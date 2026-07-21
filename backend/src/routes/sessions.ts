@@ -193,6 +193,30 @@ export function herdrStatusToIndicator(status?: string): IndicatorState | null {
   }
 }
 
+/**
+ * Per-pane indicator, same priority as the session level: herdr's per-pane
+ * status is the source of truth and hook state only fills in what herdr can't
+ * see. A hook override can sit stale for most of a turn — nothing fires
+ * between an answered AskUserQuestion and the turn's Stop — so it must never
+ * outrank a live herdr status (a stale `waiting_input` here becomes a false
+ * 許可待ち badge on the workspace card). Thread agents keep hooks first,
+ * mirroring the session-level rule (#390: herdr's accuracy there is
+ * unverified).
+ */
+export function paneIndicatorState(opts: {
+  paneAgent?: AgentProvider;
+  paneAgentStatus?: string;
+  sessionIndicator: IndicatorState;
+  hookState: IndicatorState | null;
+}): IndicatorState {
+  if (!opts.paneAgent) return 'idle';
+  const herdrState = herdrStatusToIndicator(opts.paneAgentStatus);
+  if (agentSupportsConversationMetadata(opts.paneAgent)) {
+    return herdrState ?? opts.sessionIndicator;
+  }
+  return opts.hookState ?? herdrState ?? 'idle';
+}
+
 export const sessions = new Hono();
 
 /** Build the full sessions list (shared by HTTP handler and WS push) */
@@ -324,16 +348,12 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       metrics: sessionMetrics,
       panes: s.panes ? await Promise.all(s.panes.map(async (p) => {
         const isSessionAgentOnPane = !!p.agent;
-        const isClaudeOnPane = isSessionAgentOnPane && includeClaudeInfo;
-        let paneIndicator: IndicatorState | undefined;
-        if (isClaudeOnPane) {
-          // Use session-level indicator for Claude panes (hook/jsonl based)
-          paneIndicator = indicatorState === 'completed' ? 'waiting_input' : indicatorState;
-        } else if (includeThreadInfo && isSessionAgentOnPane) {
-          paneIndicator = hookState ?? 'idle';
-        } else {
-          paneIndicator = 'idle';
-        }
+        const paneIndicator = paneIndicatorState({
+          paneAgent: p.agent,
+          paneAgentStatus: p.agentStatus,
+          sessionIndicator: indicatorState,
+          hookState,
+        });
         // Per-pane metrics + recap only for agent panes of a multi workspace
         // (see isMultiWorkspace); Claude panes get ctx/model/recap from their
         // own .jsonl, any agent pane gets memory from its pid.
@@ -358,7 +378,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           isActive: p.isActive,
           tabId: p.tabId,
           label: p.label,
-          indicatorState: isSessionAgentOnPane ? (hookState ?? paneIndicator) : paneIndicator,
+          indicatorState: paneIndicator,
           pid: p.pid,
           metrics: paneMetrics,
           recap: paneClaude?.lastRecap?.content,
