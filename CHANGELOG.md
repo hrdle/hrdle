@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.41] - 2026-07-25
+
+### Changed
+- **リリースバージョンをフロントエンドバンドルに埋め込むようにした** (#508): バンドル内にバージョンを参照している箇所が無かったため、バックエンドのみのリリースではフロントエンドの成果物がバイト単位で同一になっていた。すると `sw.js` の precache manifest もインストール済みのものと一致し、Service Worker の入れ替えが起きず、クライアントは古いビルドのまま新しいサーバーと通信し続ける。CC Hub は WS プロトコルの型を `shared/types.ts` で frontend / backend 間で共有しているため、このズレは実害になりうる。ルート `package.json` の `version` を vite の `define` で注入し、バンドルハッシュがリリースに連動するよう変更。これにより毎リリースで新しいビルドが precache され、0.2.40 で入れた更新ダイアログが確実に発火する。あわせて起動ログにバージョンが載るようになり、モバイル/タブレットからのデバッグで唯一の手がかりである `/tmp/cc-hub-browser.log` からどのビルドが動いているか判別できる。トレードオフとして、バックエンドのみの修正リリースでも「新しいバージョンがあります」が出るようになるが、protocol skew を防ぐ方を優先している（`frontend/vite.config.ts` / `src/main.tsx`）
+
 ## [0.2.40] - 2026-07-25
 
 ### Fixed
