@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.40] - 2026-07-25
+
+### Fixed
+- **リリースのたびにブラウザで手動キャッシュクリアが必要だった問題を修正** (#506): 配布バイナリの埋め込み静的配信が `Content-Type` しか返しておらず `Cache-Control` が無かったため、ブラウザのヒューリスティックキャッシュが効いていた。詰まりは2段構えで、(1) `index.html` が古いまま残り前バージョンのハッシュ付きアセットを参照し続ける、(2) **`sw.js` 自体が HTTP キャッシュから返る** ため、`index.html` が毎ロード呼んでいる `registration.update()` が新しい precache manifest を検出できない。workbox は `NavigationRoute` で `index.html` を **precache から** 配信するので、SW が更新されない限り新版は永久に出てこなかった。`/assets/*`（Vite のコンテンツハッシュ付きで内容不変）は `public, max-age=31536000, immutable`、それ以外（`index.html` / `sw.js` / `registerSW.js` / アイコン / SPA フォールバック）は `no-cache, must-revalidate` を返すよう修正。SPA フォールバック（`/dashboard` などの未知ルートに `index.html` を返す経路）は実アセットヒットと区別し、リクエストされたパスとしてキャッシュされないようにしている。開発時（`bun run dev`）は `serveStatic` の別分岐なので影響なし（`backend/src/index.ts`）
+
+### Added
+- **新バージョン検知時に確認ダイアログを出してから更新する** (#506): SW は `registerType: 'autoUpdate'`（`skipWaiting()` + `clientsClaim()`）なので新版が precache され次第 worker は勝手に入れ替わるが、開いているページは古いバンドルのまま動き続ける。ターミナルを勝手にリロードするのは乱暴なので、画面下部に「新しいバージョンがあります」を出し、**「再読み込み」を押したときだけ**リロードするようにした。「後で」で閉じれば古いバンドルのまま作業を継続でき、次のリリースでまた出る。検知は `controllerchange` の購読を**モジュール評価時**に行う（`index.html` がロード時に `registration.update()` を叩くうえバンドルが 2.3MB あるため、React マウント前に worker が claim してイベントを取りこぼしうる）。加えてタブが可視になったとき + 30分ごとに `sw.js` を再チェックし、タブレットを開きっぱなしにしても気づけるようにした。初回訪問時の「claim による1回目の `controllerchange`」だけは握り潰す（「新リリース」ではなく「これから SW 管理下になる」の意味のため）。`main.tsx` で `<App />` と並べてマウントしているので mobile / tablet / desktop の各レイアウトへ個別配線は不要。`z-10010` はオンボーディングと浮動キーボード（ともに `z-10000`+）にクリックを奪われないため（`frontend/src/components/UpdatePrompt.tsx` / `hooks/useServiceWorkerUpdate.ts`）
+
 ## [0.2.39] - 2026-07-23
 
 ### Fixed
