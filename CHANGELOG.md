@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.42] - 2026-07-25
+
+### Fixed
+- **待機中の Service Worker が activate せず更新ダイアログが出なかった問題を修正** (#510): v0.2.41 を実際にリリースして本番で検証したところ、新しい worker は正常にインストールされ新ビルドを precache まで済ませていたのに、**タブが開いている限り `waiting` のまま activate しなかった**。`about:blank` へ移動してクライアントを消すと即座に activate したことから、`registerType: 'autoUpdate'` が worker に埋め込む `skipWaiting()` がクライアント制御下では効いていないと判明。0.2.40 の検知は `controllerchange` を待つ実装だったため、入れ替わりが起きない以上ダイアログは永久に出ない。worker を意図的に `waiting` に留めて `SKIP_WAITING` メッセージハンドラを持たせる `registerType: 'prompt'` に切り替え、vite-plugin-pwa 純正の `registerSW` を使う形へ置き換えた。`onNeedRefresh` が waiting 中の worker（前回訪問から残っているものも含む）を検知し、承認時に `updateServiceWorker(true)` が `SKIP_WAITING` を送って activate させリロードする。登録がアプリ側の責務になったため `injectRegister: null` とし、`index.html` の更新チェックスクリプトは冗長になったので削除（`register()` 自体が毎回 `sw.js` を取りに行くため）（`frontend/vite.config.ts` / `src/hooks/useServiceWorkerUpdate.ts` / `index.html`）
+- **Service Worker が一切登録されていなかった問題を修正** (#510): `virtual:pwa-register` は `workbox-window` を動的インポートするが依存に無く、bare specifier が解決できないまま残って登録が丸ごと失敗していた（`TypeError: Failed to resolve module specifier 'workbox-window'`）。しかも vite-plugin-pwa は `onRegisterError` を渡さない限りこのエラーを握り潰すため、コンソールに何も出ないまま「SW が1つも無い」状態に静かになっていた。`workbox-window` を依存に追加し、`onRegisterError` を配線して二度と無言で失敗しないようにした。従来の `autoUpdate` + 注入スクリプトは素の `navigator.serviceWorker.register` を使うため `workbox-window` を必要とせず、この問題は表面化していなかった（`frontend/package.json`）
+
 ## [0.2.41] - 2026-07-25
 
 ### Changed
