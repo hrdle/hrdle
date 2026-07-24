@@ -97,7 +97,15 @@ export default defineConfig({
       devOptions: {
         enabled: false,
       },
-      registerType: 'autoUpdate',
+      // `autoUpdate` bakes skipWaiting() into the worker, but in practice the
+      // new worker still sat in `waiting` for as long as a tab stayed open, so
+      // nothing ever swapped. Prompt mode keeps it waiting on purpose and hands
+      // the trigger to useServiceWorkerUpdate, which posts SKIP_WAITING once the
+      // user accepts the reload.
+      registerType: 'prompt',
+      // registerSW() is called from useServiceWorkerUpdate, so vite must not
+      // also inject its own registration script.
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'CC Hub',

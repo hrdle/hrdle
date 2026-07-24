@@ -93,14 +93,8 @@
         });
       }
     </script>
-    <!-- Force SW update check on every page load -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-          regs.forEach(function(reg) { reg.update(); });
-        });
-      }
-    </script>
+    <!-- The SW is registered by useServiceWorkerUpdate; registering already
+         re-fetches sw.js, so no separate update check is needed here. -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
