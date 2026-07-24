@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { UpdatePrompt } from "./components/UpdatePrompt";
 import { initRemoteLogger } from "./utils/remoteLogger";
 import { applyUiScale, getStoredUiScale } from "./utils/uiScale";
 import { dispatchNotificationNavigation } from "./utils/notificationNavigation";
@@ -72,4 +73,9 @@ if ("serviceWorker" in navigator) {
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("#root element not found");
 const root = createRoot(rootEl);
-root.render(<App />);
+root.render(
+	<>
+		<App />
+		<UpdatePrompt />
+	</>,
+);
