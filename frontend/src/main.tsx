@@ -14,7 +14,9 @@ applyUiScale(getStoredUiScale());
 initRemoteLogger();
 
 // Log app version and device info for debugging
-console.log(`[CC Hub] App loaded - ${new Date().toISOString()}`);
+console.log(
+	`[CC Hub] App loaded v${__APP_VERSION__} - ${new Date().toISOString()}`,
+);
 console.log(`[CC Hub] UA: ${navigator.userAgent}`);
 console.log(
 	`[CC Hub] Screen: ${screen.width}x${screen.height} DPR:${devicePixelRatio}`,
