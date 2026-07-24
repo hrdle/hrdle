@@ -7,6 +7,14 @@ import path from 'path';
 import { execSync } from 'child_process';
 import os from 'os';
 
+// The release version lives in the root package.json. Baking it into the bundle
+// keeps the frontend in step with the backend it talks to: every release changes
+// the bundle hash, so the service worker precaches a new build and the update
+// prompt fires even when only the backend changed.
+const APP_VERSION = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf-8'),
+).version as string;
+
 // Get Tailscale certificate for HTTPS
 function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
   try {
@@ -79,6 +87,9 @@ function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
 const httpsConfig = getTailscaleCert();
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   plugins: [
     react(),
     tailwindcss(),
