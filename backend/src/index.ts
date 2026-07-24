@@ -195,14 +195,28 @@ if (EMBEDDED_MODE && getStaticAsset) {
     // Try to get asset
     let asset = getStaticAsset?.(path);
 
-    // SPA fallback
+    // SPA fallback: any unknown route serves index.html, so it must NOT be
+    // cached under the requested path (e.g. /dashboard).
+    let isAssetHit = !!asset;
     if (!asset) {
       asset = getStaticAsset?.('/index.html');
+      isAssetHit = false;
     }
 
     if (asset) {
       return new Response(new Uint8Array(asset.content), {
-        headers: { 'Content-Type': asset.contentType },
+        headers: {
+          'Content-Type': asset.contentType,
+          // Vite emits content-hashed files under /assets/ (index-a1b2.js),
+          // so their contents never change for a given URL -> cache forever.
+          // Everything else (index.html, favicon, sw, icons) must be
+          // revalidated on every load so a new release is picked up without a
+          // manual cache clear.
+          'Cache-Control':
+            isAssetHit && path.startsWith('/assets/')
+              ? 'public, max-age=31536000, immutable'
+              : 'no-cache, must-revalidate',
+        },
       });
     }
 
