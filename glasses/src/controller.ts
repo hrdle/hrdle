@@ -55,6 +55,10 @@ export interface GlassesPlatform {
 interface ReplyTarget {
   sessionId: string
   paneId?: string
+  /** The relay item being answered. Auto items self-clear when herdr reports
+   *  the pane unblocked; agent self-notes have no blocked epoch, so they are
+   *  dropped explicitly on a successful reply (#504). */
+  itemId?: string
 }
 
 /** Concatenate collected PCM chunks into one contiguous buffer. */
@@ -257,15 +261,15 @@ export class GlassesController {
           // Waiting item for the session being viewed → respond. Structured
           // relay choices win; terminal scraping is the fallback.
           if (top.choices?.length) {
-            this.enterChoice(top.choices, { sessionId: top.sessionId, paneId: top.paneId })
+            this.enterChoice(top.choices, { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
             return
           }
           const scraped = await this.scrapeChoices(top.sessionId)
           if (scraped.length > 0) {
-            this.enterChoice(scraped, { sessionId: top.sessionId, paneId: top.paneId })
+            this.enterChoice(scraped, { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
             return
           }
-          await this.startVoice({ sessionId: top.sessionId, paneId: top.paneId })
+          await this.startVoice({ sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
           return
         }
         // No relay items — legacy indicator flow (scrape, else voice).
@@ -348,6 +352,7 @@ export class GlassesController {
       case 'tap':
         // Enter confirms the TUI selection.
         this.sendChoiceKey('\r')
+        this.answeredItem(this.choiceTarget?.itemId)
         st.mode = 'conversation'
         this.render()
         void this.loadConversation().then(() => this.render())
@@ -434,6 +439,7 @@ export class GlassesController {
     const text = this.state.voiceText?.trim()
     if (t && text) {
       try { await sendPrompt(t.sessionId, text, t.paneId) } catch { /* ignore */ }
+      this.answeredItem(t.itemId)
     }
     this.state.mode = 'conversation'
     this.render()
@@ -476,7 +482,7 @@ export class GlassesController {
     this.state.conversationOffset = 0
     this.state.conversationPage = 0
     if (item.choices?.length) {
-      this.enterChoice(item.choices, { sessionId: item.sessionId, paneId: item.paneId })
+      this.enterChoice(item.choices, { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id })
       void this.loadConversation().then(() => this.render())
       return
     }
@@ -517,6 +523,20 @@ export class GlassesController {
       this.syncRelay()
       this.render()
     }
+  }
+
+  /** A relay item was answered (choice Enter / voice send). Auto items clear
+   *  themselves when herdr reports the pane unblocked, so they are left alone
+   *  here. Agent self-notes have no blocked epoch to clear them, so drop the
+   *  item explicitly — optimistic local remove + server dismiss so a reconnect
+   *  snapshot doesn't resurrect it — else it lingers on the glasses (#504). */
+  private answeredItem(itemId: string | undefined): void {
+    if (!itemId) return
+    const item = this.queue.get(itemId)
+    if (!item || item.source !== 'agent') return
+    this.queue.remove(itemId)
+    this.syncRelay()
+    void dismissRelayItem(itemId).catch(() => { /* reconnect snapshot re-syncs */ })
   }
 
   /** Terminal scrape — fallback when the active waiting item has no choices. */
