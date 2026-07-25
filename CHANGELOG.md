@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.45] - 2026-07-25
+
+### Added
+- **グラス連絡チャンネル v1: 判断が必要なものだけを G2 グラスに届ける** (#504, #522): PC を見ていない間にエージェントが入力待ち（許可プロンプト / AskUserQuestion）で止まると、質問文と選択肢だけを G2 グラスに自動表示し、リング操作（swipe=選択 / tap=決定）や音声でその場で回答できるようにした。
+  - 最低保証層（auto）: herdr の per-pane `agent_status` 差分トラッカーが blocked 遷移を検出し、backend が `readPaneText` で質問行＋番号選択肢を組み立てる。要約はせず display-width clamp のみ（`backend/src/services/glasses-relay.ts`）
+  - 自筆（agent）: `cchub glasses "<text>" --kind waiting|info --choices "a,b"` CLI と glasses-relay スキルで、エージェント自身が判断用の短文を投稿できる（`backend/src/commands/glasses.ts` / `.claude/skills/glasses-relay/`）
+  - 在席ゲート: `subscribe-glasses-relay` 購読中のみ組み立て・送信し、不在時は状態追跡だけ（追加コストゼロ）。購読時 snapshot が現在の blocked を遅延組み立てする
+  - 返信: 選択キーは paneId 指定の `POST /api/sessions/:id/panes/input`、自由文は音声 STT → `POST /api/sessions/:id/prompt`（optional `paneId` 追加）。回答後の item 消去は blocked 解除で自動
+  - glasses アプリ: relay キューを中心モデルに据えた明示的状態機械（session_list / conversation / choice / voice / overlay）に再構成し、プロアクティブな waiting overlay とブラウザ debug シミュレータを追加（`glasses/src/controller.ts` / `relay-queue.ts` / `debug-ui.ts`）
+- **glasses 実機フィードバック反映** (glasses v0.1.20〜0.1.23 として Beta 検証済み): 質問文キャップを 120 桁に削減、AskUserQuestion の filler 選択肢（"Type something." / "Chat about this"）を除去、会話画面のツールコールを `[tools] Bash×2, Edit` の1行に畳み込み、会話テキストの Markdown 記号を除去（コードは `[code]`・表は `[table]` に畳み込み）、会話画面の先頭に recap 要約ブロックを表示（Claude away_summary / 他エージェントは最終発言。これにより履歴の取れない kimi セッションでも要点が出るようになった）
+
 ## [0.2.44] - 2026-07-25
 
 ### Fixed
