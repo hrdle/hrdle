@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "TZ=UTC bun test src/",
     "test:e2e": "playwright test",
+    "test:e2e:responsive": "playwright test --project=responsive-desktop --project=responsive-tablet --project=responsive-mobile",
     "lint": "bunx @biomejs/biome lint src/",
     "typecheck": "tsgo --noEmit"
   },

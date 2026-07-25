@@ -1717,8 +1717,14 @@ export function DesktopLayout({
 		[handleSelectSessionForPane],
 	);
 
+	// data-layout pins which of the three layout trees rendered; the responsive
+	// e2e matrix asserts on it so a viewport can't silently fall through to the
+	// wrong one.
 	return (
-		<div className="h-screen flex bg-th-bg">
+		<div
+			className="h-screen flex bg-th-bg"
+			data-layout={isTablet ? "tablet" : "desktop"}
+		>
 			{/* Main content */}
 			<div className="flex-1 flex flex-col min-w-0">
 				{/* Header - desktop: minimal icons, tablet: full toolbar */}
