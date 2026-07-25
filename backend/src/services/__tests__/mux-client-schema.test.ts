@@ -71,3 +71,19 @@ describe('MuxClientMessageSchema — zoom-pane', () => {
     }
   });
 });
+
+describe('MuxClientMessageSchema — glasses-relay subscription (#504)', () => {
+  test('accepts subscribe/unsubscribe-glasses-relay with no sessionId', () => {
+    expect(MuxClientMessageSchema.safeParse({ type: 'subscribe-glasses-relay' }).success).toBe(true);
+    expect(MuxClientMessageSchema.safeParse({ type: 'unsubscribe-glasses-relay' }).success).toBe(
+      true,
+    );
+  });
+
+  test('extra keys are stripped, unknown types rejected', () => {
+    const r = MuxClientMessageSchema.safeParse({ type: 'subscribe-glasses-relay', sessionId: 's' });
+    expect(r.success).toBe(true);
+    if (r.success) expect('sessionId' in r.data).toBe(false);
+    expect(MuxClientMessageSchema.safeParse({ type: 'glasses-relay' }).success).toBe(false);
+  });
+});

@@ -145,12 +145,16 @@ async function withControlSession<T>(
 async function sendTextToSession(
   sessionId: string,
   text: string,
-  opts?: { bracketed?: boolean },
+  opts?: { bracketed?: boolean; paneId?: string },
 ): Promise<string> {
   return withControlSession(sessionId, async (cs) => {
     const panes = await cs.listPanes();
-    const target = panes.find((p) => p.isActive) || panes[0];
-    if (!target) throw new Error('No pane found');
+    // An explicit paneId (e.g. a relay item's replyTo pane) wins: in a
+    // multi-pane workspace the blocked pane is not necessarily the active one.
+    const target = opts?.paneId
+      ? panes.find((p) => p.paneId === opts.paneId)
+      : panes.find((p) => p.isActive) || panes[0];
+    if (!target) throw new Error(opts?.paneId ? 'Pane not found' : 'No pane found');
     const payload = opts?.bracketed ? `\x1b[200~${text}\x1b[201~` : text;
     await cs.sendInput(target.paneId, Buffer.from(payload, 'utf-8'));
     // Deliver the submit \r as its own write, slightly later: agent TUIs
@@ -1169,14 +1173,23 @@ sessions.get('/:id/panes/:paneId/viewport', async (c) => {
   }
 });
 
-// POST /sessions/:id/prompt - Send a prompt text to the session's active pane
+// POST /sessions/:id/prompt - Send a prompt text to the session's active pane.
+// Optional `paneId` targets a specific pane (glasses relay reply routing #504):
+// in a multi-pane workspace the blocked pane is not necessarily the active one.
 sessions.post('/:id/prompt', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
   const text = body.text as string | undefined;
+  const paneId = body.paneId as string | undefined;
 
   if (!text) {
     return c.json({ error: 'text is required' }, 400);
+  }
+  if (paneId !== undefined) {
+    const parsed = PaneIdSchema.safeParse(paneId);
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid pane ID' }, 400);
+    }
   }
 
   const exists = await herdrService.workspaceExists(id);
@@ -1186,9 +1199,12 @@ sessions.post('/:id/prompt', async (c) => {
 
   try {
     // Bracketed paste + separately-delivered \r (see sendTextToSession)
-    const paneId = await sendTextToSession(id, text, { bracketed: true });
-    return c.json({ success: true, paneId });
-  } catch (_error) {
+    const targetPaneId = await sendTextToSession(id, text, { bracketed: true, paneId });
+    return c.json({ success: true, paneId: targetPaneId });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Pane not found') {
+      return c.json({ error: 'Pane not found' }, 404);
+    }
     return c.json({ error: 'Failed to send prompt' }, 500);
   }
 });

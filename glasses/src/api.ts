@@ -50,12 +50,35 @@ export async function transcribe(pcm: Uint8Array, sampleRate = 16000): Promise<s
   return (data.text || '').trim()
 }
 
-/** Send a free-text prompt to a session (bracketed paste + Enter server-side = submit). */
-export async function sendPrompt(sessionId: string, text: string): Promise<void> {
+/** Send a free-text prompt to a session (bracketed paste + Enter server-side = submit).
+ *  `paneId` targets a specific pane (glasses relay reply routing #504): in a
+ *  multi-pane workspace the blocked pane is not necessarily the active one. */
+export async function sendPrompt(sessionId: string, text: string, paneId?: string): Promise<void> {
   const res = await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(paneId ? { text, paneId } : { text }),
   })
   if (!res.ok) throw new Error(`prompt ${res.status}`)
+}
+
+/** Send raw input bytes (arrow keys / Enter) to a specific pane. Unlike the WS
+ *  `input` frame this needs no subscription — used for relay-item choice keys
+ *  where the item carries the exact blocked paneId (#504). */
+export async function sendPaneInput(sessionId: string, paneId: string, data: string): Promise<void> {
+  const res = await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/panes/input`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paneId, data }),
+  })
+  if (!res.ok) throw new Error(`pane input ${res.status}`)
+}
+
+/** Dismiss a relay item ("later / on PC"). The server marks it dismissed and
+ *  reflects the change as a `glasses-relay` upsert. */
+export async function dismissRelayItem(id: string): Promise<void> {
+  const res = await fetch(`${baseUrl}/api/glasses/relay/${encodeURIComponent(id)}/dismiss`, {
+    method: 'POST',
+  })
+  if (!res.ok) throw new Error(`dismiss ${res.status}`)
 }

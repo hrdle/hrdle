@@ -960,12 +960,46 @@ export type ControlServerMessage =
 // Multiplexed WebSocket Types (single WS per client)
 // =============================================================================
 
+/**
+ * One relay item for the G2 glasses channel (#504): a single piece of
+ * information the user needs to make a decision, not a summary. `waiting`
+ * items are created by the blocked-transition tracker (source 'auto') or by
+ * an agent via `cchub glasses` (source 'agent') and live until the blocked
+ * epoch ends or they are dismissed; `info` items are agent self-reports with
+ * a TTL, one latest per session.
+ */
+export interface GlassesRelayItem {
+  id: string;
+  /** Workspace label of the originating session. */
+  sessionId: string;
+  /** tmux pane id ("%N") of the blocked pane — reply routing for multi-pane. */
+  paneId?: string;
+  kind: 'waiting' | 'info';
+  /** display-width-clamped text (≈ one G2 page, 189 Japanese chars). */
+  text: string;
+  /** Scraped or agent-declared choices; the glasses prefer these over a
+   *  terminal re-scrape. */
+  choices?: string[];
+  source: 'auto' | 'agent';
+  /** Dismissed ("later / on PC") items stay in the store so the same blocked
+   *  epoch is not re-synthesized on reconnect, but are excluded from
+   *  snapshots. */
+  dismissed?: boolean;
+  createdAt: number;
+  /** info items only. */
+  expiresAt?: number;
+}
+
 // Client → Server messages for /ws/mux
 export type MuxClientMessage =
   | { type: 'subscribe'; sessionId: string }
   | { type: 'unsubscribe'; sessionId: string }
   | { type: 'subscribe-conversation'; sessionId: string }
   | { type: 'unsubscribe-conversation'; sessionId: string }
+  // Glasses relay presence subscription (#504). No sessionId: it marks the
+  // whole connection as "glasses present", which gates relay assembly/send.
+  | { type: 'subscribe-glasses-relay' }
+  | { type: 'unsubscribe-glasses-relay' }
   | (ControlClientMessage & { sessionId: string });
 
 // Runtime validation for client→server /ws/mux frames. The unions above are
@@ -1022,6 +1056,8 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('unsubscribe'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('subscribe-conversation'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('unsubscribe-conversation'), sessionId: z.string().min(1) }),
+  z.object({ type: z.literal('subscribe-glasses-relay') }),
+  z.object({ type: z.literal('unsubscribe-glasses-relay') }),
   // Control frames carry a sessionId in the mux protocol (ping may send "").
   ...controlClientMessageOptions.map((o) => o.extend({ sessionId: z.string() })),
 ]);
@@ -1035,4 +1071,9 @@ export type MuxServerMessage =
   | { type: 'conversation-unsubscribed'; sessionId: string }
   | { type: 'initial-conversation'; sessionId: string; messages: ConversationMessage[] }
   | { type: 'conversation-update'; sessionId: string; messages: ConversationMessage[] }
+  // Glasses relay (#504). Sent only to connections subscribed via
+  // `subscribe-glasses-relay` — never broadcast to ordinary mux clients.
+  | { type: 'glasses-relay'; item: GlassesRelayItem } // upsert (create / dismiss reflection)
+  | { type: 'glasses-relay-remove'; id: string } // exit-blocked / TTL expiry
+  | { type: 'glasses-relay-snapshot'; items: GlassesRelayItem[] } // on subscribe: current blocked set
   | (ControlServerMessage & { sessionId: string });
