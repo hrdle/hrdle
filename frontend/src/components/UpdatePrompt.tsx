@@ -33,14 +33,14 @@ export function UpdatePrompt() {
 					<button
 						type="button"
 						onClick={dismiss}
-						className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200"
+						className="min-h-11 px-4 text-sm text-zinc-400 hover:text-zinc-200"
 					>
 						{t("update.later")}
 					</button>
 					<button
 						type="button"
 						onClick={reload}
-						className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+						className="min-h-11 rounded bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-500"
 					>
 						{t("update.reload")}
 					</button>
