@@ -1,127 +1,20 @@
-import { getDashboard, getConversation, setBaseUrl, transcribe, sendPrompt } from './api.ts'
-import { initDisplay, updateDisplay, setupEvents, buildSetupGuide, getMultiCountAt, getTotalPagesAt, startMic, stopMic } from './display.ts'
-import type { AppState } from './display.ts'
+// Entry point: environment detection + G2 wiring.
+//
+// All app logic (relay queue, state machine, ring handlers) lives in
+// controller.ts and is shared with the browser debug simulator (debug-ui.ts);
+// this file only provides the G2 platform (Even Hub bridge rendering, mic,
+// Groq STT) and the LocalStorage URL setup flow.
+
+import { getDashboard, setBaseUrl, transcribe } from './api.ts'
+import { initDisplay, updateDisplay, setupEvents, buildSetupGuide, startMic, stopMic } from './display.ts'
+import { GlassesController } from './controller.ts'
+import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
-import { CcHubWsClient } from './ws-client.ts'
-import { formatMessage } from './types.ts'
-import type { Session, ConversationMessage } from './types.ts'
+import { startDebugUI } from './debug-ui.ts'
 
 const LS_KEY = 'cchub-url'
 const POLL_INTERVAL = 5000
-const INITIAL_LOAD_COUNT = 20
-const LOAD_MORE_INCREMENT = 20
 const MIC_SAMPLE_RATE = 16000
-
-/** Concatenate collected PCM chunks into one contiguous buffer. */
-function concatPcm(chunks: Uint8Array[]): Uint8Array {
-  let len = 0
-  for (const c of chunks) len += c.length
-  const out = new Uint8Array(len)
-  let off = 0
-  for (const c of chunks) {
-    out.set(c, off)
-    off += c.length
-  }
-  return out
-}
-
-const state: AppState = {
-  mode: 'session_list',
-  sessions: [],
-  sessionIndex: 0,
-  conversation: [],
-  conversationOffset: 0,
-  conversationPage: 0,
-  conversationLastLoaded: 0,
-  conversationHasMore: false,
-  conversationLoading: false,
-  choiceIndex: 0,
-  choiceOptions: [],
-  apiUsagePercent: '',
-}
-
-function currentMsgTotalPages(): number {
-  return getTotalPagesAt(state.conversation, state.conversationOffset)
-}
-
-function sName(s: Session): string {
-  return s.customTitle || s.name || s.id.slice(0, 8)
-}
-
-function sortSessions(sessions: Session[]): Session[] {
-  const order: Record<string, number> = { waiting_input: 0, processing: 1, completed: 2, idle: 3 }
-  return [...sessions]
-    .filter(s => s.state !== 'lost')
-    .sort((a, b) => (order[a.indicatorState || 'idle'] ?? 9) - (order[b.indicatorState || 'idle'] ?? 9))
-}
-
-function currentSession(): Session | undefined {
-  return state.sessions[state.sessionIndex]
-}
-
-/** Merge consecutive assistant messages and filter out tool-result-only messages */
-function filterConversation(msgs: ConversationMessage[]): ConversationMessage[] {
-  const result: ConversationMessage[] = []
-  for (const m of msgs) {
-    // Skip tool result-only messages (output is heavily truncated)
-    if (!m.content?.trim() && !m.toolUse?.length && m.toolResult?.length) continue
-
-    // Merge assistant tool-use-only message with previous assistant text
-    if (m.role === 'assistant' && !m.content?.trim() && m.toolUse?.length) {
-      const prev = result[result.length - 1]
-      if (prev?.role === 'assistant' && prev.content?.trim()) {
-        prev.toolUse = [...(prev.toolUse || []), ...m.toolUse]
-        continue
-      }
-    }
-
-    result.push({ ...m })
-  }
-  return result
-}
-
-async function loadConversation(): Promise<void> {
-  const session = currentSession()
-  if (!session?.ccSessionId) {
-    state.conversation = []
-    state.conversationLastLoaded = 0
-    state.conversationHasMore = false
-    return
-  }
-  const raw = await getConversation(session.ccSessionId, INITIAL_LOAD_COUNT)
-  state.conversation = filterConversation(raw)
-  state.conversationLastLoaded = INITIAL_LOAD_COUNT
-  // If backend returned exactly the requested count, more may be available.
-  state.conversationHasMore = raw.length >= INITIAL_LOAD_COUNT
-  state.conversationOffset = 0
-  state.conversationPage = 0
-}
-
-/** Load more older messages by requesting a larger `last` count. Returns true if new messages were added. */
-async function loadMoreConversation(): Promise<boolean> {
-  const session = currentSession()
-  if (!session?.ccSessionId) return false
-  if (!state.conversationHasMore || state.conversationLoading) return false
-
-  state.conversationLoading = true
-  try {
-    const newLast = state.conversationLastLoaded + LOAD_MORE_INCREMENT
-    const raw = await getConversation(session.ccSessionId, newLast)
-    const filtered = filterConversation(raw)
-    // If no new messages were added, we've reached the beginning.
-    if (filtered.length <= state.conversation.length) {
-      state.conversationHasMore = false
-      state.conversationLastLoaded = newLast
-      return false
-    }
-    state.conversation = filtered
-    state.conversationLastLoaded = newLast
-    state.conversationHasMore = raw.length >= newLast
-    return true
-  } finally {
-    state.conversationLoading = false
-  }
-}
 
 // ── Glasses mode: G2 display + ring controls ──
 
@@ -150,291 +43,48 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   setBaseUrl(savedUrl)
 
-  // Auto-refresh conversation when in conversation mode (throttled)
-  let lastConvRefresh = 0
-  const CONV_REFRESH_INTERVAL = 3000
-
-  function maybeRefreshConversation() {
-    if (state.mode !== 'conversation') return
-    const now = Date.now()
-    if (now - lastConvRefresh < CONV_REFRESH_INTERVAL) return
-    lastConvRefresh = now
-    loadConversation().then(() => updateDisplay(bridge, state))
+  const platform: GlassesPlatform = {
+    render(state) {
+      void updateDisplay(bridge, state)
+    },
+    startMicCapture: () => startMic(bridge),
+    stopMicCapture: () => stopMic(bridge),
+    transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
   }
-
-  const wsClient = new CcHubWsClient({
-    onSessionsUpdated(sessions) {
-      const prevId = state.sessions[state.sessionIndex]?.id
-      // Update session data in-place (preserve sort order during conversation/choice)
-      if (state.mode !== 'session_list' && prevId) {
-        // Keep current order, just update session data
-        const newMap = new Map(sessions.filter(s => s.state !== 'lost').map(s => [s.id, s]))
-        state.sessions = state.sessions
-          .map(s => newMap.get(s.id) || s)
-          .filter(s => newMap.has(s.id))
-        // Add any new sessions at the end
-        for (const s of sessions) {
-          if (s.state !== 'lost' && !state.sessions.some(e => e.id === s.id)) {
-            state.sessions.push(s)
-          }
-        }
-      } else {
-        state.sessions = sortSessions(sessions)
-      }
-      // Re-find the previously selected session
-      if (prevId) {
-        const newIdx = state.sessions.findIndex(s => s.id === prevId)
-        state.sessionIndex = newIdx >= 0 ? newIdx : Math.min(state.sessionIndex, Math.max(0, state.sessions.length - 1))
-      } else if (state.sessionIndex >= state.sessions.length) {
-        state.sessionIndex = Math.max(0, state.sessions.length - 1)
-      }
-      updateDisplay(bridge, state)
-      maybeRefreshConversation()
-    },
-    onTerminalOutput() {
-      maybeRefreshConversation()
-    },
-    onReady() {
-      // Re-subscribe on reconnect
-      const s = currentSession()
-      if (s && state.mode !== 'session_list') wsClient.subscribe(s.id)
-    },
-    onError() {},
-  })
-  wsClient.connect()
-
-  // ── Voice input: glasses mic → PCM → Groq STT → prompt ──
-  let audioChunks: Uint8Array[] = []
-  let recording = false
-
-  async function startVoice() {
-    if (!currentSession()) return
-    audioChunks = []
-    state.mode = 'voice'
-    state.voicePhase = 'recording'
-    state.voiceText = ''
-    updateDisplay(bridge, state)
-    recording = true
-    const ok = await startMic(bridge)
-    if (!ok) {
-      recording = false
-      state.voicePhase = 'confirm'
-      state.voiceText = ''
-      updateDisplay(bridge, state)
-    }
-  }
-
-  async function stopAndTranscribe() {
-    if (!recording) return
-    recording = false
-    await stopMic(bridge)
-    state.voicePhase = 'transcribing'
-    updateDisplay(bridge, state)
-    try {
-      const pcm = concatPcm(audioChunks)
-      state.voiceText = pcm.length > 0 ? await transcribe(pcm, MIC_SAMPLE_RATE) : ''
-    } catch {
-      state.voiceText = ''
-    }
-    state.voicePhase = 'confirm'
-    updateDisplay(bridge, state)
-  }
-
-  async function sendVoice() {
-    const s = currentSession()
-    const text = state.voiceText?.trim()
-    if (s && text) {
-      try { await sendPrompt(s.id, text) } catch { /* ignore */ }
-    }
-    state.mode = 'conversation'
-    updateDisplay(bridge, state)
-    loadConversation().then(() => updateDisplay(bridge, state))
-  }
-
-  async function cancelVoice() {
-    if (recording) {
-      recording = false
-      await stopMic(bridge)
-    }
-    state.mode = 'conversation'
-    updateDisplay(bridge, state)
-  }
-
-  const handlers = {
-    async swipeUp() {
-      switch (state.mode) {
-        case 'session_list':
-          if (state.sessionIndex > 0) state.sessionIndex--
-          break
-        case 'conversation': {
-          // Page up within message, then previous message(s)
-          if (state.conversationPage > 0) {
-            state.conversationPage--
-          } else if (state.conversationOffset < state.conversation.length - 1) {
-            const jump = getMultiCountAt(state.conversation, state.conversationOffset)
-            state.conversationOffset = Math.min(state.conversation.length - 1, state.conversationOffset + jump)
-            state.conversationPage = Math.max(0, currentMsgTotalPages() - 1)
-          } else if (state.conversationHasMore && !state.conversationLoading) {
-            // At oldest loaded message — fetch more.
-            // Offset is measured from the newest, so existing messages keep their offsets
-            // after prepending older ones. We advance by one after the load completes.
-            const loaded = await loadMoreConversation()
-            if (loaded && state.conversationOffset < state.conversation.length - 1) {
-              const jump = getMultiCountAt(state.conversation, state.conversationOffset)
-              state.conversationOffset = Math.min(state.conversation.length - 1, state.conversationOffset + jump)
-              state.conversationPage = Math.max(0, currentMsgTotalPages() - 1)
-            }
-          }
-          break
-        }
-        case 'choice': {
-          // Send cursor up to Claude Code
-          const s1 = currentSession()
-          if (s1) wsClient.sendInput(s1.id, '\x1b[A')
-          if (state.choiceIndex > 0) state.choiceIndex--
-          break
-        }
-      }
-      updateDisplay(bridge, state)
-    },
-    async swipeDown() {
-      switch (state.mode) {
-        case 'session_list':
-          if (state.sessionIndex < state.sessions.length - 1) state.sessionIndex++
-          break
-        case 'conversation': {
-          // Page down within message, then next message(s)
-          const totalPages = currentMsgTotalPages()
-          if (state.conversationPage < totalPages - 1) {
-            state.conversationPage++
-          } else if (state.conversationOffset > 0) {
-            const jump = getMultiCountAt(state.conversation, state.conversationOffset - 1)
-            state.conversationOffset = Math.max(0, state.conversationOffset - jump)
-            state.conversationPage = 0
-          }
-          break
-        }
-        case 'choice': {
-          // Send cursor down to Claude Code
-          const s2 = currentSession()
-          if (s2) wsClient.sendInput(s2.id, '\x1b[B')
-          if (state.choiceOptions && state.choiceIndex < state.choiceOptions.length - 1) state.choiceIndex++
-          break
-        }
-      }
-      updateDisplay(bridge, state)
-    },
-    async tap() {
-      switch (state.mode) {
-        case 'session_list': {
-          // Switch immediately, load conversation in background
-          const s = currentSession()
-          if (s) wsClient.subscribe(s.id)
-          state.mode = 'conversation'
-          state.conversation = []
-          state.conversationOffset = 0
-          state.conversationPage = 0
-          updateDisplay(bridge, state)
-          loadConversation().then(() => updateDisplay(bridge, state))
-          return // already called updateDisplay
-        }
-        case 'conversation': {
-          const s = currentSession()
-          if (s?.indicatorState === 'waiting_input' || (s?.waitingToolName && s.waitingToolName !== 'UserInput')) {
-            // Request fresh terminal content and wait for response
-            await wsClient.requestContentAndWait(s!.id)
-            const termChoices = wsClient.getChoices(s!.id)
-            if (termChoices.length > 0) {
-              state.choiceOptions = termChoices
-              state.mode = 'choice'
-              state.choiceIndex = 0
-            }
-          } else {
-            // Non-waiting session → start a free-text voice reply
-            await startVoice()
-            return
-          }
-        }
-          break
-        case 'choice': {
-          // Send Enter to confirm current selection
-          const session = currentSession()
-          if (session) {
-            wsClient.sendInput(session.id, '\r')
-          }
-          state.mode = 'conversation'
-          break
-        }
-        case 'voice': {
-          if (state.voicePhase === 'recording') await stopAndTranscribe()
-          else if (state.voicePhase === 'confirm' && state.voiceText) await sendVoice()
-          return
-        }
-      }
-      updateDisplay(bridge, state)
-    },
-    async doubleTap() {
-      if (state.mode === 'voice') {
-        await cancelVoice()
-        return
-      }
-      if (state.mode === 'conversation' || state.mode === 'choice') {
-        // If viewing a waiting session, jump to next waiting session
-        const waitingSessions = state.sessions
-          .map((s, i) => ({ s, i }))
-          .filter(({ s }) => s.indicatorState === 'waiting_input' || (s.waitingToolName && s.waitingToolName !== 'UserInput'))
-
-        if (waitingSessions.length > 0) {
-          const currentIdx = state.sessionIndex
-          const next = waitingSessions.find(({ i }) => i > currentIdx) || waitingSessions[0]
-          if (next && next.i !== currentIdx) {
-            state.sessionIndex = next.i
-            wsClient.subscribe(state.sessions[next.i].id)
-            state.mode = 'conversation'
-            state.conversation = []
-            state.conversationOffset = 0
-            state.conversationPage = 0
-            updateDisplay(bridge, state)
-            loadConversation().then(() => updateDisplay(bridge, state))
-            return
-          }
-        }
-        // No more waiting sessions → back to list
-        state.mode = 'session_list'
-        updateDisplay(bridge, state)
-      }
-    },
-  }
+  const controller = new GlassesController(platform)
+  controller.connect()
+  platform.render(controller.state)
 
   setupEvents(bridge, {
-    onSwipeDown: handlers.swipeDown,
-    onSwipeUp: handlers.swipeUp,
-    onTap: handlers.tap,
-    onDoubleTap: handlers.doubleTap,
-    onAudioData: (pcm) => {
-      if (recording) audioChunks.push(pcm)
-    },
+    onSwipeDown: () => controller.swipeDown(),
+    onSwipeUp: () => controller.swipeUp(),
+    onTap: () => controller.tap(),
+    onDoubleTap: () => controller.doubleTap(),
+    onAudioData: (pcm) => controller.onAudioData(pcm),
   })
 
   // Poll dashboard for API usage
-  try {
-    const dashRes = await getDashboard()
-    if (dashRes.usageLimits) state.apiUsagePercent = `${dashRes.usageLimits.fiveHour.utilization}%`
-  } catch { /* ignore */ }
-
-  updateDisplay(bridge, state)
-  setInterval(async () => {
+  const pollUsage = async () => {
     try {
       const dashRes = await getDashboard()
-      if (dashRes.usageLimits) state.apiUsagePercent = `${dashRes.usageLimits.fiveHour.utilization}%`
+      if (dashRes.usageLimits) controller.setApiUsage(`${dashRes.usageLimits.fiveHour.utilization}%`)
     } catch { /* ignore */ }
-  }, POLL_INTERVAL)
+  }
+  await pollUsage()
+  setInterval(pollUsage, POLL_INTERVAL)
 }
 
 // ── Entry point: detect environment ──
 
 async function main(): Promise<void> {
-  const bridge = await initDisplay()
+  // The SDK's window.EvenAppBridge stub can exist in a plain desktop browser,
+  // so waitForEvenAppBridge() resolving is not proof of the Even Hub WebView.
+  // The real Flutter WebView injects `flutter_inappwebview` (its absence is
+  // exactly what the SDK's "Flutter handler not available" warning reports) —
+  // gate on it, or the browser debug simulator would never start.
+  const isEvenHub =
+    typeof (window as unknown as Record<string, unknown>).flutter_inappwebview !== 'undefined'
+  const bridge = isEvenHub ? await initDisplay() : null
 
   if (bridge) {
     // Even Hub environment — check launch source
@@ -453,192 +103,3 @@ async function main(): Promise<void> {
 }
 
 main().catch(console.error)
-
-// ── Debug simulator (browser only) ──
-
-function startDebugUI() {
-  // Apply hub URL from query params
-  const params = new URLSearchParams(location.search)
-  const hubUrl = params.get('hub')
-  if (hubUrl) setBaseUrl(hubUrl)
-
-  const W = 576, H = 288, SCALE = 1.5
-  const app = document.querySelector<HTMLDivElement>('#app')!
-  app.innerHTML = `
-    <div style="font-family: monospace; padding: 20px; max-width: 900px; margin: auto;">
-      <h2>CC Hub Glasses — Debug</h2>
-      <div style="display:flex; gap:16px; align-items:start;">
-        <div>
-          <div id="g2sim" style="
-            width:${W * SCALE}px; height:${H * SCALE}px;
-            background:#000; color:#0f0; font-family:monospace;
-            font-size:${12 * SCALE}px; line-height:${16 * SCALE}px;
-            padding:8px; box-sizing:border-box; border:2px solid #0f0;
-            border-radius:8px; white-space:pre-wrap; overflow:hidden;
-          "></div>
-          <div id="g2mode" style="color:#0f0; font-family:monospace; margin-top:4px; font-size:14px;"></div>
-        </div>
-        <div>
-          <p><b>Ring Controls:</b></p>
-          <button onclick="window._dbg.swipeUp()">Swipe Up</button>
-          <button onclick="window._dbg.swipeDown()">Swipe Down</button><br><br>
-          <button onclick="window._dbg.tap()">Tap</button>
-          <button onclick="window._dbg.doubleTap()">Double Tap</button>
-        </div>
-      </div>
-    </div>
-  `
-
-  // Connect via proxy (dev mode)
-  const wsClient = new CcHubWsClient({
-    onSessionsUpdated(sessions) {
-      const prevId = state.sessions[state.sessionIndex]?.id
-      state.sessions = sortSessions(sessions)
-      if (prevId) {
-        const newIdx = state.sessions.findIndex(s => s.id === prevId)
-        state.sessionIndex = newIdx >= 0 ? newIdx : Math.min(state.sessionIndex, Math.max(0, state.sessions.length - 1))
-      } else if (state.sessionIndex >= state.sessions.length) {
-        state.sessionIndex = Math.max(0, state.sessions.length - 1)
-      }
-    },
-    onTerminalOutput() {},
-    onReady() {},
-    onError() {},
-  })
-  wsClient.connect()
-  ;(window as unknown as Record<string, unknown>)._ws = wsClient
-
-  const handlers = {
-    async swipeUp() {
-      switch (state.mode) {
-        case 'session_list': if (state.sessionIndex > 0) state.sessionIndex--; break
-        case 'conversation':
-          if (state.conversationPage > 0) { state.conversationPage-- }
-          else if (state.conversationOffset < state.conversation.length - 1) {
-            const jump = getMultiCountAt(state.conversation, state.conversationOffset)
-            state.conversationOffset = Math.min(state.conversation.length - 1, state.conversationOffset + jump)
-            state.conversationPage = Math.max(0, currentMsgTotalPages() - 1)
-          } else if (state.conversationHasMore && !state.conversationLoading) {
-            const loaded = await loadMoreConversation()
-            if (loaded && state.conversationOffset < state.conversation.length - 1) {
-              const jump = getMultiCountAt(state.conversation, state.conversationOffset)
-              state.conversationOffset = Math.min(state.conversation.length - 1, state.conversationOffset + jump)
-              state.conversationPage = Math.max(0, currentMsgTotalPages() - 1)
-            }
-          }
-          break
-        case 'choice': if (state.choiceIndex > 0) state.choiceIndex--; break
-      }
-    },
-    async swipeDown() {
-      switch (state.mode) {
-        case 'session_list': if (state.sessionIndex < state.sessions.length - 1) state.sessionIndex++; break
-        case 'conversation': {
-          const tp = currentMsgTotalPages()
-          if (state.conversationPage < tp - 1) { state.conversationPage++ }
-          else if (state.conversationOffset > 0) {
-            const jump = getMultiCountAt(state.conversation, state.conversationOffset - 1)
-            state.conversationOffset = Math.max(0, state.conversationOffset - jump)
-            state.conversationPage = 0
-          }
-          break
-        }
-        case 'choice': if (state.choiceIndex < state.choiceOptions.length - 1) state.choiceIndex++; break
-      }
-    },
-    async tap() {
-      switch (state.mode) {
-        case 'session_list': {
-          const s = currentSession()
-          if (s) wsClient.subscribe(s.id)
-          await loadConversation()
-          state.mode = 'conversation'
-          break
-        }
-        case 'conversation': {
-          const s = currentSession()
-          if (s && (s.indicatorState === 'waiting_input' || (s.waitingToolName && s.waitingToolName !== 'UserInput'))) {
-            wsClient.requestContent(s.id)
-            await new Promise(r => setTimeout(r, 500))
-            const termChoices = wsClient.getChoices(s.id)
-            if (termChoices.length > 0) {
-              state.choiceOptions = termChoices
-              state.mode = 'choice'
-              state.choiceIndex = 0
-            }
-          }
-          break
-        }
-        case 'choice': {
-          const s = currentSession()
-          if (s) wsClient.sendInput(s.id, `${state.choiceOptions[state.choiceIndex]}\n`)
-          state.mode = 'conversation'
-          break
-        }
-      }
-    },
-    async doubleTap() {
-      if (state.mode !== 'session_list') state.mode = 'session_list'
-    },
-  }
-  ;(window as unknown as Record<string, unknown>)._dbg = handlers
-
-  setInterval(() => {
-    const sim = document.getElementById('g2sim')
-    const modeLabel = document.getElementById('g2mode')
-    if (!sim) return
-
-    const lines: string[] = []
-    if (state.mode === 'session_list') {
-      lines.push(`Sessions ${state.apiUsagePercent ? `API:${state.apiUsagePercent}` : ''}`)
-      lines.push('')
-      const start = Math.max(0, state.sessionIndex - 3)
-      const visible = state.sessions.slice(start, start + 8)
-      for (let i = 0; i < visible.length; i++) {
-        const s = visible[i]
-        const idx = start + i
-        const icon = s.indicatorState === 'waiting_input' ? '!' : s.indicatorState === 'processing' ? '*' : ' '
-        const cursor = idx === state.sessionIndex ? '>' : ' '
-        lines.push(`${cursor}${icon} ${sName(s)}`)
-      }
-      lines.push('', 'tap:open  swipe:nav')
-    } else if (state.mode === 'conversation') {
-      const session = currentSession()
-      const ind = session?.indicatorState
-      const status = ind === 'waiting_input' ? ' !' : ind === 'processing' ? ' *' : ''
-      lines.push(`${session ? sName(session) : '---'}${status}`, '-'.repeat(40))
-      const msgs = state.conversation
-      const msgIndex = msgs.length > 0 ? Math.max(0, msgs.length - 1 - state.conversationOffset) : -1
-      if (msgIndex >= 0) {
-        const totalPages = currentMsgTotalPages()
-        const page = Math.min(state.conversationPage, totalPages - 1)
-        const fullText = formatMessage(msgs[msgIndex])
-        // Simple character-based slice for debug UI
-        const chunkSize = 300
-        lines.push(fullText.slice(page * chunkSize, (page + 1) * chunkSize))
-        var pageInfo = totalPages > 1 ? ` p${page + 1}/${totalPages}` : ''
-      } else {
-        lines.push('(no messages)')
-        var pageInfo = ''
-      }
-      const pos = msgs.length > 0 ? `${msgIndex + 1}/${msgs.length}${pageInfo}` : ''
-      lines.push('', `${ind === 'waiting_input' ? 'tap:respond  ' : ''}dbl:back  ${pos}`)
-    } else if (state.mode === 'choice') {
-      const session = currentSession()
-      lines.push(`${session ? sName(session) : '---'}`, 'Select response:', '')
-      for (let i = 0; i < state.choiceOptions.length; i++) {
-        lines.push(`${i === state.choiceIndex ? '>' : ' '} ${state.choiceOptions[i]}`)
-      }
-      lines.push('', 'swipe:select  tap:send  dbl:cancel')
-    }
-    sim.textContent = lines.join('\n')
-    if (modeLabel) {
-      const wsState = wsClient.getState()
-      const sub = wsClient.getSubscribed()
-      const session = currentSession()
-      const bufText = session ? wsClient.getTerminalText(session.id) : ''
-      const choices = session ? wsClient.getChoices(session.id) : []
-      modeLabel.textContent = `Mode: ${state.mode} | WS: ${wsState} | Sub: ${sub || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]`
-    }
-  }, 500)
-}

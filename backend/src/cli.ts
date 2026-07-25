@@ -9,7 +9,7 @@ const isDev = process.argv.some(arg => arg.includes('--watch'));
 const DEFAULT_PORT = isDev ? 3456 : 5923;
 
 interface CliOptions {
-  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek';
+  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses';
   port: number;
   host: string;
   password?: string;
@@ -28,6 +28,10 @@ interface CliOptions {
   sendWaitMs?: number;
   sendLines?: number;
   peekTarget?: string;
+  glassesText?: string;
+  glassesKind?: 'waiting' | 'info';
+  glassesChoices?: string[];
+  glassesSession?: string;
 }
 
 function printHelp(): void {
@@ -41,6 +45,9 @@ ${t('cli.usage')}
   cchub update [options]    Check and apply updates
   cchub status              Show service status
   cchub notify              Send hook event (reads JSON from stdin)
+  cchub glasses <text>      Post a self-note to the G2 glasses relay channel
+                            [--kind waiting|info] [--choices "a,b"] [--session <id>]
+                            (session is auto-resolved: cwd → process ancestors)
   cchub send <target> [text]  Send input to a pane on a peer or local server
                               target: <peer>:<session>:<paneId>
                               (peer can be 'local', a peer id, or a nickname)
@@ -116,6 +123,41 @@ export function parseArgs(args: string[]): CliOptions {
         break;
       case 'notify':
         options.command = 'notify';
+        break;
+      case 'glasses': {
+        options.command = 'glasses';
+        const next = args[i + 1];
+        if (next && !next.startsWith('-')) {
+          options.glassesText = next;
+          i++;
+        }
+        break;
+      }
+      case '--kind': {
+        i++;
+        const kind = args[i];
+        if (kind !== 'waiting' && kind !== 'info') {
+          console.error('❌ --kind は waiting か info を指定してください');
+          process.exit(1);
+        }
+        options.glassesKind = kind;
+        break;
+      }
+      case '--choices':
+        i++;
+        if (!args[i]) {
+          console.error('❌ --choices にはカンマ区切りの選択肢を指定してください');
+          process.exit(1);
+        }
+        options.glassesChoices = args[i].split(',').map((c) => c.trim()).filter((c) => c.length > 0);
+        break;
+      case '--session':
+        i++;
+        if (!args[i]) {
+          console.error('❌ --session にはセッション id を指定してください');
+          process.exit(1);
+        }
+        options.glassesSession = args[i];
         break;
       case 'send': {
         options.command = 'send';
@@ -275,6 +317,10 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
       await runNotify(options);
       return 'exit';
 
+    case 'glasses':
+      await runGlasses(options);
+      return 'exit';
+
     case 'send':
       await runSend(options);
       return 'exit';
@@ -310,6 +356,17 @@ async function runUpdate(options: CliOptions): Promise<void> {
 async function runNotify(options: CliOptions): Promise<void> {
   const { sendNotify } = await import('./commands/notify');
   await sendNotify(options.port);
+}
+
+async function runGlasses(options: CliOptions): Promise<void> {
+  const { runGlasses: impl } = await import('./commands/glasses');
+  await impl({
+    text: options.glassesText,
+    kind: options.glassesKind ?? (options.glassesChoices?.length ? 'waiting' : 'info'),
+    choices: options.glassesChoices,
+    session: options.glassesSession,
+    port: options.port,
+  });
 }
 
 async function runSend(options: CliOptions): Promise<void> {

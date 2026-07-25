@@ -7,14 +7,14 @@ import {
   OsEventTypeList,
   AudioInputSource,
 } from '@evenrealities/even_hub_sdk'
-import { formatMessage } from './types.ts'
-import type { Session, ConversationMessage } from './types.ts'
+import { formatMessage, recapBlockLines } from './types.ts'
+import type { Session, ConversationMessage, GlassesRelayItem } from './types.ts'
 
 const W = 576
 const H = 288
 
 export type Bridge = Awaited<ReturnType<typeof waitForEvenAppBridge>>
-type Mode = 'session_list' | 'conversation' | 'choice' | 'voice'
+type Mode = 'session_list' | 'conversation' | 'choice' | 'voice' | 'overlay'
 export type VoicePhase = 'recording' | 'transcribing' | 'confirm'
 
 // Display metrics (measured on actual G2 hardware)
@@ -171,6 +171,16 @@ export interface AppState {
   debugEvent?: string
   voicePhase?: VoicePhase
   voiceText?: string
+  // ── Glasses relay channel (#504) ──
+  /** Active waiting items, priority order (first = shown in the overlay). */
+  relayWaiting: GlassesRelayItem[]
+  /** Active info items, newest first (passive FYI line in conversation). */
+  relayInfo: GlassesRelayItem[]
+  /** Item presented in 'overlay' mode; null elsewhere. */
+  overlayItemId: string | null
+  /** Display label of the choice/voice target session (falls back to the id). */
+  choiceSessionName?: string
+  voiceSessionName?: string
 }
 
 // ─── Microphone control (glasses mic → raw PCM via onEvenHubEvent) ───
@@ -205,21 +215,54 @@ function statusLabel(s: Session): string {
   return ''
 }
 
+const SEPARATOR = '-'.repeat(24)
+
+/** Display label for a relay item's session (live session name, else the id). */
+function relayLabel(state: AppState, item: GlassesRelayItem): string {
+  const s = state.sessions.find((x) => x.id === item.sessionId)
+  return s ? sName(s) : item.sessionId
+}
+
+/** Waiting/info banner prepended to the TOP of the conversation tab (#504).
+ *  Waiting-first is the core philosophy: the highest-priority waiting item
+ *  always heads the view; an info item shows only when nothing is waiting. */
+function relayBannerLines(state: AppState): string[] {
+  const top = state.relayWaiting[0]
+  if (top) {
+    const choiceHint = top.choices?.length ? `(選択${top.choices.length})` : ''
+    const more = state.relayWaiting.length > 1 ? ` 他${state.relayWaiting.length - 1}件` : ''
+    const head = splitDisplayLines(`[!]${relayLabel(state, top)}${choiceHint}${more}`)[0] || ''
+    const textLines = splitDisplayLines(top.text).slice(0, 2)
+    return [head, ...textLines, SEPARATOR]
+  }
+  const info = state.relayInfo[0]
+  if (info) {
+    const textLine = splitDisplayLines(info.text)[0] || ''
+    return [splitDisplayLines(`[i]${relayLabel(state, info)}: ${textLine}`)[0] || '', SEPARATOR]
+  }
+  return []
+}
+
 // ─── Content helpers (shared by build and in-place update) ───
 
 function sessionListHeader(state: AppState): string {
-  const { sessionIndex, sessions, apiUsagePercent } = state
-  return `CC Hub ${apiUsagePercent ? `API:${apiUsagePercent}` : ''} ${sessionIndex + 1}/${sessions.length}`
+  const { sessionIndex, sessions, apiUsagePercent, relayWaiting } = state
+  const badge = relayWaiting.length > 0 ? ` !${relayWaiting.length}` : ''
+  return `CC Hub ${apiUsagePercent ? `API:${apiUsagePercent}` : ''} ${sessionIndex + 1}/${sessions.length}${badge}`
 }
 
 function sessionListBody(state: AppState): string {
   const { sessions, sessionIndex } = state
+  // Relay waiting covers agent-declared items whose session indicator is not
+  // waiting_input; those sessions still get the [!] marker.
+  const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
   const start = Math.max(0, sessionIndex - 3)
   const visible = sessions.slice(start, start + MAX_LINES)
   return visible.map((s, i) => {
     const idx = start + i
     const cursor = idx === sessionIndex ? '>' : ' '
-    return `${cursor}${statusLabel(s)} ${sName(s)}`
+    const label = relayWaitingIds.has(s.id) ? '[!]' : statusLabel(s)
+    return `${cursor}${label} ${sName(s)}`
   }).join('\n') || '(no sessions)'
 }
 
@@ -233,17 +276,26 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const msgIndex = msgs.length > 0
     ? Math.max(0, msgs.length - 1 - state.conversationOffset)
     : -1
-  const { text: bodyText, pageInfo, multiCount } = paginateMessage(msgs, msgIndex, state.conversationPage)
+  const { text: convText, pageInfo, multiCount } = paginateMessage(msgs, msgIndex, state.conversationPage)
+  const banner = relayBannerLines(state)
+  // Recap heads the latest view; deeper paging drops it for message space.
+  const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
+  const recap = onLatest ? recapBlockLines(session?.ccRecap).flatMap(splitDisplayLines) : []
+  // The body container clips overflow: cap the banner+recap+content block at
+  // one page so a waiting overlay never pushes conversation text off-screen.
+  const bodyText = [...banner, ...recap, ...convText.split('\n')].slice(0, MAX_LINES).join('\n')
   const role = multiCount > 1
     ? `${multiCount}msgs`
     : msgIndex >= 0 ? (msgs[msgIndex].role === 'user' ? 'YOU' : 'AI') : ''
   const pos = msgs.length > 0 ? `${role} ${msgIndex + 1}/${msgs.length}${pageInfo}` : ''
-  const action = waiting ? 'tap:respond  ' : ''
+  // With a waiting banner up, the ring is routed to the overlay item:
+  // tap = respond/jump, double-tap = dismiss ("later / on PC").
+  const action = state.relayWaiting.length > 0 ? 'tap:対応  dbl:後で' : waiting ? 'tap:respond  dbl:back' : 'dbl:back'
 
   return {
     headerText: `${session ? sName(session) : '---'}${statusBadge}`,
     bodyText,
-    footerText: `${action}dbl:back  ${pos}`,
+    footerText: `${action}  ${pos}`,
     multiCount,
   }
 }
@@ -255,9 +307,36 @@ function choiceBody(state: AppState): string {
   }).join('\n')
 }
 
+/** Full-screen presentation of one waiting relay item (#504). Swipe cycles the
+ *  waiting queue, tap jumps to the item's session, double-tap dismisses. */
+function overlayContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
+  const waiting = state.relayWaiting
+  const item = waiting.find((i) => i.id === state.overlayItemId) || waiting[0]
+  if (!item) {
+    return { headerText: 'Relay', bodyText: '(waiting なし)', footerText: 'dbl:戻る' }
+  }
+  const idx = waiting.indexOf(item)
+  const headerText = `${relayLabel(state, item)} [!] ${idx + 1}/${waiting.length}`
+
+  const lines = splitDisplayLines(item.text)
+  if (item.choices?.length) {
+    lines.push(SEPARATOR)
+    for (let i = 0; i < item.choices.length; i++) {
+      lines.push(...splitDisplayLines(` ${i + 1}. ${item.choices[i]}`))
+    }
+  }
+  const bodyText = lines.length > MAX_LINES
+    ? [...lines.slice(0, MAX_LINES - 1), '…'].join('\n')
+    : lines.join('\n')
+  const footerText = item.choices?.length
+    ? 'tap:選択へ  dbl:後で  swipe:次'
+    : 'tap:開く  dbl:後で  swipe:次'
+  return { headerText, bodyText, footerText }
+}
+
 function voiceContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
   const session = state.sessions[state.sessionIndex]
-  const name = session ? sName(session) : '---'
+  const name = state.voiceSessionName || (session ? sName(session) : '---')
   switch (state.voicePhase) {
     case 'recording':
       return {
@@ -364,6 +443,7 @@ function buildConversation(state: AppState): RebuildPageContainer {
 
 function buildChoice(state: AppState): RebuildPageContainer {
   const session = state.sessions[state.sessionIndex]
+  const name = state.choiceSessionName || (session ? sName(session) : '---')
 
   // Header - action required
   const header = new TextContainerProperty({
@@ -373,7 +453,7 @@ function buildChoice(state: AppState): RebuildPageContainer {
     paddingLength: 4,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
-    content: `${session ? sName(session) : '---'}  [SELECT]`,
+    content: `${name}  [SELECT]`,
   })
 
   const body = new TextContainerProperty({
@@ -404,6 +484,45 @@ function buildChoice(state: AppState): RebuildPageContainer {
 
 function buildVoice(state: AppState): RebuildPageContainer {
   const { headerText, bodyText, footerText } = voiceContent(state)
+
+  const header = new TextContainerProperty({
+    xPosition: 0, yPosition: 0,
+    width: W, height: 36,
+    borderWidth: 0,
+    paddingLength: 4,
+    containerID: 1, containerName: 'header',
+    isEventCapture: 0,
+    content: headerText,
+  })
+
+  const body = new TextContainerProperty({
+    xPosition: 4, yPosition: 36,
+    width: W - 8, height: H - 36 - 36,
+    borderWidth: 0,
+    paddingLength: 6,
+    containerID: 2, containerName: 'body',
+    isEventCapture: 0,
+    content: bodyText,
+  })
+
+  const footer = new TextContainerProperty({
+    xPosition: 0, yPosition: H - 36,
+    width: W, height: 36,
+    borderWidth: 0,
+    paddingLength: 4,
+    containerID: 3, containerName: 'footer',
+    isEventCapture: 1,
+    content: footerText,
+  })
+
+  return new RebuildPageContainer({
+    containerTotalNum: 3,
+    textObject: [header, body, footer],
+  })
+}
+
+function buildOverlay(state: AppState): RebuildPageContainer {
+  const { headerText, bodyText, footerText } = overlayContent(state)
 
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
@@ -537,6 +656,7 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       case 'conversation': container = buildConversation(state); break
       case 'choice': container = buildChoice(state); break
       case 'voice': container = buildVoice(state); break
+      case 'overlay': container = buildOverlay(state); break
     }
     await bridge.rebuildPageContainer(container)
     return
@@ -584,6 +704,24 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
     }
     case 'voice': {
       const { headerText, bodyText, footerText } = voiceContent(state)
+      await Promise.all([
+        bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 1, containerName: 'header',
+          content: headerText,
+        })),
+        bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 2, containerName: 'body',
+          content: bodyText,
+        })),
+        bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 3, containerName: 'footer',
+          content: footerText,
+        })),
+      ])
+      break
+    }
+    case 'overlay': {
+      const { headerText, bodyText, footerText } = overlayContent(state)
       await Promise.all([
         bridge.textContainerUpgrade(new TextContainerUpgrade({
           containerID: 1, containerName: 'header',

@@ -6,6 +6,12 @@ import {
   type HerdrControlSession,
 } from '../services/herdr-control';
 import { startAgentStatusWatcher, stopAgentStatusWatcher } from '../services/herdr-agent-status';
+import {
+  resetGlassesRelayTracker,
+  subscribeGlassesRelay,
+  trackGlassesRelay,
+  unsubscribeGlassesRelay,
+} from '../services/glasses-relay';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ControlClientMessage,
@@ -93,12 +99,16 @@ function startSessionsPush() {
   // the floor (metrics, recap, anything herdr doesn't emit), not the ceiling.
   startAgentStatusWatcher(() => {
     if (activeMuxConnections.size > 0) pushSessionsNow();
+    // Relay tracker rides the same event (#504): it diffs pane statuses and,
+    // while glasses are subscribed, turns blocked transitions into relay items.
+    void trackGlassesRelay();
   });
   sessionsPushTimer = setInterval(async () => {
     if (activeMuxConnections.size === 0) {
       stopSessionsPush();
       return;
     }
+    void trackGlassesRelay(); // self-heal any missed status event
     try {
       const sessions = await buildSessionsList();
       const stableJson = JSON.stringify(sessions, (key, value) =>
@@ -122,6 +132,10 @@ function stopSessionsPush() {
     sessionsPushTimer = null;
   }
   stopAgentStatusWatcher();
+  // No observers at all: drop tracker state so the next start re-baselines
+  // silently instead of firing stale transitions. Store items survive; the
+  // subscribe-time snapshot prunes any whose blocked epoch ended meanwhile.
+  resetGlassesRelayTracker();
   lastSessionsJson = '';
 }
 
@@ -203,6 +217,19 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     return;
   }
 
+  // Glasses relay presence subscription (#504). Handled before the sessionId
+  // gate below, like ping: it marks the whole connection (no sessionId) as
+  // "glasses present", which gates relay assembly/sending.
+  if (msg.type === 'subscribe-glasses-relay') {
+    await subscribeGlassesRelay(ws);
+    return;
+  }
+
+  if (msg.type === 'unsubscribe-glasses-relay') {
+    unsubscribeGlassesRelay(ws);
+    return;
+  }
+
   // Keepalive. Handle before the sessionId/subscription gate below: the client
   // pings with sessionId="" whenever no terminal is selected (dashboard, file
   // viewer, history). If those pings were dropped, the client never gets a
@@ -229,6 +256,7 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 export function muxClose(ws: ServerWebSocket<MuxData>, code: number, reason: string) {
   console.log(`[mux] WebSocket closed: ${ws.data.visitorId} (code=${code}, reason=${reason})`);
   activeMuxConnections.delete(ws);
+  unsubscribeGlassesRelay(ws);
   if (activeMuxConnections.size === 0) stopSessionsPush();
 
   for (const [sessionId, sub] of ws.data.subscriptions) {

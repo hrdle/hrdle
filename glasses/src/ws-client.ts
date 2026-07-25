@@ -1,11 +1,16 @@
 import { getBaseUrl } from './api.ts'
-import type { Session } from './types.ts'
+import type { Session, GlassesRelayItem } from './types.ts'
 
 export interface WsCallbacks {
   onSessionsUpdated: (sessions: Session[]) => void
   onTerminalOutput: (sessionId: string, paneId: string, text: string) => void
   onReady: () => void
   onError: (err: string) => void
+  // Glasses relay channel (#504). Only received while subscribed via
+  // subscribeGlassesRelay().
+  onRelaySnapshot?: (items: GlassesRelayItem[]) => void
+  onRelayUpsert?: (item: GlassesRelayItem) => void
+  onRelayRemove?: (id: string) => void
 }
 
 // Strip ANSI escape codes, control sequences, and non-ASCII for G2 display
@@ -44,6 +49,9 @@ export class CcHubWsClient {
   private callbacks: WsCallbacks
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private subscribedSession: string | null = null
+  // Glasses relay subscription is connection-scoped (no sessionId); re-sent on
+  // every (re)connect while this flag is set (#504).
+  private relaySubscribed = false
 
   // Buffer of last N lines per session
   private terminalBuffers = new Map<string, string[]>()
@@ -69,6 +77,11 @@ export class CcHubWsClient {
 
     this.ws.onopen = () => {
       console.log('[ws] connected')
+      // Re-establish the relay subscription before onReady so the server's
+      // snapshot arrives around the same time as session re-subscribes.
+      if (this.relaySubscribed) {
+        this.send({ type: 'subscribe-glasses-relay' })
+      }
       this.callbacks.onReady()
     }
 
@@ -106,6 +119,12 @@ export class CcHubWsClient {
         this.send({ type: 'request-viewport', sessionId: msg.sessionId, paneId: targetPane, offset: 0 })
       } else if (msg.type === 'viewport' && msg.sessionId && msg.viewport) {
         this.applyViewport(msg.sessionId, msg.viewport)
+      } else if (msg.type === 'glasses-relay-snapshot' && Array.isArray(msg.items)) {
+        this.callbacks.onRelaySnapshot?.(msg.items as GlassesRelayItem[])
+      } else if (msg.type === 'glasses-relay' && msg.item) {
+        this.callbacks.onRelayUpsert?.(msg.item as GlassesRelayItem)
+      } else if (msg.type === 'glasses-relay-remove' && typeof msg.id === 'string') {
+        this.callbacks.onRelayRemove?.(msg.id as string)
       }
     } catch { /* ignore */ }
   }
@@ -140,6 +159,19 @@ export class CcHubWsClient {
     if (this.subscribedSession === sessionId) {
       this.subscribedSession = null
     }
+  }
+
+  /** Mark this connection as "glasses present" (#504). The server gates relay
+   *  assembly/sending on this subscription and answers with a snapshot of the
+   *  current waiting/info items. Re-sent automatically on reconnect. */
+  subscribeGlassesRelay(): void {
+    this.relaySubscribed = true
+    this.send({ type: 'subscribe-glasses-relay' })
+  }
+
+  unsubscribeGlassesRelay(): void {
+    this.relaySubscribed = false
+    this.send({ type: 'unsubscribe-glasses-relay' })
   }
 
   getTerminalText(sessionId: string): string {

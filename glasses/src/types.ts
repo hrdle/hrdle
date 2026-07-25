@@ -10,6 +10,9 @@ export interface Session {
   waitingToolName?: string
   customTitle?: string
   ccSummary?: string
+  /** Latest recap (Claude away_summary / /recap; other agents fall back to
+   *  their last assistant message). Shown atop the conversation view. */
+  ccRecap?: string
   ccFirstPrompt?: string
   ccSessionId?: string
   durationMinutes?: number
@@ -38,7 +41,93 @@ export interface DashboardResponse {
   version?: string
 }
 
+// ─── Glasses relay channel (#504) ───
+// Mirror of GlassesRelayItem in shared/types.ts (glasses keeps its own subset
+// of types and does not import from shared/).
+
+/**
+ * One relay item for the G2 glasses channel: a single piece of information the
+ * user needs to make a decision, not a summary. `waiting` items live until the
+ * blocked epoch ends or they are dismissed; `info` items are FYI with a TTL.
+ */
+export interface GlassesRelayItem {
+  id: string
+  /** Workspace label of the originating session. */
+  sessionId: string
+  /** tmux pane id ("%N") of the blocked pane — reply routing for multi-pane. */
+  paneId?: string
+  kind: 'waiting' | 'info'
+  /** display-width-clamped text (≈ one G2 page). */
+  text: string
+  /** Scraped or agent-declared choices; preferred over a terminal re-scrape. */
+  choices?: string[]
+  source: 'auto' | 'agent'
+  /** Dismissed ("later / on PC") — the server reflects these as upserts; the
+   *  queue drops them and snapshots never include them. */
+  dismissed?: boolean
+  createdAt: number
+  /** info items only. */
+  expiresAt?: number
+}
+
 // ─── G2 display helpers ───
+
+/**
+ * Strip Markdown / collapse noisy blocks for the G2's plain-text 7-line page.
+ * Mechanical only — no semantic summarization (that's the v2 server-side LLM
+ * plan). Fenced code and tables collapse to one marker line; emphasis,
+ * headers, links and inline-code backticks are unwrapped; blank lines and
+ * horizontal rules are dropped (every line is scarce on the glasses).
+ */
+export function sanitizeForG2(text: string): string {
+  const out: string[] = []
+  let inCode = false
+  let inTable = false
+  for (const raw of text.split('\n')) {
+    if (/^\s*```/.test(raw)) {
+      inCode = !inCode
+      if (!inCode) out.push('[code]')
+      continue
+    }
+    if (inCode) continue
+    const isTableRow = /^\s*\|.*\|?\s*$/.test(raw) && raw.includes('|')
+    if (isTableRow) {
+      if (!inTable) out.push('[table]')
+      inTable = true
+      continue
+    }
+    inTable = false
+    const line = raw
+      .replace(/^\s{0,3}#{1,6}\s+/, '') // headers
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/\*([^*\n]+)\*/g, '$1') // italic
+      .replace(/\b_([^_\n]+)_\b/g, '$1')
+      .replace(/`([^`]+)`/g, '$1') // inline code
+      .replace(/^\s*>\s?/, '') // blockquote marker
+      .replace(/~~([^~]+)~~/g, '$1') // strikethrough
+      .trimEnd()
+    if (!line.trim()) continue // blank lines / horizontal rules (---, ***)
+    if (/^[-*_]{3,}$/.test(line.trim())) continue
+    out.push(line)
+  }
+  if (inCode) out.push('[code]') // unterminated fence
+  return out.join('\n')
+}
+
+/**
+ * Conversation-top recap block (`要約: …` head + ≤maxLines-1 more + separator).
+ * Empty when no recap. The glasses conversation view leads with the gist —
+ * full history reading is the phone's job (real-device feedback, #504).
+ */
+export function recapBlockLines(recap: string | undefined, maxLines = 2): string[] {
+  const clean = sanitizeForG2((recap ?? '').trim())
+  if (!clean) return []
+  const lines = clean.split('\n')
+  const capped = lines.length > maxLines ? [...lines.slice(0, maxLines - 1), '…'] : lines
+  return [`要約: ${capped[0]}`, ...capped.slice(1), '-'.repeat(24)]
+}
 
 function shortenPath(p: string): string {
   if (!p) return ''
@@ -57,33 +146,20 @@ export function formatMessage(m: ConversationMessage): string {
   const textParts: string[] = []
   const toolParts: string[] = []
 
-  // Text content first
+  // Text content first (Markdown stripped — raw syntax is unreadable on the G2)
   if (m.content?.trim()) {
-    textParts.push(m.content.trim())
+    const clean = sanitizeForG2(m.content.trim())
+    if (clean) textParts.push(clean)
   }
 
-  // Tool use (assistant requesting tools)
+  // Tool use (assistant requesting tools): collapse the run into one summary
+  // line. On the G2's 7-line page, per-call detail crowds out the actual text;
+  // names + counts carry enough context ("what is it doing").
   if (m.toolUse?.length) {
-    for (const t of m.toolUse) {
-      const desc = t.input?.description as string | undefined
-      if (desc) {
-        toolParts.push(`[${t.name}] ${desc}`)
-      } else if (t.name === 'Edit' || t.name === 'Write') {
-        const path = (t.input?.file_path as string) || ''
-        toolParts.push(`[${t.name}] ${shortenPath(path)}`)
-      } else if (t.name === 'Bash') {
-        const cmd = (t.input?.command as string) || ''
-        toolParts.push(`[Bash] ${cmd.slice(0, 60)}`)
-      } else if (t.name === 'Read') {
-        const path = (t.input?.file_path as string) || ''
-        toolParts.push(`[Read] ${shortenPath(path)}`)
-      } else if (t.name === 'Grep' || t.name === 'Glob') {
-        const pattern = (t.input?.pattern as string) || ''
-        toolParts.push(`[${t.name}] ${pattern}`)
-      } else {
-        toolParts.push(`[${t.name}]`)
-      }
-    }
+    const counts = new Map<string, number>()
+    for (const t of m.toolUse) counts.set(t.name, (counts.get(t.name) ?? 0) + 1)
+    const summary = [...counts].map(([name, n]) => (n > 1 ? `${name}×${n}` : name)).join(', ')
+    toolParts.push(`[tools] ${summary}`)
   }
 
   // Tool results (only if no text content — usually filtered out by filterConversation)

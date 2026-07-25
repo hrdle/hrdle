@@ -12,6 +12,7 @@ import { notify } from './routes/notify';
 import { peers } from './routes/peers';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
+import { glassesRelay } from './routes/glasses-relay';
 import { muxOpen, muxMessage, muxClose, type MuxData } from './routes/terminal-mux';
 import { parseArgs, runCli, VERSION } from './cli';
 import { conditionalAuthMiddleware, isAuthRequired, getJwtSecret, initJwtSecret } from './middleware/auth';
@@ -165,7 +166,14 @@ app.use('/api/dashboard', conditionalAuthMiddleware);
 app.use('/api/peers', conditionalAuthMiddleware);
 app.use('/api/peers/*', conditionalAuthMiddleware);
 app.use('/api/herdr/*', conditionalAuthMiddleware);
-app.use('/api/glasses/*', conditionalAuthMiddleware);
+// `/api/glasses/relay*` stays OUTSIDE the auth glob (#504): local agents post
+// self-notes via `cchub glasses` from inside panes where no token exists —
+// unauthenticated local trust, same pattern as /api/notify. The STT and any
+// other glasses endpoints remain protected.
+app.use('/api/glasses/*', (c, next) => {
+  if (c.req.path.startsWith('/api/glasses/relay')) return next();
+  return conditionalAuthMiddleware(c, next);
+});
 
 app.route('/api/logs', logs);
 app.route('/api/sessions', sessions);
@@ -177,6 +185,7 @@ app.route('/api/dashboard', dashboard);
 app.route('/api/notify', notify);
 app.route('/api/peers', peers);
 app.route('/api/herdr', herdr);
+app.route('/api/glasses/relay', glassesRelay);
 app.route('/api/glasses', glasses);
 
 // Static files handling

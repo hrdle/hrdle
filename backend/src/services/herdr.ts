@@ -32,7 +32,7 @@ interface HerdrPaneInfo {
   pid?: number;
 }
 
-interface WorkspaceInfo {
+export interface WorkspaceInfo {
   id: string;
   name: string;
   instanceId?: string;
