@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.48] - 2026-07-25
+
+### Added
+- **グラスが手元のスマホで開いているセッションに追従する** (#528): これまでグラスは単独でセッションを選んでいたため、エージェントに返信するにはまずリングでセッションを探す必要があった。手に持っているスマホに既に同じセッションが開いていても、である。`sessions-updated` に `focus`（可視状態のクライアントが最後に開いたセッション）を載せ、グラスがそれに追従するようにした（`shared/types.ts` の `ClientFocus`、`backend/src/routes/terminal-mux.ts` の `computeClientFocus`、`glasses/src/controller.ts` の `followFocus`、ehpk v0.1.25）。セッション選択はスマホが担い、リングは返信に専念できる
+  - **フォーカスの取得契機は「セッションを開いた時」**であって「打った時」ではない。眺めているだけという使い方が主で、その間まったく入力が発生しないため
+  - **複数端末の競合は可視性で解く**: 固定の優先度は置かず、`client-info` が `document.visibilityState` を申告し `visibilitychange` のたびに再送する（`frontend/src/hooks/useMultiplexedTerminal.ts`）。ポケットの中のスマホやスリープ中のタブレットは候補から外れ、手に持っている端末が勝つ。可視な候補が複数なら last writer wins
+  - **全端末が hidden なら focus を配信しない**: 追従側は直前の表示を保つ（スマホをしまってグラスが真っ白になってはいけない）。グラス自身の接続は relay 購読で識別して選出から除外する（追従が選出に還流するため）
+  - **送信中・判断中は追従を保留**: voice / choice / overlay では追従しない。返信はヘッダに出ている宛先へ届かなければならず、スマホが先に進んだからといって宛先を書き換えてはならない。セッション一覧ではカーソルだけ動かし、会話を開くのは意図的なタップのまま
+  - フォーカス変更は5秒の定期 push を待たず即座に配信する（実測 26ms）。5秒遅れて追従するくらいなら追従しない方がましなため
+  - デスクトップ／タブレット経路（`DesktopLayout.tsx`）は `client-info` を送っていなかったため、追加した（モバイルの `TerminalPage.tsx` は送信済みだった）
+
+### Fixed
+- **glasses の SDK が 0.0.9 のまま取り残されていた問題**: `glasses/node_modules` の `@evenrealities/even_hub_sdk` が 0.0.9 のままで、`package.json` / `bun.lock` が指す 0.0.12 と食い違っていた。音声入力が使う `AudioInputSource` は 0.0.9 に存在しないため、この状態ではビルドが壊れる。`bun install` で解消
+
 ## [0.2.47] - 2026-07-25
 
 ### Changed
