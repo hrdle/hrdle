@@ -174,6 +174,20 @@ function sendSessionMessage(msg: Record<string, unknown>) {
 	}
 }
 
+// Last declared device type, replayed whenever the page is shown or hidden so
+// the server knows which device the user is actually looking at. That decides
+// which client owns the glasses focus.
+let lastDeviceType: "mobile" | "tablet" | "desktop" | null = null;
+
+function sendClientInfoNow() {
+	if (!lastDeviceType) return;
+	sendSessionMessage({
+		type: "client-info",
+		deviceType: lastDeviceType,
+		visible: typeof document !== "undefined" && !document.hidden,
+	});
+}
+
 function subscribeToSession(
 	sessionId: string,
 	sessionInstanceId?: string,
@@ -652,6 +666,17 @@ export function useMultiplexedTerminal(
 		};
 	});
 
+	// Re-declare visibility whenever the page is shown or hidden. Putting a
+	// device down must drop it out of the glasses focus election —
+	// otherwise a tablet left on a session would keep stealing the glasses from
+	// the phone in the user's hand.
+	useEffect(() => {
+		const onVisibilityChange = () => sendClientInfoNow();
+		document.addEventListener("visibilitychange", onVisibilityChange);
+		return () =>
+			document.removeEventListener("visibilitychange", onVisibilityChange);
+	}, []);
+
 	useEffect(() => {
 		// peer 切替時は ensureConnection が force close + 再接続するので、
 		// 接続復帰後 (onopen/ready) で subscribeToSession が呼ばれる
@@ -755,7 +780,8 @@ export function useMultiplexedTerminal(
 
 	const sendClientInfo = useCallback(
 		(deviceType: "mobile" | "tablet" | "desktop") => {
-			sendSessionMessage({ type: "client-info", deviceType });
+			lastDeviceType = deviceType;
+			sendClientInfoNow();
 		},
 		[],
 	);

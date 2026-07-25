@@ -46,6 +46,18 @@ export interface DashboardResponse {
 // of types and does not import from shared/).
 
 /**
+ * Mirror of ClientFocus in shared/types.ts: the session shown on the
+ * phone/tablet the user is currently holding. Rides along with
+ * `sessions-updated`; absent when every client is hidden, which tells the
+ * glasses to keep showing whatever they already had.
+ */
+export interface ClientFocus {
+  sessionId: string
+  deviceType: 'mobile' | 'tablet' | 'desktop'
+  at: number
+}
+
+/**
  * One relay item for the G2 glasses channel: a single piece of information the
  * user needs to make a decision, not a summary. `waiting` items live until the
  * blocked epoch ends or they are dismissed; `info` items are FYI with a TTL.

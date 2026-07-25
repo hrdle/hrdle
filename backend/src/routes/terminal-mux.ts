@@ -14,9 +14,11 @@ import {
 } from '../services/glasses-relay';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
+  ClientFocus,
   ControlClientMessage,
   MuxClientMessage,
   ConversationMessage,
+  SessionResponse,
 } from '../../../shared/types';
 import { MuxClientMessageSchema } from '../../../shared/types';
 import { buildSessionsList, invalidateWorkspacesCache } from './sessions';
@@ -65,12 +67,67 @@ export interface MuxData {
   subscriptions: Map<string, MuxSubscription>;
   conversationWatchers: Map<string, ConversationWatcher>;
   lastPingAt: number;
+  // ── Glasses focus follow ──
+  /** Declared by `client-info`; a connection without one never claims focus. */
+  deviceType?: 'mobile' | 'tablet' | 'desktop';
+  /** document.visibilityState mirror. `false` = pocketed/asleep → not a
+   *  focus candidate. `undefined` = never declared → also not a candidate. */
+  visible?: boolean;
+  /** Session this client last opened, and when. */
+  focusSessionId?: string;
+  focusAt?: number;
+  /** Set by `subscribe-glasses-relay`: the glasses follow focus, never claim
+   *  it, otherwise following would feed back into the election. */
+  isGlasses?: boolean;
 }
 
 const herdrService = new HerdrService();
 
 // Track mux connections for broadcast
 const activeMuxConnections = new Set<ServerWebSocket<MuxData>>();
+
+// ── Glasses focus follow ──
+
+/** Elect the session the user is looking at: among clients that declared
+ *  themselves visible, the one that opened a session most recently. Returns
+ *  undefined when nothing qualifies (all hidden / none declared), which tells
+ *  followers to hold their current view rather than blank it. */
+function computeClientFocus(): ClientFocus | undefined {
+  let best: MuxData | undefined;
+  for (const ws of activeMuxConnections) {
+    const d = ws.data;
+    // The glasses follow focus; letting them claim it would be a feedback loop.
+    if (d.isGlasses) continue;
+    if (!d.deviceType || !d.focusSessionId || d.visible !== true) continue;
+    if (!best || (d.focusAt ?? 0) > (best.focusAt ?? 0)) best = d;
+  }
+  if (!best?.focusSessionId || !best.deviceType) return undefined;
+  return { sessionId: best.focusSessionId, deviceType: best.deviceType, at: best.focusAt ?? 0 };
+}
+
+/** Last broadcast focus, so a re-election that lands on the same session
+ *  doesn't cost a session-list rebuild. */
+let lastFocusKey = '';
+
+function focusKey(f: ClientFocus | undefined): string {
+  return f ? `${f.sessionId}:${f.deviceType}` : '';
+}
+
+/** Re-elect and, when the winner actually changed, push it out immediately.
+ *  The 5s sessions timer would otherwise sit on the change, and following a
+ *  phone that lags five seconds behind is worse than not following at all. */
+function maybePushFocus(): void {
+  const key = focusKey(computeClientFocus());
+  if (key === lastFocusKey) return;
+  lastFocusKey = key;
+  pushSessionsNow();
+}
+
+function sessionsUpdatedPayload(sessions: SessionResponse[]): string {
+  const focus = computeClientFocus();
+  lastFocusKey = focusKey(focus);
+  return JSON.stringify({ type: 'sessions-updated', sessions, ...(focus ? { focus } : {}) });
+}
 
 // Zombie detection: if no client ping for 60s, assume connection is dead.
 const PING_TIMEOUT_MS = 60_000;
@@ -116,7 +173,7 @@ function startSessionsPush() {
       );
       if (stableJson === lastSessionsJson) return;
       lastSessionsJson = stableJson;
-      const payload = JSON.stringify({ type: 'sessions-updated', sessions });
+      const payload = sessionsUpdatedPayload(sessions);
       for (const ws of activeMuxConnections) {
         try { ws.send(payload); } catch { /* disconnected */ }
       }
@@ -142,7 +199,7 @@ function stopSessionsPush() {
 export function pushSessionsNow() {
   lastSessionsJson = '';
   buildSessionsList().then(sessions => {
-    const payload = JSON.stringify({ type: 'sessions-updated', sessions });
+    const payload = sessionsUpdatedPayload(sessions);
     for (const ws of activeMuxConnections) {
       try { ws.send(payload); } catch { /* disconnected */ }
     }
@@ -174,7 +231,7 @@ export async function muxOpen(ws: ServerWebSocket<MuxData>) {
 
   try {
     const sessions = await buildSessionsList();
-    ws.send(JSON.stringify({ type: 'sessions-updated', sessions }));
+    ws.send(sessionsUpdatedPayload(sessions));
   } catch { /* best effort */ }
 
   ws.send(JSON.stringify({ type: 'ready' }));
@@ -199,11 +256,20 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
   if (msg.type === 'subscribe') {
     await handleSubscribe(ws, msg.sessionId);
+    // Opening a session claims the glasses focus — watching, not typing,
+    // is what the user does most of the time.
+    ws.data.focusSessionId = msg.sessionId;
+    ws.data.focusAt = Date.now();
+    maybePushFocus();
     return;
   }
 
   if (msg.type === 'unsubscribe') {
     handleUnsubscribe(ws, msg.sessionId);
+    if (ws.data.focusSessionId === msg.sessionId) {
+      ws.data.focusSessionId = undefined;
+      maybePushFocus();
+    }
     return;
   }
 
@@ -221,6 +287,9 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
   // gate below, like ping: it marks the whole connection (no sessionId) as
   // "glasses present", which gates relay assembly/sending.
   if (msg.type === 'subscribe-glasses-relay') {
+    // Marks this connection as a follower, excluding it from the focus
+    // election.
+    ws.data.isGlasses = true;
     await subscribeGlassesRelay(ws);
     return;
   }
@@ -258,6 +327,8 @@ export function muxClose(ws: ServerWebSocket<MuxData>, code: number, reason: str
   activeMuxConnections.delete(ws);
   unsubscribeGlassesRelay(ws);
   if (activeMuxConnections.size === 0) stopSessionsPush();
+  // A disconnect can hand the focus to another device.
+  else maybePushFocus();
 
   for (const [sessionId, sub] of ws.data.subscriptions) {
     cleanupSubscription(ws, sessionId, sub);
@@ -694,6 +765,16 @@ async function handleControlMessage(
       }
       case 'client-info': {
         controlSession.setClientDeviceType(ws.data.visitorId, msg.deviceType);
+        // Focus follow. A client competes for the glasses focus only
+        // while its page is visible; picking a device back up re-claims it,
+        // which is the same intent as opening a session on it.
+        ws.data.deviceType = msg.deviceType;
+        if (msg.visible !== undefined) {
+          const wasVisible = ws.data.visible;
+          ws.data.visible = msg.visible;
+          if (msg.visible && !wasVisible) ws.data.focusAt = Date.now();
+          maybePushFocus();
+        }
         break;
       }
       case 'pane-demands': {
