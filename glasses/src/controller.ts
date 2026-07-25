@@ -30,7 +30,7 @@ import { getTotalPagesAt, getMultiCountAt } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { CcHubWsClient } from './ws-client.ts'
-import type { Session, ConversationMessage, GlassesRelayItem } from './types.ts'
+import type { Session, ConversationMessage, GlassesRelayItem, ClientFocus } from './types.ts'
 
 const INITIAL_LOAD_COUNT = 20
 const LOAD_MORE_INCREMENT = 20
@@ -132,7 +132,7 @@ export class GlassesController {
   constructor(platform: GlassesPlatform) {
     this.platform = platform
     this.ws = new CcHubWsClient({
-      onSessionsUpdated: (sessions) => this.onSessionsUpdated(sessions),
+      onSessionsUpdated: (sessions, focus) => this.onSessionsUpdated(sessions, focus),
       onTerminalOutput: () => this.maybeRefreshConversation(),
       onReady: () => this.onWsReady(),
       onError: () => {},
@@ -554,7 +554,7 @@ export class GlassesController {
     if (s && this.state.mode !== 'session_list') this.ws.subscribe(s.id)
   }
 
-  private onSessionsUpdated(sessions: Session[]): void {
+  private onSessionsUpdated(sessions: Session[], focus?: ClientFocus): void {
     const st = this.state
     const prevId = st.sessions[st.sessionIndex]?.id
     // Update session data in-place (preserve sort order during conversation/choice)
@@ -579,8 +579,39 @@ export class GlassesController {
     } else if (st.sessionIndex >= st.sessions.length) {
       st.sessionIndex = Math.max(0, st.sessions.length - 1)
     }
+    if (this.followFocus(focus)) return // already re-rendered
     this.render()
     this.maybeRefreshConversation()
+  }
+
+  /** Follow the session the user opened on the phone/tablet in their hand.
+   *  Returns true when it took over the render.
+   *
+   *  Deliberately narrow: it never changes mode, so a glance at the session
+   *  list is not yanked into a conversation. It also yields to every mode that
+   *  is mid-decision or mid-send — a reply must land where the header says it
+   *  will, and the phone moving on cannot be allowed to redirect it. */
+  private followFocus(focus: ClientFocus | undefined): boolean {
+    if (!focus) return false // every client hidden → hold the current view
+    const st = this.state
+    if (st.mode !== 'session_list' && st.mode !== 'conversation') return false
+    if (focus.sessionId === st.sessions[st.sessionIndex]?.id) return false
+    const idx = st.sessions.findIndex((s) => s.id === focus.sessionId)
+    if (idx < 0) return false
+
+    st.sessionIndex = idx
+    if (st.mode === 'session_list') {
+      // Move the cursor only; entering a session stays a deliberate tap.
+      this.render()
+      return true
+    }
+    this.ws.subscribe(focus.sessionId)
+    st.conversation = []
+    st.conversationOffset = 0
+    st.conversationPage = 0
+    this.render()
+    void this.loadConversation().then(() => this.render())
+    return true
   }
 
   private onRelaySnapshot(items: GlassesRelayItem[]): void {

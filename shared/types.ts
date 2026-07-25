@@ -905,7 +905,10 @@ export type ControlClientMessage =
   | { type: 'resize-pane'; paneId: string; cols: number; rows: number }
   | { type: 'select-pane'; paneId: string }
   | { type: 'ping'; timestamp: number }
-  | { type: 'client-info'; deviceType: 'mobile' | 'tablet' | 'desktop' }
+  // `visible` mirrors document.visibilityState. It decides which client owns
+  // the glasses focus when several are connected; re-sent on every
+  // visibilitychange. Omitted by clients that predate focus follow.
+  | { type: 'client-info'; deviceType: 'mobile' | 'tablet' | 'desktop'; visible?: boolean }
   // Per-client sizing (see `PaneDemand`): the sizes at which THIS client is
   // currently rendering each pane it displays. Keyed by tmux-style `%N`. The
   // server reconciles one PTY size per pane across all clients' demands. A
@@ -990,6 +993,27 @@ export interface GlassesRelayItem {
   expiresAt?: number;
 }
 
+/**
+ * Which session the user is currently looking at, so the glasses can follow
+ * the device in their hand.
+ *
+ * Only clients that declared themselves visible via `client-info` are
+ * candidates: a phone in a pocket or a sleeping tablet drops out, which is how
+ * two devices on one tailnet resolve without a fixed priority. Among visible
+ * candidates the last one to open a session wins. When no candidate remains,
+ * no focus is reported at all and followers keep whatever they were showing —
+ * pocketing a phone must never blank the glasses.
+ *
+ * Claimed by opening a session (subscribe), not by typing: watching a session
+ * scroll by is the common case and produces no input.
+ */
+export interface ClientFocus {
+  sessionId: string;
+  deviceType: 'mobile' | 'tablet' | 'desktop';
+  /** Epoch ms the focus was claimed — last writer wins among visible clients. */
+  at: number;
+}
+
 // Client → Server messages for /ws/mux
 export type MuxClientMessage =
   | { type: 'subscribe'; sessionId: string }
@@ -1019,7 +1043,11 @@ const controlClientMessageOptions = [
   z.object({ type: z.literal('resize-pane'), paneId: PaneIdSchema, cols: WsPaneDim, rows: WsPaneDim }),
   z.object({ type: z.literal('select-pane'), paneId: PaneIdSchema }),
   z.object({ type: z.literal('ping'), timestamp: z.number() }),
-  z.object({ type: z.literal('client-info'), deviceType: z.enum(['mobile', 'tablet', 'desktop']) }),
+  z.object({
+    type: z.literal('client-info'),
+    deviceType: z.enum(['mobile', 'tablet', 'desktop']),
+    visible: z.boolean().optional(),
+  }),
   z.object({ type: z.literal('adjust-pane'), paneId: PaneIdSchema, direction: z.enum(['L', 'R', 'U', 'D']), amount: WsAmount }),
   z.object({
     type: z.literal('set-split-ratios'),
@@ -1066,7 +1094,9 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
 export type MuxServerMessage =
   | { type: 'subscribed'; sessionId: string }
   | { type: 'unsubscribed'; sessionId: string }
-  | { type: 'sessions-updated'; sessions: SessionResponse[] }
+  // `focus` rides along so the glasses can follow the phone/tablet in hand
+  //; absent when every client is hidden. Ordinary clients ignore it.
+  | { type: 'sessions-updated'; sessions: SessionResponse[]; focus?: ClientFocus }
   | { type: 'conversation-subscribed'; sessionId: string; ccSessionId: string | null }
   | { type: 'conversation-unsubscribed'; sessionId: string }
   | { type: 'initial-conversation'; sessionId: string; messages: ConversationMessage[] }

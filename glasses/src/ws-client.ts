@@ -1,8 +1,10 @@
 import { getBaseUrl } from './api.ts'
-import type { Session, GlassesRelayItem } from './types.ts'
+import type { Session, GlassesRelayItem, ClientFocus } from './types.ts'
 
 export interface WsCallbacks {
-  onSessionsUpdated: (sessions: Session[]) => void
+  /** `focus` is the session the phone/tablet in the user's hand is
+   *  showing; undefined when every client is hidden. */
+  onSessionsUpdated: (sessions: Session[], focus?: ClientFocus) => void
   onTerminalOutput: (sessionId: string, paneId: string, text: string) => void
   onReady: () => void
   onError: (err: string) => void
@@ -110,7 +112,7 @@ export class CcHubWsClient {
       const msg = JSON.parse(data)
       if (msg.type === 'sessions-updated') {
         this.lastSessions = msg.sessions
-        this.callbacks.onSessionsUpdated(msg.sessions)
+        this.callbacks.onSessionsUpdated(msg.sessions, msg.focus as ClientFocus | undefined)
       } else if (msg.type === 'subscribed' && msg.sessionId) {
         // Server emits an initial viewport on subscribe; ask explicitly too
         // so we get one even if our active pane differs from the default.

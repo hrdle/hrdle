@@ -819,6 +819,9 @@ export function DesktopLayout({
 			}, 50);
 		},
 		onConnect: () => {
+			// Declare the device so this client can own the glasses focus.
+			// Mobile does the same from TerminalPage.
+			controlTerminal.sendClientInfo(isTablet ? "tablet" : "desktop");
 			// Send resize with retries for terminal refresh on session switch.
 			// The first resize triggers the backend to emit initial state snapshots.
 			const delays = [100, 300, 600, 1000];
