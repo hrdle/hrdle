@@ -262,6 +262,28 @@ describe('trackGlassesRelay blocked transitions', () => {
     expect(await buildGlassesRelaySnapshot()).toHaveLength(0);
   });
 
+  test('an agent self-note survives an unrelated pane exiting blocked (#504)', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%1', agentStatus: 'working' }])];
+    // Agent self-note posted via `cchub glasses --session` → source 'agent',
+    // no paneId. It is NOT tied to any pane's blocked epoch.
+    const agentItem = mustItem(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'deploy?' }));
+    await subscribeGlassesRelay(sock);
+    sock.messages = [];
+
+    // A pane of the same session goes blocked, then unblocks. Old behaviour
+    // dropped the paneId-less agent item on this exit-blocked; it must not.
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%1', agentStatus: 'blocked' }])];
+    await trackGlassesRelay(); // baseline (no fire)
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%1', agentStatus: 'working' }])];
+    await trackGlassesRelay(); // %1 blocked→working = exit-blocked
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).not.toContain(agentItem.id);
+    const snap = await buildGlassesRelaySnapshot();
+    expect(snap.map((i) => i.id)).toContain(agentItem.id);
+  });
+
   test('dismiss suppresses re-synthesis for the same epoch; a new epoch creates a new item', async () => {
     const sock = new FakeSocket();
     glassesRelayDeps.readPaneText = async () => QUESTION_PANE;

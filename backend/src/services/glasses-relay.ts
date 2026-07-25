@@ -344,11 +344,17 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
  * to this pane, then promotes another still-blocked pane of the same session
  * (multi-pane workspaces) so exactly one waiting item remains while anything
  * still waits.
+ *
+ * Only `auto` items follow the herdr blocked epoch. Agent self-notes
+ * (source 'agent', posted via `cchub glasses`) have their own lifecycle —
+ * answered→dismissed — and are NOT tied to any pane's blocked state, so an
+ * unrelated pane unblocking must never drop them (#504). Auto items always
+ * carry the blocked pane's id, so an exact paneId match is the right test.
  */
 async function exitBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   const slot = store.get(ws.id);
   const item = slot?.waiting;
-  if (item && (!item.paneId || item.paneId === paneId)) {
+  if (item && item.source === 'auto' && item.paneId === paneId) {
     delete slot?.waiting;
     if (slot && !slot.info) store.delete(ws.id);
     broadcastRemove(item.id);
