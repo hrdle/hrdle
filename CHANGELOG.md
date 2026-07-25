@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.46] - 2026-07-25
+
+### Fixed
+- **グラス連絡チャンネル: エージェント自筆 waiting item のライフサイクルを修正** (#504, #524): `cchub glasses --kind waiting` で投稿した自筆の判断依頼が、2つの経路で正しく扱われていなかった。(1) backend の `exitBlocked` が **paneId を持たない waiting item を、同一セッションの無関係な pane が blocked 解除しただけで削除**していた（`--session` 指定投稿は paneId が付かないため、未回答の「デプロイしていい?」が黙って消え得た）。auto 検知の item だけが herdr の blocked epoch に従うよう限定し、agent 自筆 item は独自ライフサイクル（answered→dismissed）に委ねるよう修正（`backend/src/services/glasses-relay.ts`）。(2) glasses アプリ側で、回答済みの自筆 item が banner に残り続けていた（auto item は pane の blocked 解除で自動消去されるが、自筆 item は blocked epoch を持たないため消去契機が無かった）。choice/voice 回答成功時に該当 item を明示削除（楽観的ローカル remove + サーバー dismiss で再接続時の復活も防止）するよう修正（`glasses/src/controller.ts`、ehpk v0.1.24）。回帰テスト追加
+
 ## [0.2.45] - 2026-07-25
 
 ### Added
