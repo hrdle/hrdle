@@ -90,7 +90,11 @@ describe('UsageHistoryService.recordSnapshot scoped limits', () => {
   });
 
   test('appends to history that predates scoped tracking', async () => {
-    await writeFile(HISTORY_FILE, JSON.stringify([snap('2026-07-17T00:00:00.000Z')]));
+    // Relative, not a literal date: recordSnapshot prunes anything older than
+    // 8 days, so a hardcoded timestamp silently turns into "history is empty"
+    // once it ages out — and then this asserts the wrong thing forever.
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await writeFile(HISTORY_FILE, JSON.stringify([snap(yesterday)]));
     await new UsageHistoryService().recordSnapshot(cycle, cycle, [fable]);
     const written = await readSnapshots();
     expect(written).toHaveLength(2);
