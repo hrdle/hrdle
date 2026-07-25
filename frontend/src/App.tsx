@@ -1036,6 +1036,8 @@ export function App() {
 				onSelectPane={handleSelectPane}
 				onBack={openSessions.length > 0 ? handleBackFromList : undefined}
 				isOnboarding={showSessionListOnboarding}
+				onToggleDashboard={() => setShowMobileDashboard((v) => !v)}
+				dashboardOpen={showMobileDashboard}
 			/>
 			{showSessionListOnboarding && (
 				<Onboarding
@@ -1425,9 +1427,12 @@ export function App() {
 				/>
 			)}
 
-			{/* Mobile Dashboard Overlay */}
+			{/* Mobile Dashboard Overlay.
+			    z-[70] so it also covers the workspace list overlay (z-[60]) — the
+			    list header now has its own dashboard button, and closing the
+			    dashboard drops the user back onto the list. */}
 			{showMobileDashboard && (
-				<div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a0a] animate-modal-in">
+				<div className="fixed inset-0 z-[70] flex flex-col bg-[#0a0a0a] animate-modal-in">
 					<div className="shrink-0 px-4 pt-3 pb-3 border-b border-white/[0.06]">
 						<div className="flex items-center justify-between gap-2">
 							<div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5">
