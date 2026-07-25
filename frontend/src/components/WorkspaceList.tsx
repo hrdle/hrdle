@@ -9,6 +9,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
 	ArrowRight,
 	BarChart3,
+	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	ExternalLink,
@@ -33,9 +34,11 @@ import {
 	type IndicatorState,
 	isAgentProvider,
 	LOCAL_PEER_ID,
+	type PaneInfo,
 	type PeerClientView,
 	type SessionResponse,
 	type SessionTheme,
+	type TabInfo,
 	threadAgentOf,
 } from "../../../shared/types";
 import { openClaudeAppSession } from "../utils/claude-app";
@@ -723,6 +726,288 @@ function SortableSessionItem({
 	);
 }
 
+const AGENT_NAME_COLORS: Record<string, string> = {
+	red: "text-red-300",
+	orange: "text-orange-300",
+	amber: "text-amber-300",
+	green: "text-green-300",
+	teal: "text-teal-300",
+	blue: "text-blue-300",
+	cyan: "text-cyan-300",
+	indigo: "text-indigo-300",
+	purple: "text-purple-300",
+	pink: "text-pink-300",
+};
+
+/**
+ * Long-press (600ms) handlers shared by the tab / pane rows. The timer lives in
+ * a ref because the session list re-renders on every 5s server push: a render
+ * mid-press would hand the DOM fresh handlers whose local timer is null, so the
+ * pending close would never be cancelled on release.
+ */
+function useRowLongPress(onLongPress: (() => void) | undefined) {
+	const timerRef = useRef<number | null>(null);
+	const firedRef = useRef(false);
+
+	const cancel = () => {
+		if (timerRef.current) {
+			clearTimeout(timerRef.current);
+			timerRef.current = null;
+		}
+	};
+
+	return {
+		/** True when the press already fired as a long press — the click is a no-op. */
+		consumeLongPress: () => {
+			if (!firedRef.current) return false;
+			firedRef.current = false;
+			return true;
+		},
+		handlers: {
+			onTouchStart: () => {
+				firedRef.current = false;
+				if (!onLongPress) return;
+				timerRef.current = window.setTimeout(() => {
+					timerRef.current = null;
+					firedRef.current = true;
+					onLongPress();
+				}, 600);
+			},
+			onTouchEnd: cancel,
+			onTouchMove: cancel,
+			onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+		},
+	};
+}
+
+/** One pane of a tab: status dot, agent name, then its metrics and recap. */
+function PaneRow({
+	session,
+	pane,
+	bridgePaneId,
+	onSelect,
+	onSelectPane,
+	onClosePane,
+}: {
+	session: ExtendedSessionResponse;
+	pane: PaneInfo;
+	bridgePaneId?: string;
+	onSelect: (session: ExtendedSessionResponse) => void;
+	onSelectPane?: (session: ExtendedSessionResponse, paneId: string) => void;
+	onClosePane?: (sessionId: string, paneId: string, name: string) => void;
+}) {
+	const { t, i18n } = useTranslation();
+	const cmd = pane.currentCommand || "shell";
+	const isAgentPane = isAgentProvider(cmd) || !!pane.agentName;
+	const displayName = pane.agentName || cmd;
+	const nameColor =
+		pane.agentColor && AGENT_NAME_COLORS[pane.agentColor]
+			? AGENT_NAME_COLORS[pane.agentColor]
+			: isAgentPane
+				? "text-green-300"
+				: "text-zinc-300";
+	const paneIndicator = pane.indicatorState;
+	const paneDotClass =
+		paneIndicator === "processing"
+			? "bg-blue-400"
+			: paneIndicator === "waiting_input"
+				? "bg-yellow-400 animate-pulse"
+				: "bg-zinc-600";
+
+	const { consumeLongPress, handlers } = useRowLongPress(
+		onClosePane
+			? () => onClosePane(session.id, pane.paneId, displayName)
+			: undefined,
+	);
+
+	return (
+		<div>
+			<button
+				type="button"
+				onClick={() => {
+					if (consumeLongPress()) return;
+					if (onSelectPane) {
+						onSelectPane(session, pane.paneId);
+					} else {
+						onSelect(session);
+					}
+				}}
+				{...handlers}
+				className="w-full min-h-11 flex items-center gap-2 px-3 py-1.5 rounded-md text-left transition-colors hover:bg-white/[0.04]"
+			>
+				<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${paneDotClass}`} />
+				<span className={`text-[13px] font-medium truncate ${nameColor}`}>
+					{displayName}
+				</span>
+				{!pane.agentName && <span className="flex-1" />}
+				{paneIndicator === "processing" && (
+					<span className="text-[10px] text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded-full shrink-0">
+						{t("session.processing")}
+					</span>
+				)}
+				{pane.isActive && (
+					<span className="text-[10px] text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded-full shrink-0">
+						{t("session.paneFocused")}
+					</span>
+				)}
+				<ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+			</button>
+			{pane.metrics && (
+				<div className="ml-6 flex items-center gap-3 flex-wrap text-[11px] text-zinc-500">
+					{pane.metrics.model && (
+						<span className="text-zinc-500" title={pane.metrics.model}>
+							{formatModelName(pane.metrics.model)}
+						</span>
+					)}
+					{typeof pane.metrics.contextPercent === "number" && (
+						<div
+							className="inline-flex items-center gap-1.5"
+							title={`${formatTokenCount(pane.metrics.contextTokens ?? 0)} / ${formatTokenCount(pane.metrics.contextMaxTokens ?? 0)}`}
+						>
+							<span className="text-zinc-600">ctx</span>
+							<div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
+								<div
+									className={`h-full ${
+										pane.metrics.contextPercent >= 80
+											? "bg-red-500"
+											: pane.metrics.contextPercent >= 60
+												? "bg-amber-500"
+												: "bg-emerald-500"
+									}`}
+									style={{
+										width: `${Math.max(2, pane.metrics.contextPercent)}%`,
+									}}
+								/>
+							</div>
+							<span className="font-mono tabular-nums">
+								{pane.metrics.contextPercent.toFixed(1)}%
+							</span>
+						</div>
+					)}
+					{typeof pane.metrics.memoryRssBytes === "number" &&
+						pane.metrics.memoryRssBytes > 0 && (
+							<span
+								className="font-mono tabular-nums"
+								title={`${pane.metrics.memoryRssBytes} bytes`}
+							>
+								<span className="text-zinc-600">mem</span>{" "}
+								{formatBytes(pane.metrics.memoryRssBytes)}
+							</span>
+						)}
+				</div>
+			)}
+			{pane.recap && (
+				<p className="ml-6 mt-0.5 mb-1 text-[12px] text-zinc-400 leading-relaxed line-clamp-2">
+					{pane.recap}
+					{pane.recapAt && (
+						<span className="ml-2 text-[10px] text-zinc-600">
+							{formatRelativeTime(pane.recapAt, t, i18n.language)}
+						</span>
+					)}
+				</p>
+			)}
+			{pane.paneId === bridgePaneId && (
+				<button
+					type="button"
+					onClick={() => {
+						const bridgeId = session.bridgeSessionId;
+						if (!bridgeId) return;
+						openClaudeAppSession(bridgeId);
+					}}
+					className="ml-6 mt-1 mb-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 transition-colors"
+				>
+					<ExternalLink className="w-3.5 h-3.5" />
+					{t("session.openInClaudeApp")}
+				</button>
+			)}
+		</div>
+	);
+}
+
+/**
+ * One tab of the workspace. The disclosure chevron doubles as the active
+ * marker: only the active tab can show its panes (the backend renders a single
+ * tab), so selecting a collapsed tab is what expands it.
+ */
+function TabRow({
+	session,
+	tab,
+	isActive,
+	canClose,
+	onSelectTab,
+	onCloseTab,
+}: {
+	session: ExtendedSessionResponse;
+	tab: TabInfo;
+	isActive: boolean;
+	canClose: boolean;
+	onSelectTab?: (session: ExtendedSessionResponse, tabId: string) => void;
+	onCloseTab?: (
+		session: ExtendedSessionResponse,
+		tabId: string,
+		label: string,
+	) => void;
+}) {
+	const { t } = useTranslation();
+	// herdr labels a tab with its number until it is renamed. "Tab 3" reads
+	// better than a bare "3", but a renamed tab ("Recipes") wants no prefix.
+	const label = /^\d+$/.test(tab.label)
+		? `${t("session.tab")} ${tab.label}`
+		: tab.label;
+
+	const closeTab =
+		canClose && onCloseTab
+			? () => onCloseTab(session, tab.id, tab.label)
+			: undefined;
+	const { consumeLongPress, handlers } = useRowLongPress(closeTab);
+
+	return (
+		<div className="group/tab flex items-center gap-1">
+			<button
+				type="button"
+				onClick={() => {
+					if (consumeLongPress()) return;
+					if (!isActive) onSelectTab?.(session, tab.id);
+				}}
+				{...handlers}
+				className={`flex-1 min-w-0 min-h-11 flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
+					isActive ? "bg-cyan-500/10" : "hover:bg-white/[0.04]"
+				}`}
+			>
+				{isActive ? (
+					<ChevronDown className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+				) : (
+					<ChevronRight className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+				)}
+				<span
+					className={`text-[13px] font-medium truncate ${
+						isActive ? "text-cyan-200" : "text-zinc-300"
+					}`}
+				>
+					{label}
+				</span>
+				<span className="flex-1" />
+				{!isActive && (
+					<span className="text-[11px] text-zinc-600 shrink-0">
+						{t("session.panes", { count: tab.paneCount })}
+					</span>
+				)}
+			</button>
+			{closeTab && (
+				<button
+					type="button"
+					onClick={closeTab}
+					title={t("session.closeTabTitle")}
+					aria-label={t("session.closeTabTitle")}
+					className="shrink-0 min-h-11 px-2 rounded-md text-zinc-600 opacity-0 transition-opacity hover:text-red-400 hover:bg-red-500/10 group-hover/tab:opacity-100 focus-visible:opacity-100"
+				>
+					<X className="w-3.5 h-3.5" />
+				</button>
+			)}
+		</div>
+	);
+}
+
 // Session item with long press to show menu
 function SessionItem({
 	session,
@@ -873,6 +1158,9 @@ function SessionItem({
 	// model/ctx/mem would be ambiguous, so those move to the per-pane rows.
 	const isMultiWorkspace =
 		(extSession.panes?.length ?? 0) > 1 || (extSession.tabs?.length ?? 0) > 1;
+	// A single-tab workspace has no hierarchy worth drawing — its panes are
+	// listed flat, with the "new tab" action still available underneath.
+	const hasTabTree = (extSession.tabs?.length ?? 0) > 1;
 	// Derive card-level indicatorState from panes (priority: waiting_input > processing > idle)
 	const cardIndicator: IndicatorState | undefined = (() => {
 		if (extSession.panes && extSession.panes.length > 0) {
@@ -1068,16 +1356,16 @@ function SessionItem({
 					{/* Secondary badge: pane count (only if > 1) */}
 					{extSession.panes && extSession.panes.length > 1 && (
 						<span className="text-[11px] px-2 py-0.5 rounded-full shrink-0 text-cyan-400 bg-cyan-500/15">
-							{extSession.panes.length} panes
+							{t("session.panes", { count: extSession.panes.length })}
 						</span>
 					)}
 
-						{/* Secondary badge: tab count (only if the workspace has > 1 tab) */}
-						{extSession.tabs && extSession.tabs.length > 1 && (
-							<span className="text-[11px] px-2 py-0.5 rounded-full shrink-0 text-violet-300 bg-violet-500/15">
-								{extSession.tabs.length} {t("session.tabs").toLowerCase()}
-							</span>
-						)}
+					{/* Secondary badge: tab count (only if the workspace has > 1 tab) */}
+					{extSession.tabs && extSession.tabs.length > 1 && (
+						<span className="text-[11px] px-2 py-0.5 rounded-full shrink-0 text-violet-300 bg-violet-500/15">
+							{t("session.tabsCount", { count: extSession.tabs.length })}
+						</span>
+					)}
 				</div>
 
 				{/* Auto recap (away_summary) — timestamp shown inline at the tail.
@@ -1219,268 +1507,76 @@ function SessionItem({
 				</div>
 			)}
 
-			{/* Tab list (expandable): switch / create / close the workspace's tabs.
-			    Long-press a tab to close it (never the last one). */}
-			{panesExpanded && extSession.tabs && extSession.tabs.length >= 1 && (
+			{/* Tab / pane tree (expandable). herdr's model is workspace > tab >
+			    pane, so the panes nest under the tab that owns them. Only the
+			    active tab's panes are known (the backend renders one tab at a
+			    time), so the other tabs collapse to a single row carrying their
+			    pane count — selecting one switches the workspace over to it, which
+			    is what expands it. Long-press a row to close it (tabs also get a
+			    hover ✕, since desktop has no long press). */}
+			{panesExpanded && (hasTabTree || extSession.panes) && (
 				<div
-					className="mx-4 mb-2 pt-2 border-t border-white/[0.06] space-y-1"
+					className="mx-4 mb-3 pt-2 border-t border-white/[0.06]"
 					onClick={(e) => e.stopPropagation()}
 					onMouseDown={(e) => e.stopPropagation()}
 					onTouchStart={(e) => e.stopPropagation()}
 				>
-					<div className="flex items-center justify-between px-1 mb-0.5">
-						<span className="text-[10px] uppercase tracking-wider text-zinc-500">
-							{t("session.tabs")}
-						</span>
-						{onCreateTab && (
-							<button
-								type="button"
-								onClick={() => onCreateTab(session)}
-								className="text-[11px] text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 rounded hover:bg-white/[0.06] transition-colors"
-							>
-								+ {t("session.newTab")}
-							</button>
-						)}
-					</div>
-					{extSession.tabs.map((tab) => {
-						const isActive = tab.active || extSession.activeTabId === tab.id;
-						const canClose = (extSession.tabs?.length ?? 0) > 1;
-						let tabTimer: number | null = null;
-						let tabLongPressed = false;
-						return (
-							<button
-								key={tab.id}
-								type="button"
-								onClick={() => {
-									if (tabLongPressed) {
-										tabLongPressed = false;
-										return;
-									}
-									if (!isActive) onSelectTab?.(session, tab.id);
-								}}
-								onTouchStart={() => {
-									tabLongPressed = false;
-									tabTimer = window.setTimeout(() => {
-										tabTimer = null;
-										tabLongPressed = true;
-										if (canClose) onCloseTab?.(session, tab.id, tab.label);
-									}, 600);
-								}}
-								onTouchEnd={() => {
-									if (tabTimer) {
-										clearTimeout(tabTimer);
-										tabTimer = null;
-									}
-								}}
-								onTouchMove={() => {
-									if (tabTimer) {
-										clearTimeout(tabTimer);
-										tabTimer = null;
-									}
-								}}
-								onContextMenu={(e) => e.preventDefault()}
-								className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${
-									isActive
-										? "bg-cyan-500/10 hover:bg-cyan-500/15"
-										: "hover:bg-white/[0.04]"
-								}`}
-							>
-								<span
-									className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-cyan-400" : "bg-zinc-600"}`}
-								/>
-								<span
-									className={`text-[13px] font-medium truncate ${isActive ? "text-cyan-200" : "text-zinc-300"}`}
-								>
-									{t("session.tab")} {tab.label}
-								</span>
-								<span className="text-zinc-600 text-[11px] shrink-0">
-									({tab.paneCount})
-								</span>
-								<span className="flex-1" />
-								{isActive && (
-									<span className="text-[10px] text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded-full shrink-0">
-										active
-									</span>
-								)}
-							</button>
-						);
-					})}
-				</div>
-			)}
-
-			{/* Pane list (expandable, shows per-pane status indicators + metrics) */}
-			{panesExpanded && extSession.panes && isMultiWorkspace && (
-				<div
-					className="mx-4 mb-3 pt-2 border-t border-white/[0.06] space-y-1"
-					onClick={(e) => e.stopPropagation()}
-					onMouseDown={(e) => e.stopPropagation()}
-					onTouchStart={(e) => e.stopPropagation()}
-				>
-					{extSession.panes.map((pane) => {
-						const cmd = pane.currentCommand || "shell";
-						const isAgentPane = isAgentProvider(cmd) || !!pane.agentName;
-						const displayName = pane.agentName || cmd;
-						const agentColorMap: Record<string, string> = {
-							red: "text-red-300",
-							orange: "text-orange-300",
-							amber: "text-amber-300",
-							green: "text-green-300",
-							teal: "text-teal-300",
-							blue: "text-blue-300",
-							cyan: "text-cyan-300",
-							indigo: "text-indigo-300",
-							purple: "text-purple-300",
-							pink: "text-pink-300",
-						};
-						const nameColor =
-							pane.agentColor && agentColorMap[pane.agentColor]
-								? agentColorMap[pane.agentColor]
-								: isAgentPane
-									? "text-green-300"
-									: "text-zinc-300";
-						const paneIndicator = pane.indicatorState;
-						const paneDotClass =
-							paneIndicator === "processing"
-								? "bg-blue-400"
-								: paneIndicator === "waiting_input"
-									? "bg-yellow-400 animate-pulse"
-									: "bg-zinc-600";
-						const paneBgClass = "hover:bg-white/[0.04]";
-
-						let paneTimer: number | null = null;
-						let paneLongPressed = false;
-						return (
-							<div key={pane.paneId}>
-								<button
-									type="button"
-									onClick={() => {
-									if (paneLongPressed) {
-										paneLongPressed = false;
-										return;
-									}
-									if (onSelectPane) {
-										onSelectPane(session, pane.paneId);
-									} else {
-										onSelect(session);
-									}
-								}}
-								onTouchStart={() => {
-									paneLongPressed = false;
-									paneTimer = window.setTimeout(() => {
-										paneTimer = null;
-										paneLongPressed = true;
-										onClosePane?.(session.id, pane.paneId, displayName);
-									}, 600);
-								}}
-								onTouchEnd={() => {
-									if (paneTimer) {
-										clearTimeout(paneTimer);
-										paneTimer = null;
-									}
-								}}
-								onTouchMove={() => {
-									if (paneTimer) {
-										clearTimeout(paneTimer);
-										paneTimer = null;
-									}
-								}}
-								onContextMenu={(e) => e.preventDefault()}
-								className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-left transition-colors ${paneBgClass}`}
-							>
-								<span
-									className={`w-1.5 h-1.5 rounded-full shrink-0 ${paneDotClass}`}
-								/>
-								<span
-									className={`text-[13px] font-medium truncate ${nameColor}`}
-								>
-									{displayName}
-								</span>
-								{!pane.agentName && <span className="flex-1" />}
-								{paneIndicator === "processing" && (
-									<span className="text-[10px] text-blue-400 bg-blue-500/15 px-1.5 py-0.5 rounded-full shrink-0">
-										{t("session.processing")}
-									</span>
-								)}
-								{pane.isActive && (
-									<span className="text-[10px] text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded-full shrink-0">
-										active
-									</span>
-								)}
-									<ChevronRight className="w-3.5 h-3.5 text-zinc-700 shrink-0" />
-								</button>
-								{pane.metrics && (
-									<div className="ml-6 mt-0.5 flex items-center gap-3 flex-wrap text-[11px] text-zinc-500">
-										{pane.metrics.model && (
-											<span className="text-zinc-500" title={pane.metrics.model}>
-												{formatModelName(pane.metrics.model)}
-											</span>
-										)}
-										{typeof pane.metrics.contextPercent === "number" && (
-											<div
-												className="inline-flex items-center gap-1.5"
-												title={`${formatTokenCount(pane.metrics.contextTokens ?? 0)} / ${formatTokenCount(pane.metrics.contextMaxTokens ?? 0)}`}
-											>
-												<span className="text-zinc-600">ctx</span>
-												<div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
-													<div
-														className={`h-full ${
-															pane.metrics.contextPercent >= 80
-																? "bg-red-500"
-																: pane.metrics.contextPercent >= 60
-																	? "bg-amber-500"
-																	: "bg-emerald-500"
-														}`}
-														style={{
-															width: `${Math.max(2, pane.metrics.contextPercent)}%`,
-														}}
+					{hasTabTree
+						? extSession.tabs?.map((tab) => {
+								const isActive =
+									tab.active || extSession.activeTabId === tab.id;
+								return (
+									<div key={tab.id}>
+										<TabRow
+											session={session}
+											tab={tab}
+											isActive={isActive}
+											canClose={(extSession.tabs?.length ?? 0) > 1}
+											onSelectTab={onSelectTab}
+											onCloseTab={onCloseTab}
+										/>
+										{isActive && extSession.panes && (
+											<div className="ml-4 pl-1 border-l border-white/[0.08]">
+												{extSession.panes.map((pane) => (
+													<PaneRow
+														key={pane.paneId}
+														session={extSession}
+														pane={pane}
+														bridgePaneId={bridgePaneId}
+														onSelect={onSelect}
+														onSelectPane={onSelectPane}
+														onClosePane={onClosePane}
 													/>
-												</div>
-												<span className="font-mono tabular-nums">
-													{pane.metrics.contextPercent.toFixed(1)}%
-												</span>
+												))}
 											</div>
 										)}
-										{typeof pane.metrics.memoryRssBytes === "number" &&
-											pane.metrics.memoryRssBytes > 0 && (
-												<span
-													className="font-mono tabular-nums"
-													title={`${pane.metrics.memoryRssBytes} bytes`}
-												>
-													<span className="text-zinc-600">mem</span>{" "}
-													{formatBytes(pane.metrics.memoryRssBytes)}
-												</span>
-											)}
 									</div>
-								)}
-								{pane.recap && (
-									<p className="ml-6 mt-0.5 text-[12px] text-amber-200 leading-relaxed line-clamp-2">
-										{pane.recap}
-										{pane.recapAt && (
-											<span className="ml-2 text-[10px] text-zinc-500">
-												{formatRelativeTime(pane.recapAt, t, i18n.language)}
-											</span>
-										)}
-									</p>
-								)}
-								{pane.paneId === bridgePaneId && (
-									<button
-										type="button"
-										onClick={() => {
-											const bridgeId = extSession.bridgeSessionId;
-											if (!bridgeId) return;
-											openClaudeAppSession(bridgeId);
-										}}
-										className="ml-6 mt-1 inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] text-violet-200 bg-violet-500/15 hover:bg-violet-500/25 transition-colors"
-									>
-										<ExternalLink className="w-3.5 h-3.5" />
-										{t("session.openInClaudeApp")}
-									</button>
-								)}
-							</div>
-						);
-					})}
+								);
+							})
+						: extSession.panes?.map((pane) => (
+								<PaneRow
+									key={pane.paneId}
+									session={extSession}
+									pane={pane}
+									bridgePaneId={bridgePaneId}
+									onSelect={onSelect}
+									onSelectPane={onSelectPane}
+									onClosePane={onClosePane}
+								/>
+							))}
+					{onCreateTab && (
+						<button
+							type="button"
+							onClick={() => onCreateTab(session)}
+							className="w-full min-h-11 flex items-center gap-2 px-2 rounded-md text-[12px] text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04] transition-colors"
+						>
+							<Plus className="w-3.5 h-3.5 shrink-0" />
+							{t("session.newTab")}
+						</button>
+					)}
 				</div>
 			)}
+
 		</div>
 	);
 }
