@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.44] - 2026-07-25
+
+### Fixed
+- **更新ダイアログのボタンがタップしづらかった問題を修正** (#513): 実機と同じスマホ幅（459x1019）で確認したところ、ボタンが 42x25 / 74x25 CSS px しかなく、タッチターゲットの目安 44px を大きく下回っていた。`px-3 py-1.5 text-xs` → `min-h-11 px-4 text-sm` に変更し、53x39 / 89x39 に拡大。rem 基準のままなので UI スケール設定に追従する（`frontend/src/components/UpdatePrompt.tsx`）
+- **時間経過だけで CI が恒久的に落ちるテストを修正** (#517): `UsageHistoryService` のテストが履歴のシードにリテラル日付 `2026-07-17T00:00:00.000Z` を使っていた。`recordSnapshot` は8日より古いスナップショットを剪定するため、2026-07-25 00:00 UTC を過ぎた時点でシードが append の前に消え、以後すべての PR で失敗するようになっていた（v0.2.43 のリリース CI は 7.86 日時点で通っており、その数時間後から発症）。diff を見ても原因が分からない類の故障なので、シードを現在時刻からの相対（1日前）に変更（`backend/src/services/__tests__/usage-history-legacy.test.ts`）
+
+### Added
+- **モバイル/タブレット幅の e2e を CI で実行するようにした** (#518): スマホ・タブレット・デスクトップ間の対応漏れが繰り返し発生していた原因を調査したところ、(1) `App.tsx` の mobile 分岐が305行の独立 JSX ツリーで、ターミナル / セッション一覧 / ダッシュボード / キーボードすべて desktop と別コンポーネントであること、(2) `isTablet ?` の三項が PaneContainer に30箇所・DesktopLayout に18箇所あること、(3) 共有コンポーネントでもその幅で目視していないこと、の3種類に分類できた。加えて **CI が playwright を一度も実行しておらず**（`test.yml` は lint / typecheck / unit test / build のみ）、`playwright.config.ts` の projects も Desktop Chrome ひとつだけで、モバイル幅は一度も検証されていなかった。`responsive-desktop` / `responsive-tablet` / `responsive-mobile` の3 project と、`page.route` で `/api` を全スタブしてバックエンドも herdr も不要にした `tests/e2e/responsive/` を追加し、CI に `responsive` ジョブを新設。検証内容はアプリシェルの mount、**意図したレイアウトツリーが描画されていること**（新設 `data-layout` 属性。デバイス判定は `screen` の短辺とタッチ有無で決まりビューポート幅だけでは決まらないため、これが無いとマトリクスが同じレイアウトを3回踏みうる）、横スクロールが発生しないこと、タッチ幅でのタップ領域の最小高さ。既存 spec は実 herdr セッション前提のため `testIgnore` でデスクトップ・ローカル専用のまま据え置いた。タップ領域チェックは導入時点で既存3件を検出しており、DOM パス付きで `KNOWN_TOO_SMALL` に記録した上で #514 に分離している（`frontend/playwright.config.ts` / `tests/e2e/responsive/` / `.github/workflows/test.yml`）
+
 ## [0.2.43] - 2026-07-25
 
 ### Changed
