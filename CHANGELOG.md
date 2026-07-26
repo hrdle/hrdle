@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.55] - 2026-07-27
+
+### Fixed
+- **グラス: 会話を遡って読んでいると数秒で最新に引き戻される問題** (#545): `maybeRefreshConversation` はターミナル出力とセッション push のたび（3秒スロットル）に `loadConversation` を呼ぶが、`loadConversation` は末尾で `conversationOffset` と `conversationPage` を 0 にリセットしていた。つまり更新は新着を取ってくるだけでなく、**読んでいる途中の人を3秒ごとに先頭へ戻していた**。遡り表示中は更新を保留するよう修正（`glasses/src/controller.ts`、ehpk v0.1.32）。最新まで戻せばライブ更新が再開するので、通常のケース（最新メッセージが流れてくるのを眺める）には影響しない
+
 ## [0.2.54] - 2026-07-27
 
 ### Added
