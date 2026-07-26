@@ -1,162 +1,161 @@
-// Browser debug simulator — runs when the Even Hub SDK is absent (vite dev,
-// port 8391, /api + /ws/mux proxied to a dev backend).
+// Browser simulator — runs when the Even Hub SDK is absent, so the glasses UI
+// can be driven from a browser with no G2 on your face (vite dev on 8391, or
+// served by CC Hub itself at /glasses).
 //
-// It consumes the SAME GlassesController as the real G2 path (single
-// handler/domain implementation — no duplicated logic), so automated browser
-// tests exercise the exact state machine and relay flow that runs on the
-// glasses. Mic/STT are faked: the "STT result" textbox injects what the Groq
-// transcription would have returned.
+// It consumes the SAME GlassesController as the real G2 path AND renders
+// through the same `screenText()` the device renders through, so what you see
+// here is the device's own output: identical wrapping at 52 columns, identical
+// 7-line clamp, identical pagination. Copying the screen therefore quotes what
+// the glasses actually showed. Mic/STT are faked: the "STT result" textbox
+// injects what the Groq transcription would have returned.
 
 import { setBaseUrl } from './api.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
+import { screenText, wrapForPanel } from './display.ts'
 import type { AppState } from './display.ts'
-import { formatMessage, recapBlockLines } from './types.ts'
-import type { Session } from './types.ts'
 
-function sName(s: Session): string {
-  return s.customTitle || s.name || s.id.slice(0, 8)
+/** Japanese screen names — the shared vocabulary used when reporting issues. */
+const MODE_LABEL: Record<string, string> = {
+  session_list: '一覧',
+  conversation: '会話',
+  overlay: '割り込み',
+  choice: '選択',
+  voice: '音声',
 }
 
-function isWaiting(s: Session): boolean {
-  return s.indicatorState === 'waiting_input' || (!!s.waitingToolName && s.waitingToolName !== 'UserInput')
-}
+const STYLE = `
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d100e; color: #d8ded6;
+         font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; }
+  .sim-wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 48px;
+              display: flex; flex-direction: column; gap: 20px; }
+  .sim-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .sim-title h1 { font-size: 18px; font-weight: 800; letter-spacing: .02em; margin: 0; }
+  .sim-title .sub { font-size: 12px; color: #7d867a; }
+  .sim-main { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .lens-col { display: flex; flex-direction: column; gap: 10px; max-width: 100%; }
+  .lens-scroll { overflow-x: auto; max-width: 100%; }
 
-// ── Text rendering of the same render model (approximates the G2 layout) ──
+  /* 576x288 at 1:1 — the real panel size. */
+  .lens { width: 576px; height: 288px; flex: none; background: #05090a; color: #7ce88a;
+          font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+          border-radius: 10px; display: flex; flex-direction: column;
+          box-shadow: inset 0 0 60px rgba(124,232,138,.06); }
+  /* Sized so a full Japanese line fits. The G2 treats CJK as 1.857 columns
+     wide and wraps at 28 characters; a browser monospace draws it at exactly
+     2.0, so the two ratios cannot both be exact. Fitting the wider case keeps
+     wrapped lines inside the panel — an ASCII line then stops a little short
+     of the right edge, which is the harmless direction to be wrong in. */
+  .lens .hdr, .lens .ftr { height: 36px; padding: 0 4px; display: flex; align-items: center;
+                           font-size: 19px; white-space: pre; overflow: hidden; }
+  .lens .hdr { border-bottom: 1px solid #1c3a22; }
+  .lens .ftr { border-top: 1px solid #1c3a22; color: #3d7a48; }
+  .lens .body { height: 216px; margin: 0 4px; padding: 6px; font-size: 19px; line-height: 28px;
+                white-space: pre; overflow: hidden; }
 
-function renderSim(state: AppState): string {
-  const lines: string[] = []
-  const session = state.sessions[state.sessionIndex]
+  .lens-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+  .mode-pill { background: #1b2a1f; color: #7cc98f; padding: 3px 10px; border-radius: 999px;
+               font-weight: 700; font-size: 12px; }
+  .mode-id { color: #6b736a; font-family: ui-monospace, Menlo, monospace; }
 
-  if (state.mode === 'session_list') {
-    const badge = state.relayWaiting.length > 0 ? ` !${state.relayWaiting.length}` : ''
-    lines.push(`Sessions ${state.apiUsagePercent ? `API:${state.apiUsagePercent}` : ''}${badge}`)
-    lines.push('')
-    const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
-    const start = Math.max(0, state.sessionIndex - 3)
-    const visible = state.sessions.slice(start, start + 8)
-    for (let i = 0; i < visible.length; i++) {
-      const s = visible[i]
-      const idx = start + i
-      const icon = relayWaitingIds.has(s.id) || isWaiting(s) ? '!' : s.indicatorState === 'processing' ? '*' : ' '
-      const cursor = idx === state.sessionIndex ? '>' : ' '
-      lines.push(`${cursor}${icon} ${sName(s)}`)
-    }
-    lines.push('', 'tap:open  swipe:nav  dbl:overlay')
-  } else if (state.mode === 'conversation') {
-    const ind = session?.indicatorState
-    const status = session && isWaiting(session) ? ' !' : ind === 'processing' ? ' *' : ''
-    lines.push(`${session ? sName(session) : '---'}${status}`, '-'.repeat(40))
-    // Waiting/info banner at the TOP of the conversation tab (#504)
-    const top = state.relayWaiting[0]
-    if (top) {
-      const label = state.sessions.find((x) => x.id === top.sessionId)
-      lines.push(`[!]${label ? sName(label) : top.sessionId}${top.choices?.length ? `(選択${top.choices.length})` : ''}`)
-      lines.push(top.text.slice(0, 120))
-      lines.push('-'.repeat(40))
-    } else if (state.relayInfo[0]) {
-      const info = state.relayInfo[0]
-      const label = state.sessions.find((x) => x.id === info.sessionId)
-      lines.push(`[i]${label ? sName(label) : info.sessionId}: ${info.text.slice(0, 80)}`, '-'.repeat(40))
-    }
-    // Recap heads the latest view (mirrors display.ts conversationContent).
-    if (state.conversationOffset === 0 && state.conversationPage === 0) {
-      lines.push(...recapBlockLines(session?.ccRecap))
-    }
-    const msgs = state.conversation
-    const msgIndex = msgs.length > 0 ? Math.max(0, msgs.length - 1 - state.conversationOffset) : -1
-    if (msgIndex >= 0) {
-      const chunkSize = 300
-      const fullText = formatMessage(msgs[msgIndex])
-      const totalPages = Math.max(1, Math.ceil(fullText.length / chunkSize))
-      const page = Math.min(state.conversationPage, totalPages - 1)
-      lines.push(fullText.slice(page * chunkSize, (page + 1) * chunkSize))
-      const pos = `${msgIndex + 1}/${msgs.length}${totalPages > 1 ? ` p${page + 1}/${totalPages}` : ''}`
-      lines.push('', `${top ? 'tap:対応  dbl:後で' : 'dbl:back'}  ${pos}`)
-    } else {
-      lines.push('(no messages)')
-      lines.push('', top ? 'tap:対応  dbl:後で' : 'dbl:back')
-    }
-  } else if (state.mode === 'overlay') {
-    const waiting = state.relayWaiting
-    const item = waiting.find((i) => i.id === state.overlayItemId) || waiting[0]
-    if (item) {
-      const label = state.sessions.find((x) => x.id === item.sessionId)
-      lines.push(`${label ? sName(label) : item.sessionId} [!] ${waiting.indexOf(item) + 1}/${waiting.length}`, '-'.repeat(40))
-      lines.push(item.text)
-      if (item.choices?.length) {
-        lines.push('-'.repeat(24))
-        for (let i = 0; i < item.choices.length; i++) lines.push(` ${i + 1}. ${item.choices[i]}`)
-      }
-      lines.push('', 'tap:open  dbl:dismiss  swipe:next')
-    } else {
-      lines.push('(no waiting items)', '', 'dbl:back')
-    }
-  } else if (state.mode === 'choice') {
-    lines.push(`${state.choiceSessionName || (session ? sName(session) : '---')} [SELECT]`, 'Select response:', '')
-    for (let i = 0; i < state.choiceOptions.length; i++) {
-      lines.push(`${i === state.choiceIndex ? '>' : ' '} ${state.choiceOptions[i]}`)
-    }
-    lines.push('', 'swipe:select  tap:send  dbl:cancel')
-  } else if (state.mode === 'voice') {
-    const name = state.voiceSessionName || (session ? sName(session) : '---')
-    if (state.voicePhase === 'recording') {
-      lines.push(`${name}  [録音中]`, '', '● 録音中 (debug: STT欄に入力)', '', 'tap:停止して認識  dbl:キャンセル')
-    } else if (state.voicePhase === 'transcribing') {
-      lines.push(`${name}  [認識中]`, '', '認識中…')
-    } else {
-      lines.push(`${name}  [確認]`, '', state.voiceText || '(認識できませんでした)', '', state.voiceText ? 'tap:送信  dbl:キャンセル' : 'dbl:戻る')
-    }
-  }
-  return lines.join('\n')
-}
+  .panel { background: #151a14; border: 1px solid #262e25; border-radius: 8px;
+           padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; min-width: 240px; }
+  .panel h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+              color: #7d867a; margin: 0; font-weight: 700; }
+  .ring { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button { font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 6px;
+           border: 1px solid #33402f; background: #1d251c; color: #d8ded6; cursor: pointer; }
+  button:hover { background: #263021; }
+  button:focus-visible { outline: 2px solid #7cc98f; outline-offset: 2px; }
+  button.wide { grid-column: 1 / -1; }
+  input[type=text] { font: inherit; font-size: 13px; padding: 7px 9px; border-radius: 6px;
+                     border: 1px solid #33402f; background: #0f140e; color: #d8ded6; width: 100%;
+                     box-sizing: border-box; }
+  .hint { font-size: 11px; color: #6b736a; line-height: 1.6; }
+  .diag { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: #6b736a;
+          line-height: 1.8; word-break: break-all; }
+  .copied { color: #7cc98f; }
+`
 
 export function startDebugUI(): void {
-  // Apply hub URL from query params
+  // `?hub=` points the simulator at another CC Hub; default is same-origin,
+  // which is what /glasses and the vite proxy both want.
   const params = new URLSearchParams(location.search)
   const hubUrl = params.get('hub')
   if (hubUrl) setBaseUrl(hubUrl)
 
-  const W = 576, H = 288, SCALE = 1.5
+  document.title = 'CC Hub Glasses — シミュレータ'
+  const style = document.createElement('style')
+  style.textContent = STYLE
+  document.head.appendChild(style)
+
   const app = document.querySelector<HTMLDivElement>('#app')!
   app.innerHTML = `
-    <div style="font-family: monospace; padding: 20px; max-width: 900px; margin: auto;">
-      <h2>CC Hub Glasses — Debug</h2>
-      <div style="display:flex; gap:16px; align-items:start;">
-        <div>
-          <div id="g2sim" style="
-            width:${W * SCALE}px; height:${H * SCALE}px;
-            background:#000; color:#0f0; font-family:monospace;
-            font-size:${12 * SCALE}px; line-height:${16 * SCALE}px;
-            padding:8px; box-sizing:border-box; border:2px solid #0f0;
-            border-radius:8px; white-space:pre-wrap; overflow:hidden;
-          "></div>
-          <div id="g2mode" style="color:#0f0; font-family:monospace; margin-top:4px; font-size:14px;"></div>
-          <div id="g2relay" style="color:#0f0; font-family:monospace; margin-top:4px; font-size:14px;"></div>
+    <div class="sim-wrap">
+      <div class="sim-title">
+        <h1>CC Hub Glasses シミュレータ</h1>
+        <span class="sub">実機と同じ描画（576×288 / 52字×7行）</span>
+      </div>
+      <div class="sim-main">
+        <div class="lens-col">
+          <div class="lens-scroll">
+            <div class="lens">
+              <div class="hdr" id="g2-hdr"></div>
+              <div class="body" id="g2-body"></div>
+              <div class="ftr" id="g2-ftr"></div>
+            </div>
+          </div>
+          <div class="lens-meta">
+            <span class="mode-pill" id="g2-mode-jp">一覧</span>
+            <span class="mode-id" id="g2-mode-id">session_list</span>
+            <button type="button" id="g2-copy">画面をコピー</button>
+            <span class="hint" id="g2-copied"></span>
+          </div>
+          <div class="diag" id="g2-diag"></div>
+          <div class="diag" id="g2-relay"></div>
         </div>
-        <div>
-          <p><b>Ring Controls:</b></p>
-          <button onclick="window._dbg.swipeUp()">Swipe Up</button>
-          <button onclick="window._dbg.swipeDown()">Swipe Down</button><br><br>
-          <button onclick="window._dbg.tap()">Tap</button>
-          <button onclick="window._dbg.doubleTap()">Double Tap</button>
-          <p style="margin-top:16px;"><b>Voice (STT fake):</b></p>
-          <input id="dbg-stt" type="text" placeholder="STT結果テキスト"
-            style="width:220px; font-family:monospace; padding:4px;" />
-          <p style="color:#888; font-size:12px;">voice モードで tap → この文字列が認識結果になる</p>
+
+        <div class="panel">
+          <h2>リング操作</h2>
+          <div class="ring">
+            <button type="button" id="btn-up">スワイプ↑</button>
+            <button type="button" id="btn-down">スワイプ↓</button>
+            <button type="button" id="btn-tap">タップ</button>
+            <button type="button" id="btn-dbl">ダブルタップ</button>
+          </div>
+          <h2>音声（STT 差し込み）</h2>
+          <input type="text" id="dbg-stt" placeholder="認識結果として使う文字列" />
+          <p class="hint">音声画面でタップすると、この文字列が Groq の認識結果の代わりになる。</p>
         </div>
       </div>
     </div>
   `
 
-  const sim = document.getElementById('g2sim')!
-  const modeLabel = document.getElementById('g2mode')!
-  const relayLabel = document.getElementById('g2relay')!
+  const el = (id: string) => document.getElementById(id) as HTMLElement
+  const hdr = el('g2-hdr')
+  const body = el('g2-body')
+  const ftr = el('g2-ftr')
+  const modeJp = el('g2-mode-jp')
+  const modeId = el('g2-mode-id')
+  const copied = el('g2-copied')
+  const diag = el('g2-diag')
+  const relay = el('g2-relay')
   const sttInput = document.getElementById('dbg-stt') as HTMLInputElement
+
+  let lastScreen = { header: '', body: '', footer: '' }
 
   const platform: GlassesPlatform = {
     render(state) {
-      sim.textContent = renderSim(state)
+      const raw = screenText(state)
+      // The device's container wraps for it; this panel has to do it itself.
+      const screen = { ...raw, body: wrapForPanel(raw.body) }
+      lastScreen = screen
+      hdr.textContent = screen.header
+      body.textContent = screen.body
+      ftr.textContent = screen.footer
+      modeJp.textContent = MODE_LABEL[state.mode] ?? state.mode
+      modeId.textContent = state.mode
       renderDiag(state)
     },
     startMicCapture: () => Promise.resolve(true),
@@ -173,16 +172,66 @@ export function startDebugUI(): void {
     const session = state.sessions[state.sessionIndex]
     const bufText = session ? ws.getTerminalText(session.id) : ''
     const choices = session ? ws.getChoices(session.id) : []
-    modeLabel.textContent = `Mode: ${state.mode} | WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]`
+    diag.textContent = `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]`
     const top = state.relayWaiting[0]
-    relayLabel.textContent =
+    relay.textContent =
       `Relay: waiting=${state.relayWaiting.length} info=${state.relayInfo.length}` +
       (top ? ` | top: [${top.kind}] ${top.sessionId}${top.paneId ?? ''} "${top.text.slice(0, 40)}"${top.choices?.length ? ` choices=${top.choices.length}` : ''}` : '') +
       (state.overlayItemId ? ` | overlay=${state.overlayItemId}` : '')
   }
 
-  // Diag line also changes outside controller render events (terminal buffers,
-  // WS state) — keep it fresh on an interval like the old simulator did.
+  /** The screen as pasteable text: three framed sections, same strings the G2
+   *  drew. This is the point of the simulator — quoting a screen in a report
+   *  should not require retyping it. */
+  function screenAsText(): string {
+    const rule = '─'.repeat(52)
+    return [
+      `[${MODE_LABEL[controller.state.mode] ?? controller.state.mode} / ${controller.state.mode}]`,
+      rule,
+      lastScreen.header,
+      rule,
+      lastScreen.body,
+      rule,
+      lastScreen.footer,
+      rule,
+    ].join('\n')
+  }
+
+  el('g2-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(screenAsText())
+      copied.textContent = 'コピーしました'
+      copied.className = 'hint copied'
+    } catch {
+      copied.textContent = 'コピーできませんでした'
+      copied.className = 'hint'
+    }
+    setTimeout(() => { copied.textContent = '' }, 2000)
+  })
+
+  el('btn-up').addEventListener('click', () => controller.swipeUp())
+  el('btn-down').addEventListener('click', () => controller.swipeDown())
+  el('btn-tap').addEventListener('click', () => controller.tap())
+  el('btn-dbl').addEventListener('click', () => controller.doubleTap())
+
+  // Keyboard: arrows scroll, Enter taps, Backspace double-taps. Faster than
+  // clicking when walking someone through a flow.
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement) return
+    const map: Record<string, () => void> = {
+      ArrowUp: () => controller.swipeUp(),
+      ArrowDown: () => controller.swipeDown(),
+      Enter: () => controller.tap(),
+      Backspace: () => controller.doubleTap(),
+    }
+    const fn = map[e.key]
+    if (!fn) return
+    e.preventDefault()
+    fn()
+  })
+
+  // Diag also changes outside controller render events (terminal buffers, WS
+  // state) — keep it fresh on an interval.
   setInterval(() => renderDiag(controller.state), 500)
 
   ;(window as unknown as Record<string, unknown>)._ws = controller.ws
@@ -191,6 +240,7 @@ export function startDebugUI(): void {
     swipeDown: () => controller.swipeDown(),
     tap: () => controller.tap(),
     doubleTap: () => controller.doubleTap(),
+    screenText: () => screenAsText(),
   }
   ;(window as unknown as Record<string, unknown>)._controller = controller
 }

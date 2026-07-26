@@ -1,11 +1,14 @@
 #!/usr/bin/env bun
 // Generate embedded static assets from frontend build
 
-import { readdirSync, statSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, statSync, readFileSync, writeFileSync } from 'fs';
 import { join, relative, dirname } from 'path';
 
 const scriptDir = dirname(new URL(import.meta.url).pathname);
 const FRONTEND_DIST = join(scriptDir, '../frontend/dist');
+// Glasses simulator, built with --base=/glasses/ so it can be mounted under
+// that prefix. Lets anyone open the G2 UI without the hardware.
+const GLASSES_DIST = join(scriptDir, '../glasses/dist-web');
 const OUTPUT_FILE = join(scriptDir, '../backend/src/static-assets.ts');
 
 interface AssetEntry {
@@ -60,6 +63,17 @@ function scanDirectory(dir: string, assets: Record<string, AssetEntry> = {}, bas
 console.log('Scanning frontend dist...');
 const assets = scanDirectory(FRONTEND_DIST);
 console.log(`Found ${Object.keys(assets).length} files`);
+
+if (existsSync(GLASSES_DIST)) {
+  const glasses = scanDirectory(GLASSES_DIST);
+  for (const [path, entry] of Object.entries(glasses)) {
+    assets[`/glasses${path}`] = entry;
+  }
+  console.log(`Found ${Object.keys(glasses).length} glasses simulator files (mounted at /glasses)`);
+} else {
+  // Not fatal: a binary without it simply has no simulator route.
+  console.warn('glasses/dist-web missing — skipping the simulator (run: bun run --filter glasses build:web)');
+}
 
 const output = `// Auto-generated static assets - DO NOT EDIT
 // Generated at: ${new Date().toISOString()}
