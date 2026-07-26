@@ -141,6 +141,64 @@ export function recapBlockLines(recap: string | undefined, maxLines = 2): string
   return [`要約: ${capped[0]}`, ...capped.slice(1), '-'.repeat(24)]
 }
 
+/** Clip to a display width (CJK counts ~1.86 columns, as on the panel). */
+function clipToWidth(text: string, maxWidth: number): string {
+  let width = 0
+  for (let i = 0; i < text.length; i++) {
+    const code = text.codePointAt(i) ?? 0
+    const wide =
+      (code >= 0x3000 && code <= 0x9fff) ||
+      (code >= 0xff01 && code <= 0xff60) ||
+      (code >= 0xf900 && code <= 0xfaff)
+    width += wide ? 1.86 : 1
+    if (width > maxWidth) return `${text.slice(0, i)}…`
+  }
+  return text
+}
+
+/**
+ * The one thing worth knowing about a tool call.
+ *
+ * A bare list of tool names ("[tools] Bash, Bash, Read") says nothing about
+ * what the agent is doing, which is the only reason to look at this screen.
+ * Bash carries a human-written `description` — use it over the command, since
+ * it is already a sentence about intent rather than shell to decipher.
+ */
+function describeToolUse(tool: { name: string; input?: Record<string, unknown> }): string {
+  const input = tool.input ?? {}
+  const str = (key: string): string => (typeof input[key] === 'string' ? (input[key] as string) : '')
+
+  switch (tool.name) {
+    case 'Bash':
+      return str('description') || str('command')
+    case 'Read':
+    case 'Edit':
+    case 'Write':
+    case 'NotebookEdit':
+      return shortenPath(str('file_path'))
+    case 'Grep':
+    case 'Glob':
+      return str('pattern')
+    case 'Task':
+    case 'Agent':
+      return str('description')
+    case 'WebFetch':
+      return str('url')
+    case 'WebSearch':
+      return str('query')
+    case 'TodoWrite':
+      return ''
+    default: {
+      // Unknown tool: the first non-empty string argument is usually the
+      // interesting one (a path, a query, a name).
+      for (const value of Object.values(input)) {
+        if (typeof value === 'string' && value.trim()) return value.trim()
+      }
+      return ''
+    }
+  }
+}
+
 function shortenPath(p: string): string {
   if (!p) return ''
   const parts = p.split('/')
@@ -164,26 +222,27 @@ export function formatMessage(m: ConversationMessage): string {
     if (clean) textParts.push(clean)
   }
 
-  // Tool use (assistant requesting tools): collapse the run into one summary
-  // line. On the G2's 7-line page, per-call detail crowds out the actual text;
-  // names + counts carry enough context ("what is it doing").
+  // Tool use: one line per call, each saying what it actually did. Capped so a
+  // long run cannot push the assistant's own words off the 7-line page.
   if (m.toolUse?.length) {
-    const counts = new Map<string, number>()
-    for (const t of m.toolUse) counts.set(t.name, (counts.get(t.name) ?? 0) + 1)
-    const summary = [...counts].map(([name, n]) => (n > 1 ? `${name}×${n}` : name)).join(', ')
-    toolParts.push(`[tools] ${summary}`)
+    const MAX_TOOL_LINES = 4
+    for (const tool of m.toolUse.slice(0, MAX_TOOL_LINES)) {
+      const detail = clipToWidth(sanitizeForG2(describeToolUse(tool)).trim(), 44)
+      toolParts.push(detail ? `[${tool.name}] ${detail}` : `[${tool.name}]`)
+    }
+    const hidden = m.toolUse.length - MAX_TOOL_LINES
+    if (hidden > 0) toolParts.push(`… 他${hidden}件`)
   }
 
   // Tool results (only if no text content — usually filtered out by filterConversation)
   if (!textParts.length && m.toolResult?.length) {
     for (const r of m.toolResult) {
       const name = r.toolName || '?'
-      if (name === 'Bash') {
-        toolParts.push(`[Bash] ${r.output.slice(0, 80)}`)
-      } else {
-        const path = extractPath(r.output)
-        toolParts.push(`[${name}] ${path || r.output.slice(0, 60)}`)
-      }
+      // Command output arrives with its newlines intact; left alone, a single
+      // result eats the whole 7-line page. Flatten to one line, then clip.
+      const flat = r.output.replace(/\s+/g, ' ').trim()
+      const detail = name === 'Bash' ? flat : extractPath(r.output) || flat
+      toolParts.push(detail ? `[${name}] ${clipToWidth(detail, 44)}` : `[${name}]`)
     }
   }
 
