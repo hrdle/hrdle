@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  // public/ holds the simulator's backdrop photo, which only the web build
+  // wants: the G2 bundle has no browser simulator, and the ehpk is shipped to
+  // the device where every KB is dead weight. `--mode device` drops it.
+  publicDir: mode === 'device' ? false : 'public',
   build: {
     outDir: 'dist',
   },
@@ -22,4 +26,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
