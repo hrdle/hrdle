@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.50] - 2026-07-26
+
+### Added
+- **グラス: 未捕捉エラーと起動の通過点を CC Hub のログへ送る** (#532): グラスは WebView 内で動いており、こちらから読めるコンソールが存在しない。そのため未捕捉例外が出るとアプリが黙って死ぬだけで手掛かりが何も残らない。v0.1.25 で「一瞬起動して落ちる」との報告があったが、コンソールもクラッシュログもサーバ側の記録も無く、原因を追う手段が無かった。何よりも先に `error` / `unhandledrejection` ハンドラを登録し、SDK の描画呼び出しを個別に `.catch` し、起動の通過点を記録するようにした（`glasses/src/main.ts`、`glasses/src/api.ts` の `reportLog`、ehpk v0.1.26）。接続先 URL が判明するまではバッファに貯め、判明した時点で `/api/logs`（既存の認証不要なブラウザログ用エンドポイント、journalctl にも出る）へ送る。render のトレースは最初の5回のみ — 毎フレーム送れば、それ自体が新しい障害になるため
+  - **この診断はクラッシュを再現しなかった**: 報告のあったビルドと本ビルドの差は計測コードだけだが、`uncaught` も `unhandled rejection` も `updateDisplay failed` も記録されず `startup complete` まで到達した。したがって本変更は失敗の説明ではなく、修正でもない。次に起きたときの証拠を残すためのもの
+  - 描画経路の `.catch` は原因究明とは別に残す価値がある。そこでの未処理 rejection は、他の手段では黙ってアプリを落とすため
+
 ## [0.2.49] - 2026-07-26
 
 ### Added
