@@ -24,13 +24,36 @@ EVEN Realities G2 スマートグラス用の CC Hub クライアントアプリ
 ## ビルドと配布
 
 ```bash
-bun run build       # tsc + vite build
+bun run build       # 実機用 (--mode device) → dist、ehpk の中身
+bun run build:web   # ブラウザ用 (base=/glasses/) → dist-web、CC Hub が配信
 bun run pack        # evenhub pack → out.ehpk
 bun run typecheck   # tsgo --noEmit
 ```
 
 生成された `out.ehpk` を EVEN Hub にアップロードして配布する（`/glasses-upload`
 スキルでビルド〜アップロードを自動化）。バージョンは `app.json` の `version` で管理。
+
+ビルドが2種類あるのは、ehpk がルート基準のパスを必要とするのに対し、CC Hub 配信版は
+`/glasses/` 配下に置かれるため。`public/` の背景写真も実機側には不要なので、
+`--mode device` で除外している（`vite.config.ts` の `publicDir`）。
+
+## ブラウザシミュレータ
+
+実機なしで画面を確認できる。CC Hub が起動していれば `/glasses` で開ける。
+
+```
+https://<host>:5923/glasses
+https://<host>:5923/glasses?bg=<画像URL>   # 背景を差し替える
+```
+
+表示は実機と同じ `screenText()` を通し、576×288 の canvas に描いて 16 階調へ量子化
+しているので、折り返し・行数制限・解像度感が実機と一致する。「画面をコピー」で
+枠付きテキストとして取得できる。
+
+背景の既定は `public/scene-meeting.jpg`。
+出典: [Unsplash](https://unsplash.com/photos/a-group-of-people-sitting-around-a-conference-room-LJ8vdm37J7Y)
+（撮影: Walls.io、Unsplash License — 商用利用可・帰属不要）。表示比率に合わせて
+1152×576 にクロップ済み。読み込めない場合は CSS で描いた室内シーンにフォールバックする。
 
 ## 注意: shared/types.ts との手動結合
 

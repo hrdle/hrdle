@@ -26,33 +26,65 @@ const MODE_LABEL: Record<string, string> = {
 
 const STYLE = `
   :root { color-scheme: dark; }
-  body { margin: 0; background: #0d100e; color: #d8ded6;
-         font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; }
-  .sim-wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 48px;
+  body { margin: 0; color: #d8ded6;
+         font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+         background: radial-gradient(ellipse 90% 60% at 50% 0%, #161c19 0%, #0a0d0b 60%); }
+  .sim-wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 48px;
               display: flex; flex-direction: column; gap: 20px; }
   .sim-title { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
   .sim-title h1 { font-size: 18px; font-weight: 800; letter-spacing: .02em; margin: 0; }
   .sim-title .sub { font-size: 12px; color: #7d867a; }
   .sim-main { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
   .lens-col { display: flex; flex-direction: column; gap: 10px; max-width: 100%; }
-  .lens-scroll { overflow-x: auto; max-width: 100%; }
+  .lens-scroll { overflow-x: auto; max-width: 100%; padding: 10px 0 4px; }
 
-  /* 576x288 at 1:1 — the real panel size. */
-  .lens { width: 576px; height: 288px; flex: none; background: #05090a; color: #7ce88a;
-          font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-          border-radius: 10px; display: flex; flex-direction: column;
-          box-shadow: inset 0 0 60px rgba(124,232,138,.06); }
-  /* Sized so a full Japanese line fits. The G2 treats CJK as 1.857 columns
-     wide and wraps at 28 characters; a browser monospace draws it at exactly
-     2.0, so the two ratios cannot both be exact. Fitting the wider case keeps
-     wrapped lines inside the panel — an ASCII line then stops a little short
-     of the right edge, which is the harmless direction to be wrong in. */
-  .lens .hdr, .lens .ftr { height: 36px; padding: 0 4px; display: flex; align-items: center;
-                           font-size: 19px; white-space: pre; overflow: hidden; }
-  .lens .hdr { border-bottom: 1px solid #1c3a22; }
-  .lens .ftr { border-top: 1px solid #1c3a22; color: #3d7a48; }
-  .lens .body { height: 216px; margin: 0 4px; padding: 6px; font-size: 19px; line-height: 28px;
-                white-space: pre; overflow: hidden; }
+  /* 576x288 at 1:1 — the real panel size, drawn as what the wearer actually
+     sees: the room straight ahead, someone standing in it, and the text
+     floating over both. The display is additive light on clear glass, never a
+     black rectangle, so the scene stays visible right through the type. */
+  .lens { position: relative; overflow: hidden;
+          width: 576px; height: 288px; flex: none; border-radius: 10px;
+          font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+
+  /* A lit room with people in it. The --bg custom property swaps in a real
+     photo (?bg=URL) when demoing; the drawn fallback keeps the page
+     self-contained. */
+  .scene { position: absolute; inset: 0;
+           background-image: var(--bg, none);
+           background-size: cover; background-position: center;
+           filter: saturate(.9); }
+  /* The room is dimmed under the type. Real glasses lose contrast in bright
+     rooms, but a demo nobody can read proves nothing. */
+  .scene::after { content: ''; position: absolute; inset: 0;
+                  background: linear-gradient(180deg, rgba(4,8,6,.42), rgba(4,8,6,.52)); }
+  .room { position: absolute; inset: 0; filter: blur(1.5px);
+          background:
+            linear-gradient(115deg, rgba(255,250,238,.6) 0 30%, transparent 30.5%),
+            linear-gradient(180deg, #cdd4db 0%, #bcc4cc 54%, #939ba4 54.5%, #6f767e 100%); }
+  .room::before { content: ''; position: absolute; left: 56%; top: 4%;
+                  width: 38%; height: 46%; border-radius: 3px;
+                  background: rgba(255,252,244,.72);
+                  box-shadow: inset 0 0 0 3px rgba(120,128,136,.55); }
+
+  /* Three people at different depths. Dark against the window light, which is
+     what makes the green legible in the first place. */
+  .figure { position: absolute; bottom: -8%; filter: blur(2px); }
+  .figure::before { content: ''; position: absolute; left: 50%; top: 4%;
+                    transform: translateX(-50%); width: 33%; height: 31%;
+                    border-radius: 48% 48% 44% 44%; background: var(--tone, #2a3138); }
+  .figure::after { content: ''; position: absolute; left: 50%; bottom: 0;
+                   transform: translateX(-50%); width: 100%; height: 68%;
+                   border-radius: 46% 46% 0 0; background: var(--tone, #2a3138); }
+  .figure.a { left: 4%; width: 210px; height: 250px; --tone: #1d232a; }
+  .figure.b { left: 46%; width: 170px; height: 205px; --tone: #262d35; }
+  .figure.c { left: 74%; width: 195px; height: 232px; --tone: #212830; }
+
+  /* The projected layer, drawn on a real 576x288 canvas and quantised to the
+     panel's 16 green levels. The browser's own text rendering is far finer
+     than the hardware, which would flatter the design into something the
+     wearer never sees — the type is coarse up there, and it matters. */
+  .hud-canvas { position: absolute; inset: 0; width: 576px; height: 288px;
+                image-rendering: pixelated; }
 
   .lens-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
   .mode-pill { background: #1b2a1f; color: #7cc98f; padding: 3px 10px; border-radius: 999px;
@@ -85,6 +117,13 @@ export function startDebugUI(): void {
   const hubUrl = params.get('hub')
   if (hubUrl) setBaseUrl(hubUrl)
 
+  // A real room behind the display reads far better in a demo than a drawing
+  // of one, so a meeting photo ships as the default backdrop. `?bg=<url>`
+  // swaps in any other image the page can load. The device build omits the
+  // photo, and the drawn scene stays as the fallback when it cannot be
+  // fetched, so neither case ends up with a blank backdrop.
+  const bgUrl = params.get('bg') ?? `${import.meta.env.BASE_URL}scene-meeting.jpg`
+
   document.title = 'CC Hub Glasses — シミュレータ'
   const style = document.createElement('style')
   style.textContent = STYLE
@@ -101,9 +140,13 @@ export function startDebugUI(): void {
         <div class="lens-col">
           <div class="lens-scroll">
             <div class="lens">
-              <div class="hdr" id="g2-hdr"></div>
-              <div class="body" id="g2-body"></div>
-              <div class="ftr" id="g2-ftr"></div>
+              <div class="scene" aria-hidden="true">
+                <span class="room"></span>
+                <span class="figure a"></span>
+                <span class="figure c"></span>
+                <span class="figure b"></span>
+              </div>
+              <canvas class="hud-canvas" id="g2-canvas" width="576" height="288"></canvas>
             </div>
           </div>
           <div class="lens-meta">
@@ -133,9 +176,21 @@ export function startDebugUI(): void {
   `
 
   const el = (id: string) => document.getElementById(id) as HTMLElement
-  const hdr = el('g2-hdr')
-  const body = el('g2-body')
-  const ftr = el('g2-ftr')
+  const canvas = document.getElementById('g2-canvas') as HTMLCanvasElement
+
+  // Only swap the drawn scene out once the photo has actually decoded —
+  // otherwise a missing file leaves nothing behind the text at all.
+  const backdrop = new Image()
+  backdrop.addEventListener('load', () => {
+    const scene = document.querySelector('.scene') as HTMLElement | null
+    // Quotes and backslashes stripped: the URL comes from the query string
+    // and lands inside a CSS url().
+    scene?.style.setProperty('--bg', `url("${bgUrl.replace(/["\\]/g, '')}")`)
+    for (const drawn of document.querySelectorAll('.room, .figure')) {
+      ;(drawn as HTMLElement).style.display = 'none'
+    }
+  })
+  backdrop.src = bgUrl
   const modeJp = el('g2-mode-jp')
   const modeId = el('g2-mode-id')
   const copied = el('g2-copied')
@@ -145,15 +200,58 @@ export function startDebugUI(): void {
 
   let lastScreen = { header: '', body: '', footer: '' }
 
+  // Panel geometry, straight from display.ts's container layout.
+  const PANEL_W = 576
+  const HEADER_H = 36
+  const FOOTER_Y = 288 - 36
+  const FONT = '19px ui-monospace, "SF Mono", Menlo, Consolas, monospace'
+  // The panel's phosphor green, bright enough to hold against a lit room.
+  const GREEN = '106, 255, 122'
+
+  /** Draw one screen at the hardware's real pixel count, then crush it to the
+   *  panel's 16 levels of green. Anti-aliasing finer than 4 bits is exactly
+   *  what the wearer does not get. */
+  function drawPanel(screen: { header: string; body: string; footer: string }): void {
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.font = FONT
+    ctx.textBaseline = 'alphabetic'
+    // Optics bloom a little; keep it subtle or quantising turns it to mud.
+    ctx.shadowColor = `rgba(${GREEN}, 0.55)`
+    ctx.shadowBlur = 6
+
+    ctx.fillStyle = `rgb(${GREEN})`
+    ctx.fillText(screen.header, 4, 25)
+
+    for (const [i, line] of screen.body.split('\n').entries()) {
+      ctx.fillText(line, 10, HEADER_H + 28 + i * 28)
+    }
+
+    ctx.fillStyle = `rgba(${GREEN}, 0.78)`
+    ctx.fillText(screen.footer, 4, FOOTER_Y + 25)
+
+    ctx.shadowBlur = 0
+    ctx.fillStyle = `rgba(${GREEN}, 0.3)`
+    ctx.fillRect(0, HEADER_H - 1, PANEL_W, 1)
+    ctx.fillRect(0, FOOTER_Y, PANEL_W, 1)
+
+    // 4-bit: 16 alpha levels, nothing in between.
+    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const px = frame.data
+    for (let i = 3; i < px.length; i += 4) {
+      px[i] = Math.round((px[i] / 255) * 15) * 17
+    }
+    ctx.putImageData(frame, 0, 0)
+  }
+
   const platform: GlassesPlatform = {
     render(state) {
       const raw = screenText(state)
       // The device's container wraps for it; this panel has to do it itself.
       const screen = { ...raw, body: wrapForPanel(raw.body) }
       lastScreen = screen
-      hdr.textContent = screen.header
-      body.textContent = screen.body
-      ftr.textContent = screen.footer
+      drawPanel(screen)
       modeJp.textContent = MODE_LABEL[state.mode] ?? state.mode
       modeId.textContent = state.mode
       renderDiag(state)
