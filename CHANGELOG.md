@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.52] - 2026-07-27
+
+### Fixed
+- **Service Worker が `/glasses` を横取りしていた問題** (#536): CC Hub の Service Worker が既に入っているブラウザでは、`/glasses` を開くとグラスシミュレータではなく CC Hub 本体が表示されていた（タイトルが「CC Hub」でシミュレータの要素が1つも無い状態）。vite-plugin-pwa の `navigateFallback` はあらゆるナビゲーションを precache した `index.html` で応答するため、SPA のルートではなくバックエンドが配信している `/glasses` がフォールバックに横取りされていた。該当プレフィックスを `navigateFallbackDenylist` に入れて素通りさせる（`frontend/vite.config.ts`）
+  - 新規プロファイルのブラウザでは再現しない（SW 未登録の間だけリクエストがネットワークに到達するため）。v0.2.51 の検証がその状態で行われており、実際に使う側の環境で初めて出た
+  - **新しい Service Worker が有効化されて初めて効く**。`registerType` が `'prompt'` のため、既に開いているクライアントは更新を承認するまで古い worker を使い続ける
+
 ## [0.2.51] - 2026-07-26
 
 ### Added
