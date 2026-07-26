@@ -9,7 +9,7 @@
 // the glasses actually showed. Mic/STT are faked: the "STT result" textbox
 // injects what the Groq transcription would have returned.
 
-import { setBaseUrl } from './api.ts'
+import { setBaseUrl, transcribe } from './api.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { screenText, wrapForPanel } from './display.ts'
@@ -35,8 +35,12 @@ const STYLE = `
   .sim-title h1 { font-size: 18px; font-weight: 800; letter-spacing: .02em; margin: 0; }
   .sim-title .sub { font-size: 12px; color: #7d867a; }
   .sim-main { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
-  .lens-col { display: flex; flex-direction: column; gap: 10px; max-width: 100%; }
-  .lens-scroll { overflow-x: auto; max-width: 100%; padding: 10px 0 4px; }
+  .lens-col { display: flex; flex-direction: column; gap: 10px; max-width: 100%; min-width: 0; }
+  /* The panel is a fixed 576x288 — it is the hardware. On a narrow screen it
+     is scaled down to fit rather than clipped or scrolled: seeing the whole
+     display at once is the entire point. */
+  .lens-fit { width: 100%; overflow: hidden; padding: 10px 0 4px; }
+  .lens { transform-origin: top left; }
 
   /* 576x288 at 1:1 — the real panel size, drawn as what the wearer actually
      sees: the room straight ahead, someone standing in it, and the text
@@ -105,6 +109,9 @@ const STYLE = `
                      border: 1px solid #33402f; background: #0f140e; color: #d8ded6; width: 100%;
                      box-sizing: border-box; }
   .hint { font-size: 11px; color: #6b736a; line-height: 1.6; }
+  .bg-row { display: flex; gap: 8px; }
+  .bg-row button { flex: 1; }
+  body.dropping { outline: 2px dashed #7cc98f; outline-offset: -8px; }
   .diag { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: #6b736a;
           line-height: 1.8; word-break: break-all; }
   .copied { color: #7cc98f; }
@@ -118,11 +125,17 @@ export function startDebugUI(): void {
   if (hubUrl) setBaseUrl(hubUrl)
 
   // A real room behind the display reads far better in a demo than a drawing
-  // of one, so a meeting photo ships as the default backdrop. `?bg=<url>`
-  // swaps in any other image the page can load. The device build omits the
-  // photo, and the drawn scene stays as the fallback when it cannot be
-  // fetched, so neither case ends up with a blank backdrop.
-  const bgUrl = params.get('bg') ?? `${import.meta.env.BASE_URL}scene-meeting.jpg`
+  // of one, so a meeting photo ships as the default backdrop. It can be
+  // swapped from the panel (file, drag-drop, or URL) or with `?bg=<url>`; a
+  // pasted URL is remembered, an opened file is not, since its blob URL dies
+  // with the page. The device build omits the photo and the drawn scene
+  // stays as the fallback, so neither case ends up with a blank backdrop.
+  const DEFAULT_BG = `${import.meta.env.BASE_URL}scene-meeting.jpg`
+  const BG_KEY = 'cchub-glasses-bg'
+  const savedBg = (() => {
+    try { return localStorage.getItem(BG_KEY) } catch { return null }
+  })()
+  const bgUrl = params.get('bg') ?? savedBg ?? DEFAULT_BG
 
   document.title = 'CC Hub Glasses — シミュレータ'
   const style = document.createElement('style')
@@ -138,8 +151,8 @@ export function startDebugUI(): void {
       </div>
       <div class="sim-main">
         <div class="lens-col">
-          <div class="lens-scroll">
-            <div class="lens">
+          <div class="lens-fit" id="lens-fit">
+            <div class="lens" id="lens">
               <div class="scene" aria-hidden="true">
                 <span class="room"></span>
                 <span class="figure a"></span>
@@ -167,9 +180,18 @@ export function startDebugUI(): void {
             <button type="button" id="btn-tap">タップ</button>
             <button type="button" id="btn-dbl">ダブルタップ</button>
           </div>
-          <h2>音声（STT 差し込み）</h2>
-          <input type="text" id="dbg-stt" placeholder="認識結果として使う文字列" />
-          <p class="hint">音声画面でタップすると、この文字列が Groq の認識結果の代わりになる。</p>
+          <h2>音声入力</h2>
+          <input type="text" id="dbg-stt" placeholder="STTを飛ばす場合の文字列（任意）" />
+          <p class="hint" id="voice-status">会話画面でタップすると録音を開始し、もう一度タップで Groq に送る。文字列を入れておくと録音せずそれを認識結果として扱う。</p>
+
+          <h2>背景</h2>
+          <div class="bg-row">
+            <button type="button" id="bg-pick">画像を選ぶ</button>
+            <button type="button" id="bg-reset">既定に戻す</button>
+          </div>
+          <input type="file" id="bg-file" accept="image/*" hidden />
+          <input type="text" id="bg-url" placeholder="画像URLを貼り付け（Enter）" />
+          <p class="hint" id="bg-status">画面にドラッグ＆ドロップでも差し替えられる。</p>
         </div>
       </div>
     </div>
@@ -178,19 +200,57 @@ export function startDebugUI(): void {
   const el = (id: string) => document.getElementById(id) as HTMLElement
   const canvas = document.getElementById('g2-canvas') as HTMLCanvasElement
 
-  // Only swap the drawn scene out once the photo has actually decoded —
-  // otherwise a missing file leaves nothing behind the text at all.
-  const backdrop = new Image()
-  backdrop.addEventListener('load', () => {
-    const scene = document.querySelector('.scene') as HTMLElement | null
-    // Quotes and backslashes stripped: the URL comes from the query string
-    // and lands inside a CSS url().
-    scene?.style.setProperty('--bg', `url("${bgUrl.replace(/["\\]/g, '')}")`)
-    for (const drawn of document.querySelectorAll('.room, .figure')) {
-      ;(drawn as HTMLElement).style.display = 'none'
-    }
-  })
-  backdrop.src = bgUrl
+  // Scale the 576x288 panel down to whatever width there is. The canvas keeps
+  // its real pixel count, so the type stays as coarse as the hardware's — it
+  // is the whole thing that shrinks, exactly like stepping back from it.
+  const PANEL_W = 576
+  const PANEL_H = 288
+  function fitPanel(): void {
+    const box = document.getElementById('lens-fit')
+    const lens = document.getElementById('lens')
+    if (!box || !lens) return
+    const scale = Math.min(1, box.clientWidth / PANEL_W)
+    lens.style.transform = `scale(${scale})`
+    box.style.height = `${PANEL_H * scale}px`
+  }
+  new ResizeObserver(fitPanel).observe(document.body)
+  fitPanel()
+
+  const DEFAULT_BG_HINT = '画面にドラッグ＆ドロップでも差し替えられる。'
+  function setBgStatus(message: string): void {
+    const node = document.getElementById('bg-status')
+    if (node) node.textContent = message || DEFAULT_BG_HINT
+  }
+
+  const DEFAULT_VOICE_HINT =
+    '会話画面でタップすると録音を開始し、もう一度タップで Groq に送る。文字列を入れておくと録音せずそれを認識結果として扱う。'
+  function setVoiceStatus(message: string): void {
+    const node = document.getElementById('voice-status')
+    if (node) node.textContent = message || DEFAULT_VOICE_HINT
+  }
+
+  /** Swap the backdrop, but only once the image has actually decoded — a
+   *  missing file would otherwise leave nothing at all behind the text. */
+  function applyBackdrop(url: string, remember: boolean): void {
+    const probe = new Image()
+    probe.addEventListener('load', () => {
+      const scene = document.querySelector('.scene') as HTMLElement | null
+      // Quotes and backslashes stripped: the URL can come from the query
+      // string or a text field and lands inside a CSS url().
+      scene?.style.setProperty('--bg', `url("${url.replace(/["\\]/g, '')}")`)
+      for (const drawn of document.querySelectorAll('.room, .figure')) {
+        ;(drawn as HTMLElement).style.display = 'none'
+      }
+      if (remember) {
+        try { localStorage.setItem(BG_KEY, url) } catch { /* private mode */ }
+      }
+      setBgStatus('')
+    })
+    probe.addEventListener('error', () => setBgStatus('画像を読み込めませんでした'))
+    probe.src = url
+  }
+
+  applyBackdrop(bgUrl, false)
   const modeJp = el('g2-mode-jp')
   const modeId = el('g2-mode-id')
   const copied = el('g2-copied')
@@ -201,9 +261,8 @@ export function startDebugUI(): void {
   let lastScreen = { header: '', body: '', footer: '' }
 
   // Panel geometry, straight from display.ts's container layout.
-  const PANEL_W = 576
   const HEADER_H = 36
-  const FOOTER_Y = 288 - 36
+  const FOOTER_Y = PANEL_H - 36
   const FONT = '19px ui-monospace, "SF Mono", Menlo, Consolas, monospace'
   // The panel's phosphor green, bright enough to hold against a lit room.
   const GREEN = '106, 255, 122'
@@ -245,6 +304,60 @@ export function startDebugUI(): void {
     ctx.putImageData(frame, 0, 0)
   }
 
+  // ── Microphone ──
+  //
+  // The browser records for real and the audio goes to the same Groq endpoint
+  // the G2 uses, so the whole voice path can be exercised without the
+  // hardware. The G2's SDK hands over raw 16-bit PCM at 16kHz; asking the
+  // AudioContext for that rate lets the same bytes reach the same server code.
+  const MIC_RATE = 16000
+  let micStream: MediaStream | null = null
+  let micCtx: AudioContext | null = null
+  let micNode: ScriptProcessorNode | null = null
+
+  async function startMic(): Promise<boolean> {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } })
+      micCtx = new AudioContext({ sampleRate: MIC_RATE })
+      const source = micCtx.createMediaStreamSource(micStream)
+      // ScriptProcessor is deprecated in favour of AudioWorklet, which needs a
+      // separate module file and a build step to match. For a debug panel that
+      // records a few seconds of speech, the deprecated node is the smaller
+      // thing to carry.
+      micNode = micCtx.createScriptProcessor(4096, 1, 1)
+      micNode.addEventListener('audioprocess', (e) => {
+        const samples = (e as AudioProcessingEvent).inputBuffer.getChannelData(0)
+        const pcm = new Int16Array(samples.length)
+        for (let i = 0; i < samples.length; i++) {
+          const clamped = Math.max(-1, Math.min(1, samples[i]))
+          pcm[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff
+        }
+        controller.onAudioData(new Uint8Array(pcm.buffer))
+      })
+      // Routed through a silent gain: the processor only runs while connected
+      // to the destination, and nobody wants to hear themselves back.
+      const mute = micCtx.createGain()
+      mute.gain.value = 0
+      source.connect(micNode)
+      micNode.connect(mute)
+      mute.connect(micCtx.destination)
+      setVoiceStatus('録音中… マイクに向かって話してください')
+      return true
+    } catch (err) {
+      setVoiceStatus(`マイクを使えません: ${err instanceof Error ? err.message : err}`)
+      return false
+    }
+  }
+
+  async function stopMic(): Promise<void> {
+    micNode?.disconnect()
+    micNode = null
+    for (const track of micStream?.getTracks() ?? []) track.stop()
+    micStream = null
+    await micCtx?.close().catch(() => {})
+    micCtx = null
+  }
+
   const platform: GlassesPlatform = {
     render(state) {
       const raw = screenText(state)
@@ -256,10 +369,27 @@ export function startDebugUI(): void {
       modeId.textContent = state.mode
       renderDiag(state)
     },
-    startMicCapture: () => Promise.resolve(true),
-    stopMicCapture: () => Promise.resolve(),
-    // The textbox injects what Groq STT would have returned.
-    transcribeAudio: () => Promise.resolve(sttInput.value.trim()),
+    startMicCapture: () => startMic(),
+    stopMicCapture: () => stopMic(),
+    // Typed text short-circuits the transcription, which is handy for driving
+    // the confirm/send flow without speaking. Left empty, the recording is
+    // sent to Groq exactly as the glasses would send it.
+    transcribeAudio: async (pcm) => {
+      const scripted = sttInput.value.trim()
+      if (scripted) {
+        setVoiceStatus(`STT欄の文字列を使用: ${scripted}`)
+        return scripted
+      }
+      setVoiceStatus(`認識中… (${(pcm.length / 2 / MIC_RATE).toFixed(1)}秒の音声を送信)`)
+      try {
+        const text = await transcribe(pcm, MIC_RATE)
+        setVoiceStatus(text ? `認識結果: ${text}` : '認識できませんでした')
+        return text
+      } catch (err) {
+        setVoiceStatus(`認識に失敗: ${err instanceof Error ? err.message : err}`)
+        return ''
+      }
+    },
   }
 
   const controller = new GlassesController(platform)
@@ -305,6 +435,62 @@ export function startDebugUI(): void {
       copied.className = 'hint'
     }
     setTimeout(() => { copied.textContent = '' }, 2000)
+  })
+
+  // ── Backdrop controls ──
+
+  const bgFile = document.getElementById('bg-file') as HTMLInputElement
+  const bgUrlInput = document.getElementById('bg-url') as HTMLInputElement
+
+  /** Show a local file without persisting it: a blob URL is dead on reload. */
+  function useLocalFile(file: File): void {
+    if (!file.type.startsWith('image/')) {
+      setBgStatus('画像ファイルではありません')
+      return
+    }
+    applyBackdrop(URL.createObjectURL(file), false)
+  }
+
+  el('bg-pick').addEventListener('click', () => bgFile.click())
+  bgFile.addEventListener('change', () => {
+    const file = bgFile.files?.[0]
+    if (file) useLocalFile(file)
+    bgFile.value = ''
+  })
+
+  bgUrlInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return
+    const url = bgUrlInput.value.trim()
+    if (url) applyBackdrop(url, true)
+  })
+
+  el('bg-reset').addEventListener('click', () => {
+    try { localStorage.removeItem(BG_KEY) } catch { /* private mode */ }
+    bgUrlInput.value = ''
+    applyBackdrop(DEFAULT_BG, false)
+  })
+
+  // Drop anywhere on the page — hunting for a small target is the sort of
+  // friction that made the query parameter annoying in the first place.
+  for (const type of ['dragenter', 'dragover']) {
+    window.addEventListener(type, (e) => {
+      e.preventDefault()
+      document.body.classList.add('dropping')
+    })
+  }
+  for (const type of ['dragleave', 'drop']) {
+    window.addEventListener(type, () => document.body.classList.remove('dropping'))
+  }
+  window.addEventListener('drop', (e) => {
+    e.preventDefault()
+    const dropped = e as DragEvent
+    const file = dropped.dataTransfer?.files?.[0]
+    if (file) {
+      useLocalFile(file)
+      return
+    }
+    const url = dropped.dataTransfer?.getData('text/uri-list') || dropped.dataTransfer?.getData('text/plain')
+    if (url?.trim()) applyBackdrop(url.trim(), true)
   })
 
   el('btn-up').addEventListener('click', () => controller.swipeUp())
