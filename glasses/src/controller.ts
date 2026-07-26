@@ -737,6 +737,11 @@ export class GlassesController {
   /** Auto-refresh the conversation when terminal output arrives (throttled). */
   private maybeRefreshConversation(): void {
     if (this.state.mode !== 'conversation') return
+    // Never refresh out from under someone who has scrolled back:
+    // loadConversation resets offset and page, so a reader was being yanked
+    // to the newest message every few seconds. Paging back to the latest
+    // resumes live updates.
+    if (this.state.conversationOffset > 0 || this.state.conversationPage > 0) return
     const now = Date.now()
     if (now - this.lastConvRefresh < CONV_REFRESH_INTERVAL) return
     this.lastConvRefresh = now
