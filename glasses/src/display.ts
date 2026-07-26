@@ -300,6 +300,67 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   }
 }
 
+// Footers that are fixed per mode (the rest are built with their content).
+// Named so the browser simulator renders the same string the G2 does instead
+// of a hand-copied approximation.
+const FOOTER_SESSION_LIST = 'tap:open  swipe:nav'
+const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
+
+/** Reply target shown in the choice header — the session the Enter actually
+ *  goes to, which differs from the selected one when answering a relay item
+ *  for another session. */
+function choiceHeader(state: AppState): string {
+  const session = state.sessions[state.sessionIndex]
+  const name = state.choiceSessionName || (session ? sName(session) : '---')
+  return `${name}  [SELECT]`
+}
+
+/**
+ * Wrap text the way the G2's own container would.
+ *
+ * The device wraps by itself at the panel edge, so several code paths hand it
+ * unwrapped text on purpose — `paginateSingleMessage` returns the original
+ * string whenever it already fits in seven lines. A simulator drawing with
+ * `white-space: pre` has no such container and would let those lines run past
+ * the edge, so it wraps them here, through the same width rules the device
+ * measures with.
+ */
+export function wrapForPanel(text: string): string {
+  return text.split('\n').flatMap(splitDisplayLines).join('\n')
+}
+
+/**
+ * The three container strings the G2 is about to render, for one mode.
+ *
+ * This is the seam the browser simulator renders through, so what it shows is
+ * the device's own output — same wrapping at 52 columns, same 7-line clamp,
+ * same pagination — rather than a second implementation that silently drifts.
+ */
+export function screenText(state: AppState): { header: string; body: string; footer: string } {
+  switch (state.mode) {
+    case 'session_list':
+      return {
+        header: sessionListHeader(state),
+        body: sessionListBody(state),
+        footer: FOOTER_SESSION_LIST,
+      }
+    case 'conversation': {
+      const { headerText, bodyText, footerText } = conversationContent(state)
+      return { header: headerText, body: bodyText, footer: footerText }
+    }
+    case 'choice':
+      return { header: choiceHeader(state), body: choiceBody(state), footer: FOOTER_CHOICE }
+    case 'voice': {
+      const { headerText, bodyText, footerText } = voiceContent(state)
+      return { header: headerText, body: bodyText, footer: footerText }
+    }
+    case 'overlay': {
+      const { headerText, bodyText, footerText } = overlayContent(state)
+      return { header: headerText, body: bodyText, footer: footerText }
+    }
+  }
+}
+
 function choiceBody(state: AppState): string {
   return state.choiceOptions.map((opt, i) => {
     const cursor = i === state.choiceIndex ? '>>>' : '   '
@@ -393,7 +454,7 @@ function buildSessionList(state: AppState): RebuildPageContainer {
     paddingLength: 4,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
-    content: `tap:open  swipe:nav`,
+    content: FOOTER_SESSION_LIST,
   })
 
   return new RebuildPageContainer({
@@ -442,9 +503,6 @@ function buildConversation(state: AppState): RebuildPageContainer {
 }
 
 function buildChoice(state: AppState): RebuildPageContainer {
-  const session = state.sessions[state.sessionIndex]
-  const name = state.choiceSessionName || (session ? sName(session) : '---')
-
   // Header - action required
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
@@ -453,7 +511,7 @@ function buildChoice(state: AppState): RebuildPageContainer {
     paddingLength: 4,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
-    content: `${name}  [SELECT]`,
+    content: choiceHeader(state),
   })
 
   const body = new TextContainerProperty({
@@ -473,7 +531,7 @@ function buildChoice(state: AppState): RebuildPageContainer {
     paddingLength: 4,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
-    content: 'swipe:select  tap:confirm  dbl:skip',
+    content: FOOTER_CHOICE,
   })
 
   return new RebuildPageContainer({

@@ -222,7 +222,7 @@ if (EMBEDDED_MODE && getStaticAsset) {
           // revalidated on every load so a new release is picked up without a
           // manual cache clear.
           'Cache-Control':
-            isAssetHit && path.startsWith('/assets/')
+            isAssetHit && (path.startsWith('/assets/') || path.startsWith('/glasses/assets/'))
               ? 'public, max-age=31536000, immutable'
               : 'no-cache, must-revalidate',
         },
@@ -233,6 +233,14 @@ if (EMBEDDED_MODE && getStaticAsset) {
   });
 } else {
   // Serve from file system (development mode)
+  // Glasses simulator first: it has its own dist and must not fall through to
+  // the frontend's SPA index.html.
+  const glassesRoot = process.env.GLASSES_STATIC_ROOT || '../glasses/dist-web';
+  app.use(
+    '/glasses/*',
+    serveStatic({ root: glassesRoot, rewriteRequestPath: (p) => p.replace(/^\/glasses/, '') })
+  );
+  app.get('/glasses', serveStatic({ root: glassesRoot, path: '/index.html' }));
   app.use('/*', serveStatic({ root: staticRoot }));
   app.get('*', serveStatic({ root: staticRoot, path: '/index.html' }));
 }
