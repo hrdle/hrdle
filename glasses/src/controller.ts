@@ -108,7 +108,6 @@ function initialState(): AppState {
     conversationLoading: false,
     choiceIndex: 0,
     choiceOptions: [],
-    apiUsagePercent: '',
     relayWaiting: [],
     relayInfo: [],
     overlayItemId: null,
@@ -742,13 +741,6 @@ export class GlassesController {
     if (now - this.lastConvRefresh < CONV_REFRESH_INTERVAL) return
     this.lastConvRefresh = now
     void this.loadConversation().then(() => this.render())
-  }
-
-  /** Dashboard poll result → header (called by the platform layer). */
-  setApiUsage(percent: string): void {
-    if (percent === this.state.apiUsagePercent) return
-    this.state.apiUsagePercent = percent
-    this.render()
   }
 
   private render(): void {
