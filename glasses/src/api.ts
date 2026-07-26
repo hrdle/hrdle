@@ -74,6 +74,27 @@ export async function sendPaneInput(sessionId: string, paneId: string, data: str
   if (!res.ok) throw new Error(`pane input ${res.status}`)
 }
 
+/** Ship a diagnostic line to the hub's browser log (`/api/logs`, no auth).
+ *
+ *  The glasses run inside a WebView whose console nobody can reach, so an
+ *  uncaught exception kills the app with no trace at all. This is the only way
+ *  to see why. Best effort: never throws, never blocks the caller. */
+export async function reportLog(level: string, message: string, stack?: string): Promise<void> {
+  if (!baseUrl) return
+  try {
+    await fetch(`${baseUrl}/api/logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        level,
+        message: `[glasses] ${message}`,
+        timestamp: new Date().toISOString(),
+        stack,
+      }),
+    })
+  } catch { /* the log channel must never be the thing that breaks the app */ }
+}
+
 /** Dismiss a relay item ("later / on PC"). The server marks it dismissed and
  *  reflects the change as a `glasses-relay` upsert. */
 export async function dismissRelayItem(id: string): Promise<void> {
