@@ -138,6 +138,11 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MiB
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // /glasses is a separate app the backend serves, not a route of this
+        // SPA. navigateFallback defaults to answering EVERY navigation with
+        // our index.html, so without this the glasses simulator opens as CC
+        // Hub on any browser that has already installed the service worker.
+        navigateFallbackDenylist: [/^\/glasses/],
         importScripts: ['sw-notification.js'],
         runtimeCaching: [
           {
