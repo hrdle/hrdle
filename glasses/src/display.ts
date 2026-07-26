@@ -167,7 +167,6 @@ export interface AppState {
   conversationLoading: boolean
   choiceIndex: number
   choiceOptions: string[]
-  apiUsagePercent: string
   debugEvent?: string
   voicePhase?: VoicePhase
   voiceText?: string
@@ -246,9 +245,9 @@ function relayBannerLines(state: AppState): string[] {
 // ─── Content helpers (shared by build and in-place update) ───
 
 function sessionListHeader(state: AppState): string {
-  const { sessionIndex, sessions, apiUsagePercent, relayWaiting } = state
+  const { sessionIndex, sessions, relayWaiting } = state
   const badge = relayWaiting.length > 0 ? ` !${relayWaiting.length}` : ''
-  return `CC Hub ${apiUsagePercent ? `API:${apiUsagePercent}` : ''} ${sessionIndex + 1}/${sessions.length}${badge}`
+  return `CC Hub ${sessionIndex + 1}/${sessions.length}${badge}`
 }
 
 function sessionListBody(state: AppState): string {

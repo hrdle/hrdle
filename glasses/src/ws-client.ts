@@ -15,6 +15,9 @@ export interface WsCallbacks {
   onRelayRemove?: (id: string) => void
 }
 
+// Well inside the server's 60s ping timeout, with room for a dropped one.
+const PING_INTERVAL_MS = 15_000
+
 // Strip ANSI escape codes, control sequences, and non-ASCII for G2 display
 function stripAnsi(str: string): string {
   return str
@@ -50,6 +53,10 @@ export class CcHubWsClient {
   private ws: WebSocket | null = null
   private callbacks: WsCallbacks
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  // The server drops connections that go 60s without a ping (#236). Every
+  // other client sends one; this one did not, so it was being cut and
+  // reconnected on a 90s cycle for its whole life.
+  private pingTimer: ReturnType<typeof setInterval> | null = null
   private subscribedSession: string | null = null
   // Glasses relay subscription is connection-scoped (no sessionId); re-sent on
   // every (re)connect while this flag is set (#504).
@@ -79,6 +86,7 @@ export class CcHubWsClient {
 
     this.ws.onopen = () => {
       console.log('[ws] connected')
+      this.startPing()
       // Re-establish the relay subscription before onReady so the server's
       // snapshot arrives around the same time as session re-subscribes.
       if (this.relaySubscribed) {
@@ -95,6 +103,7 @@ export class CcHubWsClient {
 
     this.ws.onclose = () => {
       console.log('[ws] closed')
+      this.stopPing()
       // The reconnected socket is a brand-new server session with no
       // subscriptions. Reset our local view so onReady's subscribe() sends
       // a fresh 'subscribe' instead of the early-return dedup. #265
@@ -256,6 +265,24 @@ export class CcHubWsClient {
   private send(msg: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
+    }
+  }
+
+  /** Keepalive. The server closes a connection 60s after the last ping, so
+   *  without this the socket dies and reconnects every 90s forever — the
+   *  glasses lose relay pushes for the gap each time. sessionId is "" because
+   *  the ping is connection-level, which the server's handler allows. */
+  private startPing(): void {
+    this.stopPing()
+    this.pingTimer = setInterval(() => {
+      this.send({ type: 'ping', sessionId: '', timestamp: Date.now() })
+    }, PING_INTERVAL_MS)
+  }
+
+  private stopPing(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer)
+      this.pingTimer = null
     }
   }
 
