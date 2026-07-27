@@ -7,7 +7,7 @@ import {
   OsEventTypeList,
   AudioInputSource,
 } from '@evenrealities/even_hub_sdk'
-import { formatMessage, recapBlockLines } from './types.ts'
+import { PANEL_WIDTH, formatMessage, recapBlockLines } from './types.ts'
 import type { Session, ConversationMessage, GlassesRelayItem } from './types.ts'
 
 const W = 576
@@ -19,7 +19,7 @@ export type VoicePhase = 'recording' | 'transcribing' | 'confirm'
 
 // Display metrics (measured on actual G2 hardware)
 // Body container: 568x210, border=0, padding=6 → effective 556x198
-const LINE_WIDTH = 52       // max half-width (ASCII) chars per line
+const LINE_WIDTH = PANEL_WIDTH   // max half-width (ASCII) chars per line
 const MAX_LINES = 7         // max visible lines in body container
 const CJK_RATIO = 52 / 28  // CJK char width relative to ASCII (~1.857)
 
@@ -293,6 +293,29 @@ function statusLabel(s: Session): string {
 
 const SEPARATOR = '-'.repeat(24)
 
+/** Trim a line down until an appended ellipsis still fits the panel. */
+function ellipsize(line: string): string {
+  let out = line
+  while (out && displayWidth(out) + 1 > LINE_WIDTH) out = out.slice(0, -1)
+  return `${out}…`
+}
+
+/**
+ * The recap block, capped in *display* lines.
+ *
+ * `recapBlockLines` counts logical lines, so a recap that arrives as one long
+ * sentence — the usual shape — passed the cap untouched and then wrapped to
+ * five or six rows, crowding out the conversation it was meant to introduce.
+ */
+function recapBlock(recap: string | undefined, maxLines = 2): string[] {
+  const block = recapBlockLines(recap, maxLines)
+  if (!block.length) return []
+  const body = block.slice(0, -1).flatMap(splitDisplayLines)
+  const separator = block[block.length - 1]
+  if (body.length <= maxLines) return [...body, separator]
+  return [...body.slice(0, maxLines - 1), ellipsize(body[maxLines - 1]), separator]
+}
+
 /** Display label for a relay item's session (live session name, else the id). */
 function relayLabel(state: AppState, item: GlassesRelayItem): string {
   const s = state.sessions.find((x) => x.id === item.sessionId)
@@ -338,7 +361,9 @@ function sessionListBody(state: AppState): string {
     const idx = start + i
     const cursor = idx === sessionIndex ? '>' : ' '
     const label = relayWaitingIds.has(s.id) ? '[!]' : statusLabel(s)
-    return `${cursor}${label} ${sName(s)}`
+    // Pad the badge so every name starts in the same column: a list where
+    // `>[!] name` and `  name` begin three columns apart is hard to scan.
+    return `${cursor}${label.padEnd(3)} ${sName(s)}`
   }).join('\n') || '(no sessions)'
 }
 
@@ -356,10 +381,13 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const banner = relayBannerLines(state)
   // Recap heads the latest view; deeper paging drops it for message space.
   const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
-  const recap = onLatest ? recapBlockLines(session?.ccRecap).flatMap(splitDisplayLines) : []
+  const recap = onLatest ? recapBlock(session?.ccRecap) : []
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
-  const bodyText = [...banner, ...recap, ...convText.split('\n')].slice(0, MAX_LINES).join('\n')
+  // Everything is measured in display lines — counting the conversation in
+  // logical lines let a wrapped paragraph run off the bottom unnoticed.
+  const content = convText.split('\n').flatMap(splitDisplayLines)
+  const bodyText = [...banner, ...recap, ...content].slice(0, MAX_LINES).join('\n')
   const role = multiCount > 1
     ? `${multiCount}msgs`
     : msgIndex >= 0 ? (msgs[msgIndex].role === 'user' ? 'YOU' : 'AI') : ''

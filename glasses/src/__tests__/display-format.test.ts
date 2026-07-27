@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { sanitizeForG2, formatMessage } from '../types.ts'
-import { wrapForPanel } from '../display.ts'
+import { screenText, wrapForPanel } from '../display.ts'
 
 const LINE_WIDTH = 52
 const CJK_RATIO = 52 / 28
@@ -133,5 +133,118 @@ describe('formatMessage', () => {
     })
     expect(out).toContain('本体 | v0.2.55')
     expect(out).not.toContain('[table]')
+  })
+
+  test('a multi-line command stays on one line', () => {
+    const out = formatMessage({
+      role: 'assistant',
+      content: '',
+      toolUse: [{ name: 'Bash', input: { command: "python3 - <<'EOF'\nimport re\np = 1\nEOF" } }],
+    })
+    expect(out.split('\n')).toHaveLength(1)
+  })
+
+  test('a clipped tool line fits the panel, prefix included', () => {
+    // The ellipsis is part of the budget; one column over and the "clipped"
+    // line wraps, leaving a two-character stub on a line of its own.
+    for (const name of ['Bash', 'Read', 'NotebookEdit']) {
+      const out = formatMessage({
+        role: 'assistant',
+        content: '',
+        toolUse: [{ name, input: { command: 'x'.repeat(300), file_path: `/a/${'b'.repeat(300)}` } }],
+      })
+      expect(wrapForPanel(out).split('\n')).toHaveLength(1)
+      expect(width(out)).toBeLessThanOrEqual(LINE_WIDTH)
+    }
+  })
+
+  test('a clipped CJK tool line fits too', () => {
+    const out = formatMessage({
+      role: 'assistant',
+      content: '',
+      toolUse: [{ name: 'Bash', input: { description: 'あ'.repeat(80) } }],
+    })
+    expect(wrapForPanel(out).split('\n')).toHaveLength(1)
+  })
+
+  test('leaves a detail that already fits untouched', () => {
+    const out = formatMessage({
+      role: 'assistant',
+      content: '',
+      toolUse: [{ name: 'Bash', input: { description: 'テストを流す' } }],
+    })
+    expect(out).toBe('A> [Bash] テストを流す')
+  })
+})
+
+describe('conversation body', () => {
+  const longRecap =
+    'beelink-arch の保守中。カーネル更新のため再起動を実施し、新カーネル 7.1.3 で正常復帰済み。以後の健康診断で報告された Swap 2.2GB 増は圧迫ではなく健全な cold ページ退避と判定、対応不要。次アクションは特にありません。'
+  const state = (recap?: string) => ({
+    mode: 'conversation' as const,
+    sessions: [{ id: 'a', name: 'linux', state: 'idle' as const, ccRecap: recap }],
+    sessionIndex: 0,
+    conversation: Array.from({ length: 6 }, (_, i) => ({
+      role: 'assistant' as const,
+      content: `${i} 番目のメッセージです。${'ながい説明が続きます。'.repeat(3)}`,
+    })),
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 6,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  })
+
+  test('a one-sentence recap is capped in display lines, not logical ones', () => {
+    // It used to pass the cap untouched and then wrap to six rows, leaving one
+    // line for the conversation it was meant to introduce.
+    const body = screenText(state(longRecap)).body.split('\n')
+    expect(body[0].startsWith('要約: ')).toBe(true)
+    // Two recap lines, then the separator — the rest of the page is the
+    // conversation.
+    expect(body.indexOf('-'.repeat(24))).toBe(2)
+    expect(body[1]).toEndWith('…')
+  })
+
+  test('the body never exceeds one page, recap or not', () => {
+    for (const recap of [undefined, longRecap]) {
+      const body = screenText(state(recap)).body
+      expect(wrapForPanel(body).split('\n').length).toBeLessThanOrEqual(7)
+    }
+  })
+})
+
+describe('session list', () => {
+  const state = {
+    mode: 'session_list' as const,
+    sessions: [
+      { id: 'a', name: 'グラス開発', state: 'working' as const, indicatorState: 'waiting_input' as const },
+      { id: 'b', name: '2脚ロボ開発', state: 'idle' as const, indicatorState: 'completed' as const },
+      { id: 'c', name: 'life', state: 'idle' as const, indicatorState: 'processing' as const },
+    ],
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  }
+
+  test('every name starts in the same column whether or not it has a badge', () => {
+    const starts = screenText(state)
+      .body.split('\n')
+      .map((l) => l.search(/[^ >[\]!*]/))
+    expect(new Set(starts).size).toBe(1)
   })
 })
