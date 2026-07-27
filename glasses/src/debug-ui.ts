@@ -131,6 +131,23 @@ const STYLE = `
                       transparent 44%, rgba(2,7,5,.40) 100%);
                   box-shadow: inset 0 0 34px rgba(2,10,6,.6); }
 
+  /* Fullscreen, for recording a demo.
+     The real display occupies the middle of the field of view, not all of it,
+     so the backdrop takes the whole viewport and the projected panel sits
+     centred and small inside it. --fs-scale is the fit-to-viewport factor,
+     already reduced, computed in JS because CSS cannot min() two ratios. */
+  .lens.fs { width: 100vw; height: 100vh; border-radius: 0;
+             transform: none !important; }
+  .lens.fs .hud-canvas, .lens.fs .glass {
+    inset: auto; left: 50%; top: 50%;
+    width: calc(576px * var(--fs-scale, 1));
+    height: calc(288px * var(--fs-scale, 1));
+    transform: translate(-50%, -50%); }
+  /* The room needs less holding back here: the type covers a fraction of the
+     frame, so the contrast fight it was dimmed for barely happens. */
+  .lens.fs .scene::after {
+    background: linear-gradient(180deg, rgba(4,8,6,.24), rgba(4,8,6,.32)); }
+
   .lens-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
   .mode-pill { background: #1b2a1f; color: #7cc98f; padding: 3px 10px; border-radius: 999px;
                font-weight: 700; font-size: 12px; }
@@ -213,6 +230,7 @@ export function startDebugUI(): void {
             <span class="mode-pill" id="g2-mode-jp">一覧</span>
             <span class="mode-id" id="g2-mode-id">session_list</span>
             <button type="button" id="g2-copy">画面をコピー</button>
+            <button type="button" id="g2-fs">全画面</button>
             <label class="mirror"><input type="checkbox" id="g2-mirror" />実機ミラー</label>
             <span class="hint" id="g2-mirror-status"></span>
             <span class="hint" id="g2-copied"></span>
@@ -255,10 +273,22 @@ export function startDebugUI(): void {
   // its real pixel count, so the type stays as coarse as the hardware's — it
   // is the whole thing that shrinks, exactly like stepping back from it.
   // Panel size comes from metrics.ts — one place holds the hardware numbers.
+  /** How much of the fitted size the panel actually takes in fullscreen.
+   *  Looking through the G2, the display sits in the middle of the field of
+   *  view rather than filling it; edge to edge would be the wrong picture. */
+  const FS_PANEL_FRACTION = 0.8
+
   function fitPanel(): void {
     const box = document.getElementById('lens-fit')
     const lens = document.getElementById('lens')
     if (!box || !lens) return
+    if (document.fullscreenElement === lens) {
+      // The backdrop owns the viewport; only the projected panel is scaled,
+      // and CSS does that from --fs-scale.
+      const scale = Math.min(window.innerWidth / PANEL_W, window.innerHeight / PANEL_H)
+      lens.style.setProperty('--fs-scale', String(scale * FS_PANEL_FRACTION))
+      return
+    }
     const scale = Math.min(1, box.clientWidth / PANEL_W)
     lens.style.transform = `scale(${scale})`
     box.style.height = `${PANEL_H * scale}px`
@@ -348,7 +378,9 @@ export function startDebugUI(): void {
   // 1px of the firmware's advances instead of 4.
   const FONT = '19px system-ui, "Noto Sans", "DejaVu Sans", sans-serif'
   // The panel's phosphor green, bright enough to hold against a lit room.
-  const GREEN = '106, 255, 122'
+  // The panel's phosphor green. Pulled toward pure green — the G2 is a
+  // monochrome green display and the paler mint read as a generic HUD.
+  const GREEN = '76, 255, 100'
 
   /** Draw one screen at the hardware's real pixel count, then crush it to the
    *  panel's 16 levels of green. Anti-aliasing finer than 4 bits is exactly
@@ -621,6 +653,25 @@ export function startDebugUI(): void {
     if (camStream) stopCam()
     else void startCam()
   })
+
+  // ── Fullscreen ──
+  //
+  // For recording: no page chrome, the room across the whole frame, and the
+  // panel where the wearer actually sees it.
+
+  el('g2-fs').addEventListener('click', () => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void lensEl.requestFullscreen().catch(() => setBgStatus('全画面にできませんでした'))
+  })
+
+  document.addEventListener('fullscreenchange', () => {
+    const on = document.fullscreenElement === lensEl
+    lensEl.classList.toggle('fs', on)
+    if (!on) lensEl.style.removeProperty('--fs-scale')
+    el('g2-fs').textContent = on ? '全画面を終了' : '全画面'
+    fitPanel()
+  })
+  window.addEventListener('resize', fitPanel)
 
   // ── Lens reflection ──
   //
