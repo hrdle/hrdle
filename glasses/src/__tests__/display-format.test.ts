@@ -377,3 +377,51 @@ describe('glyph coverage', () => {
     expect(sanitizeForG2('前 🎉 後')).not.toMatch(/ {2}/)
   })
 })
+
+describe('recap lifetime', () => {
+  const RECAP = 'beelink-arch の保守中。カーネル更新のため再起動を実施し正常復帰済み。'
+  const state = (recapAt?: string, newestAt?: string) => ({
+    mode: 'conversation' as const,
+    sessions: [{ id: 'a', name: 'linux', state: 'idle' as const, ccRecap: RECAP, ccRecapAt: recapAt }],
+    sessionIndex: 0,
+    conversation: [
+      { role: 'assistant' as const, content: '古いメッセージ', timestamp: '2026-07-27T04:00:00.000Z' },
+      { role: 'assistant' as const, content: '最新のメッセージ', timestamp: newestAt },
+    ],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 2,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  })
+  const hasRecap = (st: ReturnType<typeof state>) => screenText(st).body.startsWith('要約: ')
+
+  test('shows while nothing newer has arrived', () => {
+    expect(hasRecap(state('2026-07-27T06:00:00.000Z', '2026-07-27T05:00:00.000Z'))).toBe(true)
+  })
+
+  test('goes once the conversation moves past it', () => {
+    // Three of seven lines are better spent on the conversation than on a
+    // description of what came before it.
+    expect(hasRecap(state('2026-07-27T04:48:00.000Z', '2026-07-27T05:30:00.000Z'))).toBe(false)
+  })
+
+  test('a message written at the same moment does not count as past it', () => {
+    const at = '2026-07-27T05:00:00.000Z'
+    expect(hasRecap(state(at, at))).toBe(true)
+  })
+
+  test('keeps showing when there is no timestamp to judge by', () => {
+    expect(hasRecap(state(undefined, '2026-07-27T05:00:00.000Z'))).toBe(true)
+    expect(hasRecap(state('2026-07-27T04:00:00.000Z', undefined))).toBe(true)
+  })
+
+  test('keeps showing when a timestamp will not parse', () => {
+    expect(hasRecap(state('not a date', '2026-07-27T05:00:00.000Z'))).toBe(true)
+  })
+})
