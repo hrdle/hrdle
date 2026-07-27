@@ -243,22 +243,34 @@ function extractPath(output: string): string {
 }
 
 /**
+ * What marks whose turn it is.
+ *
+ * `$` for the user, the way a shell marks a prompt, and nothing at all for the
+ * agent. Every line is scarce on a seven-line screen, and an `A>` in front of
+ * every assistant message spends columns on something the reader can already
+ * see: the turn that is not marked is the answer to the one that is. Messages
+ * are separated by a blank line in the multi-message view, so the boundary
+ * survives without a label.
+ */
+const USER_PREFIX = '$ '
+const AGENT_PREFIX = ''
+
+/**
  * Pixels left for a tool call's detail on its own line.
  *
- * The line renders as `[Name] detail`, and the first line of a message also
- * carries the `A> ` role prefix. Clipping to a fixed budget regardless of
- * those put the line past the panel edge, so the ellipsis wrapped and a
+ * The line renders as `[Name] detail`. Clipping to a fixed budget regardless
+ * of the label put the line past the panel edge, so the ellipsis wrapped and a
  * two-character stub (`'…`) took a line of its own — on a seven-line screen.
- * Both prefixes are measured, not estimated: `[NotebookEdit] ` is more than
- * twice the width of `[Read] `.
+ * Measured, not estimated: `[NotebookEdit] ` is more than twice the width of
+ * `[Read] `. Tool lines belong to agent turns, which carry no prefix.
  */
 function toolDetailWidth(toolName: string): number {
-  return BODY_WIDTH - textWidth('A> ') - textWidth(`[${toolName}] `)
+  return BODY_WIDTH - textWidth(AGENT_PREFIX) - textWidth(`[${toolName}] `)
 }
 
 /** Format a conversation message for G2 display */
 export function formatMessage(m: ConversationMessage): string {
-  const prefix = m.role === 'user' ? 'U>' : 'A>'
+  const prefix = m.role === 'user' ? USER_PREFIX : AGENT_PREFIX
   const textParts: string[] = []
   const toolParts: string[] = []
 
@@ -302,5 +314,5 @@ export function formatMessage(m: ConversationMessage): string {
     .replace(/\n\s+/g, '\n')
     .trim()
 
-  return body ? `${prefix} ${body}` : `${prefix} (empty)`
+  return body ? `${prefix}${body}` : `${prefix}(empty)`
 }
