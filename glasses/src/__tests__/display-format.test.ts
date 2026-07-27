@@ -3,6 +3,7 @@ import { sanitizeForG2, formatMessage } from '../types.ts'
 import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
+import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
 describe('sanitizeForG2: tables', () => {
@@ -205,8 +206,15 @@ describe('conversation body', () => {
   })
 })
 
-/** One space of granularity: the gap is padded with 5px spaces. */
-const SPACE_SLACK = 6
+/**
+ * How far short of the edge the clock may sit.
+ *
+ * The gap is padded with 5px spaces, so up to one of them is unspendable, and
+ * kerning across the join takes a pixel more. Sweeping every minute of the day
+ * against several titles, the worst case is exactly 6 — which is why asserting
+ * "less than 6" was a test that passed until the clock read 10:22.
+ */
+const SPACE_SLACK = SPACE_W + 2
 
 describe('header clock', () => {
   const base = {
@@ -264,7 +272,7 @@ describe('header clock', () => {
         mode: 'conversation' as const,
         sessions: [{ id: 'a', name, state: 'working' as const }],
       }).header
-      expect(width(header)).toBeGreaterThan(HEADER_WIDTH - SPACE_SLACK)
+      expect(HEADER_WIDTH - width(header)).toBeLessThanOrEqual(SPACE_SLACK)
     }
   })
 })
