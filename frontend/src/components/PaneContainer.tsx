@@ -21,7 +21,7 @@ import { toHomeShortPath } from "../utils/path";
 import { ChatView } from "./chat/ChatView";
 import type { ControlModeConfig } from "./Terminal";
 import { TerminalComponent, type TerminalRef } from "./Terminal";
-import { soleVisiblePane } from "../utils/panes";
+import { soleVisiblePane, visiblePanes } from "../utils/panes";
 
 // ペインノード型定義。
 // sessionKey は `peerId:id` の複合キー (utils/sessionKey.ts) — セッション id
@@ -476,11 +476,13 @@ function TerminalPane({
 							</svg>
 						</button>
 					)}
-					{/* Zoom button — only meaningful when there are multiple panes */}
+					{/* Zoom button — only meaningful when there are multiple panes.
+              Counted among the ones on screen: `panes` spans every tab, and
+              zooming is about the layout in front of you. */}
 					{sessionKey &&
 						!showConversation &&
 						controlModeContext.zoomPane &&
-						(session?.panes?.length ?? 0) > 1 && (
+						visiblePanes(session).length > 1 && (
 							<button
 								type="button"
 								onClick={(e) => {
@@ -576,8 +578,10 @@ function TerminalPane({
 						</div>
 					)}
 					{/* Close button with confirmation — only shown when there are
-              multiple panes (the backend rejects closing the last pane). */}
-					{(session?.panes?.length ?? 0) > 1 && (
+              multiple panes on screen (the backend rejects closing the last
+              one). Counting every tab's panes would offer to close the only
+              pane the reader can see. */}
+					{visiblePanes(session).length > 1 && (
 						<button
 							type="button"
 							onClick={(e) => {
