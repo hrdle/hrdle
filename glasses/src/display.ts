@@ -24,7 +24,7 @@ const MAX_LINES = 7         // max visible lines in body container
 const CJK_RATIO = 52 / 28  // CJK char width relative to ASCII (~1.857)
 
 /** Returns the display width of a single character in half-width units */
-function charWidth(ch: string): number {
+export function charWidth(ch: string): number {
   const code = ch.codePointAt(0) ?? 0
   // CJK Unified Ideographs, Hiragana, Katakana, Fullwidth forms, CJK Symbols
   if (
@@ -281,6 +281,31 @@ function sName(s: Session): string {
   return s.customTitle || s.name || s.id.slice(0, 8)
 }
 
+/**
+ * Park a wall clock at the right edge of a header.
+ *
+ * Padded to the body's 52 columns rather than the 53 the header's own 4px
+ * padding allows: the browser simulator measures CJK a little wider than the
+ * device does, and a column of slack costs nothing visible while an overflow
+ * would wrap the clock out of a 36px-tall container. A long title is clipped
+ * rather than pushing the clock off — the time is the part that has to stay
+ * put to be readable at a glance.
+ *
+ * No timer drives this: the server pushes `sessions-updated` every five
+ * seconds and each push re-renders, so the minute is never stale.
+ */
+function withClock(title: string): string {
+  const now = new Date()
+  const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  const room = LINE_WIDTH - displayWidth(clock) - 1 // keep at least one space
+  let head = title
+  while (head && displayWidth(head) > room) head = head.slice(0, -1)
+  // Floor, not round: a CJK title measures fractionally, and rounding the gap
+  // up put the header a third of a column past the edge.
+  const gap = Math.max(1, Math.floor(LINE_WIDTH - displayWidth(head) - displayWidth(clock)))
+  return `${head}${' '.repeat(gap)}${clock}`
+}
+
 function isWaiting(s: Session): boolean {
   return s.indicatorState === 'waiting_input' || (!!s.waitingToolName && s.waitingToolName !== 'UserInput')
 }
@@ -347,7 +372,7 @@ function relayBannerLines(state: AppState): string[] {
 function sessionListHeader(state: AppState): string {
   const { sessionIndex, sessions, relayWaiting } = state
   const badge = relayWaiting.length > 0 ? ` !${relayWaiting.length}` : ''
-  return `CC Hub ${sessionIndex + 1}/${sessions.length}${badge}`
+  return withClock(`CC Hub ${sessionIndex + 1}/${sessions.length}${badge}`)
 }
 
 function sessionListBody(state: AppState): string {
@@ -397,7 +422,7 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const action = state.relayWaiting.length > 0 ? 'tap:対応  dbl:後で' : waiting ? 'tap:respond  dbl:back' : 'dbl:back'
 
   return {
-    headerText: `${session ? sName(session) : '---'}${statusBadge}`,
+    headerText: withClock(`${session ? sName(session) : '---'}${statusBadge}`),
     bodyText,
     footerText: `${action}  ${pos}`,
     multiCount,
@@ -416,7 +441,7 @@ const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 function choiceHeader(state: AppState): string {
   const session = state.sessions[state.sessionIndex]
   const name = state.choiceSessionName || (session ? sName(session) : '---')
-  return `${name}  [SELECT]`
+  return withClock(`${name}  [SELECT]`)
 }
 
 /**
@@ -478,10 +503,10 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
   const waiting = state.relayWaiting
   const item = waiting.find((i) => i.id === state.overlayItemId) || waiting[0]
   if (!item) {
-    return { headerText: 'Relay', bodyText: '(waiting なし)', footerText: 'dbl:戻る' }
+    return { headerText: withClock('Relay'), bodyText: '(waiting なし)', footerText: 'dbl:戻る' }
   }
   const idx = waiting.indexOf(item)
-  const headerText = `${relayLabel(state, item)} [!] ${idx + 1}/${waiting.length}`
+  const headerText = withClock(`${relayLabel(state, item)} [!] ${idx + 1}/${waiting.length}`)
 
   const lines = splitDisplayLines(item.text)
   if (item.choices?.length) {
@@ -505,19 +530,19 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
   switch (state.voicePhase) {
     case 'recording':
       return {
-        headerText: `${name}  [録音中]`,
+        headerText: withClock(`${name}  [録音中]`),
         bodyText: '● 録音中\n\nマイクに向かって話してください',
         footerText: 'tap:停止して認識  dbl:キャンセル',
       }
     case 'transcribing':
       return {
-        headerText: `${name}  [認識中]`,
+        headerText: withClock(`${name}  [認識中]`),
         bodyText: '認識中…',
         footerText: 'dbl:キャンセル',
       }
     default: // 'confirm'
       return {
-        headerText: `${name}  [確認]`,
+        headerText: withClock(`${name}  [確認]`),
         bodyText: state.voiceText ? state.voiceText : '(認識できませんでした)',
         footerText: state.voiceText ? 'tap:送信  dbl:キャンセル' : 'dbl:戻る',
       }
@@ -858,10 +883,16 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       break
     }
     case 'choice': {
-      await bridge.textContainerUpgrade(new TextContainerUpgrade({
-        containerID: 2, containerName: 'body',
-        content: choiceBody(state),
-      }))
+      await Promise.all([
+        bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 1, containerName: 'header',
+          content: choiceHeader(state),
+        })),
+        bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 2, containerName: 'body',
+          content: choiceBody(state),
+        })),
+      ])
       break
     }
     case 'voice': {
