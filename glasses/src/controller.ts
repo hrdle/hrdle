@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem } from './api.ts'
-import { getTotalPagesAt, getMultiCountAt } from './display.ts'
+import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { CcHubWsClient } from './ws-client.ts'
@@ -43,6 +43,9 @@ export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 export interface GlassesPlatform {
   /** Re-render the whole UI from the (mutated) state. */
   render(state: AppState): void
+  /** Redraw only the header. The spinner changes nothing else, and on the
+   *  device a full update sends three containers where one will do. */
+  renderHeader(state: AppState): void
   /** Start mic capture. Returns false when audio is unavailable. */
   startMicCapture(): Promise<boolean>
   stopMicCapture(): Promise<void>
@@ -147,6 +150,20 @@ export class GlassesController {
   connect(): void {
     this.ws.subscribeGlassesRelay()
     this.ws.connect()
+    // One timer for the life of the app rather than start/stop bookkeeping on
+    // every state change. It costs nothing when nothing is working: the tick
+    // returns before touching the display.
+    setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
+  }
+
+  /** Advance the working indicator, but only where it is being looked at and
+   *  only while there is something to indicate. */
+  private tickSpinner(): void {
+    const st = this.state
+    if (st.mode !== 'conversation') return
+    if (this.currentSession()?.indicatorState !== 'processing') return
+    st.spinnerTick = (st.spinnerTick ?? 0) + 1
+    this.platform.renderHeader(st)
   }
 
   // ── Ring input (the single handler set shared by G2 and debug) ──

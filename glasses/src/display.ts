@@ -132,6 +132,9 @@ export interface AppState {
   conversationLoading: boolean
   choiceIndex: number
   choiceOptions: string[]
+  /** Advances one frame per spinner tick while the shown session is working.
+   *  Absent in states built before the spinner existed; treated as 0. */
+  spinnerTick?: number
   debugEvent?: string
   voicePhase?: VoicePhase
   voiceText?: string
@@ -213,6 +216,26 @@ function statusLabel(s: Session): string {
 }
 
 const SEPARATOR = '-'.repeat(24)
+
+/**
+ * The working indicator, one frame per tick.
+ *
+ * A static mark says the session was working when the screen was last drawn;
+ * a moving one says it is working now, which is the question being asked. The
+ * frames are all 320 units wide — an uneven set shifts everything after it on
+ * each turn and reads as a shiver rather than a rotation, which is what ruled
+ * out the ASCII `|/-\` and the Braille spinner the CLI world uses (the
+ * firmware has no glyphs for the latter at all).
+ */
+const SPINNER = ['▲', '▶', '▼', '◀']
+
+/** Slow on purpose: each frame costs a BLE round trip, and the question is
+ *  only whether something is alive. */
+export const SPINNER_INTERVAL_MS = 3000
+
+function spinnerFrame(state: AppState): string {
+  return SPINNER[(state.spinnerTick ?? 0) % SPINNER.length]
+}
 
 /**
  * The recap block, capped in *display* lines.
@@ -306,7 +329,7 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const session = state.sessions[state.sessionIndex]
   const waiting = session ? isWaiting(session) : false
   const ind = session?.indicatorState
-  const statusBadge = waiting ? '  [!] WAITING' : ind === 'processing' ? '  [*]' : ''
+  const statusBadge = waiting ? '  [!] WAITING' : ind === 'processing' ? `  ${spinnerFrame(state)}` : ''
 
   const msgs = state.conversation
   const msgIndex = msgs.length > 0
@@ -745,6 +768,22 @@ export async function initDisplay(): Promise<Bridge | null> {
     console.log('[display] Even Hub SDK not available — debug mode', e)
     return null
   }
+}
+
+/**
+ * Redraw the header alone.
+ *
+ * The spinner changes nothing else, and a full update sends three containers
+ * where one will do — three times the traffic, every tick, for the whole time
+ * a session is working.
+ */
+export async function updateHeader(bridge: Bridge | null, state: AppState): Promise<void> {
+  if (!bridge || state.mode !== currentMode) return
+  const { headerText } = conversationContent(state)
+  await bridge.textContainerUpgrade(new TextContainerUpgrade({
+    containerID: 1, containerName: 'header',
+    content: headerText,
+  }))
 }
 
 export async function updateDisplay(bridge: Bridge | null, state: AppState): Promise<void> {

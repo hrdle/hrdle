@@ -447,3 +447,52 @@ describe('turn prefixes', () => {
     expect(width(out)).toBeGreaterThan(BODY_WIDTH - 24)
   })
 })
+
+describe('working indicator', () => {
+  const st = (tick: number, indicatorState: 'processing' | 'waiting_input' | 'completed') => ({
+    mode: 'conversation' as const,
+    sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const, indicatorState }],
+    sessionIndex: 0,
+    conversation: [{ role: 'assistant' as const, content: '作業中' }],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 1,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: tick,
+  })
+  const mark = (tick: number) => screenText(st(tick, 'processing')).header.replace(/^グラス開発\s+|\s+\d\d:\d\d$/g, '')
+
+  test('moves while the session is working', () => {
+    const frames = [0, 1, 2, 3].map(mark)
+    expect(new Set(frames).size).toBe(4)
+  })
+
+  test('comes back round', () => {
+    expect(mark(4)).toBe(mark(0))
+  })
+
+  test('every frame is the same width, so nothing after it shifts', () => {
+    // An uneven set reads as a shiver rather than a rotation.
+    const widths = [0, 1, 2, 3].map((t) => width(mark(t)))
+    expect(new Set(widths).size).toBe(1)
+  })
+
+  test('the header still fits at every frame', () => {
+    for (const t of [0, 1, 2, 3]) {
+      expect(width(screenText(st(t, 'processing')).header)).toBeLessThanOrEqual(HEADER_WIDTH)
+    }
+  })
+
+  test('other states do not animate', () => {
+    const waiting = [0, 1, 2].map((t) => screenText(st(t, 'waiting_input')).header)
+    expect(new Set(waiting.map((h) => h.replace(/\d\d:\d\d/, ''))).size).toBe(1)
+    expect(waiting[0]).toContain('[!] WAITING')
+    expect(screenText(st(1, 'completed')).header).not.toContain('[!]')
+  })
+})

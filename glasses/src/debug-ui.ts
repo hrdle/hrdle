@@ -527,6 +527,10 @@ export function startDebugUI(): void {
       // state keeps running underneath so switching back is instant.
       if (!mirroring) paint(screen, state.mode)
     },
+    // Drawing costs nothing here, so the header tick is just a render.
+    renderHeader(state) {
+      platform.render(state)
+    },
     startMicCapture: () => startMic(),
     stopMicCapture: () => stopMic(),
     // Typed text short-circuits the transcription, which is handy for driving
