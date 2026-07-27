@@ -292,9 +292,11 @@ describe('session list', () => {
   }
 
   test('every name starts in the same column whether or not it has a badge', () => {
+    // The blank badge is a full-width space — the same 320 units as a spinner
+    // frame — so a row with nothing to say lines up with one that has.
     const starts = screenText(state)
       .body.split('\n')
-      .map((l) => l.search(/[^ >[\]!*]/))
+      .map((l) => l.search(/[^ >\u3000▲▶▼◀]/))
     expect(new Set(starts).size).toBe(1)
   })
 })
@@ -714,5 +716,52 @@ describe('panes across tabs', () => {
   test('nothing is marked when the session reports no active tab', () => {
     const noTab = { ...st, sessions: [{ ...sessions[0], activeTabId: undefined }] }
     expect(screenText(noTab).body).not.toContain('別タブ')
+  })
+})
+
+describe('list badge', () => {
+  const mk = (indicatorState?: 'processing' | 'waiting_input') => ({
+    mode: 'session_list' as const,
+    sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const, indicatorState }],
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: 0,
+  })
+
+  test('a working row turns', () => {
+    expect(screenText({ ...mk('processing'), spinnerTick: 0 }).body).toContain('▲')
+    expect(screenText({ ...mk('processing'), spinnerTick: 1 }).body).toContain('▶')
+  })
+
+  test('waiting is no longer marked', () => {
+    // Seven of eight rows carried `[!]` on a real machine — a mark almost
+    // everything has stops distinguishing anything.
+    const body = screenText(mk('waiting_input')).body
+    expect(body).not.toContain('[!]')
+    expect(body).not.toContain('▲')
+  })
+
+  test('an unmarked row is padded to a badge width', () => {
+    expect(screenText(mk()).body).toContain('\u3000 グラス開発')
+  })
+
+  test('a relay item still marks its workspace', () => {
+    const withRelay = {
+      ...mk(),
+      relayWaiting: [
+        { id: 'r', sessionId: 'a', kind: 'waiting' as const, text: 'x', source: 'auto' as const, createdAt: 1 },
+      ],
+    }
+    expect(screenText(withRelay).body).toContain('！ グラス開発')
   })
 })

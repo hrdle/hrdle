@@ -160,10 +160,26 @@ export class GlassesController {
    *  only while there is something to indicate. */
   private tickSpinner(): void {
     const st = this.state
-    if (st.mode !== 'conversation') return
-    if (this.currentSession()?.indicatorState !== 'processing') return
+    if (!this.somethingIsWorking()) return
     st.spinnerTick = (st.spinnerTick ?? 0) + 1
     this.platform.renderHeader(st)
+  }
+
+  /** Whether a spinner is on screen at all. Nothing working means nothing to
+   *  redraw, and an idle app sends nothing. */
+  private somethingIsWorking(): boolean {
+    const st = this.state
+    if (st.mode === 'conversation') {
+      const pane = (this.currentSession()?.panes ?? []).find((p) => p.paneId === st.selectedPaneId)
+      return (pane ?? this.currentSession())?.indicatorState === 'processing'
+    }
+    if (st.mode !== 'session_list') return false
+    // The list shows every row's badge, so any working agent keeps it moving.
+    return st.sessions.some(
+      (s) =>
+        s.indicatorState === 'processing' ||
+        (s.panes ?? []).some((p) => p.indicatorState === 'processing'),
+    )
   }
 
   // ── Ring input (the single handler set shared by G2 and debug) ──

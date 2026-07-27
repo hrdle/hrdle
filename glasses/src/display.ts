@@ -214,10 +214,22 @@ function isWaiting(s: Session): boolean {
   return s.indicatorState === 'waiting_input' || (!!s.waitingToolName && s.waitingToolName !== 'UserInput')
 }
 
-function statusLabel(s: Session): string {
-  if (isWaiting(s)) return '[!]'
-  if (s.indicatorState === 'processing') return '[*]'
-  return ''
+/**
+ * The one thing a list row has room to say about state.
+ *
+ * Waiting used to get `[!]`, and on a real machine seven of eight rows carried
+ * it — a mark almost everything has stopped distinguishing anything. Waiting
+ * is the resting state of an agent; running is the news. So the badge is the
+ * spinner and nothing else, and the rest of the answer is one tap away.
+ *
+ * The blank is a full-width space, not an ordinary one: at 320 units it is
+ * exactly a spinner frame wide, and 5-unit spaces would leave every unmarked
+ * name starting three-quarters of a column to the left of the marked ones.
+ */
+const BADGE_BLANK = '\u3000'
+
+function statusLabel(s: Session, frame: string): string {
+  return s.indicatorState === 'processing' ? frame : BADGE_BLANK
 }
 
 const SEPARATOR = '-'.repeat(24)
@@ -344,10 +356,8 @@ export function rowCursor(state: AppState): number {
   return fallback >= 0 ? fallback : 0
 }
 
-function paneStatusLabel(p: Pane): string {
-  if (p.indicatorState === 'waiting_input' || (!!p.waitingToolName && p.waitingToolName !== 'UserInput')) return '[!]'
-  if (p.indicatorState === 'processing') return '[*]'
-  return ''
+function paneStatusLabel(p: Pane, frame: string): string {
+  return p.indicatorState === 'processing' ? frame : BADGE_BLANK
 }
 
 /**
@@ -377,6 +387,7 @@ function sessionListBody(state: AppState): string {
   // Relay waiting covers agent-declared items whose session indicator is not
   // waiting_input; those sessions still get the [!] marker.
   const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
+  const frame = spinnerFrame(state)
   const rows = listRows(sessions)
   if (!rows.length) return '(no sessions)'
   const cursor = rowCursor(state)
@@ -390,9 +401,11 @@ function sessionListBody(state: AppState): string {
     // Pad the badge so every name starts in the same column: a list where
     // `>[!] name` and `  name` begin three columns apart is hard to scan.
     if (row.header || !row.paneId) {
-      const label = relayWaitingIds.has(s.id) ? '[!]' : statusLabel(s)
+      // A relay item is a question already asked and still unanswered, which
+      // outlives the indicator that raised it; that one keeps its mark.
+      const label = relayWaitingIds.has(s.id) ? '！' : statusLabel(s, frame)
       // A heading takes no cursor, so it never carries the marker.
-      return `${row.header ? ' ' : here}${label.padEnd(3)} ${sName(s)}`
+      return `${row.header ? ' ' : here}${label} ${sName(s)}`
     }
     const panes = s.panes ?? []
     const p = panes.find((x) => x.paneId === row.paneId)
@@ -403,7 +416,7 @@ function sessionListBody(state: AppState): string {
     // with the badges either side of it.
     const last = panes[panes.length - 1]?.paneId === row.paneId
     const branch = last ? '└' : '├'
-    return `${here}${(p ? paneStatusLabel(p) : '').padEnd(3)}${branch} ${row.paneId}${detail ? `  ${detail}` : ''}`
+    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${row.paneId}${detail ? `  ${detail}` : ''}`
   }).join('\n')
 }
 
@@ -905,6 +918,15 @@ export async function initDisplay(): Promise<Bridge | null> {
  */
 export async function updateHeader(bridge: Bridge | null, state: AppState): Promise<void> {
   if (!bridge || state.mode !== currentMode) return
+  // Whichever container the spinner lives in — the conversation's header, or
+  // the list's rows. One container either way; a full update sends three.
+  if (state.mode === 'session_list') {
+    await bridge.textContainerUpgrade(new TextContainerUpgrade({
+      containerID: 1, containerName: 'list',
+      content: sessionListBody(state),
+    }))
+    return
+  }
   const { headerText } = conversationContent(state)
   await bridge.textContainerUpgrade(new TextContainerUpgrade({
     containerID: 1, containerName: 'header',
