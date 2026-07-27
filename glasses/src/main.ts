@@ -245,7 +245,7 @@ async function main(): Promise<void> {
   // gate on it, or the browser debug simulator would never start.
   const isEvenHub =
     typeof (window as unknown as Record<string, unknown>).flutter_inappwebview !== 'undefined'
-  trace(`main: isEvenHub=${isEvenHub}`)
+  trace(`main: v${__APP_VERSION__} isEvenHub=${isEvenHub}`)
   const bridge = isEvenHub ? await initDisplay() : null
   trace(`bridge=${bridge ? 'ready' : 'null'}`)
 
