@@ -157,7 +157,7 @@ describe('formatMessage', () => {
       content: '',
       toolUse: [{ name: 'Bash', input: { description: 'テストを流す' } }],
     })
-    expect(out).toBe('A> [Bash] テストを流す')
+    expect(out).toBe('[Bash] テストを流す')
   })
 })
 
@@ -423,5 +423,27 @@ describe('recap lifetime', () => {
 
   test('keeps showing when a timestamp will not parse', () => {
     expect(hasRecap(state('not a date', '2026-07-27T05:00:00.000Z'))).toBe(true)
+  })
+})
+
+describe('turn prefixes', () => {
+  test('the user turn is marked like a shell prompt', () => {
+    expect(formatMessage({ role: 'user', content: 'リリースお願いします' })).toBe('$ リリースお願いします')
+  })
+
+  test('the agent turn carries no prefix', () => {
+    // The turn that is not marked is the answer to the one that is; an `A>` in
+    // front of every reply spends columns on something already visible.
+    expect(formatMessage({ role: 'assistant', content: '進めます' })).toBe('進めます')
+  })
+
+  test('the reclaimed columns go to the tool detail', () => {
+    const out = formatMessage({
+      role: 'assistant',
+      content: '',
+      toolUse: [{ name: 'Bash', input: { command: 'x'.repeat(300) } }],
+    })
+    expect(width(out)).toBeLessThanOrEqual(BODY_WIDTH)
+    expect(width(out)).toBeGreaterThan(BODY_WIDTH - 24)
   })
 })
