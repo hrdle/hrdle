@@ -220,7 +220,7 @@ export function startDebugUI(): void {
                 <span class="figure a"></span>
                 <span class="figure c"></span>
                 <span class="figure b"></span>
-                <video class="cam" id="g2-cam" autoplay muted playsinline></video>
+                <video class="cam" id="g2-cam" autoplay muted playsinline disablePictureInPicture></video>
               </div>
               <canvas class="hud-canvas" id="g2-canvas" width="576" height="288"></canvas>
               <div class="glass"></div>
@@ -231,6 +231,8 @@ export function startDebugUI(): void {
             <span class="mode-id" id="g2-mode-id">session_list</span>
             <button type="button" id="g2-copy">画面をコピー</button>
             <button type="button" id="g2-fs">全画面</button>
+            <button type="button" id="g2-pip">小窓</button>
+            <video id="g2-pip-video" muted playsinline hidden></video>
             <label class="mirror"><input type="checkbox" id="g2-mirror" />実機ミラー</label>
             <span class="hint" id="g2-mirror-status"></span>
             <span class="hint" id="g2-copied"></span>
@@ -309,11 +311,18 @@ export function startDebugUI(): void {
     if (node) node.textContent = message || DEFAULT_VOICE_HINT
   }
 
+  /** The decoded backdrop, kept for the PiP compositor, which draws its own
+   *  layers and cannot read a CSS background. Null until the first load, and
+   *  tainted images simply do not composite (captureStream would throw). */
+  let backdropImage: HTMLImageElement | null = null
+
   /** Swap the backdrop, but only once the image has actually decoded — a
    *  missing file would otherwise leave nothing at all behind the text. */
   function applyBackdrop(url: string, remember: boolean): void {
     const probe = new Image()
+    probe.crossOrigin = 'anonymous'
     probe.addEventListener('load', () => {
+      backdropImage = probe
       const scene = document.querySelector('.scene') as HTMLElement | null
       // Quotes and backslashes stripped: the URL can come from the query
       // string or a text field and lands inside a CSS url().
@@ -447,6 +456,9 @@ export function startDebugUI(): void {
       px[i] = Math.round((px[i] / 255) * 15) * 17
     }
     ctx.putImageData(frame, 0, 0)
+
+    // The little window is a copy of this one; keep it in step.
+    pumpPip()
   }
 
   // ── Microphone ──
@@ -644,6 +656,7 @@ export function startDebugUI(): void {
       lensEl.classList.add('cam-on')
       camBtn.textContent = 'カメラを止める'
       setBgStatus('')
+      startCameraPump()
     } catch {
       setBgStatus('カメラを開けませんでした（権限とHTTPSを確認）')
     }
@@ -672,6 +685,167 @@ export function startDebugUI(): void {
     fitPanel()
   })
   window.addEventListener('resize', fitPanel)
+
+  // ── Picture-in-picture ──
+  //
+  // A PiP window carries exactly one video and nothing else: the earlier
+  // attempt put the bare camera feed in the little window, with none of the
+  // display in it, because the canvas and the CSS layers above the <video>
+  // never travel. So everything is composited into one canvas here — the same
+  // layers, drawn instead of stacked — and that canvas becomes the video.
+  //
+  // Worth the work because it is the demo: the terminal on the phone and what
+  // the glasses make of it, side by side.
+
+  const PIP_SCALE = 2 // panel pixels are coarse; upscale before PiP resamples
+  const pipCanvas = document.createElement('canvas')
+  pipCanvas.width = PANEL_W * PIP_SCALE
+  pipCanvas.height = PANEL_H * PIP_SCALE
+  const pipVideo = document.getElementById('g2-pip-video') as HTMLVideoElement
+  let pipStream: MediaStream | null = null
+  let pipTimer: ReturnType<typeof setInterval> | null = null
+  let pipRvfc: number | null = null
+
+  const pipActive = (): boolean => document.pictureInPictureElement === pipVideo
+
+  /** Cover-fit a source into the composite, the way object-fit: cover would. */
+  function drawCover(
+    ctx: CanvasRenderingContext2D,
+    src: CanvasImageSource,
+    sw: number,
+    sh: number,
+  ): void {
+    if (!sw || !sh) return
+    const scale = Math.max(pipCanvas.width / sw, pipCanvas.height / sh)
+    const w = sw * scale
+    const h = sh * scale
+    ctx.drawImage(src, (pipCanvas.width - w) / 2, (pipCanvas.height - h) / 2, w, h)
+  }
+
+  function compositePip(): void {
+    const ctx = pipCanvas.getContext('2d')
+    if (!ctx) return
+    const { width: W, height: H } = pipCanvas
+
+    // 1. The room, out of focus, as on the page.
+    ctx.save()
+    ctx.filter = `blur(${2.5 * PIP_SCALE}px) saturate(.92)`
+    if (camStream && camEl.videoWidth) {
+      drawCover(ctx, camEl, camEl.videoWidth, camEl.videoHeight)
+    } else if (backdropImage?.complete && backdropImage.naturalWidth) {
+      drawCover(ctx, backdropImage, backdropImage.naturalWidth, backdropImage.naturalHeight)
+    } else {
+      ctx.fillStyle = '#1a2028'
+      ctx.fillRect(0, 0, W, H)
+    }
+    ctx.restore()
+
+    // 2. Held back so the green reads against a lit room.
+    ctx.fillStyle = 'rgba(4, 8, 6, 0.44)'
+    ctx.fillRect(0, 0, W, H)
+
+    // 3. The panel itself, kept blocky — resampling it smooth would flatter
+    //    the hardware into something the wearer never sees.
+    ctx.save()
+    if (glassyToggle.checked) ctx.globalCompositeOperation = 'screen'
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(canvas, 0, 0, W, H)
+    ctx.restore()
+
+    if (!glassyToggle.checked) return
+
+    // 4. The glass: a diagonal catch of light, a leak along the top of the
+    //    combiner, and the falloff toward its edge.
+    const sheen = ctx.createLinearGradient(0, H, W * 0.95, 0)
+    sheen.addColorStop(0.26, 'rgba(214,255,229,0)')
+    sheen.addColorStop(0.35, 'rgba(214,255,229,.07)')
+    sheen.addColorStop(0.44, 'rgba(220,255,234,.17)')
+    sheen.addColorStop(0.53, 'rgba(214,255,229,.06)')
+    sheen.addColorStop(0.62, 'rgba(214,255,229,0)')
+    ctx.fillStyle = sheen
+    ctx.fillRect(0, 0, W, H)
+
+    const leak = ctx.createLinearGradient(0, 0, 0, H * 0.22)
+    leak.addColorStop(0, 'rgba(196,255,214,.10)')
+    leak.addColorStop(1, 'rgba(196,255,214,0)')
+    ctx.fillStyle = leak
+    ctx.fillRect(0, 0, W, H * 0.22)
+
+    const vignette = ctx.createRadialGradient(
+      W / 2, H * 0.44, Math.min(W, H) * 0.2,
+      W / 2, H * 0.44, Math.max(W, H) * 0.62,
+    )
+    vignette.addColorStop(0, 'rgba(2,7,5,0)')
+    vignette.addColorStop(1, 'rgba(2,7,5,.40)')
+    ctx.fillStyle = vignette
+    ctx.fillRect(0, 0, W, H)
+  }
+
+  /** Redraw the little window. Called after every panel render, and on a timer
+   *  while the camera is live — requestAnimationFrame stops firing once the
+   *  page is hidden, which is precisely when PiP is being watched. */
+  function pumpPip(): void {
+    if (pipActive()) compositePip()
+  }
+
+  function startPipPump(): void {
+    if (!pipTimer) pipTimer = setInterval(pumpPip, 200)
+    startCameraPump()
+  }
+
+  /** Timers are clamped to a second once the page is hidden, which is exactly
+   *  when the little window is being watched — fine for a panel that changes
+   *  every five seconds, not for a live room. A video frame callback rides the
+   *  media pipeline instead and is not clamped. */
+  function startCameraPump(): void {
+    if (pipRvfc !== null || !camStream || !pipActive()) return
+    if (!('requestVideoFrameCallback' in camEl)) return
+    pipRvfc = camEl.requestVideoFrameCallback(() => {
+      pipRvfc = null
+      if (!pipActive()) return
+      compositePip()
+      startCameraPump()
+    })
+  }
+
+  function stopPipPump(): void {
+    if (pipTimer) {
+      clearInterval(pipTimer)
+      pipTimer = null
+    }
+    if (pipRvfc !== null) {
+      camEl.cancelVideoFrameCallback?.(pipRvfc)
+      pipRvfc = null
+    }
+  }
+
+  async function enterPip(): Promise<void> {
+    try {
+      compositePip()
+      if (!pipStream) {
+        pipStream = pipCanvas.captureStream(15)
+        pipVideo.srcObject = pipStream
+      }
+      await pipVideo.play()
+      await pipVideo.requestPictureInPicture()
+      startPipPump()
+    } catch {
+      setBgStatus('小窓にできませんでした（対応していないブラウザかもしれません）')
+    }
+  }
+
+  el('g2-pip').addEventListener('click', () => {
+    if (pipActive()) void document.exitPictureInPicture()
+    else void enterPip()
+  })
+
+  pipVideo.addEventListener('enterpictureinpicture', () => {
+    el('g2-pip').textContent = '小窓を閉じる'
+  })
+  pipVideo.addEventListener('leavepictureinpicture', () => {
+    el('g2-pip').textContent = '小窓'
+    stopPipPump()
+  })
 
   // ── Lens reflection ──
   //
