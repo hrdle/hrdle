@@ -891,6 +891,31 @@ export class HerdrControlSession {
     await this.reconcilePanes();
   }
 
+  /**
+   * Bring a pane into view before acting on it.
+   *
+   * The split tree only holds the live tab's panes, so input aimed at a pane
+   * parked in another tab found nothing and the caller returned 404 — readable
+   * from the history API, unanswerable. Switching first makes the reply land,
+   * and leaves the terminal showing the pane that was just answered, which is
+   * where the next thing happens anyway.
+   *
+   * Returns false when the pane is nowhere in the workspace; the caller still
+   * owns the 404.
+   */
+  async ensurePaneReachable(paneId: string): Promise<boolean> {
+    if (this.tree.paneIds().includes(paneId)) return true;
+    if (!this.workspaceId) return false;
+    const all = await listPanes(this.workspaceId);
+    const target = all.find((p) => (toTmuxPaneId(p.pane_id) ?? p.pane_id) === paneId);
+    if (!target?.tab_id || target.tab_id === this.activeTabId) return false;
+    console.log(
+      `[herdr-control] ${this.sessionId}: pane ${paneId} lives in ${target.tab_id}, switching from ${this.activeTabId ?? 'n/a'}`,
+    );
+    await this.selectTab(target.tab_id);
+    return this.tree.paneIds().includes(paneId);
+  }
+
   /** Create a new focused tab in this workspace and switch to it. */
   async createTab(): Promise<void> {
     if (!this.workspaceId) throw new Error('Control session not active');

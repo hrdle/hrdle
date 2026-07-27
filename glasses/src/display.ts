@@ -369,15 +369,15 @@ function paneStatusLabel(p: Pane, frame: string): string {
  * learns nothing from the second one. What is left is the context figure,
  * which does differ, and says which of the two has been running longer.
  */
-function paneDetail(p: Pane, siblings: Pane[], activeTabId?: string): string {
+function paneDetail(p: Pane, siblings: Pane[]): string {
   const dirOf = (x: Pane) => x.currentPath?.split('/').filter(Boolean).pop() ?? ''
   const dirs = new Set(siblings.map(dirOf))
   const pct = p.metrics?.contextPercent
-  // A pane in another tab is running where the terminal cannot show it. Saying
-  // so is the difference between "there are three" and "one of them is
-  // somewhere you are not looking".
-  const offscreen = activeTabId && p.tabId && p.tabId !== activeTabId ? '別タブ' : ''
-  return [pct != null ? `${Math.round(pct)}%` : '', dirs.size > 1 ? dirOf(p) : '', offscreen]
+  // Which tab a pane sits in is not shown. It was, while a reply to one in
+  // another tab could not land — a mark for "readable but unanswerable". The
+  // server switches tabs to deliver now, so the pane behaves like any other
+  // and the label would be a fact with no decision attached to it.
+  return [pct != null ? `${Math.round(pct)}%` : '', dirs.size > 1 ? dirOf(p) : '']
     .filter(Boolean)
     .join('  ')
 }
@@ -409,7 +409,7 @@ function sessionListBody(state: AppState): string {
     }
     const panes = s.panes ?? []
     const p = panes.find((x) => x.paneId === row.paneId)
-    const detail = p ? paneDetail(p, panes, s.activeTabId) : ''
+    const detail = p ? paneDetail(p, panes) : ''
     // Drawn as a tree so the panes read as belonging to the name above them
     // rather than as more workspaces that happen to be indented. The firmware
     // carries the light box-drawing set at full width, so the branch lines up
