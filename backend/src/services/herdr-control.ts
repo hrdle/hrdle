@@ -870,6 +870,11 @@ export class HerdrControlSession {
 
   async selectPane(paneId: string): Promise<void> {
     assertPaneId(paneId);
+    // Picking a pane is the same intent as answering one: the split tree only
+    // holds the live tab's panes, so without this a pane parked in another tab
+    // resolves to nothing and the view stays on whatever tab it was already
+    // showing — the pane the user pointed at is not the pane they get.
+    await this.ensurePaneReachable(paneId);
     this.activePaneId = paneId;
     try {
       await herdrRpc('pane.focus', { pane_id: this.toHerdr(paneId) });

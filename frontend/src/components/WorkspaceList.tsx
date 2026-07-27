@@ -9,7 +9,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
 	ArrowRight,
 	BarChart3,
-	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	ExternalLink,
@@ -788,6 +787,7 @@ function PaneRow({
 	onSelect,
 	onSelectPane,
 	onClosePane,
+	activateTab,
 }: {
 	session: ExtendedSessionResponse;
 	pane: PaneInfo;
@@ -795,6 +795,12 @@ function PaneRow({
 	onSelect: (session: ExtendedSessionResponse) => void;
 	onSelectPane?: (session: ExtendedSessionResponse, paneId: string) => void;
 	onClosePane?: (sessionId: string, paneId: string, name: string) => void;
+	/**
+	 * Set only when this pane sits in a tab the workspace is not rendering.
+	 * Awaited before opening the pane so the terminal is already on the right
+	 * tab by the time it subscribes.
+	 */
+	activateTab?: () => void | Promise<void>;
 }) {
 	const { t, i18n } = useTranslation();
 	const cmd = pane.currentCommand || "shell";
@@ -824,8 +830,12 @@ function PaneRow({
 		<div>
 			<button
 				type="button"
-				onClick={() => {
+				onClick={async () => {
 					if (consumeLongPress()) return;
+					// A pane in another tab is only readable from here; the terminal
+					// shows one tab at a time. Switch before opening it, or the tap
+					// lands on some other tab's pane.
+					if (activateTab) await activateTab();
 					if (onSelectPane) {
 						onSelectPane(session, pane.paneId);
 					} else {
@@ -925,23 +935,23 @@ function PaneRow({
 }
 
 /**
- * One tab of the workspace. The disclosure chevron doubles as the active
- * marker: only the active tab can show its panes (the backend renders a single
- * tab), so selecting a collapsed tab is what expands it.
+ * The heading a tab's panes sit under. Every tab lists its panes, so there is
+ * nothing here to open or expand — tapping a pane is what switches the
+ * workspace to the tab that owns it. The highlight marks the tab the terminal
+ * is currently rendering; the row itself only closes (long press, or the ✕ on
+ * hover for desktop, which has no long press).
  */
 function TabRow({
 	session,
 	tab,
 	isActive,
 	canClose,
-	onSelectTab,
 	onCloseTab,
 }: {
 	session: ExtendedSessionResponse;
 	tab: TabInfo;
 	isActive: boolean;
 	canClose: boolean;
-	onSelectTab?: (session: ExtendedSessionResponse, tabId: string) => void;
 	onCloseTab?: (
 		session: ExtendedSessionResponse,
 		tabId: string,
@@ -959,40 +969,28 @@ function TabRow({
 		canClose && onCloseTab
 			? () => onCloseTab(session, tab.id, tab.label)
 			: undefined;
-	const { consumeLongPress, handlers } = useRowLongPress(closeTab);
+	const { handlers } = useRowLongPress(closeTab);
 
 	return (
 		<div className="group/tab flex items-center gap-1">
-			<button
-				type="button"
-				onClick={() => {
-					if (consumeLongPress()) return;
-					if (!isActive) onSelectTab?.(session, tab.id);
-				}}
+			<div
 				{...handlers}
-				className={`flex-1 min-w-0 min-h-11 flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
-					isActive ? "bg-cyan-500/10" : "hover:bg-white/[0.04]"
+				className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md ${
+					isActive ? "bg-cyan-500/10" : ""
 				}`}
 			>
-				{isActive ? (
-					<ChevronDown className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
-				) : (
-					<ChevronRight className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
-				)}
 				<span
 					className={`text-[13px] font-medium truncate ${
-						isActive ? "text-cyan-200" : "text-zinc-300"
+						isActive ? "text-cyan-200" : "text-zinc-400"
 					}`}
 				>
 					{label}
 				</span>
 				<span className="flex-1" />
-				{!isActive && (
-					<span className="text-[11px] text-zinc-600 shrink-0">
-						{t("session.panes", { count: tab.paneCount })}
-					</span>
-				)}
-			</button>
+				<span className="text-[11px] text-zinc-600 shrink-0">
+					{t("session.panes", { count: tab.paneCount })}
+				</span>
+			</div>
 			{closeTab && (
 				<button
 					type="button"
@@ -1040,7 +1038,11 @@ function SessionItem({
 		direction?: "h" | "v",
 	) => void;
 	onClosePane?: (sessionId: string, paneId: string, name: string) => void;
-	onSelectTab?: (session: ExtendedSessionResponse, tabId: string) => void;
+	/** Switch the workspace to a tab. Awaited before opening a pane it owns. */
+	onSelectTab?: (
+		session: ExtendedSessionResponse,
+		tabId: string,
+	) => void | Promise<void>;
 	onCreateTab?: (session: ExtendedSessionResponse) => void;
 	onCloseTab?: (session: ExtendedSessionResponse, tabId: string, label: string) => void;
 }) {
@@ -1508,12 +1510,12 @@ function SessionItem({
 			)}
 
 			{/* Tab / pane tree (expandable). herdr's model is workspace > tab >
-			    pane, so the panes nest under the tab that owns them. Only the
-			    active tab's panes are known (the backend renders one tab at a
-			    time), so the other tabs collapse to a single row carrying their
-			    pane count — selecting one switches the workspace over to it, which
-			    is what expands it. Long-press a row to close it (tabs also get a
-			    hover ✕, since desktop has no long press). */}
+			    pane, so the panes nest under the tab that owns them, every tab
+			    showing its own. The terminal still renders one tab at a time, so
+			    opening a pane parked in another one switches the workspace over
+			    first — the tab row itself has nothing left to select. Long-press a
+			    row to close it (tabs also get a hover ✕, since desktop has no long
+			    press). */}
 			{panesExpanded && (hasTabTree || extSession.panes) && (
 				<div
 					className="mx-4 mb-3 pt-2 border-t border-white/[0.06]"
@@ -1532,7 +1534,6 @@ function SessionItem({
 											tab={tab}
 											isActive={isActive}
 											canClose={(extSession.tabs?.length ?? 0) > 1}
-											onSelectTab={onSelectTab}
 											onCloseTab={onCloseTab}
 										/>
 										{/* `panes` spans every tab now, so each tab takes its
@@ -1547,14 +1548,19 @@ function SessionItem({
 														p.tabId ? p.tabId === tab.id : isActive,
 													)
 													.map((pane) => (
-													<PaneRow
-														key={pane.paneId}
-														session={extSession}
-														pane={pane}
-														bridgePaneId={bridgePaneId}
-														onSelect={onSelect}
-														onSelectPane={onSelectPane}
+														<PaneRow
+															key={pane.paneId}
+															session={extSession}
+															pane={pane}
+															bridgePaneId={bridgePaneId}
+															onSelect={onSelect}
+															onSelectPane={onSelectPane}
 															onClosePane={onClosePane}
+															activateTab={
+																isActive
+																	? undefined
+																	: () => onSelectTab?.(session, tab.id)
+															}
 														/>
 													))}
 											</div>

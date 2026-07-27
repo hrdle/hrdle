@@ -244,6 +244,11 @@ export const TerminalPage = forwardRef<TerminalRef, TerminalPageProps>(
 			const active = effectiveActivePaneId;
 			if (!active || !allPanes.some((p) => p.paneId === active)) {
 				prevActivePaneIdRef.current = active ?? null;
+				// The layout only carries the tab being rendered, so a pane picked
+				// from the workspace list may not be in it yet. Ask for it anyway:
+				// the server switches to its tab and the next layout brings it in.
+				// A pane that is genuinely gone just leaves this a no-op.
+				if (active) controlTerminal.selectPane(active);
 				return;
 			}
 			const isActualSwitch =
