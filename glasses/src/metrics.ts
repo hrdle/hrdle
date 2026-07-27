@@ -1,4 +1,4 @@
-import { getTextWidth } from '@evenrealities/pretext'
+import { getAdvW, getTextWidth } from '@evenrealities/pretext'
 
 /**
  * How the G2 panel measures text.
@@ -82,6 +82,96 @@ export function clipToWidth(text: string, maxPx: number): string {
     prev = ch
   }
   return text
+}
+
+// ─── Glyph coverage ───
+
+const PICTOGRAPH = /\p{Extended_Pictographic}/u
+
+/**
+ * Marks the panel cannot draw, rewritten as ones it can.
+ *
+ * The firmware carries the CJK symbol set — ○ × △ ！ ※ ★ all have real
+ * advances — and in a Japanese context those *are* the conventional marks for
+ * good, bad, partial and attention. So a status emoji does not have to be
+ * thrown away; it has an equivalent that says the same thing in the same
+ * column. Only glyphs with a genuine counterpart are here. Decoration (🎉, 🚀)
+ * has nothing to become and still goes.
+ */
+const SUBSTITUTES = new Map<string, string>([
+  // done / good
+  ...['✅', '✔', '✓', '☑', '🟢', '🆗', '👍', '⭕'].map((c) => [c, '○'] as const),
+  // failed / bad
+  ...['❌', '✗', '✘', '☒', '✕', '🔴', '🚫', '⛔', '👎'].map((c) => [c, '×'] as const),
+  // attention
+  ...['⚠', '❗', '❕', '‼', '🚨'].map((c) => [c, '！'] as const),
+  ...['❓', '❔'].map((c) => [c, '？'] as const),
+  // emphasis
+  ...['⭐', '🌟', '✨'].map((c) => [c, '★'] as const),
+  // note
+  ...['💡', 'ℹ', '📌', '📝'].map((c) => [c, '※'] as const),
+  // direction
+  ...['➡', '▶', '▷'].map((c) => [c, '→'] as const),
+  ...['⬅', '◀', '◁'].map((c) => [c, '←'] as const),
+  ...['⬆', '🔼'].map((c) => [c, '↑'] as const),
+  ...['⬇', '🔽'].map((c) => [c, '↓'] as const),
+  ...['🔺'].map((c) => [c, '▲'] as const),
+  ...['🔻'].map((c) => [c, '▼'] as const),
+  // Status dots keep their three states: a green and a yellow light both
+  // becoming ○ would lose the distinction they exist to make.
+  ...['⚪'].map((c) => [c, '○'] as const),
+  ...['🟡', '🟠'].map((c) => [c, '△'] as const),
+  ...['🔵', '🟣', '🟤', '⚫'].map((c) => [c, '●'] as const),
+])
+
+/**
+ * Drop what the panel has no glyph for.
+ *
+ * Two rules, because neither alone is enough. `getAdvW` returns 0 for a
+ * codepoint the firmware fonts do not carry, which catches ✓, ✗, ⚠ and most
+ * emoji. It does not catch ✅: pretext measures that one at 320px from an
+ * emoji font this device turns out not to have, and the panel draws tofu. So
+ * pictographs go regardless of what they measure.
+ *
+ * Sent anyway they cost a column and say nothing. Dropping them here also
+ * keeps the browser simulator honest — it would otherwise render an emoji
+ * beautifully that the wearer never sees.
+ */
+export function stripUnrenderable(text: string): string {
+  let out = ''
+  let dropped = false
+  for (const ch of text) {
+    if (ch === '\n') {
+      out += ch
+      continue
+    }
+    const cp = ch.codePointAt(0) as number
+    // Selectors and joiners only qualify the glyph beside them; alone they are
+    // leftovers from an emoji that has already gone.
+    const isModifier = cp === 0xfe0f || cp === 0x200d || (cp >= 0x1f3fb && cp <= 0x1f3ff)
+    if (isModifier) continue
+    const swap = SUBSTITUTES.get(ch)
+    if (swap) {
+      // Substituted, not dropped: nothing was left behind, so the spacing
+      // around it is still the author's.
+      out += swap
+      continue
+    }
+    if (PICTOGRAPH.test(ch) || getAdvW(cp) === 0) {
+      dropped = true
+      continue
+    }
+    out += ch
+  }
+  // A dropped glyph leaves the spaces that flanked it behind: two in the middle
+  // of a line read as a gap rather than a word break, and one at the start as
+  // an indent that was never written. Only touched when something went, so a
+  // line nobody edited keeps its own spacing.
+  if (!dropped) return out
+  return out
+    .split('\n')
+    .map((line) => line.replace(/ {2,}/g, ' ').trim())
+    .join('\n')
 }
 
 // ─── Line breaking ───
