@@ -39,6 +39,72 @@ function charWidth(ch: string): number {
   return 1
 }
 
+/** Total display width of a string, in the same half-width units as the panel. */
+function displayWidth(text: string): number {
+  let w = 0
+  for (let i = 0; i < text.length; i++) w += charWidth(text[i])
+  return w
+}
+
+/** 行頭禁則: characters that must not open a line. A lone `。` pushed onto the
+ *  next line is the most visible artefact of a naive 52-column split. */
+const NO_LINE_START = '。、．，・：；！？!?)）］」』｝》〉”’…ー〜%％'
+
+/** 行末禁則: opening brackets must not be left dangling at the end of a line. */
+const NO_LINE_END = '（(［[「『｛{《〈“‘'
+
+/** Columns we are willing to leave blank to keep an ASCII word whole. Beyond
+ *  this the ragged margin costs more than the broken word — with only seven
+ *  lines on screen, half a blank line is not worth an unbroken identifier. */
+const MAX_WORD_CARRY = 12
+
+const WORD_CHAR = /[A-Za-z0-9'._-]/
+
+/**
+ * Decide where to actually cut a full line, given the character at `i` that no
+ * longer fits. Returns [keep, carry]: `keep` closes the line, `carry` moves
+ * down ahead of that character.
+ *
+ * All three rules push characters down rather than letting them overflow — the
+ * column widths here are measured approximations, so an overflowing line would
+ * be re-wrapped by the G2's own container and land right back on the artefact
+ * we are avoiding.
+ */
+function chooseBreak(line: string, text: string, i: number): [string, string] {
+  const next = text[i]
+
+  if (NO_LINE_START.includes(next)) {
+    // Carry at most two characters, or a run of closers would empty the line.
+    for (let n = 1; n <= 2 && n < line.length; n++) {
+      const cut = line.length - n
+      if (!NO_LINE_START.includes(line[cut]) && line[cut] !== ' ') {
+        return [line.slice(0, cut), line.slice(cut)]
+      }
+    }
+    return [line, '']
+  }
+
+  if (line.length > 1 && NO_LINE_END.includes(line[line.length - 1])) {
+    return [line.slice(0, -1), line.slice(-1)]
+  }
+
+  if (/[A-Za-z0-9]/.test(next)) {
+    let start = line.length
+    while (start > 0 && WORD_CHAR.test(line[start - 1])) start--
+    const carried = line.length - start
+    if (start === 0 || carried === 0 || carried > MAX_WORD_CARRY) return [line, '']
+    // Only worth a ragged margin if the word then fits whole. A URL or a very
+    // long path is going to be split wherever it lands, so leave the blank
+    // columns out of it.
+    let end = i
+    while (end < text.length && WORD_CHAR.test(text[end])) end++
+    if (carried + (end - i) > LINE_WIDTH) return [line, '']
+    return [line.slice(0, start).trimEnd(), line.slice(start)]
+  }
+
+  return [line, '']
+}
+
 /** Split text into display lines respecting character widths and newlines */
 function splitDisplayLines(text: string): string[] {
   const lines: string[] = []
@@ -54,10 +120,11 @@ function splitDisplayLines(text: string): string[] {
       continue
     }
     const w = charWidth(ch)
-    if (currentWidth + w > LINE_WIDTH) {
-      lines.push(currentLine)
-      currentLine = ch
-      currentWidth = w
+    if (currentWidth + w > LINE_WIDTH && currentLine) {
+      const [keep, carry] = chooseBreak(currentLine, text, i)
+      lines.push(keep)
+      currentLine = carry + ch
+      currentWidth = displayWidth(currentLine)
     } else {
       currentLine += ch
       currentWidth += w
