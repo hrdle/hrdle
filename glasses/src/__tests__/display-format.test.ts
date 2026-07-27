@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { sanitizeForG2, formatMessage } from '../types.ts'
 import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
@@ -762,5 +763,34 @@ describe('list badge', () => {
       ],
     }
     expect(screenText(withRelay).body).toContain('！ グラス開発')
+  })
+})
+
+describe('lifecycle events', () => {
+  test('the host reports every reason it stops us', () => {
+    // Whether the app was backgrounded or killed is the question a whole day
+    // of guessing could not settle from inside the page.
+    expect(OsEventTypeList.FOREGROUND_ENTER_EVENT).toBe(4)
+    expect(OsEventTypeList.FOREGROUND_EXIT_EVENT).toBe(5)
+    expect(OsEventTypeList.ABNORMAL_EXIT_EVENT).toBe(6)
+    expect(OsEventTypeList.SYSTEM_EXIT_EVENT).toBe(7)
+  })
+
+  test('lifecycle codes do not collide with ring gestures', () => {
+    // They are dispatched before the gesture debounce; sharing a value with a
+    // gesture would make a resume look like a tap.
+    const gestures = [
+      OsEventTypeList.CLICK_EVENT,
+      OsEventTypeList.DOUBLE_CLICK_EVENT,
+      OsEventTypeList.SCROLL_TOP_EVENT,
+      OsEventTypeList.SCROLL_BOTTOM_EVENT,
+    ]
+    const lifecycle = [
+      OsEventTypeList.FOREGROUND_ENTER_EVENT,
+      OsEventTypeList.FOREGROUND_EXIT_EVENT,
+      OsEventTypeList.ABNORMAL_EXIT_EVENT,
+      OsEventTypeList.SYSTEM_EXIT_EVENT,
+    ]
+    expect(gestures.some((g) => lifecycle.includes(g))).toBe(false)
   })
 })
