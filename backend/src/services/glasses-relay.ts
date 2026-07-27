@@ -148,12 +148,29 @@ export interface RelaySocket {
 
 const subscribers = new Set<RelaySocket>();
 
+/**
+ * Subscribers running on real glasses, as opposed to the browser simulator.
+ *
+ * Everything the device sees, the simulator sees — showing the panel is the
+ * whole point of it. The difference is only in what a subscription is taken to
+ * PROVE: a wearer has been told, so the browser push can stop; someone with a
+ * simulator tab open has not, and silencing their notifications because a
+ * preview window is up would lose them.
+ */
+const deviceSubscribers = new Set<RelaySocket>();
+
 export function glassesRelaySubscriberCount(): number {
   return subscribers.size;
 }
 
+/** Subscribers that are actual hardware — the ones a notification reaches. */
+export function glassesDeviceCount(): number {
+  return deviceSubscribers.size;
+}
+
 export function unsubscribeGlassesRelay(ws: RelaySocket): void {
   subscribers.delete(ws);
+  deviceSubscribers.delete(ws);
 }
 
 function sendToSubscribers(msg: Record<string, unknown>): void {
@@ -163,6 +180,7 @@ function sendToSubscribers(msg: Record<string, unknown>): void {
       ws.send(payload);
     } catch {
       subscribers.delete(ws);
+      deviceSubscribers.delete(ws);
     }
   }
 }
@@ -346,11 +364,14 @@ export async function resolveHookTarget(
  * A Claude Code / Codex hook event, shown on the glasses instead of pushed to
  * the browser.
  *
- * Returns true only when the glasses actually carry the notification, and the
- * caller suppresses the browser push on exactly that. Everything that can stop
- * the item from landing — no glasses subscribed, rate limit — returns false and
- * the push goes out as it always did: a notification nobody sees is a worse
- * failure than one seen twice.
+ * Returns true only when the notification reached a face — a device
+ * subscriber. The caller suppresses the browser push on exactly that.
+ * Everything that can stop it from landing — no glasses, only a simulator
+ * watching, rate limit — returns false and the push goes out as it always
+ * did: a notification nobody sees is a worse failure than one seen twice.
+ *
+ * The item itself is still created and broadcast for a simulator-only
+ * audience, because the simulator exists to show what the panel would show.
  */
 export function postHookRelay(input: {
   sessionId: string;
@@ -358,12 +379,13 @@ export function postHookRelay(input: {
   paneId?: string;
 }): boolean {
   if (subscribers.size === 0) return false;
+  const reachesAWearer = deviceSubscribers.size > 0;
 
   // An unanswered question already outranks anything a hook can say, and it is
   // on screen with its choices. "応答が完了しました" underneath it would only
   // describe the same moment a second time, less usefully.
   const existing = store.get(input.sessionId);
-  if (existing?.waiting && !existing.waiting.dismissed) return true;
+  if (existing?.waiting && !existing.waiting.dismissed) return reachesAWearer;
 
   if (!checkRateLimit(input.sessionId)) return false;
   evictStoreIfNeeded();
@@ -383,7 +405,7 @@ export function postHookRelay(input: {
   // Latest-one-per-session, same as agent info notes: without this a client
   // keyed by item id accumulates every completion the session ever reported.
   if (replaced && replaced.id !== item.id) broadcastRemove(replaced.id);
-  return true;
+  return reachesAWearer;
 }
 
 /** "Later / on PC": flag the item so snapshots skip it but the same blocked
@@ -588,9 +610,15 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
   return items;
 }
 
-/** Register a mux connection as a glasses relay subscriber and push the snapshot. */
-export async function subscribeGlassesRelay(ws: RelaySocket): Promise<void> {
+/**
+ * Register a mux connection as a glasses relay subscriber and push the
+ * snapshot. `onDevice` false marks a simulator: it still receives everything,
+ * it just does not count as the user having been told.
+ */
+export async function subscribeGlassesRelay(ws: RelaySocket, onDevice = true): Promise<void> {
   subscribers.add(ws);
+  if (onDevice) deviceSubscribers.add(ws);
+  else deviceSubscribers.delete(ws);
   try {
     const items = await buildGlassesRelaySnapshot();
     ws.send(JSON.stringify({ type: 'glasses-relay-snapshot', items }));
@@ -621,4 +649,5 @@ export function resetGlassesRelayForTest(): void {
   postLog.clear();
   paneStatus.clear();
   subscribers.clear();
+  deviceSubscribers.clear();
 }

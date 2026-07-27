@@ -63,6 +63,7 @@ export class CcHubWsClient {
   // Glasses relay subscription is connection-scoped (no sessionId); re-sent on
   // every (re)connect while this flag is set (#504).
   private relaySubscribed = false
+  private onDevice = true
   private screenSubscribed = false
 
   // Buffer of last N lines per session
@@ -93,7 +94,7 @@ export class CcHubWsClient {
       // Re-establish the relay subscription before onReady so the server's
       // snapshot arrives around the same time as session re-subscribes.
       if (this.relaySubscribed) {
-        this.send({ type: 'subscribe-glasses-relay' })
+        this.send({ type: 'subscribe-glasses-relay', onDevice: this.onDevice })
       }
       if (this.screenSubscribed) {
         this.send({ type: 'subscribe-glasses-screen' })
@@ -183,9 +184,13 @@ export class CcHubWsClient {
   /** Mark this connection as "glasses present" (#504). The server gates relay
    *  assembly/sending on this subscription and answers with a snapshot of the
    *  current waiting/info items. Re-sent automatically on reconnect. */
-  subscribeGlassesRelay(): void {
+  /** `onDevice` false = the browser simulator. It receives every relay item
+   *  either way; the flag only stops a preview window from being taken as
+   *  proof that the user was told, which would silence their browser push. */
+  subscribeGlassesRelay(onDevice: boolean): void {
     this.relaySubscribed = true
-    this.send({ type: 'subscribe-glasses-relay' })
+    this.onDevice = onDevice
+    this.send({ type: 'subscribe-glasses-relay', onDevice })
   }
 
   unsubscribeGlassesRelay(): void {

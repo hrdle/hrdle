@@ -311,9 +311,12 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
   // "glasses present", which gates relay assembly/sending.
   if (msg.type === 'subscribe-glasses-relay') {
     // Marks this connection as a follower, excluding it from the focus
-    // election.
+    // election. The simulator follows too, so this is not the device flag.
     ws.data.isGlasses = true;
-    await subscribeGlassesRelay(ws);
+    // Absent means device: an ehpk predating the field is on a face, while the
+    // simulator ships inside the server binary that reads it, so it can never
+    // be the older of the two.
+    await subscribeGlassesRelay(ws, msg.onDevice !== false);
     return;
   }
 

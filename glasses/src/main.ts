@@ -146,6 +146,8 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   }
 
   const platform: GlassesPlatform = {
+    // startGlassesMode only runs with a real Even Hub bridge.
+    onDevice: true,
     render(state) {
       // Just the startup burst — that is where frames used to pile up.
       if (++renders <= 10) trace(`render #${renders} mode=${state.mode} sessions=${state.sessions.length}`)

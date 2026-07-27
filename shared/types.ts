@@ -1048,7 +1048,13 @@ export type MuxClientMessage =
   | { type: 'unsubscribe-conversation'; sessionId: string }
   // Glasses relay presence subscription (#504). No sessionId: it marks the
   // whole connection as "glasses present", which gates relay assembly/send.
-  | { type: 'subscribe-glasses-relay' }
+  //
+  // `onDevice` separates a wearer from a spectator. Both get the items — the
+  // simulator's whole job is to show what the panel shows — but only real
+  // hardware silences the browser push, because only a wearer is actually
+  // being told. Absent means device: an older ehpk that predates the field is
+  // running on a face, and a simulator ships with the server that reads this.
+  | { type: 'subscribe-glasses-relay'; onDevice?: boolean }
   | { type: 'unsubscribe-glasses-relay' }
   // Screen mirroring for demos. The device publishes; browsers subscribe.
   // Only a connection with a real Even Hub bridge publishes, so the simulator
@@ -1116,7 +1122,7 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('unsubscribe'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('subscribe-conversation'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('unsubscribe-conversation'), sessionId: z.string().min(1) }),
-  z.object({ type: z.literal('subscribe-glasses-relay') }),
+  z.object({ type: z.literal('subscribe-glasses-relay'), onDevice: z.boolean().optional() }),
   z.object({ type: z.literal('unsubscribe-glasses-relay') }),
   z.object({
     type: z.literal('glasses-screen'),
