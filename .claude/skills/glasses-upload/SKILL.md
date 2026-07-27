@@ -18,9 +18,11 @@ description: G2グラスアプリをビルドしてEVEN Hubにアップロード
 
 3. **ehpkパック**:
    ```bash
-   bunx --bun evenhub pack app.json dist
+   bun run pack
    ```
-   → `out.ehpk` が生成される
+   → `out.ehpk` が生成される。**版数が `app.json` とバンドルで一致していなければ止まる** —
+   バンプしてビルドを忘れると、Hub は新しい番号を表示するのに実機は古い番号を名乗る、
+   という一番たちの悪いずれ方をするため（`glasses/scripts/pack.ts`）
    ※ `npx @evenrealities/evenhub-cli pack` は npm が workspace の package.json を見てしまい "Missing script" で失敗する。`bunx evenhub` の形が確実
 
 4. **コミット** & PR (必要に応じて main にマージ):
@@ -156,7 +158,7 @@ description: G2グラスアプリをビルドしてEVEN Hubにアップロード
 ## Important Notes
 
 - **viewport 設定が必須**: agent-browser のデフォルトは 393x852 (mobile)。CC Hub Glasses 詳細ページに遷移できなかったり、Beta バッジが viewport の外 (x=1200+) に出る。先頭で必ず `set viewport 1280 800`
-- **bun を使う**: ルートが bun workspaces なので、`npm run build` / `npx evenhub pack` は workspace package.json と干渉して失敗する。`bun run build` / `bunx --bun evenhub pack ...` を使う
+- **bun を使う**: ルートが bun workspaces なので、`npm run build` / `npx evenhub pack` は workspace package.json と干渉して失敗する。`bun run build` / `bun run pack` を使う（`pack` は版数一致を検査してから evenhub CLI に渡す）
 - **EVEN Hub CLI にアップロードコマンドはない**: ブラウザ自動化が必要
 - **session-name evenhub でセッション永続化**: 一度ログインすれば再実行時はスキップできる
 - **Beta バッジは snapshot ref では操作できない**: `elementFromPoint(x, y)?.click()` を使う。座標はバッジを `querySelectorAll` + `getBoundingClientRect` で動的取得
