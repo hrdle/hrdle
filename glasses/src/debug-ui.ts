@@ -91,6 +91,46 @@ const STYLE = `
   .hud-canvas { position: absolute; inset: 0; width: 576px; height: 288px;
                 image-rendering: pixelated; }
 
+  /* A live room behind the type sells a see-through display in a way a still
+     photo cannot. Sits inside .scene so the same dimming pass covers it. */
+  .cam { position: absolute; inset: -3%; width: 106%; height: 106%;
+         object-fit: cover; display: none;
+         /* Out of focus, because the eye is focused on the near display and
+            not on the room. The drawn fallback has always been blurred for
+            this reason; the live feed should match. Overscanned so the blur
+            has pixels to sample at the edge instead of fading to nothing. */
+         filter: blur(2.5px) saturate(.92); }
+  .lens.cam-on .cam { display: block; }
+  .lens.cam-on .room, .lens.cam-on .figure { display: none; }
+
+  /* The glass the panel is projected onto. Everything here is presentation and
+     lives strictly above the canvas — the canvas is the faithful 4-bit render,
+     and mixing effects into it would undo the point of drawing it that way.
+     Toggleable for exactly that reason. */
+  .glass { position: absolute; inset: 0; pointer-events: none; display: none; }
+  .lens.glassy .glass { display: block; }
+  /* Additive, like the real optics: the display adds light to the room, it
+     never paints black onto it. */
+  .lens.glassy .hud-canvas { mix-blend-mode: screen; }
+  /* Light catching the lens on the diagonal. */
+  .glass::before { content: ''; position: absolute; inset: -20%;
+                   transform: rotate(-8deg);
+                   background: linear-gradient(103deg,
+                     transparent 0 26%,
+                     rgba(214,255,229,.07) 35%,
+                     rgba(220,255,234,.17) 44%,
+                     rgba(214,255,229,.06) 53%,
+                     transparent 62%); }
+  /* Brightness falls off toward the edge of a waveguide, and the lens rim
+     shades the corners. */
+  .glass::after { content: ''; position: absolute; inset: 0;
+                  background:
+                    /* Light leaking in along the top of the combiner. */
+                    linear-gradient(180deg, rgba(196,255,214,.10), transparent 22%),
+                    radial-gradient(118% 96% at 50% 44%,
+                      transparent 44%, rgba(2,7,5,.40) 100%);
+                  box-shadow: inset 0 0 34px rgba(2,10,6,.6); }
+
   .lens-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
   .mode-pill { background: #1b2a1f; color: #7cc98f; padding: 3px 10px; border-radius: 999px;
                font-weight: 700; font-size: 12px; }
@@ -163,8 +203,10 @@ export function startDebugUI(): void {
                 <span class="figure a"></span>
                 <span class="figure c"></span>
                 <span class="figure b"></span>
+                <video class="cam" id="g2-cam" autoplay muted playsinline></video>
               </div>
               <canvas class="hud-canvas" id="g2-canvas" width="576" height="288"></canvas>
+              <div class="glass"></div>
             </div>
           </div>
           <div class="lens-meta">
@@ -194,7 +236,9 @@ export function startDebugUI(): void {
           <h2>背景</h2>
           <div class="bg-row">
             <button type="button" id="bg-pick">画像を選ぶ</button>
+            <button type="button" id="bg-cam">カメラ</button>
             <button type="button" id="bg-reset">既定に戻す</button>
+            <label class="mirror"><input type="checkbox" id="g2-glassy" checked />映り込み</label>
           </div>
           <input type="file" id="bg-file" accept="image/*" hidden />
           <input type="text" id="bg-url" placeholder="画像URLを貼り付け（Enter）" />
@@ -537,8 +581,66 @@ export function startDebugUI(): void {
   el('bg-reset').addEventListener('click', () => {
     try { localStorage.removeItem(BG_KEY) } catch { /* private mode */ }
     bgUrlInput.value = ''
+    stopCam()
     applyBackdrop(DEFAULT_BG, false)
   })
+
+  // ── Camera backdrop ──
+
+  const lensEl = el('lens')
+  const camEl = document.getElementById('g2-cam') as HTMLVideoElement
+  const camBtn = el('bg-cam')
+  let camStream: MediaStream | null = null
+
+  function stopCam(): void {
+    // Release the device, not just the element: a camera left running keeps
+    // the indicator light on and the hardware busy for everything else.
+    for (const track of camStream?.getTracks() ?? []) track.stop()
+    camStream = null
+    camEl.srcObject = null
+    lensEl.classList.remove('cam-on')
+    camBtn.textContent = 'カメラ'
+  }
+
+  async function startCam(): Promise<void> {
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({
+        // The rear camera is the one pointing at what the wearer would see.
+        video: { facingMode: 'environment', width: { ideal: 1280 } },
+      })
+      camEl.srcObject = camStream
+      lensEl.classList.add('cam-on')
+      camBtn.textContent = 'カメラを止める'
+      setBgStatus('')
+    } catch {
+      setBgStatus('カメラを開けませんでした（権限とHTTPSを確認）')
+    }
+  }
+
+  camBtn.addEventListener('click', () => {
+    if (camStream) stopCam()
+    else void startCam()
+  })
+
+  // ── Lens reflection ──
+  //
+  // Presentation only, and separable on purpose: reading the panel for
+  // fidelity wants the bare canvas, showing it to people wants the glass.
+
+  const GLASS_KEY = 'cchub-glasses-glassy'
+  const glassyToggle = document.getElementById('g2-glassy') as HTMLInputElement
+  try {
+    if (localStorage.getItem(GLASS_KEY) === 'off') glassyToggle.checked = false
+  } catch { /* private mode */ }
+
+  function applyGlassy(): void {
+    lensEl.classList.toggle('glassy', glassyToggle.checked)
+  }
+  glassyToggle.addEventListener('change', () => {
+    applyGlassy()
+    try { localStorage.setItem(GLASS_KEY, glassyToggle.checked ? 'on' : 'off') } catch { /* private mode */ }
+  })
+  applyGlassy()
 
   // Drop anywhere on the page — hunting for a small target is the sort of
   // friction that made the query parameter annoying in the first place.
