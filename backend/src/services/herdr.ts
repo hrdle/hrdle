@@ -29,6 +29,8 @@ interface HerdrPaneInfo {
   agentSessionId?: string;
   agentStatus?: HerdrAgentStatus;
   isActive: boolean;
+  /** Tab the pane belongs to. `panes` spans every tab of the workspace. */
+  tabId?: string;
   pid?: number;
 }
 
@@ -190,15 +192,21 @@ export class HerdrService {
 
       const result: WorkspaceInfo[] = await Promise.all(
         workspaces.map(async (ws) => {
-          // Only the active tab's panes represent the session: herdr stacks
-          // multiple tabs' panes under one workspace, but the terminal view
-          // (HerdrControlSession) renders a single tab, so the list must agree
-          // or the pane count / preview would count panes the user can't see.
-          const wsPanes = allPanes.filter(
-            (p) =>
-              p.workspace_id === ws.workspace_id &&
-              (!ws.active_tab_id || p.tab_id === ws.active_tab_id),
-          );
+          // Every pane of the workspace, tagged with the tab it belongs to.
+          //
+          // The terminal view renders one tab, and the list used to be filtered
+          // to match it. But listing and rendering are different questions:
+          // a pane in another tab is still a running agent with its own
+          // conversation, and hiding it from the list made it unreachable
+          // rather than merely off-screen. Consumers that describe the terminal
+          // — preview, the representative agent, the pane count on a card —
+          // stay on the active tab via `activeWsPanes` below; consumers that
+          // enumerate agents get all of them and can tell which is which from
+          // `tabId`.
+          const wsPanes = allPanes.filter((p) => p.workspace_id === ws.workspace_id);
+          const activeWsPanes = ws.active_tab_id
+            ? wsPanes.filter((p) => p.tab_id === ws.active_tab_id)
+            : wsPanes;
           const panes: HerdrPaneInfo[] = await Promise.all(
             wsPanes.map(async (p) => {
               const tmuxId = toTmuxPaneId(p.pane_id) ?? p.pane_id;
@@ -212,18 +220,22 @@ export class HerdrService {
                 agentSessionId: agentPane?.sessionId,
                 agentStatus: agentPane?.status ?? p.agent_status,
                 isActive: p.focused,
+                tabId: p.tab_id,
                 pid,
               };
             }),
           );
 
-          // Keep the representative session fields paired to one pane. Prefer
-          // the currently focused agent pane, then the first agent pane.
+          // Keep the representative session fields paired to one pane, and to a
+          // pane the terminal is actually showing — a workspace summarised by
+          // an agent in a tab nobody is looking at describes the wrong thing.
+          const activeTabIds = new Set(activeWsPanes.map((p) => toTmuxPaneId(p.pane_id) ?? p.pane_id));
+          const shownPanes = panes.filter((p) => activeTabIds.has(p.paneId));
           const agentPane =
-            panes.find((p) => p.isActive && p.agent) ?? panes.find((p) => p.agent);
+            shownPanes.find((p) => p.isActive && p.agent) ?? shownPanes.find((p) => p.agent);
           const agent = agentPane?.agent;
 
-          const rootPane = wsPanes[0];
+          const rootPane = activeWsPanes[0];
           const rootHerdrId = rootPane?.pane_id;
           let preview: string | undefined;
           if (rootHerdrId) {
@@ -245,7 +257,10 @@ export class HerdrService {
           // `blocked` anywhere in the workspace wins: an agent waiting on a
           // prompt is the state the user has to act on, even if the split it
           // sits in isn't the one we matched an agent process to.
-          const agentStatus: HerdrAgentStatus | undefined = wsPanes.some(
+          // Also the terminal's view: a badge on the card saying "blocked" while
+          // the tab on screen is idle sends the reader looking for something
+          // that is not there. The blocked pane still says so on its own row.
+          const agentStatus: HerdrAgentStatus | undefined = activeWsPanes.some(
             (p) => p.agent_status === 'blocked',
           )
             ? 'blocked'
@@ -272,7 +287,7 @@ export class HerdrService {
           } else if (ws.active_tab_id) {
             const num = ws.active_tab_id.match(/:t(\d+)$/)?.[1] ?? '1';
             tabs = [
-              { id: ws.active_tab_id, label: num, paneCount: wsPanes.length, active: true },
+              { id: ws.active_tab_id, label: num, paneCount: activeWsPanes.length, active: true },
             ];
           }
 

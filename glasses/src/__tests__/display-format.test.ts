@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { sanitizeForG2, formatMessage } from '../types.ts'
 import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
-import { BODY_WIDTH, HEADER_WIDTH, textWidth as width } from '../metrics.ts'
+import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
+import { listRows, rowCursor } from '../display.ts'
+import { MAX_LINES } from '../metrics.ts'
 
 describe('sanitizeForG2: tables', () => {
   const table = [
@@ -225,7 +227,10 @@ describe('header clock', () => {
   }
 
   test('sits at the right edge on every screen', () => {
-    for (const mode of ['session_list', 'conversation', 'choice', 'voice', 'overlay'] as const) {
+    // The list screen has no header; its clock rides in the footer, which is
+    // the same bar geometry and the same right edge.
+    expect(screenText({ ...base, mode: 'session_list' as const }).footer).toMatch(/ \d\d:\d\d$/)
+    for (const mode of ['conversation', 'choice', 'voice', 'overlay'] as const) {
       const header = screenText({ ...base, mode }).header
       expect(header).toMatch(/ \d\d:\d\d$/)
       // The header container holds exactly one line — 28px of inner height
@@ -560,5 +565,133 @@ describe('fenced code', () => {
 
   test('an empty block leaves nothing behind', () => {
     expect(sanitizeForG2('前\n```\n\n```\n後').split('\n')).toEqual(['前', '後'])
+  })
+})
+
+describe('workspace and pane list', () => {
+  const panes = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      paneId: `%${i + 1}`,
+      currentPath: '/home/m0a/repos/wheel-leg-bot',
+      agentSessionId: `agent-${i}`,
+      indicatorState: 'waiting_input' as const,
+      metrics: { contextPercent: 30 - i * 15 },
+    }))
+  const sessions = [
+    { id: 'a', name: 'グラス開発', state: 'working' as const, panes: panes(1) },
+    { id: 'b', name: '2脚ロボ開発', state: 'idle' as const, panes: panes(2) },
+    { id: 'c', name: 'life', state: 'idle' as const },
+  ]
+  const st = (sessionIndex: number, selectedPaneId?: string) => ({
+    mode: 'session_list' as const,
+    sessions,
+    sessionIndex,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    selectedPaneId,
+  })
+
+  test('a workspace with one pane is not expanded', () => {
+    // `%1` under a name it already carries is hierarchy that says nothing.
+    expect(listRows(sessions).filter((r) => r.sessionIndex === 0)).toEqual([{ sessionIndex: 0 }])
+  })
+
+  test('a workspace with two panes lists them', () => {
+    expect(listRows(sessions).filter((r) => r.sessionIndex === 1)).toEqual([
+      { sessionIndex: 1 },
+      { sessionIndex: 1, paneId: '%1' },
+      { sessionIndex: 1, paneId: '%2' },
+    ])
+  })
+
+  test('the cursor walks workspaces and panes with one gesture', () => {
+    expect(rowCursor(st(1))).toBe(1)
+    expect(rowCursor(st(1, '%2'))).toBe(3)
+  })
+
+  test('the list gets the row the header used to occupy', () => {
+    expect(LIST_LINES).toBe(MAX_LINES + 1)
+  })
+
+  test('the footer carries the position and the clock', () => {
+    const footer = screenText(st(1)).footer
+    expect(footer).toMatch(/2\/5/)
+    expect(footer).toMatch(/ \d\d:\d\d$/)
+    expect(width(footer)).toBeLessThanOrEqual(HEADER_WIDTH)
+  })
+
+  test('the list screen has no header', () => {
+    expect(screenText(st(0)).header).toBe('')
+  })
+
+  test('a pane row drops the directory its siblings share', () => {
+    // Two panes of one repo repeat the same folder name; the second one
+    // teaches the reader nothing.
+    const body = screenText(st(1)).body
+    expect(body).toContain('%1  30%')
+    expect(body).not.toContain('wheel-leg-bot')
+  })
+
+  test('the conversation header names the pane being read', () => {
+    const header = screenText({ ...st(1, '%2'), mode: 'conversation' as const }).header
+    expect(header).toContain('2脚ロボ開発 %2')
+  })
+})
+
+describe('panes across tabs', () => {
+  const sessions = [
+    {
+      id: 'a',
+      name: '2脚ロボ開発',
+      state: 'idle' as const,
+      activeTabId: 'w4H:t1',
+      panes: [
+        { paneId: '%1', tabId: 'w4H:t1', metrics: { contextPercent: 31 } },
+        { paneId: '%4', tabId: 'w4H:t2', metrics: { contextPercent: 6 } },
+      ],
+    },
+  ]
+  const st = {
+    mode: 'session_list' as const,
+    sessions,
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  }
+
+  test('a pane the terminal cannot show says so', () => {
+    // "There are two" and "one of them is somewhere you are not looking" are
+    // different things to know.
+    const body = screenText(st).body
+    expect(body).toContain('%1  31%')
+    expect(body).toContain('%4  6%  別タブ')
+  })
+
+  test('panes of the active tab are not marked', () => {
+    const line = screenText(st).body.split('\n').find((l) => l.includes('%1')) ?? ''
+    expect(line).not.toContain('別タブ')
+  })
+
+  test('nothing is marked when the session reports no active tab', () => {
+    const noTab = { ...st, sessions: [{ ...sessions[0], activeTabId: undefined }] }
+    expect(screenText(noTab).body).not.toContain('別タブ')
   })
 })

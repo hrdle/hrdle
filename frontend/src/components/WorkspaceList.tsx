@@ -1535,9 +1535,18 @@ function SessionItem({
 											onSelectTab={onSelectTab}
 											onCloseTab={onCloseTab}
 										/>
-										{isActive && extSession.panes && (
+										{/* `panes` spans every tab now, so each tab takes its
+                        own. Rendering them all under the active one would
+                        claim a pane belongs where it does not. A pane with no
+                        tabId predates the field and stays with the active tab,
+                        which is where it always appeared. */}
+										{extSession.panes && (
 											<div className="ml-4 pl-1 border-l border-white/[0.08]">
-												{extSession.panes.map((pane) => (
+												{extSession.panes
+													.filter((p) =>
+														p.tabId ? p.tabId === tab.id : isActive,
+													)
+													.map((pane) => (
 													<PaneRow
 														key={pane.paneId}
 														session={extSession}
@@ -1545,9 +1554,9 @@ function SessionItem({
 														bridgePaneId={bridgePaneId}
 														onSelect={onSelect}
 														onSelectPane={onSelectPane}
-														onClosePane={onClosePane}
-													/>
-												))}
+															onClosePane={onClosePane}
+														/>
+													))}
 											</div>
 										)}
 									</div>

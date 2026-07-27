@@ -353,6 +353,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           agent: p.agent,
           agentSessionId: p.agentSessionId,
           isActive: p.isActive,
+          tabId: p.tabId,
           indicatorState: isSessionAgentOnPane ? (hookState ?? paneIndicator) : paneIndicator,
           pid: p.pid,
           metrics: paneMetrics,

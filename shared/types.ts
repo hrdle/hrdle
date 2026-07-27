@@ -205,6 +205,10 @@ export interface PaneInfo {
   agentName?: string;      // Team agent name from --agent-name process arg
   agentColor?: string;     // Team agent color from --agent-color process arg
   isActive: boolean;
+  /** Tab this pane belongs to. `panes` spans every tab of the workspace, so a
+   *  consumer describing the terminal — which renders one tab — filters on
+   *  this against the session's `activeTabId`. */
+  tabId?: string;
   indicatorState?: IndicatorState;
   pid?: number;            // shell/subprocess PID of the pane's foreground group
   /** Per-pane agent metrics (model / context% / memory). Populated only for

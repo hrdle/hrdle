@@ -10,6 +10,7 @@ import {
 import {
   BODY_WIDTH,
   HEADER_WIDTH,
+  LIST_LINES,
   MAX_LINES,
   SPACE_W,
   ellipsize,
@@ -17,7 +18,7 @@ import {
   textWidth,
 } from './metrics.ts'
 import { formatMessage, recapBlockLines } from './types.ts'
-import type { Session, ConversationMessage, GlassesRelayItem } from './types.ts'
+import type { Session, Pane, ConversationMessage, GlassesRelayItem } from './types.ts'
 
 const W = 576
 const H = 288
@@ -132,6 +133,10 @@ export interface AppState {
   conversationLoading: boolean
   choiceIndex: number
   choiceOptions: string[]
+  /** Pane the cursor is on, when the list row is a pane rather than its
+   *  workspace. Carries into the conversation: its own agent session, its own
+   *  status, and the pane replies are routed to. */
+  selectedPaneId?: string
   /** Advances one frame per spinner tick while the shown session is working.
    *  Absent in states built before the spinner existed; treated as 0. */
   spinnerTick?: number
@@ -281,27 +286,97 @@ function relayBannerLines(state: AppState): string[] {
 
 // ─── Content helpers (shared by build and in-place update) ───
 
-function sessionListHeader(state: AppState): string {
-  const { sessionIndex, sessions, relayWaiting } = state
-  const badge = relayWaiting.length > 0 ? ` !${relayWaiting.length}` : ''
-  return withClock(`CC Hub ${sessionIndex + 1}/${sessions.length}${badge}`)
+
+/** One navigable line of the list: a workspace, or a pane inside one. */
+export interface ListRow {
+  sessionIndex: number
+  /** Absent on the workspace's own row. */
+  paneId?: string
+}
+
+/**
+ * The list, flattened for navigation.
+ *
+ * A workspace with one pane is not expanded. `%1` under a name it already
+ * carries is a level of hierarchy that says nothing, and lines are the
+ * scarcest thing on this screen. Two or more panes are separate agent
+ * conversations with separate session ids, and only then does the workspace
+ * row stop being the whole story.
+ */
+export function listRows(sessions: Session[]): ListRow[] {
+  const rows: ListRow[] = []
+  sessions.forEach((s, sessionIndex) => {
+    rows.push({ sessionIndex })
+    const panes = s.panes ?? []
+    if (panes.length < 2) return
+    for (const p of panes) rows.push({ sessionIndex, paneId: p.paneId })
+  })
+  return rows
+}
+
+/** Index of the row the cursor is on. */
+export function rowCursor(state: AppState): number {
+  const rows = listRows(state.sessions)
+  const found = rows.findIndex(
+    (r) => r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
+  )
+  return found >= 0 ? found : Math.max(0, rows.findIndex((r) => r.sessionIndex === state.sessionIndex))
+}
+
+function paneStatusLabel(p: Pane): string {
+  if (p.indicatorState === 'waiting_input' || (!!p.waitingToolName && p.waitingToolName !== 'UserInput')) return '[!]'
+  if (p.indicatorState === 'processing') return '[*]'
+  return ''
+}
+
+/**
+ * What tells two panes of one workspace apart.
+ *
+ * Not the command: every pane here runs `claude`, so printing it fills a line
+ * with a constant. Not the directory either, unless the panes actually differ
+ * in it — two panes of one repo repeat the same folder name and the reader
+ * learns nothing from the second one. What is left is the context figure,
+ * which does differ, and says which of the two has been running longer.
+ */
+function paneDetail(p: Pane, siblings: Pane[], activeTabId?: string): string {
+  const dirOf = (x: Pane) => x.currentPath?.split('/').filter(Boolean).pop() ?? ''
+  const dirs = new Set(siblings.map(dirOf))
+  const pct = p.metrics?.contextPercent
+  // A pane in another tab is running where the terminal cannot show it. Saying
+  // so is the difference between "there are three" and "one of them is
+  // somewhere you are not looking".
+  const offscreen = activeTabId && p.tabId && p.tabId !== activeTabId ? '別タブ' : ''
+  return [pct != null ? `${Math.round(pct)}%` : '', dirs.size > 1 ? dirOf(p) : '', offscreen]
+    .filter(Boolean)
+    .join('  ')
 }
 
 function sessionListBody(state: AppState): string {
-  const { sessions, sessionIndex } = state
+  const { sessions } = state
   // Relay waiting covers agent-declared items whose session indicator is not
   // waiting_input; those sessions still get the [!] marker.
   const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
-  const start = Math.max(0, sessionIndex - 3)
-  const visible = sessions.slice(start, start + MAX_LINES)
-  return visible.map((s, i) => {
-    const idx = start + i
-    const cursor = idx === sessionIndex ? '>' : ' '
-    const label = relayWaitingIds.has(s.id) ? '[!]' : statusLabel(s)
-    // Pad the badge so every name starts in the same column: a list where
-    // `>[!] name` and `  name` begin three columns apart is hard to scan.
-    return `${cursor}${label.padEnd(3)} ${sName(s)}`
-  }).join('\n') || '(no sessions)'
+  const rows = listRows(sessions)
+  if (!rows.length) return '(no sessions)'
+  const cursor = rowCursor(state)
+  const start = Math.max(0, Math.min(cursor - 3, rows.length - LIST_LINES))
+  const visible = rows.slice(Math.max(0, start), Math.max(0, start) + LIST_LINES)
+
+  return visible.map((row, i) => {
+    const idx = Math.max(0, start) + i
+    const here = idx === cursor ? '>' : ' '
+    const s = sessions[row.sessionIndex]
+    if (!row.paneId) {
+      const label = relayWaitingIds.has(s.id) ? '[!]' : statusLabel(s)
+      // Pad the badge so every name starts in the same column: a list where
+      // `>[!] name` and `  name` begin three columns apart is hard to scan.
+      return `${here}${label.padEnd(3)} ${sName(s)}`
+    }
+    const p = (s.panes ?? []).find((x) => x.paneId === row.paneId)
+    const detail = p ? paneDetail(p, s.panes ?? [], s.activeTabId) : ''
+    // Indented under its workspace, and only ever shown beneath it.
+    return `${here}${(p ? paneStatusLabel(p) : '').padEnd(3)}  ${row.paneId}${detail ? `  ${detail}` : ''}`
+  }).join('\n')
 }
 
 /**
@@ -315,8 +390,7 @@ function sessionListBody(state: AppState): string {
  * Anything unknown means keep showing it: a missing timestamp is not evidence
  * that the recap is stale.
  */
-function recapIsCurrent(session: Session | undefined, msgs: ConversationMessage[]): boolean {
-  const recapAt = session?.ccRecapAt
+function recapIsCurrent(recapAt: string | undefined, msgs: ConversationMessage[]): boolean {
   const newestAt = msgs[msgs.length - 1]?.timestamp
   if (!recapAt || !newestAt) return true
   const recapTime = Date.parse(recapAt)
@@ -327,8 +401,15 @@ function recapIsCurrent(session: Session | undefined, msgs: ConversationMessage[
 
 function conversationContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
   const session = state.sessions[state.sessionIndex]
-  const waiting = session ? isWaiting(session) : false
-  const ind = session?.indicatorState
+  // Reading one pane of a workspace, its status is the one that applies — the
+  // workspace's is a summary of panes the reader is not looking at.
+  const pane = state.selectedPaneId
+    ? (session?.panes ?? []).find((p) => p.paneId === state.selectedPaneId)
+    : undefined
+  const waiting = pane
+    ? pane.indicatorState === 'waiting_input' || (!!pane.waitingToolName && pane.waitingToolName !== 'UserInput')
+    : session ? isWaiting(session) : false
+  const ind = pane ? pane.indicatorState : session?.indicatorState
   const statusBadge = waiting ? '  [!] WAITING' : ind === 'processing' ? `  ${spinnerFrame(state)}` : ''
 
   const msgs = state.conversation
@@ -340,7 +421,9 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   // Recap heads the latest view; deeper paging drops it for message space,
   // and so does the conversation moving past it.
   const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
-  const recap = onLatest && recapIsCurrent(session, msgs) ? recapBlock(session?.ccRecap) : []
+  const recapText = pane ? pane.recap : session?.ccRecap
+  const recapAt = pane ? pane.recapAt : session?.ccRecapAt
+  const recap = onLatest && recapIsCurrent(recapAt, msgs) ? recapBlock(recapText) : []
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
   // Everything is measured in display lines — counting the conversation in
@@ -364,7 +447,7 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   // anything. Only the page number is left, which does mean what it says.
 
   return {
-    headerText: withClock(`${session ? sName(session) : '---'}${statusBadge}`),
+    headerText: withClock(`${session ? sName(session) : '---'}${pane ? ` ${pane.paneId}` : ''}${statusBadge}`),
     bodyText,
     footerText: pageInfo ? `${action}  ${pageInfo.trim()}` : action,
   }
@@ -373,7 +456,13 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
 // Footers that are fixed per mode (the rest are built with their content).
 // Named so the browser simulator renders the same string the G2 does instead
 // of a hand-copied approximation.
-const FOOTER_SESSION_LIST = 'tap:open  swipe:nav'
+/** Everything the list screen has to say, in the one bar it still has. */
+function sessionListFooter(state: AppState): string {
+  const cursor = rowCursor(state) + 1
+  const total = listRows(state.sessions).length
+  const badge = state.relayWaiting.length > 0 ? `  !${state.relayWaiting.length}` : ''
+  return withClock(`tap:open  swipe:nav  ${cursor}/${total}${badge}`)
+}
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 
 /** Reply target shown in the choice header — the session the Enter actually
@@ -411,14 +500,19 @@ export function wrapHeader(text: string): string {
  * the device's own output — same wrapping at 52 columns, same 7-line clamp,
  * same pagination — rather than a second implementation that silently drifts.
  */
-export function screenText(state: AppState): { header: string; body: string; footer: string } {
+export function screenText(state: AppState): {
+  header: string
+  body: string
+  footer: string
+  /** The list screen drops its header container, so its body starts at the top
+   *  of the panel rather than below a bar. Anything drawing these strings has
+   *  to know, or it renders a row lower than the device does. */
+  headerless?: boolean
+} {
   switch (state.mode) {
     case 'session_list':
-      return {
-        header: sessionListHeader(state),
-        body: sessionListBody(state),
-        footer: FOOTER_SESSION_LIST,
-      }
+      // No header: the list screen gave that bar back to the list.
+      return { header: '', body: sessionListBody(state), footer: sessionListFooter(state), headerless: true }
     case 'conversation': {
       const { headerText, bodyText, footerText } = conversationContent(state)
       return { header: headerText, body: bodyText, footer: footerText }
@@ -497,44 +591,38 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
 
 // ─── Page builders ───
 
+/**
+ * The list screen: two containers, not three.
+ *
+ * A title bar over a list of titles is a line spent saying nothing. The
+ * counter and the clock it carried fit in the footer beside the gestures, and
+ * the list gets the 36px — a whole extra row, which is what a list that now
+ * includes panes needs.
+ */
 function buildSessionList(state: AppState): RebuildPageContainer {
-  const headerText = sessionListHeader(state)
-  const listText = sessionListBody(state)
-
-  const header = new TextContainerProperty({
-    xPosition: 0, yPosition: 0,
-    width: W, height: 36,
-    borderWidth: 0,
-    paddingLength: 4,
-    containerID: 1, containerName: 'header',
-    isEventCapture: 0,
-    content: headerText,
-  })
-
   const list = new TextContainerProperty({
-    xPosition: 4, yPosition: 36,
-    width: W - 8, height: H - 36 - 36,
+    xPosition: 4, yPosition: 0,
+    width: W - 8, height: H - 36,
     borderWidth: 0,
     paddingLength: 6,
-    containerID: 2, containerName: 'list',
+    containerID: 1, containerName: 'list',
     isEventCapture: 0,
-    content: listText,
+    content: sessionListBody(state),
   })
 
-  // Footer - minimal
   const footer = new TextContainerProperty({
     xPosition: 0, yPosition: H - 36,
     width: W, height: 36,
     borderWidth: 0,
     paddingLength: 4,
-    containerID: 3, containerName: 'footer',
+    containerID: 2, containerName: 'footer',
     isEventCapture: 1,
-    content: FOOTER_SESSION_LIST,
+    content: sessionListFooter(state),
   })
 
   return new RebuildPageContainer({
-    containerTotalNum: 3,
-    textObject: [header, list, footer],
+    containerTotalNum: 2,
+    textObject: [list, footer],
   })
 }
 
@@ -816,12 +904,13 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
     case 'session_list': {
       await Promise.all([
         bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: sessionListHeader(state),
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'list',
+          containerID: 1, containerName: 'list',
           content: sessionListBody(state),
+        })),
+        // The footer moves now — it holds the clock and the position.
+        bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 2, containerName: 'footer',
+          content: sessionListFooter(state),
         })),
       ])
       break

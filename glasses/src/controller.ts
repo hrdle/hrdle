@@ -26,11 +26,11 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem } from './api.ts'
-import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt } from './display.ts'
+import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { CcHubWsClient } from './ws-client.ts'
-import type { Session, ConversationMessage, GlassesRelayItem, ClientFocus } from './types.ts'
+import type { Session, Pane, ConversationMessage, GlassesRelayItem, ClientFocus } from './types.ts'
 
 const INITIAL_LOAD_COUNT = 20
 const LOAD_MORE_INCREMENT = 20
@@ -190,15 +190,27 @@ export class GlassesController {
 
   // ── session_list ──
 
+  /** Walk the list one row at a time. Rows are workspaces and, where a
+   *  workspace holds more than one, its panes — so the same gesture moves
+   *  between workspaces and into them without a second control. */
+  private moveListCursor(step: number): void {
+    const st = this.state
+    const rows = listRows(st.sessions)
+    if (!rows.length) return
+    const next = rows[Math.min(rows.length - 1, Math.max(0, rowCursor(st) + step))]
+    st.sessionIndex = next.sessionIndex
+    st.selectedPaneId = next.paneId
+  }
+
   private async onSessionListAction(action: RingAction): Promise<void> {
     const st = this.state
     switch (action) {
       case 'swipeUp':
-        if (st.sessionIndex > 0) st.sessionIndex--
+        this.moveListCursor(-1)
         this.render()
         return
       case 'swipeDown':
-        if (st.sessionIndex < st.sessions.length - 1) st.sessionIndex++
+        this.moveListCursor(1)
         this.render()
         return
       case 'tap': {
@@ -288,15 +300,18 @@ export class GlassesController {
           await this.startVoice({ sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
           return
         }
-        // No relay items — legacy indicator flow (scrape, else voice).
+        // No relay items — legacy indicator flow (scrape, else voice). Reading
+        // one pane, the reply belongs to that pane: sending it to the
+        // workspace would land wherever herdr happens to have focus.
+        const paneId = this.state.selectedPaneId
         if (cur && isSessionWaiting(cur)) {
           const scraped = await this.scrapeChoices(cur.id)
           if (scraped.length > 0) {
-            this.enterChoice(scraped, { sessionId: cur.id })
+            this.enterChoice(scraped, { sessionId: cur.id, paneId })
             return
           }
         }
-        if (cur) await this.startVoice({ sessionId: cur.id })
+        if (cur) await this.startVoice({ sessionId: cur.id, paneId })
         return
       }
       case 'doubleTap': {
@@ -722,8 +737,28 @@ export class GlassesController {
     return getTotalPagesAt(this.state.conversation, this.state.conversationOffset)
   }
 
+  /** The pane the cursor is on, when the list row was a pane. */
+  private currentPane(): Pane | undefined {
+    const id = this.state.selectedPaneId
+    if (!id) return undefined
+    return (this.currentSession()?.panes ?? []).find((p) => p.paneId === id)
+  }
+
   private async loadConversation(): Promise<void> {
     const session = this.currentSession()
+    // A pane of a multi-pane workspace is its own agent conversation, with its
+    // own session id. Reading the workspace's showed one of them and silently
+    // omitted the rest.
+    const paneAgent = this.currentPane()?.agentSessionId
+    if (paneAgent) {
+      const rawPane = await getConversation(paneAgent, INITIAL_LOAD_COUNT)
+      this.state.conversation = filterConversation(rawPane)
+      this.state.conversationLastLoaded = INITIAL_LOAD_COUNT
+      this.state.conversationHasMore = rawPane.length >= INITIAL_LOAD_COUNT
+      this.state.conversationOffset = 0
+      this.state.conversationPage = 0
+      return
+    }
     if (!session?.ccSessionId) {
       this.state.conversation = []
       this.state.conversationLastLoaded = 0

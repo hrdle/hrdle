@@ -40,6 +40,16 @@ export const BODY_WIDTH = PANEL_W - 8 - 2 * BODY_PAD
 /** Lines the body container shows before clipping. */
 export const MAX_LINES = Math.floor((PANEL_H - 2 * BAR_H - 2 * BODY_PAD) / LINE_H)
 
+/**
+ * Lines the list gets, which is one more.
+ *
+ * The list screen carries no header: a title bar over a list of titles is a
+ * line spent saying nothing, and the counter and clock it held fit in the
+ * footer beside the gestures. Giving the container that 36px back buys a
+ * whole row — which is exactly what a list that now includes panes needs.
+ */
+export const LIST_LINES = Math.floor((PANEL_H - BAR_H - 2 * BODY_PAD) / LINE_H)
+
 export const SPACE_W = getTextWidth(' ')
 
 // ─── Measuring ───
