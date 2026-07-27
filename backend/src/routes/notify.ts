@@ -9,6 +9,7 @@ import {
   postHookRelay,
   resolveHookTarget,
 } from '../services/glasses-relay';
+import { resolveNotifyCommand } from '../services/notify-command';
 
 // Read only the trailing slice of a transcript instead of the whole file.
 // Active Claude sessions produce multi-MB .jsonl transcripts; the previous
@@ -360,6 +361,7 @@ notify.get('/hook-status', async (c) => {
       configured: false,
       events: { stop: false, askUserQuestion: false },
       missing: ['stop', 'askUserQuestion'],
+      command: resolveNotifyCommand(),
     });
   }
 });

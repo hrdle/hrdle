@@ -1,5 +1,6 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { resolveNotifyCommand } from './notify-command';
 
 interface JsonHookCommand {
   type?: string;
@@ -148,7 +149,9 @@ export async function migrateCodexHooksToJson(
   const hooksPath = join(codexDir, 'hooks.json');
   const config = await readFile(configPath, 'utf8').catch(() => '');
   const hooksJson = await readFile(hooksPath, 'utf8').catch(() => null);
-  const command = findCchubNotifyCommandInToml(config) ?? 'cchub notify';
+  // A command already written by hand is kept verbatim — it may be an absolute
+  // path the user chose. Only what CC Hub writes itself gets resolved.
+  const command = findCchubNotifyCommandInToml(config) ?? resolveNotifyCommand();
   const nextConfig = removeCchubNotifyHooksToml(config);
   const nextHooksJson = mergeCchubNotifyHooksJson(hooksJson, command);
   const changed = nextConfig !== config || nextHooksJson !== hooksJson;

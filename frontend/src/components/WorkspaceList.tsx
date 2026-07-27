@@ -1640,6 +1640,8 @@ export function WorkspaceList({
 	const [showSearch, setShowSearch] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [hookConfigured, setHookConfigured] = useState<boolean | null>(null);
+	// Falls back to the bare name until the server answers with a resolved path.
+	const [hookCommand, setHookCommand] = useState("cchub notify");
 	const [hookBannerDismissed, setHookBannerDismissed] = useState(
 		() =>
 			typeof localStorage !== "undefined" &&
@@ -1657,12 +1659,19 @@ export function WorkspaceList({
 	const [conversation, setConversation] = useState<ConversationMessage[]>([]);
 	const [loadingConversation, setLoadingConversation] = useState(false);
 
-	// Check hook configuration status
+	// Check hook configuration status. The server also reports the invocation to
+	// write (an absolute path when it can resolve one) — a bare `cchub notify`
+	// dies in the hook's non-interactive shell if PATH lacks the install dir.
 	useEffect(() => {
 		if (hookBannerDismissed) return;
 		authFetch(`${API_BASE}/api/notify/hook-status`)
 			.then((r) => r.json())
-			.then((data) => setHookConfigured(data.configured))
+			.then((data) => {
+				setHookConfigured(data.configured);
+				if (typeof data.command === "string" && data.command) {
+					setHookCommand(data.command);
+				}
+			})
 			.catch(() => {});
 	}, [hookBannerDismissed]);
 
@@ -2192,7 +2201,9 @@ export function WorkspaceList({
 															method: "POST",
 															headers: { "Content-Type": "application/json" },
 															body: JSON.stringify({
-																text: t("onboarding.hookSetupPrompt"),
+																text: t("onboarding.hookSetupPrompt", {
+																	command: hookCommand,
+																}),
 															}),
 														},
 													);
