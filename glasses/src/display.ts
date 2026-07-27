@@ -302,7 +302,7 @@ function recapIsCurrent(session: Session | undefined, msgs: ConversationMessage[
   return newestTime <= recapTime
 }
 
-function conversationContent(state: AppState): { headerText: string; bodyText: string; footerText: string; multiCount: number } {
+function conversationContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
   const session = state.sessions[state.sessionIndex]
   const waiting = session ? isWaiting(session) : false
   const ind = session?.indicatorState
@@ -312,7 +312,7 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const msgIndex = msgs.length > 0
     ? Math.max(0, msgs.length - 1 - state.conversationOffset)
     : -1
-  const { text: convText, pageInfo, multiCount } = paginateMessage(msgs, msgIndex, state.conversationPage)
+  const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage)
   const banner = relayBannerLines(state)
   // Recap heads the latest view; deeper paging drops it for message space,
   // and so does the conversation moving past it.
@@ -324,19 +324,20 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   // logical lines let a wrapped paragraph run off the bottom unnoticed.
   const content = convText.split('\n').flatMap(splitDisplayLines)
   const bodyText = [...banner, ...recap, ...content].slice(0, MAX_LINES).join('\n')
-  const role = multiCount > 1
-    ? `${multiCount}msgs`
-    : msgIndex >= 0 ? (msgs[msgIndex].role === 'user' ? 'YOU' : 'AI') : ''
-  const pos = msgs.length > 0 ? `${role} ${msgIndex + 1}/${msgs.length}${pageInfo}` : ''
   // With a waiting banner up, the ring is routed to the overlay item:
   // tap = respond/jump, double-tap = dismiss ("later / on PC").
   const action = state.relayWaiting.length > 0 ? 'tap:対応  dbl:後で' : waiting ? 'tap:respond  dbl:back' : 'dbl:back'
+  // Who is speaking is in the body — the user's turn carries `$` and the
+  // agent's carries nothing — so repeating it here said nothing twice. The
+  // message counter went with it: its denominator was the number of messages
+  // loaded so far, not the length of the conversation, so the same position
+  // showed a different fraction after paging back and nobody could read it as
+  // anything. Only the page number is left, which does mean what it says.
 
   return {
     headerText: withClock(`${session ? sName(session) : '---'}${statusBadge}`),
     bodyText,
-    footerText: `${action}  ${pos}`,
-    multiCount,
+    footerText: pageInfo ? `${action}  ${pageInfo.trim()}` : action,
   }
 }
 
