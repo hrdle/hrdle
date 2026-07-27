@@ -197,9 +197,14 @@ export class GlassesController {
     const st = this.state
     const rows = listRows(st.sessions)
     if (!rows.length) return
-    const next = rows[Math.min(rows.length - 1, Math.max(0, rowCursor(st) + step))]
-    st.sessionIndex = next.sessionIndex
-    st.selectedPaneId = next.paneId
+    // Step over headings: a multi-pane workspace's name has nothing to open.
+    let i = rowCursor(st)
+    do {
+      i += step
+    } while (i >= 0 && i < rows.length && rows[i].header)
+    if (i < 0 || i >= rows.length) return
+    st.sessionIndex = rows[i].sessionIndex
+    st.selectedPaneId = rows[i].paneId
   }
 
   private async onSessionListAction(action: RingAction): Promise<void> {
