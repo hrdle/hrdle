@@ -6,7 +6,7 @@
 // Groq STT) and the LocalStorage URL setup flow.
 
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
-import { initDisplay, updateDisplay, setupEvents, buildSetupGuide, screenText, startMic, stopMic } from './display.ts'
+import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, startMic, stopMic } from './display.ts'
 import type { AppState } from './display.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
@@ -99,20 +99,30 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   // while one is in flight collapse into the latest state, which is the only
   // one worth drawing anyway.
   let renders = 0
-  let pending: AppState | null = null
+  let pending: { state: AppState; headerOnly: boolean } | null = null
   let draining = false
 
   async function drainRenders(): Promise<void> {
     while (pending) {
-      const state = pending
+      const { state, headerOnly } = pending
       pending = null
       try {
-        await updateDisplay(bridge, state)
+        await (headerOnly ? updateHeader(bridge, state) : updateDisplay(bridge, state))
       } catch (err) {
         trace(`updateDisplay failed (mode=${state.mode}): ${err}`, 'error', (err as Error)?.stack)
       }
     }
     draining = false
+  }
+
+  function enqueue(state: AppState, headerOnly: boolean): void {
+    // A full render supersedes a spinner tick waiting behind it — it draws the
+    // header too, and drawing it twice would be the overlap this queue exists
+    // to prevent.
+    pending = { state, headerOnly: headerOnly && (pending?.headerOnly ?? true) }
+    if (draining) return
+    draining = true
+    void drainRenders()
   }
 
   // Demo mirror: publish the same three strings the panel is about to show, so
@@ -139,10 +149,11 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       // Just the startup burst — that is where frames used to pile up.
       if (++renders <= 10) trace(`render #${renders} mode=${state.mode} sessions=${state.sessions.length}`)
       publishScreen(state)
-      pending = state
-      if (draining) return
-      draining = true
-      void drainRenders()
+      enqueue(state, false)
+    },
+    renderHeader(state) {
+      publishScreen(state)
+      enqueue(state, true)
     },
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
