@@ -1,23 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { sanitizeForG2, formatMessage } from '../types.ts'
-import { screenText, wrapForPanel } from '../display.ts'
-
-const LINE_WIDTH = 52
-const CJK_RATIO = 52 / 28
-
-function width(text: string): number {
-  let w = 0
-  for (let i = 0; i < text.length; i++) {
-    const code = text.codePointAt(i) ?? 0
-    const wide =
-      (code >= 0x3000 && code <= 0x9fff) ||
-      (code >= 0xf900 && code <= 0xfaff) ||
-      (code >= 0xff01 && code <= 0xff60) ||
-      (code >= 0xffe0 && code <= 0xffe6)
-    w += wide ? CJK_RATIO : 1
-  }
-  return w
-}
+import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
+import { BODY_WIDTH, HEADER_WIDTH, textWidth as width } from '../metrics.ts'
 
 describe('sanitizeForG2: tables', () => {
   const table = [
@@ -87,7 +71,7 @@ describe('wrapForPanel: line breaking', () => {
     const url = `https://example.com/${'x'.repeat(80)}`
     const lines = wrapForPanel(`参照は ${url} です`).split('\n')
     // No blank columns bought anything — the URL was going to split regardless.
-    expect(width(lines[0])).toBeGreaterThan(LINE_WIDTH - 2)
+    expect(width(lines[0])).toBeGreaterThan(BODY_WIDTH - 40)
   })
 
   test('no line exceeds the panel width', () => {
@@ -95,7 +79,7 @@ describe('wrapForPanel: line breaking', () => {
       '会話を遡ると数秒で最新に戻る件は、**自動更新がスクロール位置を巻き添えにしていた**のが原因でした。\n\n| 対象 | 版 |\n|---|---|\n| CC Hub 本体 | v0.2.55 |',
     )
     for (const line of wrapForPanel(text).split('\n')) {
-      expect(width(line)).toBeLessThanOrEqual(LINE_WIDTH)
+      expect(width(line)).toBeLessThanOrEqual(BODY_WIDTH)
     }
   })
 
@@ -154,7 +138,7 @@ describe('formatMessage', () => {
         toolUse: [{ name, input: { command: 'x'.repeat(300), file_path: `/a/${'b'.repeat(300)}` } }],
       })
       expect(wrapForPanel(out).split('\n')).toHaveLength(1)
-      expect(width(out)).toBeLessThanOrEqual(LINE_WIDTH)
+      expect(width(out)).toBeLessThanOrEqual(BODY_WIDTH)
     }
   })
 
@@ -219,6 +203,9 @@ describe('conversation body', () => {
   })
 })
 
+/** One space of granularity: the gap is padded with 5px spaces. */
+const SPACE_SLACK = 6
+
 describe('header clock', () => {
   const base = {
     sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const }],
@@ -241,7 +228,10 @@ describe('header clock', () => {
     for (const mode of ['session_list', 'conversation', 'choice', 'voice', 'overlay'] as const) {
       const header = screenText({ ...base, mode }).header
       expect(header).toMatch(/ \d\d:\d\d$/)
-      expect(width(header)).toBeLessThanOrEqual(LINE_WIDTH)
+      // The header container holds exactly one line — 28px of inner height
+      // against a 27px line — so an overflow takes the clock off the panel.
+      expect(width(header)).toBeLessThanOrEqual(HEADER_WIDTH)
+      expect(wrapHeader(header).split('\n')).toHaveLength(1)
     }
   })
 
@@ -252,12 +242,25 @@ describe('header clock', () => {
       sessions: [{ id: 'a', name: 'と'.repeat(60), state: 'working' as const }],
     }).header
     expect(header).toMatch(/ \d\d:\d\d$/)
-    expect(width(header)).toBeLessThanOrEqual(LINE_WIDTH)
+    expect(width(header)).toBeLessThanOrEqual(HEADER_WIDTH)
   })
 
   test('leaves at least one space between title and clock', () => {
     const header = screenText({ ...base, mode: 'conversation' as const }).header
     expect(header).toMatch(/[^ ] +\d\d:\d\d$/)
+  })
+
+  test('actually reaches the right edge', () => {
+    // A space is 5px on this panel. Padding it out as if it were a 10.69px
+    // column left the clock near the middle — 293px into a 568px header.
+    for (const name of ['linux', 'グラス開発', 'cchub-work-1']) {
+      const header = screenText({
+        ...base,
+        mode: 'conversation' as const,
+        sessions: [{ id: 'a', name, state: 'working' as const }],
+      }).header
+      expect(width(header)).toBeGreaterThan(HEADER_WIDTH - SPACE_SLACK)
+    }
   })
 })
 

@@ -1,4 +1,5 @@
 // CC Hub API response types (subset relevant to G2 display)
+import { BODY_WIDTH, clipToWidth, textWidth } from './metrics.ts'
 
 type IndicatorState = 'processing' | 'waiting_input' | 'idle' | 'completed'
 
@@ -166,36 +167,6 @@ export function recapBlockLines(recap: string | undefined, maxLines = 2): string
   return [`要約: ${capped[0]}`, ...capped.slice(1), '-'.repeat(24)]
 }
 
-/** Half-width columns the G2 panel fits on one line. `display.ts` wraps at the
- *  same width — it is the one measured number both modules have to agree on. */
-export const PANEL_WIDTH = 52
-
-/**
- * Clip to a display width (CJK counts ~1.86 columns, as on the panel).
- *
- * The ellipsis is part of the budget: appending it without reserving a column
- * put the result one column over, so the "clipped" line wrapped anyway and
- * left a two-character stub on a line of its own.
- */
-function clipToWidth(text: string, maxWidth: number): string {
-  const charW = (i: number): number => {
-    const code = text.codePointAt(i) ?? 0
-    const wide =
-      (code >= 0x3000 && code <= 0x9fff) ||
-      (code >= 0xff01 && code <= 0xff60) ||
-      (code >= 0xf900 && code <= 0xfaff)
-    return wide ? 1.86 : 1
-  }
-  let width = 0
-  let lastFit = 0 // longest prefix that still leaves room for the ellipsis
-  for (let i = 0; i < text.length; i++) {
-    const w = charW(i)
-    if (width + w <= maxWidth - 1) lastFit = i + 1
-    width += w
-    if (width > maxWidth) return `${text.slice(0, lastFit)}…`
-  }
-  return text
-}
 
 /**
  * The one thing worth knowing about a tool call.
@@ -252,15 +223,17 @@ function extractPath(output: string): string {
 }
 
 /**
- * Columns left for a tool call's detail on its own line.
+ * Pixels left for a tool call's detail on its own line.
  *
- * The line is rendered as `[Name] detail`, and the first line of a message
- * also carries the `A> ` role prefix. Clipping to a fixed width regardless of
- * those left the line just over the panel edge, so the ellipsis wrapped and a
+ * The line renders as `[Name] detail`, and the first line of a message also
+ * carries the `A> ` role prefix. Clipping to a fixed budget regardless of
+ * those put the line past the panel edge, so the ellipsis wrapped and a
  * two-character stub (`'…`) took a line of its own — on a seven-line screen.
+ * Both prefixes are measured, not estimated: `[NotebookEdit] ` is more than
+ * twice the width of `[Read] `.
  */
 function toolDetailWidth(toolName: string): number {
-  return PANEL_WIDTH - 3 /* `A> ` */ - (toolName.length + 3) /* `[Name] ` */
+  return BODY_WIDTH - textWidth('A> ') - textWidth(`[${toolName}] `)
 }
 
 /** Format a conversation message for G2 display */
