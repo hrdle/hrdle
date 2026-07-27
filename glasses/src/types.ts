@@ -14,6 +14,9 @@ export interface Session {
   /** Latest recap (Claude away_summary / /recap; other agents fall back to
    *  their last assistant message). Shown atop the conversation view. */
   ccRecap?: string
+  /** When the recap was written. The conversation is compared against it: a
+   *  message newer than the recap means the reader is already past it. */
+  ccRecapAt?: string
   ccFirstPrompt?: string
   ccSessionId?: string
   durationMinutes?: number
@@ -25,6 +28,8 @@ export interface Session {
 export interface ConversationMessage {
   role: 'user' | 'assistant'
   content: string
+  /** ISO 8601, as the history API sends it. */
+  timestamp?: string
   toolUse?: { name: string; input?: Record<string, unknown> }[]
   toolResult?: { toolName?: string; output: string; isError?: boolean }[]
 }

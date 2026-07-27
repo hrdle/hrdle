@@ -281,6 +281,27 @@ function sessionListBody(state: AppState): string {
   }).join('\n') || '(no sessions)'
 }
 
+/**
+ * Whether the recap still has anything to add.
+ *
+ * It summarises what happened before it was written — the point of it is to
+ * fill in a stretch the reader missed. Once a message newer than the recap is
+ * on screen the reader is past it, and three of seven lines are better spent
+ * on the conversation than on a description of what came before it.
+ *
+ * Anything unknown means keep showing it: a missing timestamp is not evidence
+ * that the recap is stale.
+ */
+function recapIsCurrent(session: Session | undefined, msgs: ConversationMessage[]): boolean {
+  const recapAt = session?.ccRecapAt
+  const newestAt = msgs[msgs.length - 1]?.timestamp
+  if (!recapAt || !newestAt) return true
+  const recapTime = Date.parse(recapAt)
+  const newestTime = Date.parse(newestAt)
+  if (Number.isNaN(recapTime) || Number.isNaN(newestTime)) return true
+  return newestTime <= recapTime
+}
+
 function conversationContent(state: AppState): { headerText: string; bodyText: string; footerText: string; multiCount: number } {
   const session = state.sessions[state.sessionIndex]
   const waiting = session ? isWaiting(session) : false
@@ -293,9 +314,10 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
     : -1
   const { text: convText, pageInfo, multiCount } = paginateMessage(msgs, msgIndex, state.conversationPage)
   const banner = relayBannerLines(state)
-  // Recap heads the latest view; deeper paging drops it for message space.
+  // Recap heads the latest view; deeper paging drops it for message space,
+  // and so does the conversation moving past it.
   const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
-  const recap = onLatest ? recapBlock(session?.ccRecap) : []
+  const recap = onLatest && recapIsCurrent(session, msgs) ? recapBlock(session?.ccRecap) : []
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
   // Everything is measured in display lines — counting the conversation in
