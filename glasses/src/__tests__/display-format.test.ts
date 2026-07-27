@@ -4,6 +4,7 @@ import { sanitizeForG2, formatMessage } from '../types.ts'
 import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
+import { NOTICE_DISMISS_MS } from '../controller.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
@@ -862,5 +863,99 @@ describe('notification banner on the list', () => {
     const many = { ...mk([info('a', 'x')], 12), sessionIndex: 11 }
     const body = screenText(many).body.split('\n')
     expect(body.some((l) => l.startsWith('>'))).toBe(true)
+  })
+})
+
+describe('notice dialog (overlay)', () => {
+  const relayItem = (kind: 'waiting' | 'info', id: string, text: string, extra = {}) => ({
+    id, sessionId: 'a', kind, text, source: 'auto' as const, createdAt: 1, ...extra,
+  })
+
+  const mk = (over: Record<string, unknown>) => ({
+    mode: 'overlay' as const,
+    sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const }],
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: 0,
+    ...over,
+  })
+
+  test('a notification fills the panel, marked [i] and named by its workspace', () => {
+    const s = screenText(mk({
+      relayInfo: [relayItem('info', 'i1', '応答が完了しました')],
+      overlayItemId: 'i1',
+    }))
+    expect(s.header).toContain('グラス開発')
+    expect(s.header).toContain('[i]')
+    expect(s.body).toContain('応答が完了しました')
+  })
+
+  test('closing a notification is not answering it', () => {
+    // "後で" is a reply to a question. A notification asked nothing.
+    const s = screenText(mk({
+      relayInfo: [relayItem('info', 'i1', '応答が完了しました')],
+      overlayItemId: 'i1',
+    }))
+    expect(s.footer).toContain('dbl:閉じる')
+    expect(s.footer).not.toContain('後で')
+  })
+
+  test('a question keeps its own wording and mark', () => {
+    const s = screenText(mk({
+      relayWaiting: [relayItem('waiting', 'w1', 'Which approach?', { choices: ['A', 'B'] })],
+      overlayItemId: 'w1',
+    }))
+    expect(s.header).toContain('[!]')
+    expect(s.footer).toContain('dbl:後で')
+    expect(s.footer).toContain('tap:選択へ')
+  })
+
+  test('a queue of one drops the counter and the swipe hint', () => {
+    const s = screenText(mk({
+      relayInfo: [relayItem('info', 'i1', 'done')],
+      overlayItemId: 'i1',
+    }))
+    expect(s.header).not.toMatch(/\d+\/\d+/)
+    expect(s.footer).not.toContain('swipe')
+  })
+
+  test('a question outranks a notification when both are queued', () => {
+    const s = screenText(mk({
+      relayWaiting: [relayItem('waiting', 'w1', 'Which approach?')],
+      relayInfo: [relayItem('info', 'i1', '応答が完了しました')],
+      overlayItemId: 'w1',
+    }))
+    expect(s.header).toContain('[!] 1/2')
+    expect(s.footer).toContain('swipe:次')
+  })
+
+  test('the notification is second in that queue, not first', () => {
+    const s = screenText(mk({
+      relayWaiting: [relayItem('waiting', 'w1', 'Which approach?')],
+      relayInfo: [relayItem('info', 'i1', '応答が完了しました')],
+      overlayItemId: 'i1',
+    }))
+    expect(s.header).toContain('[i] 2/2')
+  })
+
+  test('an emptied queue says so instead of rendering a blank panel', () => {
+    expect(screenText(mk({ overlayItemId: 'gone' })).body).toBe('(なし)')
+  })
+
+  test('the dialog gives the panel back on its own', () => {
+    // The value is the guarantee, not the number: a wearer must never have to
+    // clear a completion by hand.
+    expect(NOTICE_DISMISS_MS).toBeGreaterThan(0)
+    expect(NOTICE_DISMISS_MS).toBeLessThanOrEqual(15_000)
   })
 })
