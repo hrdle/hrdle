@@ -350,7 +350,9 @@ export function startDebugUI(): void {
   const mirrorToggle = document.getElementById('g2-mirror') as HTMLInputElement
   const mirrorStatus = el('g2-mirror-status')
 
-  let lastScreen = { header: '', body: '', footer: '' }
+  let lastScreen: { header: string; body: string; footer: string; headerless?: boolean } = {
+    header: '', body: '', footer: '',
+  }
   let lastMode = 'session_list'
 
   // ── Device mirror (demo) ──
@@ -362,7 +364,10 @@ export function startDebugUI(): void {
   let localScreen = { header: '', body: '', footer: '' }
   let localMode = 'session_list'
 
-  function paint(screen: { header: string; body: string; footer: string }, mode: string): void {
+  function paint(
+    screen: { header: string; body: string; footer: string; headerless?: boolean },
+    mode: string,
+  ): void {
     lastScreen = screen
     lastMode = mode
     drawPanel(screen)
@@ -425,7 +430,7 @@ export function startDebugUI(): void {
     }
   }
 
-  function drawPanel(screen: { header: string; body: string; footer: string }): void {
+  function drawPanel(screen: { header: string; body: string; footer: string; headerless?: boolean }): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -436,10 +441,13 @@ export function startDebugUI(): void {
     ctx.shadowBlur = 6
 
     ctx.fillStyle = `rgb(${GREEN})`
-    drawRow(ctx, screen.header, HEADER_PAD, HEADER_BASE)
+    if (!screen.headerless) drawRow(ctx, screen.header, HEADER_PAD, HEADER_BASE)
 
+    // Without a header container the body owns that band too, and starts where
+    // it does rather than a bar below it.
+    const bodyTop = screen.headerless ? BODY_PAD + BASELINE : BODY_TOP
     for (const [i, line] of screen.body.split('\n').entries()) {
-      drawRow(ctx, line, 4 + BODY_PAD, BODY_TOP + i * LINE_H)
+      drawRow(ctx, line, 4 + BODY_PAD, bodyTop + i * LINE_H)
     }
 
     ctx.fillStyle = `rgba(${GREEN}, 0.78)`

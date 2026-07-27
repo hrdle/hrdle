@@ -22,7 +22,33 @@ export interface Session {
   durationMinutes?: number
   messageCount?: number
   gitBranch?: string
-  panes?: { paneId: string; isActive?: boolean; currentCommand?: string }[]
+  panes?: Pane[]
+}
+
+/**
+ * A pane, as the server already describes it.
+ *
+ * The glasses used to declare three of these fields and drop the rest, which
+ * hid the one that matters: `indicatorState` is per pane, and which pane is
+ * blocked is a question a workspace-level status cannot answer. Each agent
+ * pane is also its own conversation — `agentSessionId` differs between panes
+ * of the same workspace — so a workspace with two panes was showing one of
+ * them and silently omitting the other.
+ */
+export interface Pane {
+  paneId: string
+  isActive?: boolean
+  currentCommand?: string
+  currentPath?: string
+  agent?: string
+  /** Native agent session id. Distinct per pane; the conversation key. */
+  agentSessionId?: string
+  indicatorState?: IndicatorState
+  waitingToolName?: string
+  /** Per-pane recap, sent only for multi-pane workspaces. */
+  recap?: string
+  recapAt?: string
+  metrics?: { contextPercent?: number }
 }
 
 export interface ConversationMessage {
