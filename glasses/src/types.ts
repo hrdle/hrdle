@@ -84,17 +84,54 @@ export interface GlassesRelayItem {
 
 // ─── G2 display helpers ───
 
+/** Unwrap inline Markdown — the syntax itself is unreadable on the G2. */
+function stripInline(raw: string): string {
+  return raw
+    .replace(/^\s{0,3}#{1,6}\s+/, '') // headers
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1') // italic
+    .replace(/\b_([^_\n]+)_\b/g, '$1')
+    .replace(/`([^`]+)`/g, '$1') // inline code
+    .replace(/^\s*>\s?/, '') // blockquote marker
+    .replace(/~~([^~]+)~~/g, '$1') // strikethrough
+    .trimEnd()
+}
+
+/**
+ * One Markdown table row → one plain line (`cell | cell`).
+ *
+ * The whole table used to collapse into a `[table]` marker, which threw the
+ * content away and told the reader nothing — the marker itself carries no
+ * information (real-device feedback). Tables in agent replies are nearly
+ * always short key/value pairs, which read fine one row per line even at 52
+ * columns. Returns null for the `|---|---|` delimiter row, which has nothing
+ * to say without column alignment to describe.
+ */
+function tableRowToLine(raw: string): string | null {
+  const cells = raw
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((c) => c.trim())
+  if (cells.every((c) => /^:?-+:?$/.test(c))) return null
+  const kept = cells.filter((c) => c !== '')
+  return kept.length ? kept.join(' | ') : null
+}
+
 /**
  * Strip Markdown / collapse noisy blocks for the G2's plain-text 7-line page.
  * Mechanical only — no semantic summarization (that's the v2 server-side LLM
- * plan). Fenced code and tables collapse to one marker line; emphasis,
- * headers, links and inline-code backticks are unwrapped; blank lines and
- * horizontal rules are dropped (every line is scarce on the glasses).
+ * plan). Fenced code collapses to one marker line (code is unreadable at this
+ * size anyway); table rows are flattened to text; emphasis, headers, links and
+ * inline-code backticks are unwrapped; blank lines and horizontal rules are
+ * dropped (every line is scarce on the glasses).
  */
 export function sanitizeForG2(text: string): string {
   const out: string[] = []
   let inCode = false
-  let inTable = false
   for (const raw of text.split('\n')) {
     if (/^\s*```/.test(raw)) {
       inCode = !inCode
@@ -102,24 +139,12 @@ export function sanitizeForG2(text: string): string {
       continue
     }
     if (inCode) continue
-    const isTableRow = /^\s*\|.*\|?\s*$/.test(raw) && raw.includes('|')
-    if (isTableRow) {
-      if (!inTable) out.push('[table]')
-      inTable = true
+    if (/^\s*\|.*\|?\s*$/.test(raw) && raw.includes('|')) {
+      const row = tableRowToLine(raw)
+      if (row) out.push(stripInline(row))
       continue
     }
-    inTable = false
-    const line = raw
-      .replace(/^\s{0,3}#{1,6}\s+/, '') // headers
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
-      .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
-      .replace(/__([^_]+)__/g, '$1')
-      .replace(/\*([^*\n]+)\*/g, '$1') // italic
-      .replace(/\b_([^_\n]+)_\b/g, '$1')
-      .replace(/`([^`]+)`/g, '$1') // inline code
-      .replace(/^\s*>\s?/, '') // blockquote marker
-      .replace(/~~([^~]+)~~/g, '$1') // strikethrough
-      .trimEnd()
+    const line = stripInline(raw)
     if (!line.trim()) continue // blank lines / horizontal rules (---, ***)
     if (/^[-*_]{3,}$/.test(line.trim())) continue
     out.push(line)
