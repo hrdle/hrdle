@@ -496,3 +496,37 @@ describe('working indicator', () => {
     expect(screenText(st(1, 'completed')).header).not.toContain('[!]')
   })
 })
+
+describe('back label', () => {
+  const st = (offset: number, page: number) => ({
+    mode: 'conversation' as const,
+    sessions: [{ id: 'a', name: 'グラス開発', state: 'idle' as const }],
+    sessionIndex: 0,
+    conversation: [
+      { role: 'user' as const, content: '質問' },
+      { role: 'assistant' as const, content: Array.from({ length: 20 }, (_, i) => `${i} 行目`).join('\n') },
+    ],
+    conversationOffset: offset,
+    conversationPage: page,
+    conversationLastLoaded: 2,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  })
+
+  test('leaves the session from the newest message', () => {
+    expect(screenText(st(0, 0)).footer).toContain('dbl:back')
+  })
+
+  test('returns to the top once the reader has paged', () => {
+    expect(screenText(st(0, 1)).footer).toContain('dbl:top')
+  })
+
+  test('returns to the top once the reader has gone back a message', () => {
+    expect(screenText(st(1, 0)).footer).toContain('dbl:top')
+  })
+})
