@@ -386,7 +386,7 @@ herdr が `blocked` を報告して waiting アイテムがある間は、hook �
 
 `PreToolUse` / `UserPromptSubmit` はもう不要（v0.2.2〜）。インジケータの状態遷移は herdr の `pane.agent_status_changed` から取るようになったため、hook は herdr が持たない情報（通知本文・質問のツール名）だけを運ぶ。既に登録済みでも害はない。
 
-2. `cchub` バイナリにPATHが通っていることを確認（hookはClaude Code / Codex のプロセスから実行される）
+2. `cchub` バイナリにPATHが通っていることを確認（hookはClaude Code / Codex のプロセスから実行される）。hook は**非対話シェル**で走るため `.zshrc` は読まれない。`~/bin` / `~/.local/bin` への PATH 追加を `.zshrc` に書いている構成ではベア名が解決できず `command not found` になる（#538）。その場合は絶対パス（`/home/you/bin/cchub notify`）を書く。cchub 自身が書き込む側（`migrateCodexHooksToJson` / UI の hook 設定プロンプト）は `resolveNotifyCommand()`（`services/notify-command.ts`）で解決済みパスを使う
 
 3. CC Hubサーバーがデフォルトポート（5923）で起動していること。カスタムポートの場合は `cchub notify -p <port>` を指定
 

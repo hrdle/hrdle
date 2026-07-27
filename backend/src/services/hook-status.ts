@@ -1,6 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { resolveNotifyCommand } from './notify-command';
 
 /**
  * Hooks CC Hub still needs. Indicator transitions used to need PreToolUse and
@@ -28,6 +29,12 @@ type HookStatus = HookProviderStatus & {
     codex: HookProviderStatus;
     grok: HookProviderStatus;
   };
+  /**
+   * The invocation a client should write into a hook config. Only this side
+   * knows where the running binary lives, and a hook shell's PATH usually
+   * doesn't (#538).
+   */
+  command: string;
 };
 
 const DEFAULT_EVENTS: HookEventStatus = {
@@ -218,5 +225,6 @@ export async function getHookStatus(): Promise<HookStatus> {
     events,
     missing,
     providers,
+    command: resolveNotifyCommand(),
   };
 }

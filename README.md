@@ -293,6 +293,12 @@ Receive browser push notifications when Claude Code completes a response or need
 
 Add this to `~/.claude/settings.json`. The CC Hub server must be running. Allow browser notification permissions on first access.
 
+Hooks run in a **non-interactive** shell, which never sources `.zshrc`/`.bashrc`. If your PATH additions live there (a `~/bin` or `~/.local/bin` install), the bare name won't resolve and the hook dies with `command not found`. Use the absolute path in that case — `which cchub` gives it, and CC Hub's own "set up hooks" button already writes the resolved path:
+
+```json
+{ "type": "command", "command": "/home/you/bin/cchub notify" }
+```
+
 Session indicators (working / waiting / done) need no hooks at all — herdr reports agent status itself. These two hooks only carry what herdr can't see: the notification text and the name of the tool that asked a question.
 
 ## Development Setup
