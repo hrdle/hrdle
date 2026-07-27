@@ -7,6 +7,7 @@ import {
   displayWidth,
   extractNumberedChoices,
   extractQuestionLine,
+  glassesDeviceCount,
   glassesRelayDeps,
   normalizeRelayText,
   postAgentRelay,
@@ -571,3 +572,65 @@ describe('postHookRelay', () => {
     expect(snapshot.map((i) => i.id)).toContain(agentNote.id);
   });
 });
+
+describe('simulator vs device', () => {
+  test('a simulator sees the notification but does not silence the browser', async () => {
+    const sim = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sim, false);
+    sim.messages = [];
+
+    // Undelivered as far as the browser is concerned...
+    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(false);
+    // ...but the panel it previews still shows what the panel would show.
+    expect(sim.ofType('glasses-relay')).toHaveLength(1);
+  });
+
+  test('a device alongside a simulator still silences the browser', async () => {
+    const sim = new FakeSocket();
+    const dev = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sim, false);
+    await subscribeGlassesRelay(dev, true);
+
+    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(true);
+    expect(sim.ofType('glasses-relay')).toHaveLength(1);
+    expect(dev.ofType('glasses-relay')).toHaveLength(1);
+  });
+
+  test('an omitted flag counts as a device, so a pre-flag ehpk keeps working', async () => {
+    const old = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(old);
+    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(true);
+  });
+
+  test('an unanswered question suppresses only when a device is watching', async () => {
+    const sim = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sim, false);
+    postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'Which one?' });
+
+    expect(postHookRelay({ sessionId: 's1', text: 'ユーザー入力を待っています' })).toBe(false);
+  });
+
+  test('a device that disconnects stops counting', async () => {
+    const dev = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(dev, true);
+    expect(glassesDeviceCount()).toBe(1);
+    unsubscribeGlassesRelay(dev);
+    expect(glassesDeviceCount()).toBe(0);
+    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(false);
+  });
+
+  test('resubscribing as a simulator drops the device claim', async () => {
+    // The socket is reused across a reconnect; a stale device claim would keep
+    // the browser silent for a tab that is only previewing.
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock, true);
+    await subscribeGlassesRelay(sock, false);
+    expect(glassesDeviceCount()).toBe(0);
+  });
+})

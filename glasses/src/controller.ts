@@ -41,6 +41,15 @@ export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 /** Platform capabilities the controller cannot provide itself. The G2 wires
  *  the real Even Hub bridge + mic; the debug simulator fakes them. */
 export interface GlassesPlatform {
+  /**
+   * Real hardware, not the browser simulator.
+   *
+   * Both run this controller and both show the same screen; the difference is
+   * that only a wearer has actually been told something. The server silences
+   * the browser push on this, so a simulator claiming it would take the user's
+   * notifications away while a preview window sat open on their desk.
+   */
+  onDevice: boolean
   /** Re-render the whole UI from the (mutated) state. */
   render(state: AppState): void
   /** Redraw only the header. The spinner changes nothing else, and on the
@@ -152,7 +161,7 @@ export class GlassesController {
    *  relay subscription is (re)sent on every connect; the server answers with
    *  a snapshot, then pushes upserts/removals. */
   connect(): void {
-    this.ws.subscribeGlassesRelay()
+    this.ws.subscribeGlassesRelay(this.platform.onDevice)
     this.ws.connect()
     // One timer for the life of the app rather than start/stop bookkeeping on
     // every state change. It costs nothing when nothing is working: the tick

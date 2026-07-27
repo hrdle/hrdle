@@ -524,6 +524,9 @@ export function startDebugUI(): void {
   }
 
   const platform: GlassesPlatform = {
+    // A browser panel, not a face. Claiming otherwise would silence the
+    // wearer's browser notifications for as long as this tab stayed open.
+    onDevice: false,
     render(state) {
       const raw = screenText(state)
       // The device's container wraps for it; this panel has to do it itself.
