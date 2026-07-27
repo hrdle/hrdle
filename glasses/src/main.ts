@@ -176,12 +176,34 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   trace('events wired')
   trace('startup complete')
 
+  /**
+   * JS heap, when the engine will say.
+   *
+   * Deliberately narrow evidence: this is the JS heap alone, not the WebView's
+   * DOM, GPU textures or native allocations. If Android is killing the process
+   * on total footprint, this stays flat right up to the end — which is itself
+   * worth knowing, because it rules the JS heap out rather than leaving it a
+   * suspect. Non-standard and Chromium-only, hence the cast and the guard.
+   */
+  function heapNote(): string {
+    const mem = (performance as unknown as {
+      memory?: { usedJSHeapSize: number; totalJSHeapSize: number; jsHeapSizeLimit: number }
+    }).memory
+    if (!mem) return ''
+    const mb = (n: number) => Math.round(n / 1048576)
+    return ` heap=${mb(mem.usedJSHeapSize)}/${mb(mem.totalJSHeapSize)}MB(limit ${mb(mem.jsHeapSizeLimit)})`
+  }
+
   // Heartbeat. Startup already completes cleanly in every failing report, so
   // the question is no longer whether it starts but how long it survives —
-  // the last beat that arrives is the moment it died.
+  // the last beat that arrives is the moment it died. Its spacing is evidence
+  // too: the interval stretched from 30s to 65s before eight of twenty deaths,
+  // which is the engine being throttled rather than the app failing.
   const bootAt = Date.now()
   setInterval(() => {
-    trace(`alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} ws=${controller.ws.getState()}`)
+    trace(
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} ws=${controller.ws.getState()}${heapNote()}`,
+    )
   }, HEARTBEAT_MS)
 }
 
