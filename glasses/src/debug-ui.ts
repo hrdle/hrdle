@@ -12,7 +12,7 @@
 import { setBaseUrl, transcribe } from './api.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
-import { screenText, wrapForPanel } from './display.ts'
+import { charWidth, screenText, wrapForPanel } from './display.ts'
 import type { AppState } from './display.ts'
 
 /** Japanese screen names — the shared vocabulary used when reporting issues. */
@@ -270,6 +270,36 @@ export function startDebugUI(): void {
   /** Draw one screen at the hardware's real pixel count, then crush it to the
    *  panel's 16 levels of green. Anti-aliasing finer than 4 bits is exactly
    *  what the wearer does not get. */
+  // The panel's column pitch, measured on the hardware: 52 columns across the
+  // body's 556px. No browser monospace matches the device font — at this size
+  // it draws ASCII at 9.5px against the device's 10.69 and CJK at 19 against
+  // 19.85 — so letting the browser lay out a whole string drifts by several
+  // columns across one line. Right-aligned content ended up nowhere near the
+  // edge. Advancing per character by the device's own pitch puts every glyph
+  // where the G2 puts it, which is the entire point of this window.
+  const PITCH = 556 / 52
+
+  function drawRow(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
+    let col = 0
+    for (const ch of text) {
+      const cell = charWidth(ch) * PITCH
+      const natural = ctx.measureText(ch).width
+      if (natural > cell + 0.5) {
+        // A glyph the width table misjudges — an emoji, a box-drawing rune —
+        // would otherwise run over its neighbour. Squeeze it into the cell the
+        // device gives it, which is also what the reader needs to know.
+        ctx.save()
+        ctx.translate(x + col * PITCH, y)
+        ctx.scale(cell / natural, 1)
+        ctx.fillText(ch, 0, 0)
+        ctx.restore()
+      } else {
+        ctx.fillText(ch, x + col * PITCH, y)
+      }
+      col += charWidth(ch)
+    }
+  }
+
   function drawPanel(screen: { header: string; body: string; footer: string }): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -281,14 +311,14 @@ export function startDebugUI(): void {
     ctx.shadowBlur = 6
 
     ctx.fillStyle = `rgb(${GREEN})`
-    ctx.fillText(screen.header, 4, 25)
+    drawRow(ctx, screen.header, 4, 25)
 
     for (const [i, line] of screen.body.split('\n').entries()) {
-      ctx.fillText(line, 10, HEADER_H + 28 + i * 28)
+      drawRow(ctx, line, 10, HEADER_H + 28 + i * 28)
     }
 
     ctx.fillStyle = `rgba(${GREEN}, 0.78)`
-    ctx.fillText(screen.footer, 4, FOOTER_Y + 25)
+    drawRow(ctx, screen.footer, 4, FOOTER_Y + 25)
 
     ctx.shadowBlur = 0
     ctx.fillStyle = `rgba(${GREEN}, 0.3)`

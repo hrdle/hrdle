@@ -219,6 +219,48 @@ describe('conversation body', () => {
   })
 })
 
+describe('header clock', () => {
+  const base = {
+    sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const }],
+    sessionIndex: 0,
+    conversation: [{ role: 'assistant' as const, content: 'やあ' }],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 1,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: ['はい', 'いいえ'],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    voicePhase: 'recording' as const,
+  }
+
+  test('sits at the right edge on every screen', () => {
+    for (const mode of ['session_list', 'conversation', 'choice', 'voice', 'overlay'] as const) {
+      const header = screenText({ ...base, mode }).header
+      expect(header).toMatch(/ \d\d:\d\d$/)
+      expect(width(header)).toBeLessThanOrEqual(LINE_WIDTH)
+    }
+  })
+
+  test('a long title is clipped rather than pushing the clock off', () => {
+    const header = screenText({
+      ...base,
+      mode: 'conversation' as const,
+      sessions: [{ id: 'a', name: 'と'.repeat(60), state: 'working' as const }],
+    }).header
+    expect(header).toMatch(/ \d\d:\d\d$/)
+    expect(width(header)).toBeLessThanOrEqual(LINE_WIDTH)
+  })
+
+  test('leaves at least one space between title and clock', () => {
+    const header = screenText({ ...base, mode: 'conversation' as const }).header
+    expect(header).toMatch(/[^ ] +\d\d:\d\d$/)
+  })
+})
+
 describe('session list', () => {
   const state = {
     mode: 'session_list' as const,
