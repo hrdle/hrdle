@@ -13,7 +13,7 @@ import { setBaseUrl, transcribe } from './api.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { screenText, wrapForPanel } from './display.ts'
-import { advance } from './metrics.ts'
+import { BAR_H, LINE_H, PANEL_H, PANEL_W, advance } from './metrics.ts'
 import type { AppState } from './display.ts'
 
 /** Japanese screen names — the shared vocabulary used when reporting issues. */
@@ -204,8 +204,7 @@ export function startDebugUI(): void {
   // Scale the 576x288 panel down to whatever width there is. The canvas keeps
   // its real pixel count, so the type stays as coarse as the hardware's — it
   // is the whole thing that shrinks, exactly like stepping back from it.
-  const PANEL_W = 576
-  const PANEL_H = 288
+  // Panel size comes from metrics.ts — one place holds the hardware numbers.
   function fitPanel(): void {
     const box = document.getElementById('lens-fit')
     const lens = document.getElementById('lens')
@@ -261,9 +260,17 @@ export function startDebugUI(): void {
 
   let lastScreen = { header: '', body: '', footer: '' }
 
-  // Panel geometry, straight from display.ts's container layout.
-  const HEADER_H = 36
-  const FOOTER_Y = PANEL_H - 36
+  // Panel geometry, straight from the container definitions in display.ts.
+  // Text starts below the container's own padding, and LVGL stacks lines at a
+  // fixed 27px — drawing them 28px apart put the last of seven a full line's
+  // eighth out of place.
+  const HEADER_PAD = 4
+  const BODY_PAD = 6
+  /** Baseline within a 27px line box, for the font this canvas draws with. */
+  const BASELINE = 21
+  const HEADER_BASE = HEADER_PAD + BASELINE
+  const BODY_TOP = BAR_H + BODY_PAD + BASELINE
+  const FOOTER_BASE = PANEL_H - BAR_H + HEADER_PAD + BASELINE
   // Proportional, not monospace: the G2 font is proportional (a space is 5px,
   // `i` is 4, `W` is 16) and drawing into those cells with a monospace face
   // meant squeezing almost every ASCII glyph. A plain sans lands within about
@@ -317,19 +324,18 @@ export function startDebugUI(): void {
     ctx.shadowBlur = 6
 
     ctx.fillStyle = `rgb(${GREEN})`
-    drawRow(ctx, screen.header, 4, 25)
+    drawRow(ctx, screen.header, HEADER_PAD, HEADER_BASE)
 
     for (const [i, line] of screen.body.split('\n').entries()) {
-      drawRow(ctx, line, 10, HEADER_H + 28 + i * 28)
+      drawRow(ctx, line, 4 + BODY_PAD, BODY_TOP + i * LINE_H)
     }
 
     ctx.fillStyle = `rgba(${GREEN}, 0.78)`
-    drawRow(ctx, screen.footer, 4, FOOTER_Y + 25)
+    drawRow(ctx, screen.footer, HEADER_PAD, FOOTER_BASE)
 
+    // No rules between the zones: the containers carry borderWidth 0, so the
+    // panel has nothing there and neither should this.
     ctx.shadowBlur = 0
-    ctx.fillStyle = `rgba(${GREEN}, 0.3)`
-    ctx.fillRect(0, HEADER_H - 1, PANEL_W, 1)
-    ctx.fillRect(0, FOOTER_Y, PANEL_W, 1)
 
     // 4-bit: 16 alpha levels, nothing in between.
     const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)

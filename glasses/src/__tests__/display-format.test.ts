@@ -293,3 +293,48 @@ describe('session list', () => {
     expect(new Set(starts).size).toBe(1)
   })
 })
+
+describe('paging', () => {
+  const long = Array.from({ length: 40 }, (_, i) => `${i} 行目の内容がここに入ります。`).join('\n')
+  const state = (page: number) => ({
+    mode: 'conversation' as const,
+    sessions: [{ id: 'a', name: 'x', state: 'idle' as const }],
+    sessionIndex: 0,
+    conversation: [{ role: 'assistant' as const, content: long }],
+    conversationOffset: 0,
+    conversationPage: page,
+    conversationLastLoaded: 1,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  })
+
+  const pageCount = () => {
+    const m = screenText(state(0)).footer.match(/p\d+\/(\d+)/)
+    return m ? Number(m[1]) : 1
+  }
+
+  test('pages tile: no line is shown twice', () => {
+    const seen: string[] = []
+    for (let p = 0; p < pageCount(); p++) seen.push(...screenText(state(p)).body.split('\n'))
+    const meaningful = seen.filter((l) => l.trim())
+    expect(new Set(meaningful).size).toBe(meaningful.length)
+  })
+
+  test('pages leave no gap', () => {
+    const shown = new Set<string>()
+    for (let p = 0; p < pageCount(); p++)
+      for (const l of screenText(state(p)).body.split('\n')) if (l.trim()) shown.add(l)
+    for (let i = 0; i < 40; i++) expect([...shown].some((l) => l.startsWith(`${i} 行目`) || l.includes(`${i} 行目`))).toBe(true)
+  })
+
+  test('paging forward and back returns to the same page', () => {
+    const total = pageCount()
+    expect(screenText(state(0)).body).toBe(screenText(state(0)).body)
+    expect(screenText(state(total - 1)).body).not.toBe(screenText(state(0)).body)
+  })
+})

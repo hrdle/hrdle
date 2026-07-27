@@ -39,11 +39,12 @@ function paginateSingleMessage(fullText: string, page: number): { text: string; 
     return { text: fullText, pageInfo: '', totalPages: 1 }
   }
 
-  const overlap = 1
-  const advance = MAX_LINES - overlap
-  const totalPages = Math.ceil((allLines.length - MAX_LINES) / advance) + 1
+  // Pages tile: no line appears twice. Carrying the last line over as context
+  // sounded helpful and read as the page not having advanced — the reader has
+  // to work out which of the seven lines is the one they already know.
+  const totalPages = Math.ceil(allLines.length / MAX_LINES)
   const p = Math.min(page, totalPages - 1)
-  const start = p * advance
+  const start = p * MAX_LINES
   const pageLines = allLines.slice(start, start + MAX_LINES)
   const text = pageLines.join('\n')
   const pageInfo = ` p${p + 1}/${totalPages}`
@@ -462,7 +463,7 @@ function buildSessionList(state: AppState): RebuildPageContainer {
     xPosition: 4, yPosition: 36,
     width: W - 8, height: H - 36 - 36,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: 6,
     containerID: 2, containerName: 'list',
     isEventCapture: 0,
     content: listText,
@@ -540,7 +541,7 @@ function buildChoice(state: AppState): RebuildPageContainer {
     xPosition: 4, yPosition: 36,
     width: W - 8, height: H - 36 - 36,
     borderWidth: 0,
-    paddingLength: 8,
+    paddingLength: 6,
     containerID: 2, containerName: 'body',
     isEventCapture: 0,
     content: choiceBody(state),
