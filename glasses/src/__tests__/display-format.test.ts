@@ -340,15 +340,23 @@ describe('paging', () => {
 })
 
 describe('glyph coverage', () => {
-  test('drops an emoji the panel renders as tofu', () => {
+  test('rewrites a status emoji the panel renders as tofu', () => {
     // pretext measures ✅ at 320px from an emoji font the device does not
     // have, so measuring alone would have let it through.
-    expect(sanitizeForG2('- ✅ health-check.sh を修正')).toBe('- health-check.sh を修正')
+    expect(sanitizeForG2('- ✅ health-check.sh を修正')).toBe('- ○ health-check.sh を修正')
   })
 
-  test('drops marks the firmware fonts do not carry', () => {
-    expect(sanitizeForG2('結果: ✓ OK / ✗ NG')).toBe('結果: OK / NG')
-    expect(sanitizeForG2('❌ 失敗 ⚠ 注意 🎉 完了')).toBe('失敗 注意 完了')
+  test('rewrites marks the firmware fonts do not carry', () => {
+    expect(sanitizeForG2('結果: ✓ OK / ✗ NG / ❓ 不明')).toBe('結果: ○ OK / × NG / ？ 不明')
+    expect(sanitizeForG2('⚠️ 注意 ⭐ 重要 💡 ヒント ➡️ 次へ')).toBe('！ 注意 ★ 重要 ※ ヒント → 次へ')
+  })
+
+  test('keeps the three states of a status light apart', () => {
+    expect(sanitizeForG2('🟢 稼働 🟡 警告 🔴 停止')).toBe('○ 稼働 △ 警告 × 停止')
+  })
+
+  test('drops decoration, which has nothing to become', () => {
+    expect(sanitizeForG2('🎉 完了 🚀 デプロイ')).toBe('完了 デプロイ')
   })
 
   test('keeps the symbols the panel can actually draw', () => {
@@ -361,11 +369,11 @@ describe('glyph coverage', () => {
     expect(sanitizeForG2(line)).toBe(line)
   })
 
-  test('keeps line structure while dropping glyphs', () => {
-    expect(sanitizeForG2('✅ 一行目\n❌ 二行目').split('\n')).toEqual(['一行目', '二行目'])
+  test('keeps line structure', () => {
+    expect(sanitizeForG2('✅ 一行目\n🎉 二行目').split('\n')).toEqual(['○ 一行目', '二行目'])
   })
 
-  test('a stripped line never leaves a double space', () => {
-    expect(sanitizeForG2('前 ✅ 後')).not.toMatch(/ {2}/)
+  test('a line that lost a glyph never leaves a double space', () => {
+    expect(sanitizeForG2('前 🎉 後')).not.toMatch(/ {2}/)
   })
 })

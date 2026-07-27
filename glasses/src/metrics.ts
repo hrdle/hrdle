@@ -89,6 +89,42 @@ export function clipToWidth(text: string, maxPx: number): string {
 const PICTOGRAPH = /\p{Extended_Pictographic}/u
 
 /**
+ * Marks the panel cannot draw, rewritten as ones it can.
+ *
+ * The firmware carries the CJK symbol set — ○ × △ ！ ※ ★ all have real
+ * advances — and in a Japanese context those *are* the conventional marks for
+ * good, bad, partial and attention. So a status emoji does not have to be
+ * thrown away; it has an equivalent that says the same thing in the same
+ * column. Only glyphs with a genuine counterpart are here. Decoration (🎉, 🚀)
+ * has nothing to become and still goes.
+ */
+const SUBSTITUTES = new Map<string, string>([
+  // done / good
+  ...['✅', '✔', '✓', '☑', '🟢', '🆗', '👍', '⭕'].map((c) => [c, '○'] as const),
+  // failed / bad
+  ...['❌', '✗', '✘', '☒', '✕', '🔴', '🚫', '⛔', '👎'].map((c) => [c, '×'] as const),
+  // attention
+  ...['⚠', '❗', '❕', '‼', '🚨'].map((c) => [c, '！'] as const),
+  ...['❓', '❔'].map((c) => [c, '？'] as const),
+  // emphasis
+  ...['⭐', '🌟', '✨'].map((c) => [c, '★'] as const),
+  // note
+  ...['💡', 'ℹ', '📌', '📝'].map((c) => [c, '※'] as const),
+  // direction
+  ...['➡', '▶', '▷'].map((c) => [c, '→'] as const),
+  ...['⬅', '◀', '◁'].map((c) => [c, '←'] as const),
+  ...['⬆', '🔼'].map((c) => [c, '↑'] as const),
+  ...['⬇', '🔽'].map((c) => [c, '↓'] as const),
+  ...['🔺'].map((c) => [c, '▲'] as const),
+  ...['🔻'].map((c) => [c, '▼'] as const),
+  // Status dots keep their three states: a green and a yellow light both
+  // becoming ○ would lose the distinction they exist to make.
+  ...['⚪'].map((c) => [c, '○'] as const),
+  ...['🟡', '🟠'].map((c) => [c, '△'] as const),
+  ...['🔵', '🟣', '🟤', '⚫'].map((c) => [c, '●'] as const),
+])
+
+/**
  * Drop what the panel has no glyph for.
  *
  * Two rules, because neither alone is enough. `getAdvW` returns 0 for a
@@ -113,7 +149,15 @@ export function stripUnrenderable(text: string): string {
     // Selectors and joiners only qualify the glyph beside them; alone they are
     // leftovers from an emoji that has already gone.
     const isModifier = cp === 0xfe0f || cp === 0x200d || (cp >= 0x1f3fb && cp <= 0x1f3ff)
-    if (isModifier || PICTOGRAPH.test(ch) || getAdvW(cp) === 0) {
+    if (isModifier) continue
+    const swap = SUBSTITUTES.get(ch)
+    if (swap) {
+      // Substituted, not dropped: nothing was left behind, so the spacing
+      // around it is still the author's.
+      out += swap
+      continue
+    }
+    if (PICTOGRAPH.test(ch) || getAdvW(cp) === 0) {
       dropped = true
       continue
     }
