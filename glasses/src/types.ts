@@ -142,24 +142,64 @@ function tableRowToLine(raw: string): string | null {
   return kept.length ? kept.join(' | ') : null
 }
 
+/** Lines a fenced block may take before it stops being an aside and starts
+ *  being the page. Four leaves three for the prose around it. */
+const MAX_CODE_LINES = 4
+
+/**
+ * A fenced block, shown when it can be shown.
+ *
+ * It used to collapse to `[code]` on the grounds that source is unreadable at
+ * this size. True of real source with deep indentation and long lines — and
+ * false of most fenced blocks in agent replies, which are a command, a couple
+ * of values, a short listing. Those fit the panel with room to spare, and
+ * throwing them away took the content a sentence had just promised.
+ *
+ * Common indentation goes first: on a panel this narrow, four leading spaces
+ * are the difference between fitting and not, and dropping the shared prefix
+ * keeps every line's relation to the others intact.
+ */
+function renderCodeBlock(lines: string[]): string[] {
+  const body = [...lines]
+  while (body.length && !body[0].trim()) body.shift()
+  while (body.length && !body[body.length - 1].trim()) body.pop()
+  if (!body.length) return []
+
+  const filled = body.filter((l) => l.trim())
+  const indent = Math.min(...filled.map((l) => (l.match(/^ */) as RegExpMatchArray)[0].length))
+  const dedented = body.map((l) => stripUnrenderable(l.slice(indent)))
+
+  const fits = dedented.length <= MAX_CODE_LINES && dedented.every((l) => textWidth(l) <= BODY_WIDTH)
+  // Still worth saying how much was withheld — `[code]` alone said only that
+  // something was there.
+  return fits ? dedented : [`[code ${dedented.length}行]`]
+}
+
 /**
  * Strip Markdown / collapse noisy blocks for the G2's plain-text 7-line page.
  * Mechanical only — no semantic summarization (that's the v2 server-side LLM
- * plan). Fenced code collapses to one marker line (code is unreadable at this
- * size anyway); table rows are flattened to text; emphasis, headers, links and
+ * plan). Fenced code is shown when it fits and summarised when it does not;
+ * table rows are flattened to text; emphasis, headers, links and
  * inline-code backticks are unwrapped; blank lines and horizontal rules are
  * dropped (every line is scarce on the glasses).
  */
 export function sanitizeForG2(text: string): string {
   const out: string[] = []
-  let inCode = false
+  let code: string[] | null = null
   for (const raw of text.split('\n')) {
     if (/^\s*```/.test(raw)) {
-      inCode = !inCode
-      if (!inCode) out.push('[code]')
+      if (code) {
+        out.push(...renderCodeBlock(code))
+        code = null
+      } else {
+        code = []
+      }
       continue
     }
-    if (inCode) continue
+    if (code) {
+      code.push(raw)
+      continue
+    }
     if (/^\s*\|.*\|?\s*$/.test(raw) && raw.includes('|')) {
       const row = tableRowToLine(raw)
       if (row) out.push(stripInline(row))
@@ -170,7 +210,7 @@ export function sanitizeForG2(text: string): string {
     if (/^[-*_]{3,}$/.test(line.trim())) continue
     out.push(line)
   }
-  if (inCode) out.push('[code]') // unterminated fence
+  if (code) out.push(...renderCodeBlock(code)) // unterminated fence
   return out.join('\n')
 }
 
