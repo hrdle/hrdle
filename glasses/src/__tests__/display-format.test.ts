@@ -530,3 +530,35 @@ describe('back label', () => {
     expect(screenText(st(1, 0)).footer).toContain('dbl:top')
   })
 })
+
+describe('fenced code', () => {
+  test('shows a short block instead of a marker', () => {
+    // `[code]` said only that something was there, and took the content a
+    // sentence had just promised.
+    const out = sanitizeForG2('フッターの表示です。\n\n```\n最新    dbl:back\nページ2  dbl:top\n```')
+    expect(out.split('\n')).toEqual(['フッターの表示です。', '最新    dbl:back', 'ページ2  dbl:top'])
+  })
+
+  test('drops the shared indentation so more of it fits', () => {
+    expect(sanitizeForG2('```ts\n    const a = 1\n      const b = 2\n```').split('\n'))
+      .toEqual(['const a = 1', '  const b = 2'])
+  })
+
+  test('summarises a block whose lines will not fit', () => {
+    const wide = 'x'.repeat(200)
+    expect(sanitizeForG2(`\`\`\`\n${wide}\n\`\`\``)).toBe('[code 1行]')
+  })
+
+  test('summarises a block long enough to become the page', () => {
+    const many = Array.from({ length: 6 }, (_, i) => `${i}行目`).join('\n')
+    expect(sanitizeForG2(`\`\`\`\n${many}\n\`\`\``)).toBe('[code 6行]')
+  })
+
+  test('an unterminated fence is still rendered', () => {
+    expect(sanitizeForG2('```\nbun run test')).toBe('bun run test')
+  })
+
+  test('an empty block leaves nothing behind', () => {
+    expect(sanitizeForG2('前\n```\n\n```\n後').split('\n')).toEqual(['前', '後'])
+  })
+})
