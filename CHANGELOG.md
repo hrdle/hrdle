@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.58] - 2026-07-27
+
+### Fixed
+- **グラス: 文字幅を実測ピクセルで測るようにした** (#554): **G2 のフォントは等幅ではなかった**。空白 5px、`i` 4px、`a` 12px、`W` 16px、CJK 20px、行高 27px。これまでの「52桁 / CJK 1.857倍」というモデルは平均的には近いが文字列ごとにずれる近似で、右詰めのパディング（＝空白）を実幅の2倍で数えていたため、ヘッダー時計は `linux` + 空白 + `10:25` で **293px / 568px** ——「右上隅に行っていない」のではなくパネルの真ん中で止まっていた。修正後は 563〜567px に到達する（ehpk v0.1.35）
+  - 公式の **[@evenrealities/pretext](https://www.npmjs.com/package/@evenrealities/pretext)**（MIT・依存なし・SDK と同じメンテナ）を採用。G2 ファームウェアの LVGL フォントメトリクスを埋め込んでおり、カーニング、3段のフォントフォールバック、LVGL と同じ per-glyph 丸め `(adv + kern + 8) >> 4` まで再現する
+  - `metrics.ts` を新設し `types.ts` / `display.ts` の共通計測層に。コンテナ寸法を LVGL の実数から導出（行高 27px なので **36px のヘッダーはちょうど1行**しか持てず、あふれた行は時計ごとパネル外に出る）
+  - `advance(prev, ch)` はペア単位のカーニング差分。1文字ずつ足すと `getTextWidth` の全体幅と**誤差 0px** で一致するため、行分割は1パスのまま。禁則処理・折り返し位置の空白除去・`…` を予算に含める切り詰めはすべて維持
+  - `charWidth` / `displayWidth` / `PANEL_WIDTH` / `LINE_WIDTH` / `CJK_RATIO` は削除
+  - コスト gzip +40KB（ehpk 約50KB → 約90KB）。実データ218ページ走査でパネル幅超過ゼロ・7行超過ゼロ・ヘッダー折り返しゼロ
+- **シミュレータの描画を実機フォントの性質に合わせた** (#554): 等幅フォントで描いていたため、実機の狭い advance（空白5px、`i` 4px）に対して ASCII をほぼ毎回横に押し潰していた。プロポーショナル sans に変更し、実機 advance との平均誤差 **4.22px → 1.07px**
+
 ## [0.2.57] - 2026-07-27
 
 ### Added
