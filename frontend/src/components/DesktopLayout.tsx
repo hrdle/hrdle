@@ -843,15 +843,19 @@ export function DesktopLayout({
 			};
 			setTimeout(() => requestAllViewports(), 500);
 		},
-		onHookEvent: (event, cwd, sessionId, data, message) => {
-			fireHookNotification(
-				event,
-				cwd,
-				sessionId,
-				data,
-				message,
-				peerConn.peerId,
-			);
+		onHookEvent: (event, cwd, sessionId, data, message, deliveredToGlasses) => {
+			// The glasses already showed it; a second alert on the desk is noise.
+			// The indicator update below still runs — it is state, not an alert.
+			if (!deliveredToGlasses) {
+				fireHookNotification(
+					event,
+					cwd,
+					sessionId,
+					data,
+					message,
+					peerConn.peerId,
+				);
+			}
 			// 全useWorkspaces インスタンスのindicatorStateを即座に更新
 			updateCachedSessionsByHookEvent(event, sessionId);
 		},

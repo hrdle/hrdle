@@ -10,7 +10,9 @@ import {
   glassesRelayDeps,
   normalizeRelayText,
   postAgentRelay,
+  postHookRelay,
   resetGlassesRelayForTest,
+  resolveHookTarget,
   subscribeGlassesRelay,
   trackGlassesRelay,
   unsubscribeGlassesRelay,
@@ -371,5 +373,201 @@ describe('snapshot ordering', () => {
     sock.messages = [];
     postAgentRelay({ sessionId: 'a', kind: 'info', text: 'fyi' });
     expect(sock.messages).toHaveLength(0);
+  });
+});
+
+// =============================================================================
+// Hook notifications routed to the glasses
+// =============================================================================
+
+/** Workspace stub carrying the fields the hook resolver joins on. */
+function hookWs(
+  id: string,
+  panes: Array<{ paneId: string; agentSessionId?: string; path?: string; agent?: string }>,
+  agentSessionId?: string,
+): WorkspaceInfo {
+  return {
+    id,
+    name: id,
+    instanceId: `w-${id}`,
+    createdAt: '',
+    attached: false,
+    agentSessionId,
+    panes: panes.map((p) => ({
+      paneId: p.paneId,
+      command: 'claude',
+      path: p.path ?? `/tmp/${id}`,
+      agent: 'agent' in p ? p.agent : 'claude',
+      agentSessionId: p.agentSessionId,
+      isActive: true,
+    })),
+  } as unknown as WorkspaceInfo;
+}
+
+describe('resolveHookTarget', () => {
+  test('joins on the pane agent session id, naming the exact reply target', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [
+      hookWs('other', [{ paneId: '%0', agentSessionId: 'uuid-other' }]),
+      hookWs('dev', [
+        { paneId: '%0', agentSessionId: 'uuid-a' },
+        { paneId: '%1', agentSessionId: 'uuid-b' },
+      ]),
+    ];
+    expect(await resolveHookTarget('uuid-b', undefined)).toEqual({ sessionId: 'dev', paneId: '%1' });
+  });
+
+  test('a pane match beats a workspace-level match found earlier in the list', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [
+      hookWs('ws-level', [{ paneId: '%0' }], 'uuid-a'),
+      hookWs('pane-level', [{ paneId: '%3', agentSessionId: 'uuid-a' }]),
+    ];
+    expect(await resolveHookTarget('uuid-a', undefined)).toEqual({
+      sessionId: 'pane-level',
+      paneId: '%3',
+    });
+  });
+
+  test('falls back to the workspace session id when no pane carries one', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [hookWs('dev', [{ paneId: '%0' }], 'uuid-a')];
+    expect(await resolveHookTarget('uuid-a', undefined)).toEqual({ sessionId: 'dev' });
+  });
+
+  test('falls back to cwd when the hook carries no session id', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [
+      hookWs('dev', [{ paneId: '%0', path: '/home/u/app' }]),
+      hookWs('docs', [{ paneId: '%0', path: '/home/u/docs' }]),
+    ];
+    expect(await resolveHookTarget(undefined, '/home/u/docs')).toEqual({
+      sessionId: 'docs',
+      paneId: '%0',
+    });
+  });
+
+  test('two agents in one directory keep the workspace but lose the pane', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [
+      hookWs('dev', [
+        { paneId: '%0', path: '/home/u/app' },
+        { paneId: '%1', path: '/home/u/app' },
+      ]),
+    ];
+    expect(await resolveHookTarget(undefined, '/home/u/app')).toEqual({ sessionId: 'dev' });
+  });
+
+  test('the same directory in two workspaces resolves to nothing', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [
+      hookWs('a', [{ paneId: '%0', path: '/home/u/app' }]),
+      hookWs('b', [{ paneId: '%0', path: '/home/u/app' }]),
+    ];
+    expect(await resolveHookTarget(undefined, '/home/u/app')).toBeNull();
+  });
+
+  test('a pane running no agent is not a cwd match', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [
+      hookWs('dev', [{ paneId: '%0', path: '/home/u/app', agent: undefined }]),
+    ];
+    expect(await resolveHookTarget(undefined, '/home/u/app')).toBeNull();
+  });
+
+  test('an unknown session and an unknown directory resolve to nothing', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [hookWs('dev', [{ paneId: '%0' }])];
+    expect(await resolveHookTarget('uuid-missing', '/nowhere')).toBeNull();
+  });
+});
+
+describe('postHookRelay', () => {
+  test('without a subscriber it delivers nothing and reports so', () => {
+    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(false);
+  });
+
+  test('delivers an info item that expires far sooner than an agent note', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+    sock.messages = [];
+
+    expect(postHookRelay({ sessionId: 's1', paneId: '%1', text: '応答が完了しました' })).toBe(true);
+    const upserts = sock.ofType('glasses-relay');
+    expect(upserts).toHaveLength(1);
+    const item = upserts[0].item as { kind: string; paneId: string; text: string; expiresAt: number };
+    expect(item.kind).toBe('info');
+    expect(item.paneId).toBe('%1');
+    expect(item.text).toBe('応答が完了しました');
+    // Notification-lifetime, not the 5-minute agent-note lifetime.
+    expect(item.expiresAt - Date.now()).toBeLessThanOrEqual(90_000);
+    expect(item.expiresAt - Date.now()).toBeGreaterThan(60_000);
+  });
+
+  test('an unanswered question already covers the session: no second item, still suppressed', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+    postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'Which one?' });
+    sock.messages = [];
+
+    expect(postHookRelay({ sessionId: 's1', text: 'ユーザー入力を待っています' })).toBe(true);
+    expect(sock.ofType('glasses-relay')).toHaveLength(0);
+  });
+
+  test('a dismissed question does not cover the session', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+    const waiting = mustItem(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'Which one?' }));
+    dismissRelayItem(waiting.id);
+    sock.messages = [];
+
+    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(true);
+    expect(sock.ofType('glasses-relay')).toHaveLength(1);
+  });
+
+  test('the latest notification replaces the previous one for that session', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+    postHookRelay({ sessionId: 's1', text: 'first' });
+    const firstId = (sock.ofType('glasses-relay')[0].item as { id: string }).id;
+    sock.messages = [];
+
+    postHookRelay({ sessionId: 's1', text: 'second' });
+    expect((sock.ofType('glasses-relay')[0].item as { text: string }).text).toBe('second');
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toEqual([firstId]);
+  });
+
+  test('a rate-limited session reports undelivered, so the browser notifies instead', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+    for (let i = 0; i < 12; i++) {
+      expect(postHookRelay({ sessionId: 'flood', text: `n${i}` })).toBe(true);
+    }
+    expect(postHookRelay({ sessionId: 'flood', text: 'too much' })).toBe(false);
+  });
+
+  test('the real question replaces a hook notification, but not an agent note', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    // s2 stays in the list: a workspace that vanishes has its items dropped
+    // wholesale, which would mask what this test is about.
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'working' }]),
+      ws('s2', [{ paneId: '%0', agentStatus: 'working' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay(); // baseline
+
+    postHookRelay({ sessionId: 's1', text: 'ユーザー入力を待っています' });
+    const hookInfoId = (sock.ofType('glasses-relay')[0].item as { id: string }).id;
+    const agentNote = mustItem(postAgentRelay({ sessionId: 's2', kind: 'info', text: 'agent note' }));
+    sock.messages = [];
+
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+      ws('s2', [{ paneId: '%0', agentStatus: 'working' }]),
+    ];
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toEqual([hookInfoId]);
+    const snapshot = await buildGlassesRelaySnapshot();
+    expect(snapshot.map((i) => i.id)).toContain(agentNote.id);
   });
 });

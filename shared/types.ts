@@ -961,7 +961,12 @@ export type ControlServerMessage =
   | { type: 'pong'; timestamp: number }
   | { type: 'session-exited'; reason: string }
   | { type: 'error'; message: string; paneId?: string }
-  | { type: 'hook-event'; event: string; cwd?: string; sessionId?: string; message?: string; data?: Record<string, unknown> };
+  // `deliveredToGlasses`: this event is already on the G2 screen as a relay
+  // item, so browsers must not also raise an OS notification for it. Set per
+  // event rather than announced as a "glasses are on" state, because it is
+  // true only when the item actually landed — the server never claims delivery
+  // it could not make, and an absent flag always means "notify as before".
+  | { type: 'hook-event'; event: string; cwd?: string; sessionId?: string; message?: string; data?: Record<string, unknown>; deliveredToGlasses?: boolean };
 
 // =============================================================================
 // Multiplexed WebSocket Types (single WS per client)

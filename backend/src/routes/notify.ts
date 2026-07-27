@@ -4,6 +4,11 @@ import { Hono } from 'hono';
 import { broadcastToMuxClients } from './terminal-mux';
 import type { IndicatorState } from '../../../shared/types';
 import { getHookStatus } from '../services/hook-status';
+import {
+  glassesRelaySubscriberCount,
+  postHookRelay,
+  resolveHookTarget,
+} from '../services/glasses-relay';
 
 // Read only the trailing slice of a transcript instead of the whole file.
 // Active Claude sessions produce multi-MB .jsonl transcripts; the previous
@@ -213,6 +218,19 @@ function evictStateOverrides(): void {
   }
 }
 
+/**
+ * What the glasses say about an event, when the transcript gave us nothing
+ * better. Mirrors the browser notification's own fallback bodies so the two
+ * channels describe the same event in the same words.
+ */
+const HOOK_RELAY_TEXT: Record<string, string> = {
+  Stop: '応答が完了しました',
+  Notification: 'ユーザー入力を待っています',
+  SubagentStop: 'サブエージェントが完了しました',
+  TaskCompleted: 'タスクが完了しました',
+  PostToolUse: 'ユーザー入力を待っています',
+};
+
 function hookEventToState(event: string, toolName?: string): IndicatorState | null {
   switch (event) {
     case 'Stop':
@@ -292,6 +310,27 @@ notify.post('/', async (c) => {
 
     // Skip notification for status-only events (no browser notification needed)
     if (event !== 'UserPromptSubmit' && event !== 'PreToolUse') {
+      // While the glasses are on they take the notification and the browser
+      // stays quiet: the user is wearing the thing that already told them, and
+      // a phone buzzing about the same event is noise. Anything that keeps the
+      // relay item from landing — no glasses, an unresolvable session, the
+      // per-session rate limit — leaves this false and the push goes out as it
+      // always did. Losing a notification is the worse failure of the two.
+      let deliveredToGlasses = false;
+      if (glassesRelaySubscriberCount() > 0) {
+        try {
+          const target = await resolveHookTarget(sessionId, cwd);
+          if (target) {
+            deliveredToGlasses = postHookRelay({
+              sessionId: target.sessionId,
+              paneId: target.paneId,
+              text: message || HOOK_RELAY_TEXT[event] || `Hook: ${event}`,
+            });
+          }
+        } catch (err) {
+          console.warn('[notify] glasses relay failed:', err);
+        }
+      }
       const hookMsg = {
         type: 'hook-event',
         event,
@@ -299,6 +338,7 @@ notify.post('/', async (c) => {
         sessionId,
         message,
         data: Object.keys(rest).length > 0 ? rest : undefined,
+        ...(deliveredToGlasses ? { deliveredToGlasses: true } : {}),
       };
       broadcastToMuxClients(hookMsg);
     }

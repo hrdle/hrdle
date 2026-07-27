@@ -794,3 +794,73 @@ describe('lifecycle events', () => {
     expect(gestures.some((g) => lifecycle.includes(g))).toBe(false)
   })
 })
+
+describe('notification banner on the list', () => {
+  const info = (sessionId: string, text: string, createdAt = 1) => ({
+    id: `i-${sessionId}-${createdAt}`,
+    sessionId,
+    kind: 'info' as const,
+    text,
+    source: 'auto' as const,
+    createdAt,
+  })
+
+  const mk = (relayInfo: ReturnType<typeof info>[], sessionCount = 1) => ({
+    mode: 'session_list' as const,
+    sessions: Array.from({ length: sessionCount }, (_, i) => ({
+      id: i === 0 ? 'a' : `s${i}`,
+      name: i === 0 ? 'グラス開発' : `ws${i}`,
+      state: 'working' as const,
+    })),
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo,
+    overlayItemId: null,
+    spinnerTick: 0,
+  })
+
+  test('nothing to report costs the list no line', () => {
+    const body = screenText(mk([])).body
+    expect(body.split('\n')[0]).toContain('グラス開発')
+  })
+
+  test('a notification heads the list, named by its workspace', () => {
+    const body = screenText(mk([info('a', '応答が完了しました')])).body.split('\n')
+    expect(body[0]).toBe('[i]グラス開発: 応答が完了しました')
+    // The list itself is still there, one row lower.
+    expect(body[1]).toContain('グラス開発')
+  })
+
+  test('an unknown workspace falls back to its id rather than vanishing', () => {
+    const body = screenText(mk([info('gone', '応答が完了しました')])).body
+    expect(body.split('\n')[0]).toBe('[i]gone: 応答が完了しました')
+  })
+
+  test('the count of the others survives even when the text is cut', () => {
+    const long = 'あ'.repeat(120)
+    const banner = screenText(mk([info('a', long, 2), info('s1', long, 1)], 2)).body.split('\n')[0]
+    expect(banner.startsWith('[i]グラス開発+1: ')).toBe(true)
+  })
+
+  test('the banner takes its line from the list, never from the panel', () => {
+    const many = mk([], 12)
+    const rowsWithout = screenText(many).body.split('\n').length
+    const rowsWith = screenText({ ...many, relayInfo: [info('a', 'x')] }).body.split('\n').length
+    expect(rowsWithout).toBe(LIST_LINES)
+    expect(rowsWith).toBe(LIST_LINES)
+  })
+
+  test('the cursor row stays on screen with the banner present', () => {
+    const many = { ...mk([info('a', 'x')], 12), sessionIndex: 11 }
+    const body = screenText(many).body.split('\n')
+    expect(body.some((l) => l.startsWith('>'))).toBe(true)
+  })
+})
