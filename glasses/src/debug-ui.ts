@@ -12,7 +12,8 @@
 import { setBaseUrl, transcribe } from './api.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
-import { charWidth, screenText, wrapForPanel } from './display.ts'
+import { screenText, wrapForPanel } from './display.ts'
+import { advance } from './metrics.ts'
 import type { AppState } from './display.ts'
 
 /** Japanese screen names — the shared vocabulary used when reporting issues. */
@@ -147,7 +148,7 @@ export function startDebugUI(): void {
     <div class="sim-wrap">
       <div class="sim-title">
         <h1>CC Hub Glasses シミュレータ</h1>
-        <span class="sub">実機と同じ描画（576×288 / 52字×7行）</span>
+        <span class="sub">実機と同じ描画（576×288 / 7行・幅は実測px）</span>
       </div>
       <div class="sim-main">
         <div class="lens-col">
@@ -263,40 +264,45 @@ export function startDebugUI(): void {
   // Panel geometry, straight from display.ts's container layout.
   const HEADER_H = 36
   const FOOTER_Y = PANEL_H - 36
-  const FONT = '19px ui-monospace, "SF Mono", Menlo, Consolas, monospace'
+  // Proportional, not monospace: the G2 font is proportional (a space is 5px,
+  // `i` is 4, `W` is 16) and drawing into those cells with a monospace face
+  // meant squeezing almost every ASCII glyph. A plain sans lands within about
+  // 1px of the firmware's advances instead of 4.
+  const FONT = '19px system-ui, "Noto Sans", "DejaVu Sans", sans-serif'
   // The panel's phosphor green, bright enough to hold against a lit room.
   const GREEN = '106, 255, 122'
 
   /** Draw one screen at the hardware's real pixel count, then crush it to the
    *  panel's 16 levels of green. Anti-aliasing finer than 4 bits is exactly
    *  what the wearer does not get. */
-  // The panel's column pitch, measured on the hardware: 52 columns across the
-  // body's 556px. No browser monospace matches the device font — at this size
-  // it draws ASCII at 9.5px against the device's 10.69 and CJK at 19 against
-  // 19.85 — so letting the browser lay out a whole string drifts by several
-  // columns across one line. Right-aligned content ended up nowhere near the
-  // edge. Advancing per character by the device's own pitch puts every glyph
-  // where the G2 puts it, which is the entire point of this window.
-  const PITCH = 556 / 52
-
+  // Every glyph lands where the firmware puts it.
+  //
+  // Letting the browser lay out a whole string drifts badly: the G2 font is
+  // proportional (a space is 5px, `i` is 4, `W` is 16) and no browser
+  // monospace comes close, so a right-aligned clock ended up near the middle
+  // of the panel. Advancing by the firmware's own per-character widths —
+  // kerning included — is the only way this window earns the phrase "実機と
+  // 同じ描画" in its own subtitle.
   function drawRow(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-    let col = 0
+    let dx = 0
+    let prev = ''
     for (const ch of text) {
-      const cell = charWidth(ch) * PITCH
+      const cell = advance(prev, ch)
       const natural = ctx.measureText(ch).width
       if (natural > cell + 0.5) {
-        // A glyph the width table misjudges — an emoji, a box-drawing rune —
-        // would otherwise run over its neighbour. Squeeze it into the cell the
-        // device gives it, which is also what the reader needs to know.
+        // The browser's glyph is wider than the cell the firmware gives it —
+        // an emoji, a box-drawing rune. Squeeze it in rather than let it run
+        // over its neighbour, which is also what the reader needs to know.
         ctx.save()
-        ctx.translate(x + col * PITCH, y)
+        ctx.translate(x + dx, y)
         ctx.scale(cell / natural, 1)
         ctx.fillText(ch, 0, 0)
         ctx.restore()
       } else {
-        ctx.fillText(ch, x + col * PITCH, y)
+        ctx.fillText(ch, x + dx, y)
       }
-      col += charWidth(ch)
+      dx += cell
+      prev = ch
     }
   }
 

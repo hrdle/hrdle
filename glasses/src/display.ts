@@ -7,7 +7,16 @@ import {
   OsEventTypeList,
   AudioInputSource,
 } from '@evenrealities/even_hub_sdk'
-import { PANEL_WIDTH, formatMessage, recapBlockLines } from './types.ts'
+import {
+  BODY_WIDTH,
+  HEADER_WIDTH,
+  MAX_LINES,
+  SPACE_W,
+  ellipsize,
+  splitLines,
+  textWidth,
+} from './metrics.ts'
+import { formatMessage, recapBlockLines } from './types.ts'
 import type { Session, ConversationMessage, GlassesRelayItem } from './types.ts'
 
 const W = 576
@@ -17,131 +26,9 @@ export type Bridge = Awaited<ReturnType<typeof waitForEvenAppBridge>>
 type Mode = 'session_list' | 'conversation' | 'choice' | 'voice' | 'overlay'
 export type VoicePhase = 'recording' | 'transcribing' | 'confirm'
 
-// Display metrics (measured on actual G2 hardware)
-// Body container: 568x210, border=0, padding=6 → effective 556x198
-const LINE_WIDTH = PANEL_WIDTH   // max half-width (ASCII) chars per line
-const MAX_LINES = 7         // max visible lines in body container
-const CJK_RATIO = 52 / 28  // CJK char width relative to ASCII (~1.857)
-
-/** Returns the display width of a single character in half-width units */
-export function charWidth(ch: string): number {
-  const code = ch.codePointAt(0) ?? 0
-  // CJK Unified Ideographs, Hiragana, Katakana, Fullwidth forms, CJK Symbols
-  if (
-    (code >= 0x3000 && code <= 0x9FFF) ||   // CJK, Hiragana, Katakana, symbols
-    (code >= 0xF900 && code <= 0xFAFF) ||   // CJK Compatibility
-    (code >= 0xFF01 && code <= 0xFF60) ||   // Fullwidth Latin
-    (code >= 0xFFE0 && code <= 0xFFE6) ||   // Fullwidth symbols
-    (code >= 0x20000 && code <= 0x2FA1F)    // CJK Extension B+
-  ) {
-    return CJK_RATIO
-  }
-  return 1
-}
-
-/** Total display width of a string, in the same half-width units as the panel. */
-function displayWidth(text: string): number {
-  let w = 0
-  for (let i = 0; i < text.length; i++) w += charWidth(text[i])
-  return w
-}
-
-/** 行頭禁則: characters that must not open a line. A lone `。` pushed onto the
- *  next line is the most visible artefact of a naive 52-column split. */
-const NO_LINE_START = '。、．，・：；！？!?)）］」』｝》〉”’…ー〜%％'
-
-/** 行末禁則: opening brackets must not be left dangling at the end of a line. */
-const NO_LINE_END = '（(［[「『｛{《〈“‘'
-
-/** Columns we are willing to leave blank to keep an ASCII word whole. Beyond
- *  this the ragged margin costs more than the broken word — with only seven
- *  lines on screen, half a blank line is not worth an unbroken identifier. */
-const MAX_WORD_CARRY = 12
-
-const WORD_CHAR = /[A-Za-z0-9'._-]/
-
-/**
- * Decide where to actually cut a full line, given the character at `i` that no
- * longer fits. Returns [keep, carry]: `keep` closes the line, `carry` moves
- * down ahead of that character.
- *
- * All three rules push characters down rather than letting them overflow — the
- * column widths here are measured approximations, so an overflowing line would
- * be re-wrapped by the G2's own container and land right back on the artefact
- * we are avoiding.
- */
-function chooseBreak(line: string, text: string, i: number): [string, string] {
-  const next = text[i]
-
-  if (NO_LINE_START.includes(next)) {
-    // Carry at most two characters, or a run of closers would empty the line.
-    for (let n = 1; n <= 2 && n < line.length; n++) {
-      const cut = line.length - n
-      if (!NO_LINE_START.includes(line[cut]) && line[cut] !== ' ') {
-        return [line.slice(0, cut), line.slice(cut)]
-      }
-    }
-    return [line, '']
-  }
-
-  if (line.length > 1 && NO_LINE_END.includes(line[line.length - 1])) {
-    return [line.slice(0, -1), line.slice(-1)]
-  }
-
-  if (/[A-Za-z0-9]/.test(next)) {
-    let start = line.length
-    while (start > 0 && WORD_CHAR.test(line[start - 1])) start--
-    const carried = line.length - start
-    if (start === 0 || carried === 0 || carried > MAX_WORD_CARRY) return [line, '']
-    // Only worth a ragged margin if the word then fits whole. A URL or a very
-    // long path is going to be split wherever it lands, so leave the blank
-    // columns out of it.
-    let end = i
-    while (end < text.length && WORD_CHAR.test(text[end])) end++
-    if (carried + (end - i) > LINE_WIDTH) return [line, '']
-    return [line.slice(0, start).trimEnd(), line.slice(start)]
-  }
-
-  return [line, '']
-}
-
-/** Split text into display lines respecting character widths and newlines */
+/** Break text into the lines the body container will show. */
 function splitDisplayLines(text: string): string[] {
-  const lines: string[] = []
-  let currentLine = ''
-  let currentWidth = 0
-  // True while the line was opened by a wrap rather than by a newline, so the
-  // space the wrap fell on can be dropped without eating real indentation.
-  let wrapped = false
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (ch === '\n') {
-      lines.push(currentLine)
-      currentLine = ''
-      currentWidth = 0
-      wrapped = false
-      continue
-    }
-    // The space between two words is where the break happened — carrying it to
-    // the next line leaves a stray indent, which on the panel reads as an
-    // unexplained gap in the middle of a sentence.
-    if (wrapped && !currentLine && ch === ' ') continue
-    const w = charWidth(ch)
-    if (currentWidth + w > LINE_WIDTH && currentLine) {
-      const [keep, carry] = chooseBreak(currentLine, text, i)
-      lines.push(keep.trimEnd())
-      currentLine = carry
-      currentWidth = displayWidth(carry)
-      wrapped = true
-      i-- // re-examine ch against the fresh line
-      continue
-    }
-    currentLine += ch
-    currentWidth += w
-  }
-  if (currentLine) lines.push(currentLine.trimEnd())
-  return lines
+  return splitLines(text, BODY_WIDTH)
 }
 
 /** Paginate a single message by display lines */
@@ -284,12 +171,15 @@ function sName(s: Session): string {
 /**
  * Park a wall clock at the right edge of a header.
  *
- * Padded to the body's 52 columns rather than the 53 the header's own 4px
- * padding allows: the browser simulator measures CJK a little wider than the
- * device does, and a column of slack costs nothing visible while an overflow
- * would wrap the clock out of a 36px-tall container. A long title is clipped
- * rather than pushing the clock off — the time is the part that has to stay
- * put to be readable at a glance.
+ * The padding is spaces, and a space is 5px on this panel — a fifth of what a
+ * column-counting model assumed, which is why the clock used to stop near the
+ * middle. Widths come from the firmware's own metrics now, so the gap is
+ * computed in pixels and verified before it goes out.
+ *
+ * A long title is clipped rather than pushing the clock off: the time is the
+ * part that has to stay put to be readable at a glance. Overflow is never an
+ * option — the header container is 28px of inner height against a 27px line,
+ * so a wrap takes the second line, and the clock with it, off the panel.
  *
  * No timer drives this: the server pushes `sessions-updated` every five
  * seconds and each push re-renders, so the minute is never stale.
@@ -297,13 +187,18 @@ function sName(s: Session): string {
 function withClock(title: string): string {
   const now = new Date()
   const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  const room = LINE_WIDTH - displayWidth(clock) - 1 // keep at least one space
+  const clockPx = textWidth(clock)
   let head = title
-  while (head && displayWidth(head) > room) head = head.slice(0, -1)
-  // Floor, not round: a CJK title measures fractionally, and rounding the gap
-  // up put the header a third of a column past the edge.
-  const gap = Math.max(1, Math.floor(LINE_WIDTH - displayWidth(head) - displayWidth(clock)))
-  return `${head}${' '.repeat(gap)}${clock}`
+  while (head && textWidth(head) + SPACE_W + clockPx > HEADER_WIDTH) head = head.slice(0, -1)
+  let spaces = Math.max(1, Math.floor((HEADER_WIDTH - textWidth(head) - clockPx) / SPACE_W))
+  // Kerning across the join can cost a pixel or two; give it back rather than
+  // hand the container a line it has to wrap.
+  let out = `${head}${' '.repeat(spaces)}${clock}`
+  while (spaces > 1 && textWidth(out) > HEADER_WIDTH) {
+    spaces--
+    out = `${head}${' '.repeat(spaces)}${clock}`
+  }
+  return out
 }
 
 function isWaiting(s: Session): boolean {
@@ -317,13 +212,6 @@ function statusLabel(s: Session): string {
 }
 
 const SEPARATOR = '-'.repeat(24)
-
-/** Trim a line down until an appended ellipsis still fits the panel. */
-function ellipsize(line: string): string {
-  let out = line
-  while (out && displayWidth(out) + 1 > LINE_WIDTH) out = out.slice(0, -1)
-  return `${out}…`
-}
 
 /**
  * The recap block, capped in *display* lines.
@@ -456,6 +344,11 @@ function choiceHeader(state: AppState): string {
  */
 export function wrapForPanel(text: string): string {
   return text.split('\n').flatMap(splitDisplayLines).join('\n')
+}
+
+/** Re-wrap a header string the way the header container would. */
+export function wrapHeader(text: string): string {
+  return splitLines(text, HEADER_WIDTH).join('\n')
 }
 
 /**
