@@ -99,6 +99,21 @@ describe('wrapForPanel: line breaking', () => {
     }
   })
 
+  test('a space falling on the wrap point does not indent the next line', () => {
+    // The gap between two words is where the break happened; carrying it down
+    // showed up on the panel as an unexplained space mid-sentence.
+    const text =
+      'glasses ワークスペースは今までテストゼロだったので、bun test を入れて 13 件書きました。lint / test / typecheck / device・web 両ビルドとも通っています。'
+    for (const line of wrapForPanel(text).split('\n')) {
+      expect(line).not.toMatch(/^\s/)
+      expect(line).not.toMatch(/\s$/)
+    }
+  })
+
+  test('keeps indentation that came from a real newline', () => {
+    expect(wrapForPanel('あ\n  いんでんと').split('\n')[1]).toBe('  いんでんと')
+  })
+
   test('loses no characters while re-wrapping', () => {
     const text = 'あいうえお、かきくけこ。Beta と push のたびに（3 秒）動きます。'
     const strip = (s: string) => s.replace(/\s/g, '')

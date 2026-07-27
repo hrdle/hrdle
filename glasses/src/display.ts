@@ -110,6 +110,9 @@ function splitDisplayLines(text: string): string[] {
   const lines: string[] = []
   let currentLine = ''
   let currentWidth = 0
+  // True while the line was opened by a wrap rather than by a newline, so the
+  // space the wrap fell on can be dropped without eating real indentation.
+  let wrapped = false
 
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
@@ -117,20 +120,27 @@ function splitDisplayLines(text: string): string[] {
       lines.push(currentLine)
       currentLine = ''
       currentWidth = 0
+      wrapped = false
       continue
     }
+    // The space between two words is where the break happened — carrying it to
+    // the next line leaves a stray indent, which on the panel reads as an
+    // unexplained gap in the middle of a sentence.
+    if (wrapped && !currentLine && ch === ' ') continue
     const w = charWidth(ch)
     if (currentWidth + w > LINE_WIDTH && currentLine) {
       const [keep, carry] = chooseBreak(currentLine, text, i)
-      lines.push(keep)
-      currentLine = carry + ch
-      currentWidth = displayWidth(currentLine)
-    } else {
-      currentLine += ch
-      currentWidth += w
+      lines.push(keep.trimEnd())
+      currentLine = carry
+      currentWidth = displayWidth(carry)
+      wrapped = true
+      i-- // re-examine ch against the fresh line
+      continue
     }
+    currentLine += ch
+    currentWidth += w
   }
-  if (currentLine) lines.push(currentLine)
+  if (currentLine) lines.push(currentLine.trimEnd())
   return lines
 }
 
