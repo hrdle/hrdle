@@ -382,19 +382,47 @@ function paneDetail(p: Pane, siblings: Pane[]): string {
     .join('  ')
 }
 
+/**
+ * The newest info item, as one banner line above the list.
+ *
+ * The list is where the glasses rest when nothing is happening — which is
+ * exactly when a notification arrives. Without this it would surface only on
+ * the conversation tab, i.e. only to a reader already looking at the session it
+ * came from, who is the one person who did not need telling.
+ *
+ * Waiting items are deliberately absent: they raise the overlay and mark their
+ * own row with ！, so repeating them here would spend the scarcest line on the
+ * screen saying something the screen already says.
+ */
+function listInfoBanner(state: AppState): string[] {
+  const info = state.relayInfo[0]
+  if (!info) return []
+  // The count goes next to the label, not after the text: the text is what
+  // gets cut at the panel edge, and "他2件" is the part that must survive.
+  const more = state.relayInfo.length > 1 ? `+${state.relayInfo.length - 1}` : ''
+  const wrapped = splitDisplayLines(`[i]${relayLabel(state, info)}${more}: ${info.text}`)
+  const line = wrapped[0] || ''
+  if (!line) return []
+  // A message cut at the panel edge with nothing to show for it reads as a
+  // complete, and wrong, sentence. Opening the session shows the rest.
+  return [wrapped.length > 1 ? ellipsize(line) : line]
+}
+
 function sessionListBody(state: AppState): string {
   const { sessions } = state
   // Relay waiting covers agent-declared items whose session indicator is not
   // waiting_input; those sessions still get the [!] marker.
   const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
   const frame = spinnerFrame(state)
+  const banner = listInfoBanner(state)
+  const listLines = LIST_LINES - banner.length
   const rows = listRows(sessions)
-  if (!rows.length) return '(no sessions)'
+  if (!rows.length) return [...banner, '(no sessions)'].join('\n')
   const cursor = rowCursor(state)
-  const start = Math.max(0, Math.min(cursor - 3, rows.length - LIST_LINES))
-  const visible = rows.slice(Math.max(0, start), Math.max(0, start) + LIST_LINES)
+  const start = Math.max(0, Math.min(cursor - 3, rows.length - listLines))
+  const visible = rows.slice(Math.max(0, start), Math.max(0, start) + listLines)
 
-  return visible.map((row, i) => {
+  const listBody = visible.map((row, i) => {
     const idx = Math.max(0, start) + i
     const here = idx === cursor ? '>' : ' '
     const s = sessions[row.sessionIndex]
@@ -417,7 +445,9 @@ function sessionListBody(state: AppState): string {
     const last = panes[panes.length - 1]?.paneId === row.paneId
     const branch = last ? '└' : '├'
     return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${row.paneId}${detail ? `  ${detail}` : ''}`
-  }).join('\n')
+  })
+
+  return [...banner, ...listBody].join('\n')
 }
 
 /**

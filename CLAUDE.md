@@ -361,7 +361,12 @@ Kimi Code は `~/.kimi-code/config.toml` の `[[hooks]]` に設定する（例: 
 
 ```
 Hook → cchub notify (stdin JSON) → POST /api/notify → WebSocket broadcast → ブラウザ Notification API
+                                                    ↘ グラス起動中は relay info アイテム → G2 画面
 ```
+
+グラスアプリ（`subscribe-glasses-relay` の購読者）が居る間は、通知はブラウザではなく G2 に出す。`/api/notify` が hook の `session_id`（agent セッションid）または `cwd` から herdr の workspace/pane を解決し（`resolveHookTarget`）、90 秒 TTL の `info` リレーアイテムを作る（`postHookRelay`）。実際にアイテムが載ったときだけ `hook-event` に `deliveredToGlasses: true` を付け、フロント側はこのフラグが立っている時だけ `fireHookNotification` を呼ばない。グラスが居ない・セッションが解決できない・レート制限に当たった場合はフラグが立たず従来どおりブラウザ通知が出る（通知が消えるより二重に出るほうがマシ）。インジケータ更新はフラグに関係なく常に走る。
+
+herdr が `blocked` を報告して waiting アイテムがある間は、hook 由来の info は作らない（同じ状況を二重に言うだけなので）。逆に hook が先に届いていた場合、waiting 成立時に hook 由来の info（`source: 'auto'`）は消される。エージェント自身の `cchub glasses` メモ（`source: 'agent'`）は無関係なので残る。
 
 ### セットアップ手順
 
@@ -403,6 +408,7 @@ Hook → cchub notify (stdin JSON) → POST /api/notify → WebSocket broadcast 
 - `/api/notify` エンドポイントは認証不要（ローカルhookから呼ばれるため）
 - 既存のhookスクリプト（smart-notify.py等）と併用可能（同じイベントに複数hook登録）
 - 複数のWebSocket接続がある場合でもデバウンスにより通知は1回のみ
+- グラスは接続している1台のCC Hubの通知しか表示しないので、`deliveredToGlasses` はイベントを起こしたサーバーだけが立てる。peer の通知は peer 側にグラスが繋がっていない限り従来どおりブラウザに出る
 
 ## Internationalization (i18n)
 

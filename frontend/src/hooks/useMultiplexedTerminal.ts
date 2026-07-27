@@ -29,6 +29,8 @@ interface UseMultiplexedTerminalOptions {
 		sessionId?: string,
 		data?: Record<string, unknown>,
 		message?: string,
+		/** The G2 glasses are already showing this event; do not also notify. */
+		deliveredToGlasses?: boolean,
 	) => void;
 	onConnect?: () => void;
 	onDisconnect?: () => void;
@@ -148,6 +150,8 @@ type MuxCallbacks = {
 		sessionId?: string,
 		data?: Record<string, unknown>,
 		message?: string,
+		/** The G2 glasses are already showing this event; do not also notify. */
+		deliveredToGlasses?: boolean,
 	) => void;
 	onConnect?: () => void;
 	onDisconnect?: () => void;
@@ -404,6 +408,7 @@ function ensureConnection(token?: string | null, wsBase?: string | null) {
 					msg.sessionId as string | undefined,
 					msg.data as Record<string, unknown> | undefined,
 					msg.message as string | undefined,
+					msg.deliveredToGlasses as boolean | undefined,
 				);
 				break;
 			}
@@ -654,7 +659,8 @@ export function useMultiplexedTerminal(
 		activeCallbacks = {
 			onPaneViewport: (p, v) => onPaneViewportRef.current?.(p, v),
 			onLayoutChange: (l, z) => onLayoutChangeRef.current?.(l, z),
-			onHookEvent: (e, c, s, d, m) => onHookEventRef.current?.(e, c, s, d, m),
+			onHookEvent: (e, c, s, d, m, g) =>
+				onHookEventRef.current?.(e, c, s, d, m, g),
 			onConnect: () => onConnectRef.current?.(),
 			onDisconnect: () => onDisconnectRef.current?.(),
 			onSessionExit: (reason) => onSessionExitRef.current?.(reason),

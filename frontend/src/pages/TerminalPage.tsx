@@ -195,7 +195,16 @@ export const TerminalPage = forwardRef<TerminalRef, TerminalPageProps>(
 					controlTerminal.requestViewport(pane.paneId, offset);
 				}
 			},
-			onHookEvent: (event, cwd, agentSessionId, data, message) => {
+			onHookEvent: (
+				event,
+				cwd,
+				agentSessionId,
+				data,
+				message,
+				deliveredToGlasses,
+			) => {
+				// Already on the G2 screen — the glasses are the notification.
+				if (deliveredToGlasses) return;
 				fireHookNotification(
 					event,
 					cwd,

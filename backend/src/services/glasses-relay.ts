@@ -33,6 +33,15 @@ const MAX_TEXT_WIDTH = 120;
 const MAX_CHOICES = 9;
 const MAX_CHOICE_WIDTH = 52;
 const INFO_TTL_MS = 5 * 60_000;
+/**
+ * Hook-sourced info items expire far sooner than agent self-notes.
+ *
+ * An agent's `cchub glasses` note is something it chose to say and wants read;
+ * a hook notification is the glasses' answer to a browser push, and a push
+ * that is still on screen five minutes later has stopped being news. Long
+ * enough to catch on the next glance, short enough to clear itself.
+ */
+const HOOK_INFO_TTL_MS = 90_000;
 /** Per-session POST rate limit (CLI self-notes). */
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 12;
@@ -228,6 +237,7 @@ function makeItem(
   text: string,
   paneId?: string,
   choices?: string[],
+  ttlMs: number = INFO_TTL_MS,
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
     id: randomUUID(),
@@ -244,7 +254,7 @@ function makeItem(
       .map((c) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH))
       .filter((c) => c.length > 0);
   }
-  if (kind === 'info') item.expiresAt = Date.now() + INFO_TTL_MS;
+  if (kind === 'info') item.expiresAt = Date.now() + ttlMs;
   return item;
 }
 
@@ -285,6 +295,95 @@ export function postAgentRelay(input: {
   // or a client keyed by item id would accumulate stale info items.
   if (replaced && replaced.id !== item.id) broadcastRemove(replaced.id);
   return { status: 200, item };
+}
+
+/**
+ * Which workspace (and pane) a hook event belongs to.
+ *
+ * Hooks identify themselves by the agent's own session id — a Claude/Codex
+ * conversation UUID — while relay items are keyed by workspace label, so the
+ * two only meet through herdr. The session id is the exact join; `cwd` is the
+ * fallback for hooks that carry no usable one, and it is trusted only when a
+ * single agent claims that directory: two agents in one worktree make the pane
+ * a coin flip, and a reply routed to the wrong pane is worse than no pane.
+ */
+export async function resolveHookTarget(
+  agentSessionId: string | undefined,
+  cwd: string | undefined,
+): Promise<{ sessionId: string; paneId?: string } | null> {
+  const workspaces = await glassesRelayDeps.listWorkspaces();
+
+  if (agentSessionId) {
+    // Panes first, across every workspace: a pane match names the exact reply
+    // target, and settling for a workspace-level match found earlier in the
+    // list would throw that away.
+    for (const ws of workspaces) {
+      const pane = ws.panes?.find((p) => p.agentSessionId === agentSessionId);
+      if (pane) return { sessionId: ws.id, paneId: pane.paneId };
+    }
+    const ws = workspaces.find((w) => w.agentSessionId === agentSessionId);
+    if (ws) return { sessionId: ws.id };
+  }
+
+  if (cwd) {
+    const matches: { sessionId: string; paneId: string }[] = [];
+    for (const ws of workspaces) {
+      for (const pane of ws.panes ?? []) {
+        if (pane.agent && pane.path === cwd) matches.push({ sessionId: ws.id, paneId: pane.paneId });
+      }
+    }
+    if (matches.length === 1) return matches[0];
+    // Ambiguous pane, unambiguous workspace: the notification still knows where
+    // it came from, so keep the workspace and drop the pane.
+    const ids = new Set(matches.map((m) => m.sessionId));
+    if (ids.size === 1) return { sessionId: matches[0].sessionId };
+  }
+
+  return null;
+}
+
+/**
+ * A Claude Code / Codex hook event, shown on the glasses instead of pushed to
+ * the browser.
+ *
+ * Returns true only when the glasses actually carry the notification, and the
+ * caller suppresses the browser push on exactly that. Everything that can stop
+ * the item from landing — no glasses subscribed, rate limit — returns false and
+ * the push goes out as it always did: a notification nobody sees is a worse
+ * failure than one seen twice.
+ */
+export function postHookRelay(input: {
+  sessionId: string;
+  text: string;
+  paneId?: string;
+}): boolean {
+  if (subscribers.size === 0) return false;
+
+  // An unanswered question already outranks anything a hook can say, and it is
+  // on screen with its choices. "応答が完了しました" underneath it would only
+  // describe the same moment a second time, less usefully.
+  const existing = store.get(input.sessionId);
+  if (existing?.waiting && !existing.waiting.dismissed) return true;
+
+  if (!checkRateLimit(input.sessionId)) return false;
+  evictStoreIfNeeded();
+  const slot = getSlot(input.sessionId);
+  const item = makeItem(
+    input.sessionId,
+    'info',
+    'auto',
+    input.text,
+    input.paneId,
+    undefined,
+    HOOK_INFO_TTL_MS,
+  );
+  const replaced = slot.info;
+  slot.info = item;
+  broadcastUpsert(item);
+  // Latest-one-per-session, same as agent info notes: without this a client
+  // keyed by item id accumulates every completion the session ever reported.
+  if (replaced && replaced.id !== item.id) broadcastRemove(replaced.id);
+  return true;
 }
 
 /** "Later / on PC": flag the item so snapshots skip it but the same blocked
@@ -337,6 +436,15 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   const item = makeItem(ws.id, 'waiting', 'auto', text, paneId, choices);
   slot.waiting = item;
   broadcastUpsert(item);
+  // A hook can report "waiting for input" a beat before herdr reports blocked,
+  // leaving the session described twice — once vaguely, once with the actual
+  // question. The real one wins. Only hook info is dropped (source 'auto');
+  // an agent's own note is about something else and stays.
+  if (slot.info?.source === 'auto') {
+    const staleId = slot.info.id;
+    delete slot.info;
+    broadcastRemove(staleId);
+  }
 }
 
 /**
