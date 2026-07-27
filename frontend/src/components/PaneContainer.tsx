@@ -21,6 +21,7 @@ import { toHomeShortPath } from "../utils/path";
 import { ChatView } from "./chat/ChatView";
 import type { ControlModeConfig } from "./Terminal";
 import { TerminalComponent, type TerminalRef } from "./Terminal";
+import { soleVisiblePane } from "../utils/panes";
 
 // ペインノード型定義。
 // sessionKey は `peerId:id` の複合キー (utils/sessionKey.ts) — セッション id
@@ -324,7 +325,7 @@ function TerminalPane({
 	const activeTmuxPane =
 		session?.panes?.find((p) => p.paneId === controlledPaneId) ??
 		session?.panes?.find((p) => p.isActive) ??
-		(session?.panes?.length === 1 ? session.panes[0] : undefined);
+		soleVisiblePane(session);
 	const conversationAvailable = !!(
 		activeTmuxPane?.agent && activeTmuxPane.agentSessionId
 	);

@@ -338,11 +338,15 @@ function paneStatusLabel(p: Pane): string {
  * learns nothing from the second one. What is left is the context figure,
  * which does differ, and says which of the two has been running longer.
  */
-function paneDetail(p: Pane, siblings: Pane[]): string {
+function paneDetail(p: Pane, siblings: Pane[], activeTabId?: string): string {
   const dirOf = (x: Pane) => x.currentPath?.split('/').filter(Boolean).pop() ?? ''
   const dirs = new Set(siblings.map(dirOf))
   const pct = p.metrics?.contextPercent
-  return [pct != null ? `${Math.round(pct)}%` : '', dirs.size > 1 ? dirOf(p) : '']
+  // A pane in another tab is running where the terminal cannot show it. Saying
+  // so is the difference between "there are three" and "one of them is
+  // somewhere you are not looking".
+  const offscreen = activeTabId && p.tabId && p.tabId !== activeTabId ? '別タブ' : ''
+  return [pct != null ? `${Math.round(pct)}%` : '', dirs.size > 1 ? dirOf(p) : '', offscreen]
     .filter(Boolean)
     .join('  ')
 }
@@ -369,7 +373,7 @@ function sessionListBody(state: AppState): string {
       return `${here}${label.padEnd(3)} ${sName(s)}`
     }
     const p = (s.panes ?? []).find((x) => x.paneId === row.paneId)
-    const detail = p ? paneDetail(p, s.panes ?? []) : ''
+    const detail = p ? paneDetail(p, s.panes ?? [], s.activeTabId) : ''
     // Indented under its workspace, and only ever shown beneath it.
     return `${here}${(p ? paneStatusLabel(p) : '').padEnd(3)}  ${row.paneId}${detail ? `  ${detail}` : ''}`
   }).join('\n')

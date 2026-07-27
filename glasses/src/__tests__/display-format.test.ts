@@ -646,3 +646,52 @@ describe('workspace and pane list', () => {
     expect(header).toContain('2脚ロボ開発 %2')
   })
 })
+
+describe('panes across tabs', () => {
+  const sessions = [
+    {
+      id: 'a',
+      name: '2脚ロボ開発',
+      state: 'idle' as const,
+      activeTabId: 'w4H:t1',
+      panes: [
+        { paneId: '%1', tabId: 'w4H:t1', metrics: { contextPercent: 31 } },
+        { paneId: '%4', tabId: 'w4H:t2', metrics: { contextPercent: 6 } },
+      ],
+    },
+  ]
+  const st = {
+    mode: 'session_list' as const,
+    sessions,
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  }
+
+  test('a pane the terminal cannot show says so', () => {
+    // "There are two" and "one of them is somewhere you are not looking" are
+    // different things to know.
+    const body = screenText(st).body
+    expect(body).toContain('%1  31%')
+    expect(body).toContain('%4  6%  別タブ')
+  })
+
+  test('panes of the active tab are not marked', () => {
+    const line = screenText(st).body.split('\n').find((l) => l.includes('%1')) ?? ''
+    expect(line).not.toContain('別タブ')
+  })
+
+  test('nothing is marked when the session reports no active tab', () => {
+    const noTab = { ...st, sessions: [{ ...sessions[0], activeTabId: undefined }] }
+    expect(screenText(noTab).body).not.toContain('別タブ')
+  })
+})

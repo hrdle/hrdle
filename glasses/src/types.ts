@@ -17,6 +17,8 @@ export interface Session {
   /** When the recap was written. The conversation is compared against it: a
    *  message newer than the recap means the reader is already past it. */
   ccRecapAt?: string
+  /** Tab the terminal is showing. Panes outside it are marked in the list. */
+  activeTabId?: string
   ccFirstPrompt?: string
   ccSessionId?: string
   durationMinutes?: number
@@ -38,6 +40,10 @@ export interface Session {
 export interface Pane {
   paneId: string
   isActive?: boolean
+  /** Tab the pane belongs to. `panes` spans every tab of the workspace, so a
+   *  pane whose tab is not the active one is running out of sight of the
+   *  terminal — still a live agent, and now reachable from here. */
+  tabId?: string
   currentCommand?: string
   currentPath?: string
   agent?: string

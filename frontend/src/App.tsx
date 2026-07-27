@@ -50,6 +50,7 @@ import {
 	parseNotificationTarget,
 	type NotificationTarget,
 } from "./utils/notificationNavigation";
+import { soleVisiblePane } from "./utils/panes";
 
 // Loading screen with phase display and timeout detection
 function LoadingScreen({
@@ -874,9 +875,7 @@ export function App() {
 				(p) => mobileActivePaneId && p.paneId === mobileActivePaneId,
 			) ??
 			activeSession?.panes?.find((p) => p.isActive) ??
-			(activeSession?.panes?.length === 1
-				? activeSession.panes[0]
-				: undefined);
+			soleVisiblePane(activeSession);
 		if (!activePane?.agent || !activePane.agentSessionId) return;
 		setShowConversation(true);
 	}, [openSessions, activeSessionKey, mobileActivePaneId]);
@@ -1094,9 +1093,7 @@ export function App() {
 			(p) => mobileActivePaneId && p.paneId === mobileActivePaneId,
 		) ??
 		activeSession?.panes?.find((p) => p.isActive) ??
-		(activeSession?.panes?.length === 1
-			? activeSession.panes[0]
-			: undefined);
+		soleVisiblePane(activeSession);
 	const conversationAvailable = !!(
 		activeConversationPane?.agent && activeConversationPane.agentSessionId
 	);
