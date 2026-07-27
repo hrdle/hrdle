@@ -35,6 +35,14 @@ import type { Session, Pane, ConversationMessage, GlassesRelayItem, ClientFocus 
 const INITIAL_LOAD_COUNT = 20
 const LOAD_MORE_INCREMENT = 20
 const CONV_REFRESH_INTERVAL = 3000
+/**
+ * How long a notification holds the panel before giving it back.
+ *
+ * Long enough to be read at a glance without hurrying — a completion line plus
+ * a sentence of recap — and short enough that a wearer walking around is not
+ * looking through a message about something they already knew.
+ */
+export const NOTICE_DISMISS_MS = 8000
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
@@ -139,6 +147,8 @@ export class GlassesController {
   private choiceTarget: ReplyTarget | null = null
   private voiceTarget: ReplyTarget | null = null
   private overlayReturnMode: 'session_list' | 'conversation' = 'session_list'
+  /** Pending auto-dismissal of a notification overlay; null when none is due. */
+  private noticeTimer: ReturnType<typeof setTimeout> | null = null
 
   private audioChunks: Uint8Array[] = []
   private recording = false
@@ -456,15 +466,17 @@ export class GlassesController {
 
   private async onOverlayAction(action: RingAction): Promise<void> {
     const st = this.state
-    const waiting = this.queue.waitingItems()
-    const item = waiting.find((i) => i.id === st.overlayItemId) || waiting[0]
+    // The wearer is driving now; a notification must not vanish mid-gesture.
+    this.clearNoticeTimer()
+    const items = this.queue.sorted()
+    const item = (st.overlayItemId ? this.queue.get(st.overlayItemId) : undefined) || items[0]
     switch (action) {
       case 'swipeUp':
       case 'swipeDown': {
-        if (waiting.length < 2) return
-        const idx = item ? waiting.indexOf(item) : 0
+        if (items.length < 2) return
+        const idx = item ? items.indexOf(item) : 0
         const delta = action === 'swipeDown' ? 1 : -1
-        st.overlayItemId = waiting[(idx + delta + waiting.length) % waiting.length].id
+        st.overlayItemId = items[(idx + delta + items.length) % items.length].id
         this.render()
         return
       }
@@ -620,9 +632,49 @@ export class GlassesController {
   }
 
   private exitOverlay(): void {
+    this.clearNoticeTimer()
     this.state.mode = this.overlayReturnMode
     this.state.overlayItemId = null
     this.render()
+  }
+
+  /**
+   * Give the screen back on its own.
+   *
+   * A question is entitled to hold the panel until it is answered. A
+   * notification is not: an agent finishing is a thing to have been told once,
+   * and making the wearer raise a hand to clear every completion would turn
+   * the feature into a chore. So it behaves like a notification anywhere else
+   * — it appears, it is read, it leaves.
+   */
+  private scheduleNoticeDismiss(itemId: string): void {
+    this.clearNoticeTimer()
+    this.noticeTimer = setTimeout(() => {
+      this.noticeTimer = null
+      // Only if it is still the thing on screen. A gesture or a newer item in
+      // the meantime has already decided this item's fate.
+      if (this.state.mode === 'overlay' && this.state.overlayItemId === itemId) {
+        this.exitOverlay()
+      }
+    }, NOTICE_DISMISS_MS)
+  }
+
+  private clearNoticeTimer(): void {
+    if (!this.noticeTimer) return
+    clearTimeout(this.noticeTimer)
+    this.noticeTimer = null
+  }
+
+  /**
+   * Whether a notification may take the screen.
+   *
+   * Reading is interruptible — the overlay returns to the exact place it left,
+   * and eight seconds later it does so by itself. Choosing an option and
+   * dictating a prompt are not: the panel IS the input there, and replacing it
+   * mid-gesture would lose what the wearer was in the middle of saying.
+   */
+  private canInterruptForNotice(): boolean {
+    return this.state.mode === 'session_list' || this.state.mode === 'conversation'
   }
 
   /** Jump to a relay item's session: subscribe + open its conversation, and
@@ -805,6 +857,13 @@ export class GlassesController {
     // modes the banner / header badge surfaces it without yanking the view.
     if (isNew && item.kind === 'waiting' && this.state.mode === 'session_list') {
       this.enterOverlay(item.id)
+      return
+    }
+    // A notification is only a notification if it is seen, so it takes the
+    // screen the same way — and then hands it back without being asked.
+    if (isNew && item.kind === 'info' && this.canInterruptForNotice()) {
+      this.enterOverlay(item.id)
+      this.scheduleNoticeDismiss(item.id)
       return
     }
     this.render()

@@ -612,16 +612,28 @@ function choiceBody(state: AppState): string {
   }).join('\n')
 }
 
-/** Full-screen presentation of one waiting relay item (#504). Swipe cycles the
- *  waiting queue, tap jumps to the item's session, double-tap dismisses. */
+/**
+ * Full-screen presentation of one relay item (#504). Swipe cycles the queue,
+ * tap jumps to the item's session, double-tap dismisses.
+ *
+ * Questions and notifications share this screen because they are the same
+ * gesture problem — one thing, full width, reachable from the ring. They part
+ * ways in what happens when the wearer does nothing: a question waits, a
+ * notification takes itself away (the controller's dismissal timer).
+ */
 function overlayContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
-  const waiting = state.relayWaiting
-  const item = waiting.find((i) => i.id === state.overlayItemId) || waiting[0]
+  // Waiting first, matching the queue's own ordering, so a question is never
+  // buried behind an FYI that happens to be newer.
+  const items = [...state.relayWaiting, ...state.relayInfo]
+  const item = items.find((i) => i.id === state.overlayItemId) || items[0]
   if (!item) {
-    return { headerText: withClock('Relay'), bodyText: '(waiting なし)', footerText: 'dbl:戻る' }
+    return { headerText: withClock('Relay'), bodyText: '(なし)', footerText: 'dbl:戻る' }
   }
-  const idx = waiting.indexOf(item)
-  const headerText = withClock(`${relayLabel(state, item)} [!] ${idx + 1}/${waiting.length}`)
+  const idx = items.indexOf(item)
+  const badge = item.kind === 'waiting' ? '[!]' : '[i]'
+  // A counter over a queue of one says nothing, and the header is one line.
+  const counter = items.length > 1 ? ` ${idx + 1}/${items.length}` : ''
+  const headerText = withClock(`${relayLabel(state, item)} ${badge}${counter}`)
 
   const lines = splitDisplayLines(item.text)
   if (item.choices?.length) {
@@ -633,9 +645,14 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
   const bodyText = lines.length > MAX_LINES
     ? [...lines.slice(0, MAX_LINES - 1), '…'].join('\n')
     : lines.join('\n')
-  const footerText = item.choices?.length
-    ? 'tap:選択へ  dbl:後で  swipe:次'
-    : 'tap:開く  dbl:後で  swipe:次'
+  const next = items.length > 1 ? '  swipe:次' : ''
+  // "後で" is an answer to a question. A notification is not asking anything,
+  // so the same gesture is just closing it.
+  const footerText = item.kind === 'info'
+    ? `tap:開く  dbl:閉じる${next}`
+    : item.choices?.length
+      ? `tap:選択へ  dbl:後で${next}`
+      : `tap:開く  dbl:後で${next}`
   return { headerText, bodyText, footerText }
 }
 
