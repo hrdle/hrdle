@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.60] - 2026-07-27
+
+### Added
+- **グラス: 実機の画面をシミュレータにミラーする** (#560): デモ用途。装着者が今見ている画面を、ブラウザで何台でも同時に見られる（ehpk v0.1.37）
+  ```
+  実機（スマホの WebView）              CC Hub               ブラウザ（何台でも）
+    render(state)
+      ├→ updateDisplay(bridge)  →  G2 パネル
+      └→ publish screenText()   →  /ws/mux  →  broadcast  →  drawPanel()
+  ```
+  - グラスアプリは `screenText()` で画面を**一度だけ**計算し、同じ3本の文字列をパネルとシミュレータの描画器の両方に渡している。したがってミラーは画面の再現ではなく**画面そのもの**
+  - publish は `GlassesPlatform.render` にぶら下げた。両プラットフォーム共通の唯一の描画口なので、全モード・全リング操作が列挙なしで乗る。直前と同一のフレームは送らない（描画は5秒ごとに走るため）
+  - サーバは**最後のフレームを保持**。途中から参加した viewer は空パネルではなく現在の画面を即座に見られる
+  - publisher のソケットが閉じたら **null を配信**し `実機が接続されていません` と表示。最後のフレームを出し続けるミラーは「静止している生きた画面」と見分けがつかず、聴衆の前で気づくには最悪の種類の曖昧さになる
+  - **読み取り専用**。viewer がリングを押すと装着者と画面を奪い合うため、ミラー中はリングのボタンを無効化する。ノートPCからグラスを操作するのは別の機能
+  - WS プロトコル: `glasses-screen`（publish / broadcast）、`subscribe-glasses-screen` / `unsubscribe-glasses-screen`。zod スキーマでペイロード上限も検証
+
 ## [0.2.59] - 2026-07-27
 
 ### Fixed
