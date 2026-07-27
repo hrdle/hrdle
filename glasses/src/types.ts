@@ -59,6 +59,18 @@ export interface ClientFocus {
 }
 
 /**
+ * Mirror of GlassesScreen in shared/types.ts: the three container strings the
+ * panel is showing. The device publishes it; the simulator draws it.
+ */
+export interface GlassesScreen {
+  header: string
+  body: string
+  footer: string
+  mode: string
+  at: number
+}
+
+/**
  * One relay item for the G2 glasses channel: a single piece of information the
  * user needs to make a decision, not a summary. `waiting` items live until the
  * blocked epoch ends or they are dismissed; `info` items are FYI with a TTL.

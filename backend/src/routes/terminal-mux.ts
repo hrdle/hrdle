@@ -16,6 +16,7 @@ import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
   ControlClientMessage,
+  GlassesScreen,
   MuxClientMessage,
   ConversationMessage,
   SessionResponse,
@@ -79,6 +80,28 @@ export interface MuxData {
   /** Set by `subscribe-glasses-relay`: the glasses follow focus, never claim
    *  it, otherwise following would feed back into the election. */
   isGlasses?: boolean;
+  /** Set by `subscribe-glasses-screen`: this connection watches the mirror. */
+  watchesGlassesScreen?: boolean;
+}
+
+// ── Glasses screen mirror ──
+//
+// The device publishes the three strings it just drew; browsers render them
+// with the simulator's own painter. Last frame is retained so a viewer joining
+// mid-demo sees the current screen instead of a blank panel until the next
+// render.
+
+let lastGlassesScreen: GlassesScreen | null = null;
+let glassesScreenPublisher: ServerWebSocket<MuxData> | null = null;
+
+function sendGlassesScreen(ws: ServerWebSocket<MuxData>, screen: GlassesScreen | null) {
+  try { ws.send(JSON.stringify({ type: 'glasses-screen', screen })); } catch { /* disconnected */ }
+}
+
+function broadcastGlassesScreen(screen: GlassesScreen | null) {
+  for (const client of activeMuxConnections) {
+    if (client.data.watchesGlassesScreen) sendGlassesScreen(client, screen);
+  }
 }
 
 const herdrService = new HerdrService();
@@ -299,6 +322,27 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     return;
   }
 
+  // Screen mirror (demo). Publishing is not gated on `isGlasses`: a client
+  // that publishes has a real bridge by construction, and the simulator never
+  // calls this.
+  if (msg.type === 'glasses-screen') {
+    lastGlassesScreen = msg.screen;
+    glassesScreenPublisher = ws;
+    broadcastGlassesScreen(msg.screen);
+    return;
+  }
+
+  if (msg.type === 'subscribe-glasses-screen') {
+    ws.data.watchesGlassesScreen = true;
+    sendGlassesScreen(ws, lastGlassesScreen);
+    return;
+  }
+
+  if (msg.type === 'unsubscribe-glasses-screen') {
+    ws.data.watchesGlassesScreen = false;
+    return;
+  }
+
   // Keepalive. Handle before the sessionId/subscription gate below: the client
   // pings with sessionId="" whenever no terminal is selected (dashboard, file
   // viewer, history). If those pings were dropped, the client never gets a
@@ -326,6 +370,14 @@ export function muxClose(ws: ServerWebSocket<MuxData>, code: number, reason: str
   console.log(`[mux] WebSocket closed: ${ws.data.visitorId} (code=${code}, reason=${reason})`);
   activeMuxConnections.delete(ws);
   unsubscribeGlassesRelay(ws);
+  // The publisher going away must reach the viewers: a mirror that keeps
+  // showing the last frame is indistinguishable from a live one that has
+  // stopped changing.
+  if (glassesScreenPublisher === ws) {
+    glassesScreenPublisher = null;
+    lastGlassesScreen = null;
+    broadcastGlassesScreen(null);
+  }
   if (activeMuxConnections.size === 0) stopSessionsPush();
   // A disconnect can hand the focus to another device.
   else maybePushFocus();

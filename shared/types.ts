@@ -964,6 +964,23 @@ export type ControlServerMessage =
 // =============================================================================
 
 /**
+ * The three container strings the G2 is showing right now.
+ *
+ * The glasses app computes these once and hands the same object to the panel
+ * and to this channel, so a mirror is not a re-derivation of the screen — it
+ * is the screen. Demo viewers render it with the simulator's own painter.
+ */
+export interface GlassesScreen {
+  header: string;
+  body: string;
+  footer: string;
+  /** Which screen this is, for the mirror's status line. */
+  mode: string;
+  /** Epoch ms the frame was produced, so a stalled mirror is visible. */
+  at: number;
+}
+
+/**
  * One relay item for the G2 glasses channel (#504): a single piece of
  * information the user needs to make a decision, not a summary. `waiting`
  * items are created by the blocked-transition tracker (source 'auto') or by
@@ -1024,6 +1041,12 @@ export type MuxClientMessage =
   // whole connection as "glasses present", which gates relay assembly/send.
   | { type: 'subscribe-glasses-relay' }
   | { type: 'unsubscribe-glasses-relay' }
+  // Screen mirroring for demos. The device publishes; browsers subscribe.
+  // Only a connection with a real Even Hub bridge publishes, so the simulator
+  // never echoes its own frames back at itself.
+  | { type: 'glasses-screen'; screen: GlassesScreen }
+  | { type: 'subscribe-glasses-screen' }
+  | { type: 'unsubscribe-glasses-screen' }
   | (ControlClientMessage & { sessionId: string });
 
 // Runtime validation for client→server /ws/mux frames. The unions above are
@@ -1086,6 +1109,20 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('unsubscribe-conversation'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('subscribe-glasses-relay') }),
   z.object({ type: z.literal('unsubscribe-glasses-relay') }),
+  z.object({
+    type: z.literal('glasses-screen'),
+    screen: z.object({
+      // One G2 page each; the caps only keep a rogue client from broadcasting
+      // a novel to every viewer.
+      header: z.string().max(500),
+      body: z.string().max(4000),
+      footer: z.string().max(500),
+      mode: z.string().max(40),
+      at: z.number(),
+    }),
+  }),
+  z.object({ type: z.literal('subscribe-glasses-screen') }),
+  z.object({ type: z.literal('unsubscribe-glasses-screen') }),
   // Control frames carry a sessionId in the mux protocol (ping may send "").
   ...controlClientMessageOptions.map((o) => o.extend({ sessionId: z.string() })),
 ]);
@@ -1106,4 +1143,8 @@ export type MuxServerMessage =
   | { type: 'glasses-relay'; item: GlassesRelayItem } // upsert (create / dismiss reflection)
   | { type: 'glasses-relay-remove'; id: string } // exit-blocked / TTL expiry
   | { type: 'glasses-relay-snapshot'; items: GlassesRelayItem[] } // on subscribe: current blocked set
+  // Screen mirror. `null` means no device is publishing — sent on subscribe
+  // when nothing is live, and again when the publisher disconnects, so a demo
+  // audience sees "切断" rather than a frozen screen.
+  | { type: 'glasses-screen'; screen: GlassesScreen | null }
   | (ControlServerMessage & { sessionId: string });
