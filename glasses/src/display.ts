@@ -349,7 +349,13 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const bodyText = [...banner, ...recap, ...content].slice(0, MAX_LINES).join('\n')
   // With a waiting banner up, the ring is routed to the overlay item:
   // tap = respond/jump, double-tap = dismiss ("later / on PC").
-  const action = state.relayWaiting.length > 0 ? 'tap:対応  dbl:後で' : waiting ? 'tap:respond  dbl:back' : 'dbl:back'
+  // Read some way back, the double-tap returns to the newest message rather
+  // than leaving the session, so the label has to say which one it will do.
+  const scrolled = state.conversationOffset > 0 || state.conversationPage > 0
+  const back = scrolled ? 'dbl:top' : 'dbl:back'
+  const action = state.relayWaiting.length > 0
+    ? 'tap:対応  dbl:後で'
+    : waiting ? `tap:respond  ${back}` : back
   // Who is speaking is in the body — the user's turn carries `$` and the
   // agent's carries nothing — so repeating it here said nothing twice. The
   // message counter went with it: its denominator was the number of messages

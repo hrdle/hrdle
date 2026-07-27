@@ -306,6 +306,20 @@ export class GlassesController {
           await this.dismissItem(top)
           return
         }
+        // Back out one level at a time. Having read some way into the history,
+        // the way out is to the top of it — swiping all the way down again to
+        // leave is the wrong amount of work. Only from the newest message does
+        // the same gesture leave the session.
+        if (st.conversationOffset > 0 || st.conversationPage > 0) {
+          st.conversationOffset = 0
+          st.conversationPage = 0
+          this.render()
+          // Live updates resume at the top, and whatever arrived while the
+          // reader was back there should be waiting for them.
+          await this.loadConversation()
+          this.render()
+          return
+        }
         st.mode = 'session_list'
         this.render()
         return
