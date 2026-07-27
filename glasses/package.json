@@ -9,7 +9,7 @@
     "build": "tsc && vite build --mode device",
     "build:web": "tsc && vite build --base=/glasses/ --outDir=dist-web",
     "preview": "vite preview",
-    "pack": "evenhub pack",
+    "pack": "bun scripts/pack.ts",
     "test": "bun test",
     "lint": "echo 'no lint'",
     "typecheck": "tsgo --noEmit"
