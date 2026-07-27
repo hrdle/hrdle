@@ -1,5 +1,5 @@
 import { getBaseUrl } from './api.ts'
-import type { Session, GlassesRelayItem, ClientFocus } from './types.ts'
+import type { Session, GlassesRelayItem, ClientFocus, GlassesScreen } from './types.ts'
 
 export interface WsCallbacks {
   /** `focus` is the session the phone/tablet in the user's hand is
@@ -13,6 +13,8 @@ export interface WsCallbacks {
   onRelaySnapshot?: (items: GlassesRelayItem[]) => void
   onRelayUpsert?: (item: GlassesRelayItem) => void
   onRelayRemove?: (id: string) => void
+  /** Screen mirror (demo). `null` = no device publishing / publisher gone. */
+  onGlassesScreen?: (screen: GlassesScreen | null) => void
 }
 
 // Well inside the server's 60s ping timeout, with room for a dropped one.
@@ -61,6 +63,7 @@ export class CcHubWsClient {
   // Glasses relay subscription is connection-scoped (no sessionId); re-sent on
   // every (re)connect while this flag is set (#504).
   private relaySubscribed = false
+  private screenSubscribed = false
 
   // Buffer of last N lines per session
   private terminalBuffers = new Map<string, string[]>()
@@ -91,6 +94,9 @@ export class CcHubWsClient {
       // snapshot arrives around the same time as session re-subscribes.
       if (this.relaySubscribed) {
         this.send({ type: 'subscribe-glasses-relay' })
+      }
+      if (this.screenSubscribed) {
+        this.send({ type: 'subscribe-glasses-screen' })
       }
       this.callbacks.onReady()
     }
@@ -136,6 +142,8 @@ export class CcHubWsClient {
         this.callbacks.onRelayUpsert?.(msg.item as GlassesRelayItem)
       } else if (msg.type === 'glasses-relay-remove' && typeof msg.id === 'string') {
         this.callbacks.onRelayRemove?.(msg.id as string)
+      } else if (msg.type === 'glasses-screen') {
+        this.callbacks.onGlassesScreen?.((msg.screen ?? null) as GlassesScreen | null)
       }
     } catch { /* ignore */ }
   }
@@ -183,6 +191,32 @@ export class CcHubWsClient {
   unsubscribeGlassesRelay(): void {
     this.relaySubscribed = false
     this.send({ type: 'unsubscribe-glasses-relay' })
+  }
+
+  /** Publish the screen the panel is showing, for demo mirrors. Only the
+   *  device calls this — the simulator has no bridge and would otherwise echo
+   *  its own frames back at itself. */
+  publishScreen(screen: GlassesScreen): void {
+    this.send({ type: 'glasses-screen', screen })
+  }
+
+  /** Late-bound because only the browser simulator listens, and it is built
+   *  after the controller that owns this client. */
+  setGlassesScreenHandler(fn: (screen: GlassesScreen | null) => void): void {
+    this.callbacks.onGlassesScreen = fn
+  }
+
+  /** Watch the device's screen. The server replies with the retained frame, so
+   *  a viewer joining mid-demo sees the current screen rather than a blank
+   *  panel until the next render. */
+  subscribeGlassesScreen(): void {
+    this.screenSubscribed = true
+    this.send({ type: 'subscribe-glasses-screen' })
+  }
+
+  unsubscribeGlassesScreen(): void {
+    this.screenSubscribed = false
+    this.send({ type: 'unsubscribe-glasses-screen' })
   }
 
   getTerminalText(sessionId: string): string {

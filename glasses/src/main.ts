@@ -6,7 +6,7 @@
 // Groq STT) and the LocalStorage URL setup flow.
 
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
-import { initDisplay, updateDisplay, setupEvents, buildSetupGuide, startMic, stopMic } from './display.ts'
+import { initDisplay, updateDisplay, setupEvents, buildSetupGuide, screenText, startMic, stopMic } from './display.ts'
 import type { AppState } from './display.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
@@ -115,10 +115,30 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     draining = false
   }
 
+  // Demo mirror: publish the same three strings the panel is about to show, so
+  // a browser can render the screen the wearer is looking at. Skipped when the
+  // frame is identical to the last one — renders fire every five seconds
+  // whether or not anything changed, and a demo audience does not need the
+  // traffic.
+  let lastPublished = ''
+  function publishScreen(state: AppState): void {
+    try {
+      const { header, body, footer } = screenText(state)
+      const key = `${state.mode}\u0000${header}\u0000${body}\u0000${footer}`
+      if (key === lastPublished) return
+      lastPublished = key
+      controller.ws.publishScreen({ header, body, footer, mode: state.mode, at: Date.now() })
+    } catch (err) {
+      // A mirror is a nicety; never let it take the panel down with it.
+      trace(`publishScreen failed: ${err}`, 'error', (err as Error)?.stack)
+    }
+  }
+
   const platform: GlassesPlatform = {
     render(state) {
       // Just the startup burst — that is where frames used to pile up.
       if (++renders <= 10) trace(`render #${renders} mode=${state.mode} sessions=${state.sessions.length}`)
+      publishScreen(state)
       pending = state
       if (draining) return
       draining = true

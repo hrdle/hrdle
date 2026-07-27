@@ -113,6 +113,10 @@ const STYLE = `
   .bg-row { display: flex; gap: 8px; }
   .bg-row button { flex: 1; }
   body.dropping { outline: 2px dashed #7cc98f; outline-offset: -8px; }
+  .mirror { display: inline-flex; align-items: center; gap: 5px; font-size: 13px;
+            color: #cbd5e1; cursor: pointer; user-select: none; }
+  .mirror input { accent-color: #6affa0; }
+  .mirror-live { color: #6affa0; }
   .diag { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; color: #6b736a;
           line-height: 1.8; word-break: break-all; }
   .copied { color: #7cc98f; }
@@ -167,6 +171,8 @@ export function startDebugUI(): void {
             <span class="mode-pill" id="g2-mode-jp">一覧</span>
             <span class="mode-id" id="g2-mode-id">session_list</span>
             <button type="button" id="g2-copy">画面をコピー</button>
+            <label class="mirror"><input type="checkbox" id="g2-mirror" />実機ミラー</label>
+            <span class="hint" id="g2-mirror-status"></span>
             <span class="hint" id="g2-copied"></span>
           </div>
           <div class="diag" id="g2-diag"></div>
@@ -258,7 +264,28 @@ export function startDebugUI(): void {
   const relay = el('g2-relay')
   const sttInput = document.getElementById('dbg-stt') as HTMLInputElement
 
+  const mirrorToggle = document.getElementById('g2-mirror') as HTMLInputElement
+  const mirrorStatus = el('g2-mirror-status')
+
   let lastScreen = { header: '', body: '', footer: '' }
+  let lastMode = 'session_list'
+
+  // ── Device mirror (demo) ──
+  //
+  // The device publishes the three strings it just drew; this panel paints
+  // them with the same painter it uses for its own state. What the audience
+  // sees is the wearer's screen, not a second interpretation of it.
+  let mirroring = false
+  let localScreen = { header: '', body: '', footer: '' }
+  let localMode = 'session_list'
+
+  function paint(screen: { header: string; body: string; footer: string }, mode: string): void {
+    lastScreen = screen
+    lastMode = mode
+    drawPanel(screen)
+    modeJp.textContent = MODE_LABEL[mode] ?? mode
+    modeId.textContent = mode
+  }
 
   // Panel geometry, straight from the container definitions in display.ts.
   // Text starts below the container's own padding, and LVGL stacks lines at a
@@ -405,11 +432,12 @@ export function startDebugUI(): void {
       const raw = screenText(state)
       // The device's container wraps for it; this panel has to do it itself.
       const screen = { ...raw, body: wrapForPanel(raw.body) }
-      lastScreen = screen
-      drawPanel(screen)
-      modeJp.textContent = MODE_LABEL[state.mode] ?? state.mode
-      modeId.textContent = state.mode
+      localScreen = screen
+      localMode = state.mode
       renderDiag(state)
+      // While mirroring the device owns the panel; this connection's own
+      // state keeps running underneath so switching back is instant.
+      if (!mirroring) paint(screen, state.mode)
     },
     startMicCapture: () => startMic(),
     stopMicCapture: () => stopMic(),
@@ -456,7 +484,7 @@ export function startDebugUI(): void {
   function screenAsText(): string {
     const rule = '─'.repeat(52)
     return [
-      `[${MODE_LABEL[controller.state.mode] ?? controller.state.mode} / ${controller.state.mode}]`,
+      `[${MODE_LABEL[lastMode] ?? lastMode} / ${lastMode}]${mirroring ? ' 実機ミラー' : ''}`,
       rule,
       lastScreen.header,
       rule,
@@ -558,6 +586,42 @@ export function startDebugUI(): void {
 
   // Diag also changes outside controller render events (terminal buffers, WS
   // state) — keep it fresh on an interval.
+  // ── Mirror wiring ──
+
+  const RING_BUTTONS = ['btn-up', 'btn-down', 'btn-tap', 'btn-dbl']
+
+  function setMirrorUi(live: boolean, message: string): void {
+    mirrorStatus.textContent = message
+    mirrorStatus.className = live ? 'hint mirror-live' : 'hint'
+    // A viewer clicking the ring while the device drives the panel would fight
+    // the wearer for the screen. Mirroring is for watching.
+    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = mirroring
+  }
+
+  controller.ws.setGlassesScreenHandler((screen) => {
+    if (!mirroring) return
+    if (!screen) {
+      // The publisher's socket closed. Say so — a mirror still showing the
+      // last frame is indistinguishable from a live one that has gone quiet.
+      setMirrorUi(false, '実機が接続されていません')
+      return
+    }
+    paint({ header: screen.header, body: wrapForPanel(screen.body), footer: screen.footer }, screen.mode)
+    setMirrorUi(true, '実機と同期中')
+  })
+
+  mirrorToggle.addEventListener('change', () => {
+    mirroring = mirrorToggle.checked
+    if (mirroring) {
+      controller.ws.subscribeGlassesScreen()
+      setMirrorUi(false, '実機を待っています…')
+    } else {
+      controller.ws.unsubscribeGlassesScreen()
+      setMirrorUi(false, '')
+      paint(localScreen, localMode)
+    }
+  })
+
   setInterval(() => renderDiag(controller.state), 500)
 
   ;(window as unknown as Record<string, unknown>)._ws = controller.ws
