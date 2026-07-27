@@ -148,6 +148,9 @@ async function sendTextToSession(
   opts?: { bracketed?: boolean; paneId?: string },
 ): Promise<string> {
   return withControlSession(sessionId, async (cs) => {
+    // Same as raw pane input: an addressed pane may be sitting in another tab,
+    // and a reply that cannot land is worse than one that moves the view.
+    if (opts?.paneId) await cs.ensurePaneReachable(opts.paneId);
     const panes = await cs.listPanes();
     // An explicit paneId (e.g. a relay item's replyTo pane) wins: in a
     // multi-pane workspace the blocked pane is not necessarily the active one.
@@ -1109,6 +1112,9 @@ sessions.post('/:id/panes/input', async (c) => {
 
   try {
     return await withControlSession(id, async (controlSession) => {
+      // A pane in another tab is still a live agent; bring it into view rather
+      // than refusing to answer it.
+      await controlSession.ensurePaneReachable(parsed.data.paneId);
       const panes = await controlSession.listPanes();
       const targetPane = panes.find((p) => p.paneId === parsed.data.paneId);
       if (!targetPane) {

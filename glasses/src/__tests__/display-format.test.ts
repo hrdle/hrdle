@@ -708,22 +708,13 @@ describe('panes across tabs', () => {
     overlayItemId: null,
   }
 
-  test('a pane the terminal cannot show says so', () => {
-    // "There are two" and "one of them is somewhere you are not looking" are
-    // different things to know.
+  test('a pane in another tab looks like any other', () => {
+    // It was marked while a reply to it could not land. The server switches
+    // tabs to deliver now, so the tab is a fact with no decision attached.
     const body = screenText(st).body
     expect(body).toContain('%1  31%')
-    expect(body).toContain('%4  6%  別タブ')
-  })
-
-  test('panes of the active tab are not marked', () => {
-    const line = screenText(st).body.split('\n').find((l) => l.includes('%1')) ?? ''
-    expect(line).not.toContain('別タブ')
-  })
-
-  test('nothing is marked when the session reports no active tab', () => {
-    const noTab = { ...st, sessions: [{ ...sessions[0], activeTabId: undefined }] }
-    expect(screenText(noTab).body).not.toContain('別タブ')
+    expect(body).toContain('%4  6%')
+    expect(body).not.toContain('別タブ')
   })
 })
 
