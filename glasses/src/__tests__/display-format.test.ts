@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { sanitizeForG2, formatMessage } from '../types.ts'
 import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
-import { listRows, rowCursor } from '../display.ts'
+import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { MAX_LINES } from '../metrics.ts'
 
 describe('sanitizeForG2: tables', () => {
@@ -292,9 +292,11 @@ describe('session list', () => {
   }
 
   test('every name starts in the same column whether or not it has a badge', () => {
+    // The blank badge is a full-width space — the same 320 units as a spinner
+    // frame — so a row with nothing to say lines up with one that has.
     const starts = screenText(state)
       .body.split('\n')
-      .map((l) => l.search(/[^ >[\]!*]/))
+      .map((l) => l.search(/[^ >\u3000▲▶▼◀]/))
     expect(new Set(starts).size).toBe(1)
   })
 })
@@ -605,17 +607,36 @@ describe('workspace and pane list', () => {
     expect(listRows(sessions).filter((r) => r.sessionIndex === 0)).toEqual([{ sessionIndex: 0 }])
   })
 
-  test('a workspace with two panes lists them', () => {
+  test('a workspace with two panes lists them under a heading', () => {
     expect(listRows(sessions).filter((r) => r.sessionIndex === 1)).toEqual([
-      { sessionIndex: 1 },
+      { sessionIndex: 1, header: true },
       { sessionIndex: 1, paneId: '%1' },
       { sessionIndex: 1, paneId: '%2' },
     ])
   })
 
+  test('the heading is not a place the cursor can be', () => {
+    // Its own row would open the representative pane the server picked — one
+    // of them, arbitrarily, which is the ambiguity the pane rows remove.
+    expect(selectableRows(sessions).some((r) => r.sessionIndex === 1 && !r.paneId)).toBe(false)
+  })
+
+  test('a heading carries no cursor marker', () => {
+    const line = screenText(st(1, '%1')).body.split('\n')[1]
+    expect(line.startsWith('>')).toBe(false)
+    expect(line).toContain('2脚ロボ開発')
+  })
+
   test('the cursor walks workspaces and panes with one gesture', () => {
-    expect(rowCursor(st(1))).toBe(1)
     expect(rowCursor(st(1, '%2'))).toBe(3)
+    // A workspace with panes resolves to its first one, never to the heading.
+    expect(listRows(sessions)[rowCursor(st(1))].paneId).toBe('%1')
+  })
+
+  test('panes are drawn as a tree under their workspace', () => {
+    const body = screenText(st(1)).body.split('\n')
+    expect(body[2]).toContain('├ %1')
+    expect(body[3]).toContain('└ %2')
   })
 
   test('the list gets the row the header used to occupy', () => {
@@ -624,7 +645,9 @@ describe('workspace and pane list', () => {
 
   test('the footer carries the position and the clock', () => {
     const footer = screenText(st(1)).footer
-    expect(footer).toMatch(/2\/5/)
+    // Four selectable rows: the single-pane workspace, two panes, and the
+    // workspace with none. The heading is not among them.
+    expect(footer).toMatch(/2\/4/)
     expect(footer).toMatch(/ \d\d:\d\d$/)
     expect(width(footer)).toBeLessThanOrEqual(HEADER_WIDTH)
   })
@@ -637,7 +660,7 @@ describe('workspace and pane list', () => {
     // Two panes of one repo repeat the same folder name; the second one
     // teaches the reader nothing.
     const body = screenText(st(1)).body
-    expect(body).toContain('%1  30%')
+    expect(body).toContain('├ %1  30%')
     expect(body).not.toContain('wheel-leg-bot')
   })
 
@@ -693,5 +716,52 @@ describe('panes across tabs', () => {
   test('nothing is marked when the session reports no active tab', () => {
     const noTab = { ...st, sessions: [{ ...sessions[0], activeTabId: undefined }] }
     expect(screenText(noTab).body).not.toContain('別タブ')
+  })
+})
+
+describe('list badge', () => {
+  const mk = (indicatorState?: 'processing' | 'waiting_input') => ({
+    mode: 'session_list' as const,
+    sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const, indicatorState }],
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: 0,
+  })
+
+  test('a working row turns', () => {
+    expect(screenText({ ...mk('processing'), spinnerTick: 0 }).body).toContain('▲')
+    expect(screenText({ ...mk('processing'), spinnerTick: 1 }).body).toContain('▶')
+  })
+
+  test('waiting is no longer marked', () => {
+    // Seven of eight rows carried `[!]` on a real machine — a mark almost
+    // everything has stops distinguishing anything.
+    const body = screenText(mk('waiting_input')).body
+    expect(body).not.toContain('[!]')
+    expect(body).not.toContain('▲')
+  })
+
+  test('an unmarked row is padded to a badge width', () => {
+    expect(screenText(mk()).body).toContain('\u3000 グラス開発')
+  })
+
+  test('a relay item still marks its workspace', () => {
+    const withRelay = {
+      ...mk(),
+      relayWaiting: [
+        { id: 'r', sessionId: 'a', kind: 'waiting' as const, text: 'x', source: 'auto' as const, createdAt: 1 },
+      ],
+    }
+    expect(screenText(withRelay).body).toContain('！ グラス開発')
   })
 })

@@ -214,10 +214,22 @@ function isWaiting(s: Session): boolean {
   return s.indicatorState === 'waiting_input' || (!!s.waitingToolName && s.waitingToolName !== 'UserInput')
 }
 
-function statusLabel(s: Session): string {
-  if (isWaiting(s)) return '[!]'
-  if (s.indicatorState === 'processing') return '[*]'
-  return ''
+/**
+ * The one thing a list row has room to say about state.
+ *
+ * Waiting used to get `[!]`, and on a real machine seven of eight rows carried
+ * it — a mark almost everything has stopped distinguishing anything. Waiting
+ * is the resting state of an agent; running is the news. So the badge is the
+ * spinner and nothing else, and the rest of the answer is one tap away.
+ *
+ * The blank is a full-width space, not an ordinary one: at 320 units it is
+ * exactly a spinner frame wide, and 5-unit spaces would leave every unmarked
+ * name starting three-quarters of a column to the left of the marked ones.
+ */
+const BADGE_BLANK = '\u3000'
+
+function statusLabel(s: Session, frame: string): string {
+  return s.indicatorState === 'processing' ? frame : BADGE_BLANK
 }
 
 const SEPARATOR = '-'.repeat(24)
@@ -287,11 +299,20 @@ function relayBannerLines(state: AppState): string[] {
 // ─── Content helpers (shared by build and in-place update) ───
 
 
-/** One navigable line of the list: a workspace, or a pane inside one. */
+/** One line of the list: a workspace, a pane inside one, or a group label. */
 export interface ListRow {
   sessionIndex: number
   /** Absent on the workspace's own row. */
   paneId?: string
+  /**
+   * A label, not a target.
+   *
+   * A multi-pane workspace's own row has nothing to open: it would fall back
+   * to the representative agent the server picked, which is one of the panes
+   * chosen arbitrarily — exactly the ambiguity the pane rows exist to remove.
+   * So the name becomes a heading over them and the cursor passes it by.
+   */
+  header?: boolean
 }
 
 /**
@@ -306,27 +327,37 @@ export interface ListRow {
 export function listRows(sessions: Session[]): ListRow[] {
   const rows: ListRow[] = []
   sessions.forEach((s, sessionIndex) => {
-    rows.push({ sessionIndex })
     const panes = s.panes ?? []
-    if (panes.length < 2) return
+    if (panes.length < 2) {
+      rows.push({ sessionIndex })
+      return
+    }
+    rows.push({ sessionIndex, header: true })
     for (const p of panes) rows.push({ sessionIndex, paneId: p.paneId })
   })
   return rows
+}
+
+/** Rows the cursor can rest on. */
+export function selectableRows(sessions: Session[]): ListRow[] {
+  return listRows(sessions).filter((r) => !r.header)
 }
 
 /** Index of the row the cursor is on. */
 export function rowCursor(state: AppState): number {
   const rows = listRows(state.sessions)
   const found = rows.findIndex(
-    (r) => r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
+    (r) => !r.header && r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
   )
-  return found >= 0 ? found : Math.max(0, rows.findIndex((r) => r.sessionIndex === state.sessionIndex))
+  if (found >= 0) return found
+  // Landed on a workspace that turned out to have panes — a fresh state, or a
+  // pane count that grew underneath. Its first pane is what the row meant.
+  const fallback = rows.findIndex((r) => !r.header && r.sessionIndex === state.sessionIndex)
+  return fallback >= 0 ? fallback : 0
 }
 
-function paneStatusLabel(p: Pane): string {
-  if (p.indicatorState === 'waiting_input' || (!!p.waitingToolName && p.waitingToolName !== 'UserInput')) return '[!]'
-  if (p.indicatorState === 'processing') return '[*]'
-  return ''
+function paneStatusLabel(p: Pane, frame: string): string {
+  return p.indicatorState === 'processing' ? frame : BADGE_BLANK
 }
 
 /**
@@ -356,6 +387,7 @@ function sessionListBody(state: AppState): string {
   // Relay waiting covers agent-declared items whose session indicator is not
   // waiting_input; those sessions still get the [!] marker.
   const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
+  const frame = spinnerFrame(state)
   const rows = listRows(sessions)
   if (!rows.length) return '(no sessions)'
   const cursor = rowCursor(state)
@@ -366,16 +398,25 @@ function sessionListBody(state: AppState): string {
     const idx = Math.max(0, start) + i
     const here = idx === cursor ? '>' : ' '
     const s = sessions[row.sessionIndex]
-    if (!row.paneId) {
-      const label = relayWaitingIds.has(s.id) ? '[!]' : statusLabel(s)
-      // Pad the badge so every name starts in the same column: a list where
-      // `>[!] name` and `  name` begin three columns apart is hard to scan.
-      return `${here}${label.padEnd(3)} ${sName(s)}`
+    // Pad the badge so every name starts in the same column: a list where
+    // `>[!] name` and `  name` begin three columns apart is hard to scan.
+    if (row.header || !row.paneId) {
+      // A relay item is a question already asked and still unanswered, which
+      // outlives the indicator that raised it; that one keeps its mark.
+      const label = relayWaitingIds.has(s.id) ? '！' : statusLabel(s, frame)
+      // A heading takes no cursor, so it never carries the marker.
+      return `${row.header ? ' ' : here}${label} ${sName(s)}`
     }
-    const p = (s.panes ?? []).find((x) => x.paneId === row.paneId)
-    const detail = p ? paneDetail(p, s.panes ?? [], s.activeTabId) : ''
-    // Indented under its workspace, and only ever shown beneath it.
-    return `${here}${(p ? paneStatusLabel(p) : '').padEnd(3)}  ${row.paneId}${detail ? `  ${detail}` : ''}`
+    const panes = s.panes ?? []
+    const p = panes.find((x) => x.paneId === row.paneId)
+    const detail = p ? paneDetail(p, panes, s.activeTabId) : ''
+    // Drawn as a tree so the panes read as belonging to the name above them
+    // rather than as more workspaces that happen to be indented. The firmware
+    // carries the light box-drawing set at full width, so the branch lines up
+    // with the badges either side of it.
+    const last = panes[panes.length - 1]?.paneId === row.paneId
+    const branch = last ? '└' : '├'
+    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${row.paneId}${detail ? `  ${detail}` : ''}`
   }).join('\n')
 }
 
@@ -458,8 +499,12 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
 // of a hand-copied approximation.
 /** Everything the list screen has to say, in the one bar it still has. */
 function sessionListFooter(state: AppState): string {
-  const cursor = rowCursor(state) + 1
-  const total = listRows(state.sessions).length
+  // Counted among what can be opened; headings are not places to be.
+  const rows = listRows(state.sessions)
+  const at = rows[rowCursor(state)]
+  const selectable = rows.filter((r) => !r.header)
+  const cursor = selectable.findIndex((r) => r === at) + 1
+  const total = selectable.length
   const badge = state.relayWaiting.length > 0 ? `  !${state.relayWaiting.length}` : ''
   return withClock(`tap:open  swipe:nav  ${cursor}/${total}${badge}`)
 }
@@ -873,6 +918,15 @@ export async function initDisplay(): Promise<Bridge | null> {
  */
 export async function updateHeader(bridge: Bridge | null, state: AppState): Promise<void> {
   if (!bridge || state.mode !== currentMode) return
+  // Whichever container the spinner lives in — the conversation's header, or
+  // the list's rows. One container either way; a full update sends three.
+  if (state.mode === 'session_list') {
+    await bridge.textContainerUpgrade(new TextContainerUpgrade({
+      containerID: 1, containerName: 'list',
+      content: sessionListBody(state),
+    }))
+    return
+  }
   const { headerText } = conversationContent(state)
   await bridge.textContainerUpgrade(new TextContainerUpgrade({
     containerID: 1, containerName: 'header',
