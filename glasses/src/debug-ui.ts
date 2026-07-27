@@ -698,6 +698,9 @@ export function startDebugUI(): void {
   // the glasses make of it, side by side.
 
   const PIP_SCALE = 2 // panel pixels are coarse; upscale before PiP resamples
+  /** Clearance for the window's own rounded corners, which were cutting the
+   *  ends off lines that run to the edge of the panel. */
+  const PIP_PANEL_FRACTION = 0.92
   const pipCanvas = document.createElement('canvas')
   pipCanvas.width = PANEL_W * PIP_SCALE
   pipCanvas.height = PANEL_H * PIP_SCALE
@@ -745,11 +748,15 @@ export function startDebugUI(): void {
     ctx.fillRect(0, 0, W, H)
 
     // 3. The panel itself, kept blocky — resampling it smooth would flatter
-    //    the hardware into something the wearer never sees.
+    //    the hardware into something the wearer never sees. Held in from the
+    //    frame because the little window has rounded corners of its own and
+    //    was clipping the ends of lines that run to the edge.
+    const pw = W * PIP_PANEL_FRACTION
+    const ph = H * PIP_PANEL_FRACTION
     ctx.save()
     if (glassyToggle.checked) ctx.globalCompositeOperation = 'screen'
     ctx.imageSmoothingEnabled = false
-    ctx.drawImage(canvas, 0, 0, W, H)
+    ctx.drawImage(canvas, (W - pw) / 2, (H - ph) / 2, pw, ph)
     ctx.restore()
 
     if (!glassyToggle.checked) return
