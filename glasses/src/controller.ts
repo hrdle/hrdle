@@ -51,6 +51,10 @@ export interface GlassesPlatform {
   stopMicCapture(): Promise<void>
   /** Transcribe collected PCM into text. */
   transcribeAudio(pcm: Uint8Array): Promise<string>
+  /** Durable across a WebView restart. The device writes to the host app's
+   *  storage, which outlives the page; the simulator uses localStorage. */
+  saveState(json: string): void
+  loadState(): Promise<string | null>
 }
 
 /** Where a reply (choice keys / voice prompt) is routed. paneId targets the
@@ -180,6 +184,82 @@ export class GlassesController {
         s.indicatorState === 'processing' ||
         (s.panes ?? []).some((p) => p.indicatorState === 'processing'),
     )
+  }
+
+  // ── Suspend and resume ──
+  //
+  // The phone suspends the WebView whenever the Even app goes to the
+  // background — lock screen, app switcher — and the app looks dead from the
+  // wearer's side. It is not a crash and cannot be prevented from here, so
+  // what is left is to come back well: notice the resume, reconnect, and pick
+  // up where the reader was rather than at the top of a fresh list.
+
+  /** Anything older than this is not where the reader still is. */
+  private static readonly RESUME_WINDOW_MS = 30 * 60 * 1000
+
+  private saveResumePoint(): void {
+    const st = this.state
+    const session = this.currentSession()
+    try {
+      this.platform.saveState(
+        JSON.stringify({
+          at: Date.now(),
+          mode: st.mode === 'conversation' ? 'conversation' : 'session_list',
+          sessionId: session?.id,
+          paneId: st.selectedPaneId,
+          offset: st.conversationOffset,
+          page: st.conversationPage,
+        }),
+      )
+    } catch { /* a resume point is a nicety; never let it take the app down */ }
+  }
+
+  /** Put the reader back where they were, if they were there recently. */
+  private async restoreResumePoint(): Promise<void> {
+    let saved: { at?: number; mode?: string; sessionId?: string; paneId?: string; offset?: number; page?: number }
+    try {
+      const raw = await this.platform.loadState()
+      if (!raw) return
+      saved = JSON.parse(raw)
+    } catch {
+      return
+    }
+    if (!saved.at || Date.now() - saved.at > GlassesController.RESUME_WINDOW_MS) return
+    if (saved.mode !== 'conversation' || !saved.sessionId) return
+    const idx = this.state.sessions.findIndex((s) => s.id === saved.sessionId)
+    if (idx < 0) return
+    const st = this.state
+    this.restoringResumePoint = true
+    try {
+      st.sessionIndex = idx
+      st.selectedPaneId = saved.paneId
+      st.mode = 'conversation'
+      this.ws.subscribe(saved.sessionId)
+      this.render()
+      await this.loadConversation()
+      // Offset survives; the page does not, because the conversation may have
+      // grown and page N of the old text is not page N of the new.
+      st.conversationOffset = Math.min(saved.offset ?? 0, Math.max(0, st.conversation.length - 1))
+      this.render()
+    } finally {
+      this.restoringResumePoint = false
+    }
+  }
+
+  /** The app is back. Its socket died while it slept and its screen is stale. */
+  onForegroundEnter(): void {
+    this.state.spinnerTick = 0
+    this.ws.connect()
+    this.render()
+    void this.maybeRefreshConversation()
+  }
+
+  onForegroundExit(): void {
+    this.saveResumePoint()
+  }
+
+  onHostExit(_kind: 'abnormal' | 'system'): void {
+    this.saveResumePoint()
   }
 
   // ── Ring input (the single handler set shared by G2 and debug) ──
@@ -613,12 +693,28 @@ export class GlassesController {
 
   // ── WS event wiring ──
 
+  /** Restore on the first list that arrives: before that there is no session
+   *  to match the saved id against. */
+  private maybeRestoreOnce(): void {
+    if (this.restoredResumePoint || this.state.sessions.length === 0) return
+    this.restoredResumePoint = true
+    if (this.state.mode !== 'session_list') return // already somewhere on purpose
+    void this.restoreResumePoint()
+  }
+
   private onWsReady(): void {
     // Re-subscribe the session being viewed after a reconnect (the relay
     // subscription itself is re-sent by the WS client).
     const s = this.currentSession()
     if (s && this.state.mode !== 'session_list') this.ws.subscribe(s.id)
   }
+
+  private restoredResumePoint = false
+  /** True while the resume point is being put back. `loadConversation` ends by
+   *  resetting the offset, so a periodic refresh landing mid-restore would
+   *  undo it and drop the reader at the newest message — the very thing the
+   *  resume point exists to avoid. */
+  private restoringResumePoint = false
 
   private onSessionsUpdated(sessions: Session[], focus?: ClientFocus): void {
     const st = this.state
@@ -645,6 +741,7 @@ export class GlassesController {
     } else if (st.sessionIndex >= st.sessions.length) {
       st.sessionIndex = Math.max(0, st.sessions.length - 1)
     }
+    this.maybeRestoreOnce()
     if (this.followFocus(focus)) return // already re-rendered
     this.render()
     this.maybeRefreshConversation()
@@ -824,6 +921,7 @@ export class GlassesController {
   /** Auto-refresh the conversation when terminal output arrives (throttled). */
   private maybeRefreshConversation(): void {
     if (this.state.mode !== 'conversation') return
+    if (this.restoringResumePoint) return
     // Never refresh out from under someone who has scrolled back:
     // loadConversation resets offset and page, so a reader was being yanked
     // to the newest message every few seconds. Paging back to the latest

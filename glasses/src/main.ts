@@ -18,6 +18,7 @@ const MIC_SAMPLE_RATE = 16000
 // Slow now that the crash is understood: enough to date a silent death, not
 // so often that the log is mostly heartbeat.
 const HEARTBEAT_MS = 30_000
+const RESUME_KEY = 'cchub-glasses-resume'
 
 // ── Crash reporting ──
 //
@@ -155,6 +156,17 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       publishScreen(state)
       enqueue(state, true)
     },
+    // The host app's own store, which outlives the WebView the phone suspends.
+    saveState(json) {
+      void bridge?.setLocalStorage(RESUME_KEY, json).catch(() => {})
+    },
+    async loadState() {
+      try {
+        return (await bridge?.getLocalStorage(RESUME_KEY)) || null
+      } catch {
+        return null
+      }
+    },
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
     transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
@@ -166,6 +178,21 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   platform.render(controller.state)
 
   setupEvents(bridge, {
+    onForegroundEnter() {
+      trace('foreground: entered — reconnecting after suspend')
+      controller.onForegroundEnter()
+    },
+    onForegroundExit() {
+      trace('foreground: exited — saving resume point')
+      controller.onForegroundExit()
+    },
+    onExit(kind) {
+      // The host says why it is stopping us. Worth its own line: it is the
+      // difference between "backgrounded" and "killed", which no amount of
+      // guessing from inside the page could settle.
+      trace(`host exit: ${kind}`, 'error')
+      controller.onHostExit(kind)
+    },
     onSwipeDown: () => controller.swipeDown(),
     onSwipeUp: () => controller.swipeUp(),
     onTap: () => controller.tap(),

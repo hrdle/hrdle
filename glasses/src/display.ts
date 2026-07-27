@@ -1050,6 +1050,13 @@ export function setupEvents(
     onDoubleTap: () => void
     onRawEvent?: (raw: string) => void
     onAudioData?: (pcm: Uint8Array) => void
+    /** The app came back to the foreground. Its JS may have been suspended for
+     *  any length of time, so anything time-sensitive is now stale. */
+    onForegroundEnter?: () => void
+    /** Going away. Whatever should survive has to be written now. */
+    onForegroundExit?: () => void
+    /** The host is tearing the app down and says why. */
+    onExit?: (kind: 'abnormal' | 'system') => void
   },
 ): void {
   if (!bridge) return
@@ -1095,6 +1102,25 @@ export function setupEvents(
       lastEventTime = now
       callbacks.onSwipeDown()
       return
+    }
+
+    // Lifecycle, handled before the ring debounce: these are not gestures, and
+    // letting them share the debounce would have a resume swallow the tap that
+    // follows it. The host reports its own reason for stopping us, which is
+    // the difference between "backgrounded" and "killed".
+    switch (eventType) {
+      case OsEventTypeList.FOREGROUND_ENTER_EVENT:
+        callbacks.onForegroundEnter?.()
+        return
+      case OsEventTypeList.FOREGROUND_EXIT_EVENT:
+        callbacks.onForegroundExit?.()
+        return
+      case OsEventTypeList.ABNORMAL_EXIT_EVENT:
+        callbacks.onExit?.('abnormal')
+        return
+      case OsEventTypeList.SYSTEM_EXIT_EVENT:
+        callbacks.onExit?.('system')
+        return
     }
 
     // Ring tap: sysEvent with undefined eventType

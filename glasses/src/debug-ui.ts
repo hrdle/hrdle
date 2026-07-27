@@ -539,6 +539,14 @@ export function startDebugUI(): void {
     renderHeader(state) {
       platform.render(state)
     },
+    // No host store in a browser; localStorage plays the same part, and it
+    // lets the simulator exercise the resume path without the device.
+    saveState(json) {
+      try { localStorage.setItem('cchub-glasses-resume', json) } catch { /* private mode */ }
+    },
+    async loadState() {
+      try { return localStorage.getItem('cchub-glasses-resume') } catch { return null }
+    },
     startMicCapture: () => startMic(),
     stopMicCapture: () => stopMic(),
     // Typed text short-circuits the transcription, which is handy for driving
