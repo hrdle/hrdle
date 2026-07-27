@@ -338,3 +338,34 @@ describe('paging', () => {
     expect(screenText(state(total - 1)).body).not.toBe(screenText(state(0)).body)
   })
 })
+
+describe('glyph coverage', () => {
+  test('drops an emoji the panel renders as tofu', () => {
+    // pretext measures ✅ at 320px from an emoji font the device does not
+    // have, so measuring alone would have let it through.
+    expect(sanitizeForG2('- ✅ health-check.sh を修正')).toBe('- health-check.sh を修正')
+  })
+
+  test('drops marks the firmware fonts do not carry', () => {
+    expect(sanitizeForG2('結果: ✓ OK / ✗ NG')).toBe('結果: OK / NG')
+    expect(sanitizeForG2('❌ 失敗 ⚠ 注意 🎉 完了')).toBe('失敗 注意 完了')
+  })
+
+  test('keeps the symbols the panel can actually draw', () => {
+    const line = '★ 重要 ● 項目 → 次へ ※ 注記 ① ▲ ◆'
+    expect(sanitizeForG2(line)).toBe(line)
+  })
+
+  test('leaves ordinary text untouched', () => {
+    const line = '絵文字なしの普通の行です。'
+    expect(sanitizeForG2(line)).toBe(line)
+  })
+
+  test('keeps line structure while dropping glyphs', () => {
+    expect(sanitizeForG2('✅ 一行目\n❌ 二行目').split('\n')).toEqual(['一行目', '二行目'])
+  })
+
+  test('a stripped line never leaves a double space', () => {
+    expect(sanitizeForG2('前 ✅ 後')).not.toMatch(/ {2}/)
+  })
+})

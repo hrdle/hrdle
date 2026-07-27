@@ -1,5 +1,5 @@
 // CC Hub API response types (subset relevant to G2 display)
-import { BODY_WIDTH, clipToWidth, textWidth } from './metrics.ts'
+import { BODY_WIDTH, clipToWidth, stripUnrenderable, textWidth } from './metrics.ts'
 
 type IndicatorState = 'processing' | 'waiting_input' | 'idle' | 'completed'
 
@@ -97,19 +97,22 @@ export interface GlassesRelayItem {
 
 // ─── G2 display helpers ───
 
-/** Unwrap inline Markdown — the syntax itself is unreadable on the G2. */
+/** Unwrap inline Markdown — the syntax itself is unreadable on the G2 — and
+ *  drop anything the panel has no glyph for. */
 function stripInline(raw: string): string {
-  return raw
-    .replace(/^\s{0,3}#{1,6}\s+/, '') // headers
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
-    .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/\*([^*\n]+)\*/g, '$1') // italic
-    .replace(/\b_([^_\n]+)_\b/g, '$1')
-    .replace(/`([^`]+)`/g, '$1') // inline code
-    .replace(/^\s*>\s?/, '') // blockquote marker
-    .replace(/~~([^~]+)~~/g, '$1') // strikethrough
-    .trimEnd()
+  return stripUnrenderable(
+    raw
+      .replace(/^\s{0,3}#{1,6}\s+/, '') // headers
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // links → text
+      .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/\*([^*\n]+)\*/g, '$1') // italic
+      .replace(/\b_([^_\n]+)_\b/g, '$1')
+      .replace(/`([^`]+)`/g, '$1') // inline code
+      .replace(/^\s*>\s?/, '') // blockquote marker
+      .replace(/~~([^~]+)~~/g, '$1') // strikethrough
+      .trimEnd()
+  )
 }
 
 /**

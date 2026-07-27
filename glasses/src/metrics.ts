@@ -1,4 +1,4 @@
-import { getTextWidth } from '@evenrealities/pretext'
+import { getAdvW, getTextWidth } from '@evenrealities/pretext'
 
 /**
  * How the G2 panel measures text.
@@ -82,6 +82,52 @@ export function clipToWidth(text: string, maxPx: number): string {
     prev = ch
   }
   return text
+}
+
+// ─── Glyph coverage ───
+
+const PICTOGRAPH = /\p{Extended_Pictographic}/u
+
+/**
+ * Drop what the panel has no glyph for.
+ *
+ * Two rules, because neither alone is enough. `getAdvW` returns 0 for a
+ * codepoint the firmware fonts do not carry, which catches ✓, ✗, ⚠ and most
+ * emoji. It does not catch ✅: pretext measures that one at 320px from an
+ * emoji font this device turns out not to have, and the panel draws tofu. So
+ * pictographs go regardless of what they measure.
+ *
+ * Sent anyway they cost a column and say nothing. Dropping them here also
+ * keeps the browser simulator honest — it would otherwise render an emoji
+ * beautifully that the wearer never sees.
+ */
+export function stripUnrenderable(text: string): string {
+  let out = ''
+  let dropped = false
+  for (const ch of text) {
+    if (ch === '\n') {
+      out += ch
+      continue
+    }
+    const cp = ch.codePointAt(0) as number
+    // Selectors and joiners only qualify the glyph beside them; alone they are
+    // leftovers from an emoji that has already gone.
+    const isModifier = cp === 0xfe0f || cp === 0x200d || (cp >= 0x1f3fb && cp <= 0x1f3ff)
+    if (isModifier || PICTOGRAPH.test(ch) || getAdvW(cp) === 0) {
+      dropped = true
+      continue
+    }
+    out += ch
+  }
+  // A dropped glyph leaves the spaces that flanked it behind: two in the middle
+  // of a line read as a gap rather than a word break, and one at the start as
+  // an indent that was never written. Only touched when something went, so a
+  // line nobody edited keeps its own spacing.
+  if (!dropped) return out
+  return out
+    .split('\n')
+    .map((line) => line.replace(/ {2,}/g, ' ').trim())
+    .join('\n')
 }
 
 // ─── Line breaking ───
