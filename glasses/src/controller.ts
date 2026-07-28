@@ -54,11 +54,14 @@ const AUTO_ADVANCE_IDLE_MS = 10_000
 /**
  * How long each step stays up.
  *
- * Slow on purpose: it is read at a glance while doing something else, and
- * every step costs a redraw over BLE. Matched to the sessions push so the
- * panel keeps one rhythm rather than two competing ones.
+ * Five seconds read as hurried on the device — three lines of Japanese went
+ * past before they were finished. Fifteen is about five seconds a line, which
+ * is the pace of something read while doing something else rather than
+ * something read.
+ *
+ * Slow is also cheap: every step is a redraw over BLE.
  */
-const AUTO_ADVANCE_STEP_MS = 5000
+const AUTO_ADVANCE_STEP_MS = 15_000
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
