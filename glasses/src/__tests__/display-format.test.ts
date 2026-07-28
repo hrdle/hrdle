@@ -959,3 +959,74 @@ describe('notice dialog (overlay)', () => {
     expect(NOTICE_DISMISS_MS).toBeLessThanOrEqual(15_000)
   })
 })
+
+describe('no notification about what is already on screen', () => {
+  const info = (sessionId: string, text: string, createdAt = 1) => ({
+    id: `i-${sessionId}`, sessionId, kind: 'info' as const, text,
+    source: 'auto' as const, createdAt,
+  })
+
+  const mk = (over: Record<string, unknown>) => ({
+    mode: 'conversation' as const,
+    sessions: [
+      { id: 'a', name: 'グラス開発', state: 'working' as const },
+      { id: 'b', name: '2脚ロボ開発', state: 'idle' as const },
+    ],
+    sessionIndex: 0, // reading 'a'
+    conversation: [
+      { role: 'assistant' as const, content: '本文です', timestamp: '2026-07-28T00:00:00Z' },
+    ],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: 0,
+    ...over,
+  })
+
+  test('the session being read does not announce itself', () => {
+    // An agent working in bursts fires one of these per turn; without this the
+    // banner never leaves, and it says only what the transcript below says.
+    const body = screenText(mk({ relayInfo: [info('a', '応答が完了しました')] })).body
+    expect(body).not.toContain('[i]')
+    expect(body).toContain('本文です')
+  })
+
+  test('another session still gets through', () => {
+    const body = screenText(mk({ relayInfo: [info('b', '応答が完了しました')] })).body
+    expect(body).toContain('[i]2脚ロボ開発: 応答が完了しました')
+  })
+
+  test('the open session is skipped over, not the whole queue', () => {
+    const body = screenText(mk({
+      relayInfo: [info('a', 'こちらは出ない', 2), info('b', 'こちらは出る', 1)],
+    })).body
+    expect(body).toContain('こちらは出る')
+    expect(body).not.toContain('こちらは出ない')
+  })
+
+  test('a question about the open session still shows — it carries the choices', () => {
+    const body = screenText(mk({
+      relayWaiting: [{
+        id: 'w', sessionId: 'a', kind: 'waiting' as const, text: 'Which one?',
+        source: 'auto' as const, createdAt: 1, choices: ['A', 'B'],
+      }],
+    })).body
+    expect(body).toContain('[!]グラス開発')
+  })
+
+  test('the list is untouched: nothing there is "on screen"', () => {
+    // sessionIndex is a cursor on the list, not a conversation being read.
+    const body = screenText(mk({
+      mode: 'session_list' as const,
+      relayInfo: [info('a', '応答が完了しました')],
+    })).body
+    expect(body).toContain('[i]グラス開発: 応答が完了しました')
+  })
+})

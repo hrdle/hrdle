@@ -288,12 +288,25 @@ function relayBannerLines(state: AppState): string[] {
     const textLines = splitDisplayLines(top.text).slice(0, 2)
     return [head, ...textLines, SEPARATOR]
   }
-  const info = state.relayInfo[0]
+  // Notifications about the session already on screen are dropped: the reader
+  // can see the agent finish. Announcing it spends one of seven lines to say
+  // what the other six are already showing, and an agent working in bursts
+  // keeps the line permanently occupied.
+  //
+  // Questions are exempt above — one carries the choices needed to answer it,
+  // which is not something the transcript shows.
+  const info = firstOtherSessionInfo(state)
   if (info) {
     const textLine = splitDisplayLines(info.text)[0] || ''
     return [splitDisplayLines(`[i]${relayLabel(state, info)}: ${textLine}`)[0] || '', SEPARATOR]
   }
   return []
+}
+
+/** The newest notification that is NOT about the session being read. */
+export function firstOtherSessionInfo(state: AppState): GlassesRelayItem | undefined {
+  const openId = state.sessions[state.sessionIndex]?.id
+  return state.relayInfo.find((i) => i.sessionId !== openId)
 }
 
 // ─── Content helpers (shared by build and in-place update) ───

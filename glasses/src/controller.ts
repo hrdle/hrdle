@@ -673,8 +673,13 @@ export class GlassesController {
    * dictating a prompt are not: the panel IS the input there, and replacing it
    * mid-gesture would lose what the wearer was in the middle of saying.
    */
-  private canInterruptForNotice(): boolean {
-    return this.state.mode === 'session_list' || this.state.mode === 'conversation'
+  private canInterruptForNotice(item: GlassesRelayItem): boolean {
+    if (this.state.mode === 'session_list') return true
+    if (this.state.mode !== 'conversation') return false
+    // Not about what is already on screen. "この会話が終わりました" thrown over
+    // the conversation itself tells the reader nothing they cannot see, and an
+    // agent working in bursts would raise it again every turn.
+    return item.sessionId !== this.currentSession()?.id
   }
 
   /** Jump to a relay item's session: subscribe + open its conversation, and
@@ -861,7 +866,7 @@ export class GlassesController {
     }
     // A notification is only a notification if it is seen, so it takes the
     // screen the same way — and then hands it back without being asked.
-    if (isNew && item.kind === 'info' && this.canInterruptForNotice()) {
+    if (isNew && item.kind === 'info' && this.canInterruptForNotice(item)) {
       this.enterOverlay(item.id)
       this.scheduleNoticeDismiss(item.id)
       return
