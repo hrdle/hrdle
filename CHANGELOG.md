@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.85] - 2026-07-28
+
+### Changed
+- **実行時パスも identity に寄せる** (#637): #635 はインストーラとサービスマネージャが使う名前を集約したが、**動いているサーバーが触るパス**が残っていた。しかもこちらのほうが性質が悪く、間違えても失敗しない
+  - **`/tmp/cchub-images` が3箇所に別々のリテラルで存在していた**（`index.ts` の静的ルート、`routes/upload.ts`、`routes/files.ts`）。3つが一致している限りだけ動き、一致を確かめるものが何も無かった。1箇所ズレるとアップロードは「何も配信していないディレクトリ」に着地し、症状は 404 だけになる
+  - `/tmp/cchub-usage-history.json` はパスがズレるとエラーではなく**空の履歴**を返す（「まだ使用量が無い」に見える）
+  - macOS Keychain のサービス名はサーバーのパスワードの保管先。変えても起動には失敗せず、**パスワード無しで起動する**
+  - `identity.json` に `tmpPrefix` / `browserLogName` / `keychainService` を追加し、`shared/identity.ts` の `TMP_PATHS` 経由に統一（`backend/src/index.ts`、`routes/logs.ts`、`routes/upload.ts`、`routes/files.ts`、`services/usage-history.ts`、`utils/keychain.ts`）
+  - `/tmp/cc-hub-browser.log` は `tmpPrefix` に合わせた正規化をせず、ハイフン入りの現行スペルのまま記録した。CLAUDE.md がこのパスを `tail -f` の対象として案内しているため、この不整合なスペルは load-bearing。改名時に意図して直すのは構わないが、リファクタの副作用で変えるべきではない
+  - **検証は動かして実施**: 8x8 PNG をアップロード → `/tmp/cchub-images` 着地 → `/api/files/images` からバイト一致で取得（三重化していた3つの消費者を1往復で通した）。`/api/logs` への POST が `/tmp/cc-hub-browser.log` に追記され、ダッシュボード取得が `/tmp/cchub-usage-history.json` にスナップショットを書くことも確認
+  - ユーザー向けの挙動変更は無い
+
 ## [0.2.84] - 2026-07-28
 
 ### Changed
