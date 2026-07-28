@@ -4,3 +4,9 @@
  *  decides it. Lets a log line answer "which build is on the device?" outright
  *  instead of by comparing timestamps against when a build was promoted. */
 declare const __APP_VERSION__: string
+
+/** Short commit the bundle was built from, `+dirty` when `src/` or the shared
+ *  types had uncommitted edits, `nogit` when the build had no repository to
+ *  ask. The version says which number a build claims; this says which code it
+ *  contains, which is the question a log line actually has to answer. */
+declare const __BUILD_COMMIT__: string

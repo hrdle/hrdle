@@ -24,11 +24,15 @@ if (bundles.length === 0) {
   process.exit(1)
 }
 
-const marker = /main: v([0-9][0-9.]*)/
+const marker = /main: v([0-9][0-9.]*) \(([^)]*)\)/
 const found = new Set<string>()
+const commits = new Set<string>()
 for (const rel of bundles) {
   const m = marker.exec(await Bun.file(`dist/${rel}`).text())
-  if (m) found.add(m[1])
+  if (m) {
+    found.add(m[1])
+    commits.add(m[2])
+  }
 }
 
 if (found.size === 0) {
@@ -41,5 +45,19 @@ if (found.size > 1 || !found.has(want)) {
   process.exit(1)
 }
 
-console.log(`✓ app.json and bundle agree on v${want}`)
+// A version number can be reused; a commit cannot. Shipping a build whose
+// source was uncommitted leaves the device naming a commit it does not match,
+// and nothing on the Hub or the device can tell afterwards which code it was.
+const commit = [...commits][0] ?? 'nogit'
+if (commit.endsWith('+dirty')) {
+  console.error(`✗ The bundle was built from uncommitted source (${commit}).`)
+  console.error('  Commit glasses/src (and shared/) first, rebuild, then pack —')
+  console.error('  otherwise the version on the device points at code that never existed.')
+  process.exit(1)
+}
+if (commit === 'nogit') {
+  console.warn('! No repository at build time: the bundle cannot name its commit.')
+}
+
+console.log(`✓ app.json and bundle agree on v${want} (${commit})`)
 await $`bunx --bun evenhub pack app.json dist`
