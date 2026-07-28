@@ -2,6 +2,8 @@
 // Detects language from LANG/LC_ALL environment variables
 // Translations are embedded for single binary support
 
+import { IDENTITY, SERVICE } from '../../../shared/identity';
+
 type TranslationKey = string;
 type Translations = Record<string, unknown>;
 
@@ -10,9 +12,9 @@ const translations: Record<string, Translations> = {
   en: {
     cli: {
       usage: "Usage:",
-      serverStart: "cchub [options]           Start server",
+      serverStart: "{{bin}} [options]           Start server",
       options: "Options:",
-      optionPort: "-p, --port <number>    Port number (default: 5923)",
+      optionPort: "-p, --port <number>    Port number (default: {{port}})",
       optionHost: "-H, --host <address>   Bind address (default: 0.0.0.0)",
       optionPassword: "-P, --password <pass>  Authentication password",
       optionHelp: "-h, --help             Show help",
@@ -22,8 +24,8 @@ const translations: Record<string, Translations> = {
       cmdStatus: "status                 Show service status",
       cmdUpdate: "update                 Update from GitHub",
       examples: "Examples:",
-      exampleStart: "cchub                      Start server (default: 5923)",
-      exampleWithPort: "cchub -p 8080 -P secret    Start on port 8080 with password",
+      exampleStart: "{{bin}}                      Start server (default: {{port}})",
+      exampleWithPort: "{{bin}} -p 8080 -P secret    Start on port 8080 with password",
       errorInvalidPort: "Error: Invalid port number",
       errorNoHost: "Error: Host not specified",
       errorNoPassword: "Error: Password not specified",
@@ -60,11 +62,11 @@ const translations: Record<string, Translations> = {
       herdrIntegrationFailed: "⚠️  Failed to install herdr {{agent}} integration:",
       agentsNotInitialized: "⚠️  {{agents}} are installed, but their configuration is not initialized.",
       agentsNotFound: "⚠️  Claude Code / Codex were not found.",
-      agentInitHint: "   Start an agent once, then run cchub setup again",
+      agentInitHint: "   Start an agent once, then run {{bin}} setup again",
       codexHooksMigrated: "✅ Merged Codex hooks into ~/.codex/hooks.json",
       codexHooksMigrationFailed: "⚠️  Failed to merge Codex hooks into hooks.json:",
-      macTitle: "🔧 CC Hub setup (macOS)",
-      keychainSaved: "🔐 Saved password to Keychain (service: cchub)",
+      macTitle: "🔧 {{product}} setup (macOS)",
+      keychainSaved: "🔐 Saved password to Keychain (service: {{keychain}})",
       keychainFailed: "⚠️  Failed to save password to Keychain",
       serviceFile: "✅ Service file: {{path}}",
       updateServiceFile: "✅ Update service file: {{path}}",
@@ -73,24 +75,24 @@ const translations: Record<string, Translations> = {
       autoUpdateEnabled: "✅ Automatic updates enabled (daily at 4:00)",
       managementCommands: "📋 Management commands:",
       herdrManualSwitch: "   (Agent conversations resume automatically when resume_agents_on_restore is enabled)",
-      setupTitle: "🔧 CC Hub setup",
+      setupTitle: "🔧 {{product}} setup",
       envFile: "✅ Environment file: {{path}}",
       updateTimerFile: "✅ Update timer file: {{path}}",
       autoUpdateTimerEnabled: "✅ Automatic update timer enabled",
       serviceEnableFailed: "⚠️  Failed to enable service",
       serviceEnabled: "Service enabled and started",
       commands: "Commands:",
-      cmdRestart: "systemctl --user restart cchub   # Restart",
-      cmdStop: "systemctl --user stop cchub      # Stop",
-      cmdLogs: "journalctl --user -u cchub -f    # View logs",
+      cmdRestart: "systemctl --user restart {{service}}   # Restart",
+      cmdStop: "systemctl --user stop {{service}}      # Stop",
+      cmdLogs: "journalctl --user -u {{service}} -f    # View logs",
       enablingAutostart: "Enabling autostart on boot...",
       autostartEnabled: "Autostart on boot enabled",
       autostartFailed: "Failed to enable autostart. Run manually:",
       autostartCommand: "loginctl enable-linger $USER",
-      passwordNotSetEnv: "Password not set: Edit ~/.config/cchub/env"
+      passwordNotSetEnv: "Password not set: Edit ~/.config/{{configDir}}/env"
     },
     uninstall: {
-      title: "CC Hub Uninstall",
+      title: "{{product}} Uninstall",
       removedService: "Removed service",
       removedUpdate: "Removed update service",
       removedTimer: "Removed update timer",
@@ -100,14 +102,14 @@ const translations: Record<string, Translations> = {
       configHint: "To remove config"
     },
     status: {
-      startCommand: "To start: systemctl --user start cchub",
+      startCommand: "To start: systemctl --user start {{service}}",
       tailscaleConnected: "Tailscale: Connected",
       tailscaleDisconnected: "Tailscale: Disconnected"
     },
     update: {
       githubConnectionFailed: "Failed to connect to GitHub API",
       serviceRestarted: "Service restarted",
-      manualRestartRequired: "Manual restart required: systemctl --user restart cchub",
+      manualRestartRequired: "Manual restart required: systemctl --user restart {{service}}",
       authUsing: "Using GitHub token from {{source}}",
       rateLimitedAnon: "GitHub API rate limit exceeded (60/hr for unauthenticated requests)",
       rateLimitedAuth: "GitHub API rate limit exceeded",
@@ -122,9 +124,9 @@ const translations: Record<string, Translations> = {
   ja: {
     cli: {
       usage: "使い方:",
-      serverStart: "cchub [オプション]           サーバー起動",
+      serverStart: "{{bin}} [オプション]           サーバー起動",
       options: "オプション:",
-      optionPort: "-p, --port <number>    ポート番号 (デフォルト: 5923)",
+      optionPort: "-p, --port <number>    ポート番号 (デフォルト: {{port}})",
       optionHost: "-H, --host <address>   バインドアドレス (デフォルト: 0.0.0.0)",
       optionPassword: "-P, --password <pass>  認証パスワード",
       optionHelp: "-h, --help             ヘルプを表示",
@@ -134,8 +136,8 @@ const translations: Record<string, Translations> = {
       cmdStatus: "status                 サービス状態を表示",
       cmdUpdate: "update                 GitHubから更新",
       examples: "例:",
-      exampleStart: "cchub                      サーバー起動（本番: 5923）",
-      exampleWithPort: "cchub -p 8080 -P secret    ポート8080、パスワード付きで起動",
+      exampleStart: "{{bin}}                      サーバー起動（本番: {{port}}）",
+      exampleWithPort: "{{bin}} -p 8080 -P secret    ポート8080、パスワード付きで起動",
       errorInvalidPort: "エラー: 無効なポート番号",
       errorNoHost: "エラー: ホストが指定されていません",
       errorNoPassword: "エラー: パスワードが指定されていません",
@@ -172,11 +174,11 @@ const translations: Record<string, Translations> = {
       herdrIntegrationFailed: "⚠️  herdr {{agent}} integration の設定に失敗しました:",
       agentsNotInitialized: "⚠️  {{agents}} はインストールされていますが、設定が初期化されていません。",
       agentsNotFound: "⚠️  Claude Code / Codex が見つかりません。",
-      agentInitHint: "   エージェントを一度起動してから cchub setup を再実行してください",
+      agentInitHint: "   エージェントを一度起動してから {{bin}} setup を再実行してください",
       codexHooksMigrated: "✅ Codex hook を ~/.codex/hooks.json に統合しました",
       codexHooksMigrationFailed: "⚠️  Codex hook の hooks.json 統合に失敗しました:",
-      macTitle: "🔧 CC Hub セットアップ (macOS)",
-      keychainSaved: "🔐 パスワードを Keychain に保存しました (service: cchub)",
+      macTitle: "🔧 {{product}} セットアップ (macOS)",
+      keychainSaved: "🔐 パスワードを Keychain に保存しました (service: {{keychain}})",
       keychainFailed: "⚠️  Keychain への保存に失敗しました",
       serviceFile: "✅ サービスファイル: {{path}}",
       updateServiceFile: "✅ 更新サービスファイル: {{path}}",
@@ -185,24 +187,24 @@ const translations: Record<string, Translations> = {
       autoUpdateEnabled: "✅ 自動更新を有効化しました（毎日4:00）",
       managementCommands: "📋 管理コマンド:",
       herdrManualSwitch: "   (resume_agents_on_restore 有効ならエージェント会話は自動復元されます)",
-      setupTitle: "🔧 CC Hub セットアップ",
+      setupTitle: "🔧 {{product}} セットアップ",
       envFile: "✅ 環境変数ファイル: {{path}}",
       updateTimerFile: "✅ 更新タイマーファイル: {{path}}",
       autoUpdateTimerEnabled: "✅ 自動更新タイマーを有効化しました",
       serviceEnableFailed: "⚠️  サービスの有効化に失敗しました",
       serviceEnabled: "サービスを有効化・起動しました",
       commands: "コマンド:",
-      cmdRestart: "systemctl --user restart cchub   # 再起動",
-      cmdStop: "systemctl --user stop cchub      # 停止",
-      cmdLogs: "journalctl --user -u cchub -f    # ログ表示",
+      cmdRestart: "systemctl --user restart {{service}}   # 再起動",
+      cmdStop: "systemctl --user stop {{service}}      # 停止",
+      cmdLogs: "journalctl --user -u {{service}} -f    # ログ表示",
       enablingAutostart: "PC起動時の自動起動を有効化中...",
       autostartEnabled: "PC起動時の自動起動を有効化しました",
       autostartFailed: "自動起動の有効化に失敗しました。手動で実行してください:",
       autostartCommand: "loginctl enable-linger $USER",
-      passwordNotSetEnv: "パスワード未設定: ~/.config/cchub/env を編集してください"
+      passwordNotSetEnv: "パスワード未設定: ~/.config/{{configDir}}/env を編集してください"
     },
     uninstall: {
-      title: "CC Hub アンインストール",
+      title: "{{product}} アンインストール",
       removedService: "サービスを削除しました",
       removedUpdate: "更新サービスを削除しました",
       removedTimer: "更新タイマーを削除しました",
@@ -212,14 +214,14 @@ const translations: Record<string, Translations> = {
       configHint: "設定を削除するには"
     },
     status: {
-      startCommand: "起動するには: systemctl --user start cchub",
+      startCommand: "起動するには: systemctl --user start {{service}}",
       tailscaleConnected: "Tailscale: 接続中",
       tailscaleDisconnected: "Tailscale: 未接続"
     },
     update: {
       githubConnectionFailed: "GitHub APIへの接続に失敗しました",
       serviceRestarted: "サービスを再起動しました",
-      manualRestartRequired: "手動で再起動してください: systemctl --user restart cchub",
+      manualRestartRequired: "手動で再起動してください: systemctl --user restart {{service}}",
       authUsing: "GitHub token を使用中 (取得元: {{source}})",
       rateLimitedAnon: "GitHub API のレート制限に到達しました (未認証時は 60/時)",
       rateLimitedAuth: "GitHub API のレート制限に到達しました",
@@ -265,17 +267,34 @@ function getNestedValue(obj: Translations, key: string): string | undefined {
 }
 
 // Translation function with interpolation support
+/**
+ * Always available to every message, so the catalog can name the product
+ * without hard-coding it (#459) and no call site has to remember to pass it.
+ *
+ * Note for a rename: the CLI help aligns its columns with literal spaces, so a
+ * name of a different length needs those adjusted. `cchub` and `hrdle` are both
+ * five characters, which is luck rather than design.
+ */
+const IDENTITY_PARAMS: Record<string, string | number> = {
+  product: IDENTITY.productName,
+  bin: IDENTITY.binaryName,
+  port: IDENTITY.defaultPort,
+  service: SERVICE.systemctl,
+  configDir: IDENTITY.configDirName,
+  keychain: IDENTITY.keychainService,
+};
+
 export function t(key: TranslationKey, params?: Record<string, string | number>): string {
   const translation = getNestedValue(translations[currentLanguage], key)
     || getNestedValue(translations.en, key)
     || key;
 
-  if (!params) {
-    return translation;
-  }
+  // Caller-supplied values win, so a message can override one of these if it
+  // ever needs to talk about something other than the running build.
+  const values = params ? { ...IDENTITY_PARAMS, ...params } : IDENTITY_PARAMS;
 
   // Replace {{param}} with values
   return translation.replace(/\{\{(\w+)\}\}/g, (_, paramKey) => {
-    return params[paramKey]?.toString() ?? `{{${paramKey}}}`;
+    return values[paramKey]?.toString() ?? `{{${paramKey}}}`;
   });
 }
