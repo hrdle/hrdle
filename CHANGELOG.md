@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.84] - 2026-07-28
+
+### Changed
+- **製品名を1ファイルに集約する** (#635): 改名（#459）を今やると 169ファイル / 1241箇所の書き換えになり、1つ外したときの失敗が見ていない場所で出る（`update.ts` の asset 名を外すと**公開されていないリリースを取りに行く** — インストール時に他人のマシンで初めて分かる。`uninstall.ts` の unit 名を外すと存在しないサービスの timer が回り続ける）。しかも大半は誰かが選んだ名前ではなく、`cchub-update.timer` は `${serviceName}-update.timer`、`com.cchub.server.plist` は `${launchdPrefix}.server.plist` という合成物で、これを呼び出し側で綴っていることが1回の改名を1000回にしていた
+  - `identity.json` に値を、`shared/identity.ts` にそこから合成される名前（unit ファイル名・launchd ラベル・asset 名・hook コマンド・User-Agent）を置き、**間違えるとデータが飛ぶかサービスが壊れる8箇所**を配線した（`storage.ts` の data dir と上書き env、`setup.ts`、`uninstall.ts`、`status.ts`、`update.ts`、`notify.ts`、`hook-status.ts`）
+  - 表示文字列とログ、`CHANGELOG.md`（216箇所）、`specs/`（26箇所）は対象外。前者は一致に依存するものが無く、後者は当時の事実の記録で書き換えると履歴が嘘になる
+  - `install.sh` と `.github/workflows/release.yml` は JSON を読めない（インストーラは `curl | bash` で走るためチェックアウトが存在せず、clone すべきリポジトリ自体がそのファイル内の値。Actions の matrix は jq を走らせるより前に評価される）。自前のコピーを保持し、`backend/tests/unit/identity-consistency.test.ts` がズレを検出する
+  - **出力が動いていないことを確認済み**: このマシンに既にインストール済みの systemd unit 3本（改修前のコードが書いたもの）と合成後のテンプレートがバイト一致し、`backend/tests/unit/setup-units.test.ts` で golden として固定。`getServiceBinaryPath` の正規表現（`cchub update` がどのバイナリを差し替えるかを決める箇所）も実 unit に対して改修前後で同じパスを返す
+  - ユーザー向けの挙動変更は無い。#459 の前提工事であり、改名をやらなくても残る整理
+
 ## [0.2.83] - 2026-07-28
 
 ### Added
