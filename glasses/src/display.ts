@@ -193,19 +193,32 @@ function sName(s: Session): string {
  * No timer drives this: the server pushes `sessions-updated` every five
  * seconds and each push re-renders, so the minute is never stale.
  */
-function withClock(title: string): string {
+/**
+ * A title against the right-edge clock, in the one line the bar has.
+ *
+ * `tail` is what the bar is there to report — a status, a count of what
+ * arrived — and it survives a full bar. The title gives way instead: it names
+ * where the reader already is, which they can see from everything below it.
+ * Without the split a long workspace name would push the new information off
+ * the edge, silently, which is the one thing a notice must not do.
+ */
+function withClock(title: string, tail = ''): string {
   const now = new Date()
   const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const clockPx = textWidth(clock)
+  const fits = (s: string) => textWidth(s) + SPACE_W + clockPx <= HEADER_WIDTH
   let head = title
-  while (head && textWidth(head) + SPACE_W + clockPx > HEADER_WIDTH) head = head.slice(0, -1)
-  let spaces = Math.max(1, Math.floor((HEADER_WIDTH - textWidth(head) - clockPx) / SPACE_W))
+  while (head && !fits(head + tail)) head = head.slice(0, -1)
+  // A tail long enough to overflow on its own is not worth protecting.
+  let label = head + tail
+  while (label && !fits(label)) label = label.slice(0, -1)
+  let spaces = Math.max(1, Math.floor((HEADER_WIDTH - textWidth(label) - clockPx) / SPACE_W))
   // Kerning across the join can cost a pixel or two; give it back rather than
   // hand the container a line it has to wrap.
-  let out = `${head}${' '.repeat(spaces)}${clock}`
+  let out = `${label}${' '.repeat(spaces)}${clock}`
   while (spaces > 1 && textWidth(out) > HEADER_WIDTH) {
     spaces--
-    out = `${head}${' '.repeat(spaces)}${clock}`
+    out = `${label}${' '.repeat(spaces)}${clock}`
   }
   return out
 }
@@ -288,25 +301,21 @@ function relayBannerLines(state: AppState): string[] {
     const textLines = splitDisplayLines(top.text).slice(0, 2)
     return [head, ...textLines, SEPARATOR]
   }
-  // Notifications about the session already on screen are dropped: the reader
-  // can see the agent finish. Announcing it spends one of seven lines to say
-  // what the other six are already showing, and an agent working in bursts
-  // keeps the line permanently occupied.
+  // Notifications get no body space here. The dialog already presented each
+  // one full-screen, and the list keeps them in full afterwards; a third
+  // showing spends two of seven lines — text plus separator — of the very
+  // conversation the reader chose to open. The header carries a count instead,
+  // which is the part that is still news while reading.
   //
-  // Questions are exempt above — one carries the choices needed to answer it,
-  // which is not something the transcript shows.
-  const info = firstOtherSessionInfo(state)
-  if (info) {
-    const textLine = splitDisplayLines(info.text)[0] || ''
-    return [splitDisplayLines(`[i]${relayLabel(state, info)}: ${textLine}`)[0] || '', SEPARATOR]
-  }
+  // Questions stay: one carries the choices needed to answer it, which is not
+  // something the transcript below shows.
   return []
 }
 
-/** The newest notification that is NOT about the session being read. */
-export function firstOtherSessionInfo(state: AppState): GlassesRelayItem | undefined {
+/** Notifications waiting that are NOT about the session being read. */
+export function otherSessionInfoCount(state: AppState): number {
   const openId = state.sessions[state.sessionIndex]?.id
-  return state.relayInfo.find((i) => i.sessionId !== openId)
+  return state.relayInfo.filter((i) => i.sessionId !== openId).length
 }
 
 // ─── Content helpers (shared by build and in-place update) ───
@@ -530,8 +539,15 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   // showed a different fraction after paging back and nobody could read it as
   // anything. Only the page number is left, which does mean what it says.
 
+  // The count, not the text: enough to know something landed and that the list
+  // is worth a look, without spending the lines to say what.
+  const notices = otherSessionInfoCount(state)
+  const noticeMark = notices > 0 ? `  [i]${notices}` : ''
   return {
-    headerText: withClock(`${session ? sName(session) : '---'}${pane ? ` ${pane.paneId}` : ''}${statusBadge}`),
+    headerText: withClock(
+      `${session ? sName(session) : '---'}${pane ? ` ${pane.paneId}` : ''}`,
+      `${statusBadge}${noticeMark}`,
+    ),
     bodyText,
     footerText: pageInfo ? `${action}  ${pageInfo.trim()}` : action,
   }

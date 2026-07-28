@@ -990,25 +990,48 @@ describe('no notification about what is already on screen', () => {
     ...over,
   })
 
-  test('the session being read does not announce itself', () => {
-    // An agent working in bursts fires one of these per turn; without this the
-    // banner never leaves, and it says only what the transcript below says.
-    const body = screenText(mk({ relayInfo: [info('a', '応答が完了しました')] })).body
-    expect(body).not.toContain('[i]')
-    expect(body).toContain('本文です')
+  test('the session being read does not announce itself, not even as a count', () => {
+    // An agent working in bursts fires one of these per turn; counting them
+    // would leave a mark permanently lit about the thing being watched.
+    const s = screenText(mk({ relayInfo: [info('a', '応答が完了しました')] }))
+    expect(s.header).not.toContain('[i]')
+    expect(s.body).not.toContain('[i]')
+    expect(s.body).toContain('本文です')
   })
 
-  test('another session still gets through', () => {
-    const body = screenText(mk({ relayInfo: [info('b', '応答が完了しました')] })).body
-    expect(body).toContain('[i]2脚ロボ開発: 応答が完了しました')
+  test('another session is reported as a count in the header, not as body text', () => {
+    // The dialog already showed it in full and the list still holds it; a
+    // third showing would cost two of the seven lines being read.
+    const s = screenText(mk({ relayInfo: [info('b', '応答が完了しました')] }))
+    expect(s.header).toContain('[i]1')
+    expect(s.body).not.toContain('応答が完了しました')
   })
 
-  test('the open session is skipped over, not the whole queue', () => {
-    const body = screenText(mk({
-      relayInfo: [info('a', 'こちらは出ない', 2), info('b', 'こちらは出る', 1)],
-    })).body
-    expect(body).toContain('こちらは出る')
-    expect(body).not.toContain('こちらは出ない')
+  test('the open session is not counted, the others are', () => {
+    const s = screenText(mk({
+      relayInfo: [info('a', 'これは数えない', 2), info('b', 'これは数える', 1)],
+    }))
+    expect(s.header).toContain('[i]1')
+    expect(s.body).not.toContain('これは数える')
+    expect(s.body).not.toContain('これは数えない')
+  })
+
+  test('nothing waiting means no mark at all', () => {
+    expect(screenText(mk({})).header).not.toContain('[i]')
+  })
+
+  test('a long workspace name gives way so the count survives', () => {
+    // withClock truncates from the right; without the tail split the mark
+    // itself would be what fell off the edge.
+    const s = screenText(mk({
+      sessions: [
+        { id: 'a', name: 'とても長いワークスペース名前ですこれは実機の幅を超えます', state: 'working' as const },
+        { id: 'b', name: 'b', state: 'idle' as const },
+      ],
+      relayInfo: [info('b', 'x')],
+    }))
+    expect(s.header).toContain('[i]1')
+    expect(width(s.header)).toBeLessThanOrEqual(HEADER_WIDTH)
   })
 
   test('a question about the open session still shows — it carries the choices', () => {
