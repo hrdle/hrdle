@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.87] - 2026-07-28
+
+### Fixed
+- **グラス: 実機ミラーが要約の帯を落としていた** (#642): 実機では要約が出るのにミラーでは出ない。ミラーは受信した画面を**フィールドごとに組み直していた**ので、#639 で追加した `notice` が名指しされておらず消えていた
+  ```ts
+  paint({ header: screen.header, body: wrapForPanel(screen.body), footer: screen.footer }, screen.mode)
+  //                                                                                  ↑ notice が無い
+  ```
+  - ローカル描画側は `{ ...raw }` と展開しているので通っていた。**2つある経路のうち片方だけが落とす**形だった
+  - フィールドを名指しして追加し、なぜ落ちたのかをコメントに残した。スプレッドに変えれば今回は直るが、次に増えるフィールドで同じことが起きたときに理由が読めなくなるため
+  - **ehpk は不要**。実機は publisher 側で `notice` を v0.1.54 から既に送っており、ミラーの受信側はサーバーバイナリ同梱のシミュレーター
+
 ## [0.2.86] - 2026-07-28
 
 ### Changed
