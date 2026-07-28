@@ -990,25 +990,48 @@ describe('no notification about what is already on screen', () => {
     ...over,
   })
 
-  test('the session being read does not announce itself', () => {
-    // An agent working in bursts fires one of these per turn; without this the
-    // banner never leaves, and it says only what the transcript below says.
-    const body = screenText(mk({ relayInfo: [info('a', '応答が完了しました')] })).body
-    expect(body).not.toContain('[i]')
-    expect(body).toContain('本文です')
+  test('the session being read does not announce itself, not even as a count', () => {
+    // An agent working in bursts fires one of these per turn; counting them
+    // would leave a mark permanently lit about the thing being watched.
+    const s = screenText(mk({ relayInfo: [info('a', '応答が完了しました')] }))
+    expect(s.header).not.toContain('[i]')
+    expect(s.body).not.toContain('[i]')
+    expect(s.body).toContain('本文です')
   })
 
-  test('another session still gets through', () => {
-    const body = screenText(mk({ relayInfo: [info('b', '応答が完了しました')] })).body
-    expect(body).toContain('[i]2脚ロボ開発: 応答が完了しました')
+  test('another session is reported as a count in the header, not as body text', () => {
+    // The dialog already showed it in full and the list still holds it; a
+    // third showing would cost two of the seven lines being read.
+    const s = screenText(mk({ relayInfo: [info('b', '応答が完了しました')] }))
+    expect(s.header).toContain('[i]1')
+    expect(s.body).not.toContain('応答が完了しました')
   })
 
-  test('the open session is skipped over, not the whole queue', () => {
-    const body = screenText(mk({
-      relayInfo: [info('a', 'こちらは出ない', 2), info('b', 'こちらは出る', 1)],
-    })).body
-    expect(body).toContain('こちらは出る')
-    expect(body).not.toContain('こちらは出ない')
+  test('the open session is not counted, the others are', () => {
+    const s = screenText(mk({
+      relayInfo: [info('a', 'これは数えない', 2), info('b', 'これは数える', 1)],
+    }))
+    expect(s.header).toContain('[i]1')
+    expect(s.body).not.toContain('これは数える')
+    expect(s.body).not.toContain('これは数えない')
+  })
+
+  test('nothing waiting means no mark at all', () => {
+    expect(screenText(mk({})).header).not.toContain('[i]')
+  })
+
+  test('a long workspace name gives way so the count survives', () => {
+    // withClock truncates from the right; without the tail split the mark
+    // itself would be what fell off the edge.
+    const s = screenText(mk({
+      sessions: [
+        { id: 'a', name: 'とても長いワークスペース名前ですこれは実機の幅を超えます', state: 'working' as const },
+        { id: 'b', name: 'b', state: 'idle' as const },
+      ],
+      relayInfo: [info('b', 'x')],
+    }))
+    expect(s.header).toContain('[i]1')
+    expect(width(s.header)).toBeLessThanOrEqual(HEADER_WIDTH)
   })
 
   test('a question about the open session still shows — it carries the choices', () => {
@@ -1028,5 +1051,73 @@ describe('no notification about what is already on screen', () => {
       relayInfo: [info('a', '応答が完了しました')],
     })).body
     expect(body).toContain('[i]グラス開発: 応答が完了しました')
+  })
+})
+
+describe('the header bar never overflows, whatever the clock reads', () => {
+  // A CI run in another timezone caught this: digit widths differ (`1` is 8px,
+  // `0` is wider), so the bar fit on the machine it was written on and not on
+  // the one that checked it. Sweeping the clock is the only honest test of a
+  // layout that measures itself against the time of day.
+  const RealDate = Date
+
+  const state = (name: string, notices: number) => ({
+    mode: 'conversation' as const,
+    sessions: [
+      { id: 'a', name, state: 'working' as const, indicatorState: 'waiting_input' as const },
+      { id: 'b', name: 'b', state: 'idle' as const },
+    ],
+    sessionIndex: 0,
+    conversation: [{ role: 'assistant' as const, content: 'x', timestamp: '2026-07-28T00:00:00Z' }],
+    conversationOffset: 0, conversationPage: 0, conversationLastLoaded: 0,
+    conversationHasMore: false, conversationLoading: false,
+    choiceIndex: 0, choiceOptions: [], relayWaiting: [],
+    relayInfo: Array.from({ length: notices }, (_, i) => ({
+      id: `i${i}`, sessionId: 'b', kind: 'info' as const, text: 'x',
+      source: 'auto' as const, createdAt: i,
+    })),
+    overlayItemId: null, spinnerTick: 0,
+  })
+
+  const NAMES = [
+    'とても長いワークスペース名前ですこれは実機の幅を超えます',
+    'wheel-leg-bot-with-a-very-long-name-indeed-truly',
+    'グラス開発',
+  ]
+
+  function sweep(check: (header: string, at: string) => void) {
+    try {
+      for (let m = 0; m < 1440; m += 7) {
+        const h = Math.floor(m / 60)
+        const mi = m % 60
+        // @ts-expect-error clock shim for the sweep
+        globalThis.Date = class extends RealDate {
+          getHours() { return h }
+          getMinutes() { return mi }
+        }
+        const at = `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`
+        for (const n of NAMES) check(screenText(state(n, 2) as never).header, `${at} / ${n}`)
+      }
+    } finally {
+      globalThis.Date = RealDate
+    }
+  }
+
+  test('it fits at every minute of the day', () => {
+    const over: string[] = []
+    sweep((header, at) => {
+      if (width(header) > HEADER_WIDTH) over.push(`${at}: ${width(header)}px "${header}"`)
+    })
+    expect(over).toEqual([])
+  })
+
+  test('the notice count is never what falls off the edge', () => {
+    // The title is truncatable context; the count is the news. If the bar has
+    // to lose something it must not be this.
+    const lost: string[] = []
+    sweep((header, at) => {
+      if (!header.includes('[i]2')) lost.push(`${at}: "${header}"`)
+    })
+    expect(lost).toEqual([])
   })
 })
