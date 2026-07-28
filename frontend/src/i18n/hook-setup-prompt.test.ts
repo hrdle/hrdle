@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
+import { IDENTITY } from "../../../shared/identity";
 
 /**
  * The hook setup prompt is handed to an agent, which then edits the user's
- * settings file from it. So the config it carries has to be the config CC Hub
+ * settings file from it. So the config it carries has to be the config this app
  * actually looks for: a stale example (#538 left one asking for PreToolUse and
  * UserPromptSubmit, dropped in #390) is a wrong edit made on our instruction.
  */
@@ -13,10 +14,20 @@ const PROMPTS = [
 	["en", en.onboarding.hookSetupPrompt],
 ] as const;
 
-const COMMAND = "/home/me/bin/cchub notify";
+const COMMAND = `/home/me/bin/${IDENTITY.binaryName} notify`;
 
+/**
+ * Stands in for i18next, which fills `{{product}}` and `{{bin}}` from
+ * `defaultVariables` without any call site passing them. The assertion below
+ * that nothing `{{`-shaped survives is what makes this worth keeping in step:
+ * a placeholder the real renderer knows about but this one does not would fail
+ * here, and a placeholder neither knows about would reach the agent verbatim.
+ */
 function render(prompt: string): string {
-	return prompt.replaceAll("{{command}}", COMMAND);
+	return prompt
+		.replaceAll("{{command}}", COMMAND)
+		.replaceAll("{{product}}", IDENTITY.productName)
+		.replaceAll("{{bin}}", IDENTITY.binaryName);
 }
 
 /** The one `{"hooks":...}` object the prompt embeds as its example. */

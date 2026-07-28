@@ -1,6 +1,7 @@
 // CLI argument parser and commands
 import pkg from '../../package.json';
 import { t } from './i18n';
+import { IDENTITY } from '../../shared/identity';
 
 const VERSION = pkg.version;
 
@@ -36,25 +37,25 @@ interface CliOptions {
 
 function printHelp(): void {
   console.log(`
-CC Hub v${VERSION} - Claude Code Session Manager
+${IDENTITY.productName} v${VERSION} - ${IDENTITY.tagline}
 
 ${t('cli.usage')}
   ${t('cli.serverStart')}
-  cchub setup [options]     Register service (systemd on Linux, launchd on macOS)
-  cchub uninstall           Remove service registration
-  cchub update [options]    Check and apply updates
-  cchub status              Show service status
-  cchub notify              Send hook event (reads JSON from stdin)
-  cchub glasses <text>      Post a self-note to the G2 glasses relay channel
+  ${IDENTITY.binaryName} setup [options]     Register service (systemd on Linux, launchd on macOS)
+  ${IDENTITY.binaryName} uninstall           Remove service registration
+  ${IDENTITY.binaryName} update [options]    Check and apply updates
+  ${IDENTITY.binaryName} status              Show service status
+  ${IDENTITY.binaryName} notify              Send hook event (reads JSON from stdin)
+  ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
                             (session is auto-resolved: cwd → process ancestors)
-  cchub send <target> [text]  Send input to a pane on a peer or local server
+  ${IDENTITY.binaryName} send <target> [text]  Send input to a pane on a peer or local server
                               target: <peer>:<session>:<paneId>
                               (peer can be 'local', a peer id, or a nickname)
-  cchub peek <target>       Snapshot a pane's current viewport (last 20 rows
+  ${IDENTITY.binaryName} peek <target>       Snapshot a pane's current viewport (last 20 rows
                             by default) — useful for checking peer state
                             without opening the peer UI.
-  cchub debug <sub>         Toggle Bun inspector mode on the running service
+  ${IDENTITY.binaryName} debug <sub>         Toggle Bun inspector mode on the running service
                             sub: enable | disable | profile | status
 
 ${t('cli.options')}
@@ -88,13 +89,13 @@ peek options:
 ${t('cli.examples')}
   ${t('cli.exampleStart')}
   ${t('cli.exampleWithPort')}
-  cchub setup -P secret      Register service with password (stored in Keychain on macOS)
-  cchub update               Update to latest
+  ${IDENTITY.binaryName} setup -P secret      Register service with password (stored in Keychain on macOS)
+  ${IDENTITY.binaryName} update               Update to latest
 `);
 }
 
 function printVersion(): void {
-  console.log(`cchub v${VERSION}`);
+  console.log(`${IDENTITY.binaryName} v${VERSION}`);
 }
 
 export function parseArgs(args: string[]): CliOptions {
@@ -277,7 +278,7 @@ export function parseArgs(args: string[]): CliOptions {
       default:
         if (arg.startsWith('-')) {
           console.error(`❌ ${t('cli.errorUnknownOption', { option: arg })}`);
-          console.error('Help: cchub --help');
+          console.error(`Help: ${IDENTITY.binaryName} --help`);
           process.exit(1);
         }
     }
@@ -371,7 +372,9 @@ async function runGlasses(options: CliOptions): Promise<void> {
 
 async function runSend(options: CliOptions): Promise<void> {
   if (!options.sendTarget) {
-    console.error('❌ target is required: cchub send <peer>:<session>:<paneId> [text]');
+    console.error(
+      `❌ target is required: ${IDENTITY.binaryName} send <peer>:<session>:<paneId> [text]`,
+    );
     process.exit(1);
   }
   const { runSend: runSendImpl } = await import('./commands/send');
@@ -396,7 +399,9 @@ async function runSend(options: CliOptions): Promise<void> {
 
 async function runPeek(options: CliOptions): Promise<void> {
   if (!options.peekTarget) {
-    console.error('❌ target is required: cchub peek <peer>:<session>:<paneId>');
+    console.error(
+      `❌ target is required: ${IDENTITY.binaryName} peek <peer>:<session>:<paneId>`,
+    );
     process.exit(1);
   }
   const { runPeek: runPeekImpl } = await import('./commands/send');

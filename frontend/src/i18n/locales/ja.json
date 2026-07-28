@@ -364,11 +364,11 @@
 		"historyTabDescription": "過去のClaude Codeセッションを検索・閲覧できます。以前の会話を再開したり履歴を確認できます。",
 		"dashboardTabTitle": "ダッシュボード",
 		"dashboardTabDescription": "使用量リミット、アクティビティ統計、コスト推定をリアルタイムで確認できます。",
-		"welcomePrompt": "こんにちは！CC Hubへようこそ。あなたはClaude Codeです。CC Hubを通じてリモートからアクセスしています。簡単に自己紹介してください。",
-		"hookNotConfigured": "Hook通知が未設定です。Claude Code か Codex の hook に cchub notify を追加すると、応答完了時と入力待ちのときに OS 通知を受け取れます。セッションのステータス表示（実行中／完了／入力待ち）は hook なしで動きます。",
+		"welcomePrompt": "こんにちは！{{product}}へようこそ。あなたはClaude Codeです。{{product}}を通じてリモートからアクセスしています。簡単に自己紹介してください。",
+		"hookNotConfigured": "Hook通知が未設定です。Claude Code か Codex の hook に {{bin}} notify を追加すると、応答完了時と入力待ちのときに OS 通知を受け取れます。セッションのステータス表示（実行中／完了／入力待ち）は hook なしで動きます。",
 		"hookNotConfiguredDismiss": "閉じる",
 		"hookSetupAction": "設定する",
-		"hookSetupPrompt": "CC Hub の通知 hook を設定してください。必要なイベントは2つだけです: Stop（通知の本文）と PostToolUse（matcher: AskUserQuestion、質問元のツール名）。セッションのステータス表示（実行中／完了／入力待ち）は herdr から取得しているので hook は要りません。\nhook コマンド: {{command}}\n設定ファイルは Claude Code が ~/.claude/settings.json、Codex が ~/.codex/hooks.json で、どちらも同じ形式です（Codex は config.toml に書くと警告が出るため hooks.json を使ってください）:\n{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"{{command}}\"}]}],\"PostToolUse\":[{\"matcher\":\"AskUserQuestion\",\"hooks\":[{\"type\":\"command\",\"command\":\"{{command}}\"}]}]}}\n既存のファイルにマージしてください。既存の hooks エントリや他の設定は上書きせず、{{command}} を新しいエントリとして追加するか、既存の hooks 配列の末尾に追加します。\nPreToolUse と UserPromptSubmit は不要です（すでに登録されていても害はないので、そのままで構いません）。Grok Build は Claude の settings.json を読むため、追加の設定は要りません。"
+		"hookSetupPrompt": "{{product}} の通知 hook を設定してください。必要なイベントは2つだけです: Stop（通知の本文）と PostToolUse（matcher: AskUserQuestion、質問元のツール名）。セッションのステータス表示（実行中／完了／入力待ち）は herdr から取得しているので hook は要りません。\nhook コマンド: {{command}}\n設定ファイルは Claude Code が ~/.claude/settings.json、Codex が ~/.codex/hooks.json で、どちらも同じ形式です（Codex は config.toml に書くと警告が出るため hooks.json を使ってください）:\n{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"{{command}}\"}]}],\"PostToolUse\":[{\"matcher\":\"AskUserQuestion\",\"hooks\":[{\"type\":\"command\",\"command\":\"{{command}}\"}]}]}}\n既存のファイルにマージしてください。既存の hooks エントリや他の設定は上書きせず、{{command}} を新しいエントリとして追加するか、既存の hooks 配列の末尾に追加します。\nPreToolUse と UserPromptSubmit は不要です（すでに登録されていても害はないので、そのままで構いません）。Grok Build は Claude の settings.json を読むため、追加の設定は要りません。"
 	},
 	"remoteControl": {
 		"active": "リモコンモード中",
