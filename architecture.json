@@ -1,6 +1,6 @@
 {
   "name": "CC Hub",
-  "version": "0.2.82",
+  "version": "0.2.83",
   "generated": "2026-07-28",
   "summary": "Web-based terminal session manager for Claude Code / Codex. Runs agents in herdr workspaces and provides a web UI for remote access from tablets/mobile devices",
   "stack": {
