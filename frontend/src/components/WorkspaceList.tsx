@@ -805,7 +805,9 @@ function PaneRow({
 	const { t, i18n } = useTranslation();
 	const cmd = pane.currentCommand || "shell";
 	const isAgentPane = isAgentProvider(cmd) || !!pane.agentName;
-	const displayName = pane.agentName || cmd;
+	// A name the user typed outranks one we derived: `herdr pane rename` is them
+	// saying what the pane is for, where `claude` only says what is running.
+	const displayName = pane.label || pane.agentName || cmd;
 	const nameColor =
 		pane.agentColor && AGENT_NAME_COLORS[pane.agentColor]
 			? AGENT_NAME_COLORS[pane.agentColor]

@@ -209,6 +209,14 @@ export interface PaneInfo {
    *  consumer describing the terminal — which renders one tab — filters on
    *  this against the session's `activeTabId`. */
   tabId?: string;
+  /**
+   * Name the user gave this pane with `herdr pane rename`.
+   *
+   * Absent until they set one, so anything showing it needs a fallback — the
+   * pane id is what a pane is called before it is called anything else. herdr
+   * owns this; cchub only relays it, so renaming from either side agrees.
+   */
+  label?: string;
   indicatorState?: IndicatorState;
   pid?: number;            // shell/subprocess PID of the pane's foreground group
   /** Per-pane agent metrics (model / context% / memory). Populated only for

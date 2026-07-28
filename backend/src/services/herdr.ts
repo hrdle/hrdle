@@ -31,6 +31,8 @@ interface HerdrPaneInfo {
   isActive: boolean;
   /** Tab the pane belongs to. `panes` spans every tab of the workspace. */
   tabId?: string;
+  /** User-given name from `herdr pane rename`, absent until they set one. */
+  label?: string;
   pid?: number;
 }
 
@@ -221,6 +223,7 @@ export class HerdrService {
                 agentStatus: agentPane?.status ?? p.agent_status,
                 isActive: p.focused,
                 tabId: p.tab_id,
+                label: p.label,
                 pid,
               };
             }),

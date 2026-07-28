@@ -1121,3 +1121,53 @@ describe('the header bar never overflows, whatever the clock reads', () => {
     expect(lost).toEqual([])
   })
 })
+
+describe('a pane is called what the user called it', () => {
+  const mk = (over: Record<string, unknown> = {}) => ({
+    mode: 'session_list' as const,
+    sessions: [
+      {
+        id: 'a', name: '2脚ロボ開発', state: 'idle' as const,
+        panes: [
+          { paneId: '%1', currentPath: '/repo' },
+          { paneId: '%3', label: '買い物', currentPath: '/repo' },
+          { paneId: '%4', label: '   ', currentPath: '/repo' },
+        ],
+      },
+    ],
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0, conversationPage: 0, conversationLastLoaded: 0,
+    conversationHasMore: false, conversationLoading: false,
+    choiceIndex: 0, choiceOptions: [], relayWaiting: [], relayInfo: [],
+    overlayItemId: null, spinnerTick: 0,
+    ...over,
+  })
+
+  test('a named pane shows its name', () => {
+    // `%3` is an address, not a name: it says where the pane sits in the split
+    // tree and nothing about what is running there.
+    expect(screenText(mk()).body).toContain('買い物')
+  })
+
+  test('an unnamed pane keeps its id', () => {
+    // Most panes are never named; without the fallback the row points at
+    // nothing at all.
+    expect(screenText(mk()).body).toContain('%1')
+  })
+
+  test('a blank name is not a name', () => {
+    // herdr accepts whitespace; a row reading "├    16%" identifies nothing.
+    expect(screenText(mk()).body).toContain('%4')
+  })
+
+  test('the conversation header names the pane it is reading', () => {
+    const s = screenText(mk({
+      mode: 'conversation' as const,
+      selectedPaneId: '%3',
+      conversation: [{ role: 'assistant' as const, content: 'x', timestamp: '2026-07-28T00:00:00Z' }],
+    }))
+    expect(s.header).toContain('買い物')
+    expect(s.header).not.toContain('%3')
+  })
+})
