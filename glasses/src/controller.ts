@@ -83,6 +83,18 @@ const AUTO_PAGE_STEP_MS = 3 * SECONDS_PER_LINE_MS
  */
 const AUTO_SCROLL_DWELL_MS = 3 * SECONDS_PER_LINE_MS
 
+/**
+ * How many times round the recap goes before it rests.
+ *
+ * Looping was the point — a reader looking up a minute later should find it
+ * readable from the start — but looping forever means a full redraw every five
+ * seconds for as long as the conversation stays open, over BLE, for nobody.
+ * Two passes is a minute of motion, which is long enough for someone who is
+ * there and short enough not to spend the evening drawing for someone who is
+ * not. A ring gesture starts the count over: that is a reader arriving.
+ */
+const AUTO_SCROLL_MAX_PASSES = 2
+
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
 /** Platform capabilities the controller cannot provide itself. The G2 wires
@@ -192,6 +204,11 @@ export class GlassesController {
   private lastGestureAt = 0
   /** Ticks since the last auto step, so a page turn can cost several of them. */
   private autoTicks = 0
+  /** Completed passes over the recap, counted towards AUTO_SCROLL_MAX_PASSES. */
+  private autoPasses = 0
+  /** Set once the screen has shown everything it has, twice. Nothing moves
+   *  again until a gesture says someone is there. */
+  private autoResting = false
 
   private audioChunks: Uint8Array[] = []
   private recording = false
@@ -239,6 +256,8 @@ export class GlassesController {
   private tickAutoAdvance(): void {
     const st = this.state
     if (st.mode !== 'conversation') return
+    // Everything has been shown, twice. Drawing again would be for nobody.
+    if (this.autoResting) return
     // The reader is working the ring; do not fight them for it.
     if (Date.now() - this.lastGestureAt < AUTO_ADVANCE_IDLE_MS) return
 
@@ -270,9 +289,16 @@ export class GlassesController {
     // again, rather than sitting on its last three lines forever — the reader
     // who looks up a minute later should find it readable from the start.
     if (steps > 1 && (st.noticeWindow ?? 0) !== 0) {
+      // Back to the top, then count the pass. Resting at the top rather than
+      // on the last three lines: whenever the reader does look up, the recap
+      // reads from its beginning.
       st.noticeWindow = 0
       this.render()
+      if (++this.autoPasses >= AUTO_SCROLL_MAX_PASSES) this.autoResting = true
+      return
     }
+    // Nothing scrolls and no page is left — there is nothing to come back for.
+    this.autoResting = true
     // Everything on this screen has been shown. Stop: arriving at the end and
     // staying there is what "read it all" looks like.
   }
@@ -396,6 +422,9 @@ export class GlassesController {
     // to know the reader is driving. The auto-advance clock stays out of the
     // way for AUTO_ADVANCE_IDLE_MS afterwards.
     this.lastGestureAt = Date.now()
+    // Someone is here. Whatever the screen had settled into, it starts over.
+    this.autoPasses = 0
+    this.autoResting = false
     switch (this.state.mode) {
       case 'session_list': return this.onSessionListAction(action)
       case 'conversation': return this.onConversationAction(action)
