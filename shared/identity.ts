@@ -86,6 +86,8 @@ export const SERVICE = {
   launchdUpdateLabel: `${IDENTITY.launchdPrefix}.update`,
   launchdServerPlist: `${IDENTITY.launchdPrefix}.server.plist`,
   launchdUpdatePlist: `${IDENTITY.launchdPrefix}.update.plist`,
+  /** `cchub.service.d` — where systemd looks for drop-in overrides. */
+  dropInDir: `${IDENTITY.serviceName}.service.d`,
 } as const;
 
 /** The release asset for a platform, e.g. `cchub-linux-x64`. */
@@ -95,6 +97,17 @@ export function assetName(platform: string, arch: string): string {
 
 /** The hook command hosts are told to run, e.g. `cchub notify`. */
 export const HOOK_COMMAND = `${IDENTITY.binaryName} notify`;
+
+/**
+ * Matches a hook command that invokes us, bare or by absolute path.
+ *
+ * Used to recognise an entry that is already there. A pattern that stops
+ * matching after a rename does not throw — it reports the hook as missing and
+ * writes a second one beside it.
+ */
+export const HOOK_COMMAND_PATTERN = new RegExp(
+  `(?:^|/)${IDENTITY.binaryName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+notify(?:\\s|$)`,
+);
 
 /** `User-Agent` for calls to the GitHub API. */
 export function userAgent(version: string): string {
