@@ -1278,3 +1278,62 @@ describe('waiting shows what did not fit', () => {
     expect(noticeScrollSteps(st({ conversationPage: 2 }) as never)).toBe(1)
   })
 })
+
+describe('the scroll rests at the end before starting over', () => {
+  // The controller's clock, on paper: one tick per SCROLL step, a page turn
+  // and the end-of-scroll rest each costing three. Verifying the schedule
+  // rather than the wall clock keeps this test instant and deterministic.
+  const STEP = 1
+  const DWELL_TICKS = 3
+  const PAGE_TICKS = 3
+
+  function run(noticeSteps: number, totalPages: number, ticks: number) {
+    let w = 0
+    let page = 0
+    let waited = 0
+    const events: string[] = []
+    for (let t = STEP; t <= ticks; t += STEP) {
+      if (w < noticeSteps - 1) {
+        w++; waited = 0; events.push(`scroll:${w}@${t}`); continue
+      }
+      const need = noticeSteps > 1 ? DWELL_TICKS : PAGE_TICKS
+      if (++waited < need) continue
+      waited = 0
+      if (page < totalPages - 1) { page++; events.push(`page:${page}@${t}`); continue }
+      if (noticeSteps > 1 && w !== 0) { w = 0; events.push(`rewind@${t}`) }
+    }
+    return events
+  }
+
+  test('the last line is not snatched away at a scrolled line’s pace', () => {
+    // It reached the end and went straight back to the top, so the line worth
+    // waiting for got less time than any line before it.
+    const events = run(4, 1, 10)
+    const end = events.findIndex((e) => e.startsWith('scroll:3'))
+    const rewind = events.findIndex((e) => e.startsWith('rewind'))
+    expect(end).toBeGreaterThanOrEqual(0)
+    expect(rewind).toBeGreaterThan(end)
+    // Three ticks between arriving and leaving, not one.
+    const at = (e: string) => Number(e.split('@')[1])
+    expect(at(events[rewind]) - at(events[end])).toBe(DWELL_TICKS)
+  })
+
+  test('it comes round again rather than sitting on the last lines forever', () => {
+    const events = run(4, 1, 14)
+    expect(events.filter((e) => e === 'scroll:1@1' || e.startsWith('scroll:1@')).length).toBeGreaterThan(1)
+  })
+
+  test('pages take their turn before the recap starts over', () => {
+    // Otherwise a recap loop would keep the rest of the message off screen.
+    const events = run(4, 3, 12)
+    const firstPage = events.findIndex((e) => e.startsWith('page:'))
+    const firstRewind = events.findIndex((e) => e.startsWith('rewind'))
+    expect(firstPage).toBeGreaterThanOrEqual(0)
+    expect(firstRewind === -1 || firstPage < firstRewind).toBe(true)
+  })
+
+  test('with nothing to scroll, pages still turn on their own schedule', () => {
+    const events = run(1, 3, 9)
+    expect(events).toEqual(['page:1@3', 'page:2@6'])
+  })
+})

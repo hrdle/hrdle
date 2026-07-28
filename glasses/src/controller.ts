@@ -74,6 +74,15 @@ const AUTO_SCROLL_STEP_MS = SECONDS_PER_LINE_MS
  */
 const AUTO_PAGE_STEP_MS = 3 * SECONDS_PER_LINE_MS
 
+/**
+ * How long the end of a scroll stays up before it goes back to the top.
+ *
+ * Without it the last line appeared and was gone in the time any other line
+ * gets — and the last line is the one worth waiting for. Priced like a page
+ * turn: long enough to finish the sentence and look away.
+ */
+const AUTO_SCROLL_DWELL_MS = 3 * SECONDS_PER_LINE_MS
+
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
 /** Platform capabilities the controller cannot provide itself. The G2 wires
@@ -240,13 +249,28 @@ export class GlassesController {
       this.render()
       return
     }
-    // A page turn costs more reading than a scrolled line, so it waits longer
-    // — counted in ticks of the same clock rather than run off a second timer.
+
+    // The scroll is at its end, or there was nothing to scroll. Either way the
+    // strip has said what it has, so the next step waits longer than a line:
+    // a page turn's worth, which is also how long the last line deserves
+    // before it is taken away.
+    const wait = steps > 1 ? AUTO_SCROLL_DWELL_MS : AUTO_PAGE_STEP_MS
+    if (++this.autoTicks < wait / AUTO_SCROLL_STEP_MS) return
+    this.autoTicks = 0
+
     const totalPages = this.currentMsgTotalPages()
     if (st.conversationPage < totalPages - 1) {
-      if (++this.autoTicks < AUTO_PAGE_STEP_MS / AUTO_SCROLL_STEP_MS) return
-      this.autoTicks = 0
+      // Turning the page drops the recap anyway (deeper paging buys message
+      // space with it), so there is nothing to send back to the top.
       st.conversationPage++
+      this.render()
+      return
+    }
+    // Nothing further to page to. Back to the top of the recap and round
+    // again, rather than sitting on its last three lines forever — the reader
+    // who looks up a minute later should find it readable from the start.
+    if (steps > 1 && (st.noticeWindow ?? 0) !== 0) {
+      st.noticeWindow = 0
       this.render()
     }
     // Everything on this screen has been shown. Stop: arriving at the end and
@@ -1018,6 +1042,14 @@ export class GlassesController {
     return (this.currentSession()?.panes ?? []).find((p) => p.paneId === id)
   }
 
+  /**
+   * Reload the open conversation.
+   *
+   * Deliberately leaves `noticeWindow` alone: this runs on every refresh of a
+   * conversation already being read, and resetting it here snapped the recap
+   * back to its first line each time the agent said anything. Opening a
+   * different conversation resets it — those call sites do it themselves.
+   */
   private async loadConversation(): Promise<void> {
     const session = this.currentSession()
     // A pane of a multi-pane workspace is its own agent conversation, with its
@@ -1031,7 +1063,6 @@ export class GlassesController {
       this.state.conversationHasMore = rawPane.length >= INITIAL_LOAD_COUNT
       this.state.conversationOffset = 0
       this.state.conversationPage = 0
-      this.state.noticeWindow = 0
       return
     }
     if (!session?.ccSessionId) {
@@ -1047,7 +1078,6 @@ export class GlassesController {
     this.state.conversationHasMore = raw.length >= INITIAL_LOAD_COUNT
     this.state.conversationOffset = 0
     this.state.conversationPage = 0
-    this.state.noticeWindow = 0
   }
 
   /** Load more older messages by requesting a larger `last` count. Returns true if new messages were added. */
