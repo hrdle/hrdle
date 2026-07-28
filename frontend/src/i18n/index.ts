@@ -4,6 +4,7 @@ import { initReactI18next } from "react-i18next";
 
 import en from "./locales/en.json";
 import ja from "./locales/ja.json";
+import { storageKey } from "../utils/app-storage";
 
 const resources = {
 	en: { translation: en },
@@ -23,6 +24,6 @@ i18n
 		detection: {
 			order: ["localStorage", "navigator", "htmlTag"],
 			caches: ["localStorage"],
-			lookupLocalStorage: "cchub-language",
+			lookupLocalStorage: storageKey("language"),
 		},
 	});

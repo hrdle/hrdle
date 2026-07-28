@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { storageKey } from "../utils/app-storage";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "cchub-theme";
+const STORAGE_KEY = storageKey("theme");
 
 function getStoredTheme(): Theme {
 	try {

@@ -50,12 +50,13 @@ import {
 } from "./PaneContainer";
 import { SessionModal } from "./SessionModal";
 import type { ControlModeConfig, TerminalRef } from "./Terminal";
+import { storageKey } from "../utils/app-storage";
 
-const DESKTOP_STATE_KEY = "cchub-desktop-state";
+const DESKTOP_STATE_KEY = storageKey("desktop-state");
 // Pre-#487 storage: the peer the user last picked a session from. The pane
 // tree now stores composite `peerId:id` keys, so this only feeds the one-time
 // migration of a legacy saved tree and is removed afterwards.
-const LEGACY_SESSION_PEER_KEY = "cchub-desktop-session-peer";
+const LEGACY_SESSION_PEER_KEY = storageKey("desktop-session-peer");
 
 function readLegacySessionPeerIntent(): { id: string; peerId: string } | null {
 	try {
@@ -397,7 +398,7 @@ function extractPaneSizes(
 	return sizes;
 }
 
-const KEYBOARD_VISIBLE_KEY = "cchub-floating-keyboard-visible";
+const KEYBOARD_VISIBLE_KEY = storageKey("floating-keyboard-visible");
 
 export function DesktopLayout({
 	sessions: propSessions,

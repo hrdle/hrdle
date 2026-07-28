@@ -1,3 +1,4 @@
+import { storageKey } from "./app-storage";
 /**
  * Stable per-device identifier.
  *
@@ -6,7 +7,7 @@
  * connections (so multiple tabs on the same browser count as one).
  */
 
-const STORAGE_KEY = "cchub-device-id";
+const STORAGE_KEY = storageKey("device-id");
 
 export function getDeviceId(): string {
 	try {

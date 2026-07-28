@@ -13,6 +13,9 @@
   "serviceName": "cchub",
   "launchdPrefix": "com.cchub",
   "storagePrefix": "cchub-",
+  "legacyStoragePrefixes": [
+    "cc-hub-"
+  ],
   "tmpPrefix": "cchub",
   "browserLogName": "cc-hub-browser.log",
   "keychainService": "cchub"

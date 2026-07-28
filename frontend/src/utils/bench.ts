@@ -1,3 +1,4 @@
+import { storageKey } from "./app-storage";
 /**
  * End-to-end terminal latency bench.
  *
@@ -181,7 +182,7 @@ export const bench = {
 // Auto-start if localStorage flag is set
 if (
 	typeof localStorage !== "undefined" &&
-	localStorage.getItem("cchub-bench") === "1"
+	localStorage.getItem(storageKey("bench")) === "1"
 ) {
 	start();
 }

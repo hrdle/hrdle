@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
+import { storageKey } from "../utils/app-storage";
 
-const WORDWRAP_STORAGE_KEY = "cchub-wordwrap";
-const FONTSIZE_STORAGE_KEY = "cchub-fontsize";
+const WORDWRAP_STORAGE_KEY = storageKey("wordwrap");
+const FONTSIZE_STORAGE_KEY = storageKey("fontsize");
 
 const DEFAULT_FONTSIZE = 14;
 export const MIN_FONTSIZE = 8;

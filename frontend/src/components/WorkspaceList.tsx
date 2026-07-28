@@ -109,6 +109,7 @@ import { authFetch } from "../services/api";
 import { ConversationViewer } from "./ConversationViewer";
 import { SessionHistory } from "./SessionHistory";
 import { SessionHistoryV2 } from "./history/SessionHistoryV2";
+import { storageKey } from "../utils/app-storage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -1212,7 +1213,7 @@ function SessionItem({
 	};
 
 	// Show long-press hint only for first few visits
-	const hintKey = "cchub-longpress-hint-seen";
+	const hintKey = storageKey("longpress-hint-seen");
 	const hintSeen =
 		typeof localStorage !== "undefined" && localStorage.getItem(hintKey);
 	if (!hintSeen && typeof localStorage !== "undefined") {
@@ -1651,7 +1652,7 @@ export function WorkspaceList({
 	const [hookBannerDismissed, setHookBannerDismissed] = useState(
 		() =>
 			typeof localStorage !== "undefined" &&
-			localStorage.getItem("cchub-hook-banner-dismissed") === "1",
+			localStorage.getItem(storageKey("hook-banner-dismissed")) === "1",
 	);
 
 	// Conversation viewer state
@@ -2216,7 +2217,7 @@ export function WorkspaceList({
 													if (res.ok) {
 														setHookBannerDismissed(true);
 														localStorage.setItem(
-															"cchub-hook-banner-dismissed",
+															storageKey("hook-banner-dismissed"),
 															"1",
 														);
 														onSelectSession(target);
@@ -2232,7 +2233,7 @@ export function WorkspaceList({
 											onClick={() => {
 												setHookBannerDismissed(true);
 												localStorage.setItem(
-													"cchub-hook-banner-dismissed",
+													storageKey("hook-banner-dismissed"),
 													"1",
 												);
 											}}

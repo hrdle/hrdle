@@ -24,6 +24,7 @@ import { HistoryActiveChips } from "./HistoryActiveChips";
 import { HistoryFacetDrawer } from "./HistoryFacetDrawer";
 import { HistoryFacetSidebar } from "./HistoryFacetSidebar";
 import { VirtualizedHistoryList } from "./VirtualizedHistoryList";
+import { storageKey } from "../../utils/app-storage";
 
 interface ActiveSession extends SessionResponse {
 	ccSessionId?: string;
@@ -37,7 +38,7 @@ interface SessionHistoryV2Props {
 
 const SIDEBAR_MIN_WIDTH = 760;
 
-const SIDEBAR_WIDTH_KEY = "cchub-history-sidebar-width";
+const SIDEBAR_WIDTH_KEY = storageKey("history-sidebar-width");
 const SIDEBAR_WIDTH_DEFAULT = 240;
 const SIDEBAR_WIDTH_MIN = 180;
 const SIDEBAR_WIDTH_MAX = 480;

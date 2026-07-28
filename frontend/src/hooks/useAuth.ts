@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import * as api from "../services/api";
+import { storageKey } from "../utils/app-storage";
 
 interface AuthState {
 	token: string | null;
@@ -8,7 +9,7 @@ interface AuthState {
 	authRequired: boolean | null; // null = checking
 }
 
-const TOKEN_KEY = "cc-hub-token";
+const TOKEN_KEY = storageKey("token");
 
 export function useAuth() {
 	const [state, setState] = useState<AuthState>({

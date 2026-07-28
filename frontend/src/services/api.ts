@@ -1,5 +1,6 @@
+import { storageKey } from "../utils/app-storage";
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const TOKEN_KEY = "cc-hub-token";
+const TOKEN_KEY = storageKey("token");
 
 // Get auth token from localStorage
 export function getAuthToken(): string | null {

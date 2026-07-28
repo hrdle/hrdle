@@ -1,4 +1,5 @@
-export const UI_SCALE_STORAGE_KEY = "cchub-ui-scale";
+import { storageKey } from "./app-storage";
+export const UI_SCALE_STORAGE_KEY = storageKey("ui-scale");
 export const UI_SCALE_OPTIONS = [0.8, 0.9, 1.0, 1.15, 1.3] as const;
 const DEFAULT_UI_SCALE = 1.0;
 const BASE_FONT_SIZE_PX = 14;

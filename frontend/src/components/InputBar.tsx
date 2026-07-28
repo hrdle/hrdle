@@ -18,6 +18,7 @@ import {
 } from "react";
 import { uploadImage } from "../utils/upload-image";
 import { Keyboard } from "./Keyboard";
+import { storageKey } from "../utils/app-storage";
 
 export type InputMode = "hidden" | "shortcuts" | "input";
 
@@ -75,7 +76,7 @@ export const InputBar = memo(
 			(() => {
 				try {
 					return JSON.parse(
-						localStorage.getItem("cchub-input-history") || "[]",
+						localStorage.getItem(storageKey("input-history")) || "[]",
 					);
 				} catch {
 					return [];
@@ -132,7 +133,7 @@ export const InputBar = memo(
 			history.unshift(text);
 			if (history.length > 50) history.pop();
 			try {
-				localStorage.setItem("cchub-input-history", JSON.stringify(history));
+				localStorage.setItem(storageKey("input-history"), JSON.stringify(history));
 			} catch {}
 		};
 
@@ -390,7 +391,7 @@ export const InputBar = memo(
 											inputHistoryRef.current = (() => {
 												try {
 													return JSON.parse(
-														localStorage.getItem("cchub-input-history") || "[]",
+														localStorage.getItem(storageKey("input-history")) || "[]",
 													);
 												} catch {
 													return [];
@@ -541,7 +542,7 @@ export const InputBar = memo(
 										inputHistoryRef.current = (() => {
 											try {
 												return JSON.parse(
-													localStorage.getItem("cchub-input-history") || "[]",
+													localStorage.getItem(storageKey("input-history")) || "[]",
 												);
 											} catch {
 												return [];

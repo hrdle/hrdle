@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { storageKey } from "../utils/app-storage";
 
-const STORAGE_KEY = "cchub-history-v2";
+const STORAGE_KEY = storageKey("history-v2");
 
 function readFlag(): boolean {
 	try {

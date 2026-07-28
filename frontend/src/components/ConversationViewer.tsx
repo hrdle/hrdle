@@ -22,11 +22,12 @@ import {
 } from "../../../shared/types";
 import { agentBadge } from "../utils/agentDisplay";
 import { getTerminalThemes } from "./terminal-themes";
+import { storageKey } from "../utils/app-storage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 // Conversation font size (shared across all sessions)
-const CV_FONT_SIZE_KEY = "cchub-conversation-font-size";
+const CV_FONT_SIZE_KEY = storageKey("conversation-font-size");
 const CV_DEFAULT_FONT_SIZE = 13;
 const CV_MIN_FONT_SIZE = 9;
 const CV_MAX_FONT_SIZE = 24;
