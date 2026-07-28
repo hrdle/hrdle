@@ -20,6 +20,7 @@ import { AuthService } from './services/auth';
 import { getDataDir } from './utils/storage';
 import { herdrBinaryPath, herdrRpc, herdrSocketPath } from './services/herdr-client';
 import { t } from './i18n';
+import { TMP_PATHS } from '../../shared/identity';
 
 // Global error handlers to prevent silent crashes
 process.on('uncaughtException', (err) => {
@@ -116,7 +117,7 @@ addLog('Version: ${VERSION}',true);
 app.route('/api/auth', auth);
 
 // Public images route (no auth required - images are user-uploaded screenshots)
-const IMAGES_DIR = '/tmp/cchub-images';
+const IMAGES_DIR = TMP_PATHS.imagesDir;
 app.get('/api/images/:filename', async (c) => {
   const { readFile } = await import('node:fs/promises');
   const { join, basename } = await import('node:path');

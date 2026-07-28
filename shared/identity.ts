@@ -34,6 +34,28 @@ export const IDENTITY = {
   serviceName: raw.serviceName,
   launchdPrefix: raw.launchdPrefix,
   storagePrefix: raw.storagePrefix,
+  tmpPrefix: raw.tmpPrefix,
+  browserLogName: raw.browserLogName,
+  keychainService: raw.keychainService,
+} as const;
+
+/**
+ * Scratch paths under /tmp.
+ *
+ * `imagesDir` had three separate copies of its literal (the server's static
+ * route, the upload handler and the file route) which only work as long as all
+ * three agree — one edit away from uploads landing where nothing serves them.
+ *
+ * `browserLogFile` does not follow `tmpPrefix`: it has always been
+ * `cc-hub-browser.log`, with the hyphen, and CLAUDE.md tells people to tail it
+ * by that name. Normalising the spelling is a real change to something someone
+ * has in their shell history, so it is recorded here as-is rather than quietly
+ * corrected — a rename can decide to fix it deliberately.
+ */
+export const TMP_PATHS = {
+  imagesDir: `/tmp/${IDENTITY.tmpPrefix}-images`,
+  usageHistoryFile: `/tmp/${IDENTITY.tmpPrefix}-usage-history.json`,
+  browserLogFile: `/tmp/${IDENTITY.browserLogName}`,
 } as const;
 
 /** systemd unit / launchd label names, all composed from `serviceName`. */
