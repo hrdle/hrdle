@@ -3,6 +3,7 @@
 import { platform } from 'node:os';
 import { VERSION } from '../cli';
 import { t } from '../i18n';
+import { SERVICE } from '../../../shared/identity';
 
 export async function showStatus(): Promise<void> {
   console.log(`CC Hub v${VERSION}`);
@@ -20,10 +21,10 @@ export async function showStatus(): Promise<void> {
 
 function showStatusSystemd(): void {
   // Check main service status
-  const serviceResult = Bun.spawnSync(['systemctl', '--user', 'status', 'cchub', '--no-pager'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  const serviceResult = Bun.spawnSync(
+    ['systemctl', '--user', 'status', SERVICE.systemctl, '--no-pager'],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
 
   if (serviceResult.exitCode === 0) {
     console.log('📦 Service status:');
@@ -44,17 +45,23 @@ function showStatusSystemd(): void {
   console.log('');
 
   // Check update timer status
-  const timerResult = Bun.spawnSync(['systemctl', '--user', 'is-active', 'cchub-update.timer'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  const timerResult = Bun.spawnSync(
+    ['systemctl', '--user', 'is-active', SERVICE.updateTimer],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
 
   const timerActive = timerResult.stdout.toString().trim() === 'active';
   console.log(`🔄 Auto-update: ${timerActive ? 'Enabled' : 'Disabled'}`);
 
   if (timerActive) {
     const nextResult = Bun.spawnSync(
-      ['systemctl', '--user', 'show', 'cchub-update.timer', '--property=NextElapseUSecRealtime'],
+      [
+        'systemctl',
+        '--user',
+        'show',
+        SERVICE.updateTimer,
+        '--property=NextElapseUSecRealtime',
+      ],
       { stdout: 'pipe' }
     );
     const nextOutput = nextResult.stdout.toString();
@@ -70,11 +77,11 @@ function showStatusSystemd(): void {
 }
 
 function showStatusLaunchd(): void {
-  // Main service: com.cchub.server
-  const serviceResult = Bun.spawnSync(['launchctl', 'list', 'com.cchub.server'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  // Main service
+  const serviceResult = Bun.spawnSync(
+    ['launchctl', 'list', SERVICE.launchdServerLabel],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
 
   if (serviceResult.exitCode === 0) {
     const out = serviceResult.stdout.toString();
@@ -86,7 +93,9 @@ function showStatusLaunchd(): void {
       console.log('📦 Service status: Stopped');
       if (exitMatch) console.log(`   Last exit status: ${exitMatch[1]}`);
       console.log('');
-      console.log('   Restart: launchctl kickstart -k gui/$(id -u)/com.cchub.server');
+      console.log(
+        `   Restart: launchctl kickstart -k gui/$(id -u)/${SERVICE.launchdServerLabel}`,
+      );
     }
   } else {
     console.log('📦 Service status: Not registered');
@@ -96,11 +105,11 @@ function showStatusLaunchd(): void {
 
   console.log('');
 
-  // Update job: com.cchub.update (StartCalendarInterval, runs daily at 4:00)
-  const updateResult = Bun.spawnSync(['launchctl', 'list', 'com.cchub.update'], {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  // Update job (StartCalendarInterval, runs daily at 4:00)
+  const updateResult = Bun.spawnSync(
+    ['launchctl', 'list', SERVICE.launchdUpdateLabel],
+    { stdout: 'pipe', stderr: 'pipe' },
+  );
   const updateActive = updateResult.exitCode === 0;
   console.log(`🔄 Auto-update: ${updateActive ? 'Enabled (daily 4:00)' : 'Disabled'}`);
 }

@@ -2,11 +2,17 @@ import { join } from 'node:path';
 import { mkdir, writeFile, rename, unlink } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-
-const DEFAULT_DATA_DIR = join(homedir(), '.cc-hub');
+import { IDENTITY } from '../../../shared/identity';
 
 export function getDataDir(): string {
-  return process.env.CC_HUB_DATA_DIR || DEFAULT_DATA_DIR;
+  return (
+    process.env[IDENTITY.dataDirEnv] || join(homedir(), IDENTITY.dataDirName)
+  );
+}
+
+/** `~/.config/cchub` — service env file and other non-data config. */
+export function getConfigDir(): string {
+  return join(homedir(), '.config', IDENTITY.configDirName);
 }
 
 export async function ensureDataDir(): Promise<string> {

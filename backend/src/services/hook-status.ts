@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { resolveNotifyCommand } from './notify-command';
+import { HOOK_COMMAND } from '../../../shared/identity';
 
 /**
  * Hooks CC Hub still needs. Indicator transitions used to need PreToolUse and
@@ -67,7 +68,7 @@ function hasCchubNotify(entries: HookEntry[] | undefined, matcher?: string): boo
   for (const entry of entries) {
     if (matcher !== undefined && !matcherMatches(entry.matcher, matcher)) continue;
     for (const hook of entry.hooks || []) {
-      if (hook.command?.includes('cchub notify')) return true;
+      if (hook.command?.includes(HOOK_COMMAND)) return true;
     }
   }
   return false;
@@ -134,7 +135,7 @@ export function parseHookToml(content: string): HookEventStatus | null {
     }
 
     if (!inHookItems && !line.startsWith('command')) continue;
-    if (!line.includes('command') || !line.includes('cchub notify')) continue;
+    if (!line.includes('command') || !line.includes(HOOK_COMMAND)) continue;
 
     if (currentEvent === 'askUserQuestion') {
       if (matcherMatches(currentMatcher ?? undefined, 'AskUserQuestion')) {

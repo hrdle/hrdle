@@ -7,8 +7,10 @@
  *   "command": "cchub notify"
  */
 
-const PRODUCTION_PORT = 5923;
-const DEV_PORT = 3456;
+import { IDENTITY } from '../../../shared/identity';
+
+const PRODUCTION_PORT = IDENTITY.defaultPort;
+const DEV_PORT = IDENTITY.devPort;
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];

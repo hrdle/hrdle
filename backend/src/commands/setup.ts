@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
+import { IDENTITY, SERVICE } from '../../../shared/identity';
 import { t } from '../i18n';
 import { herdrBinaryPath } from '../services/herdr-client';
 import { migrateCodexHooksToJson } from '../services/codex-hook-config';
@@ -52,14 +53,14 @@ function escapeXml(s: string): string {
 
 // ─── Linux: systemd ───
 
-const SYSTEMD_SERVICE = `[Unit]
-Description=CC Hub - Claude Code Session Manager
+export const SYSTEMD_SERVICE = `[Unit]
+Description=${IDENTITY.productName} - ${IDENTITY.tagline}
 After=network.target tailscaled.service
 
 [Service]
 Type=simple
 ExecStart=__SHELL__ -lc 'exec __EXEC_PATH__ -p __PORT__'
-EnvironmentFile=%h/.config/cchub/env
+EnvironmentFile=%h/.config/${IDENTITY.configDirName}/env
 Environment=PATH=__PATH__
 KillMode=process
 Restart=always
@@ -69,16 +70,16 @@ RestartSec=3
 WantedBy=default.target
 `;
 
-const SYSTEMD_UPDATE_SERVICE = `[Unit]
-Description=CC Hub update check
+export const SYSTEMD_UPDATE_SERVICE = `[Unit]
+Description=${IDENTITY.productName} update check
 
 [Service]
 Type=oneshot
 ExecStart=__EXEC_PATH__ update --auto
 `;
 
-const SYSTEMD_UPDATE_TIMER = `[Unit]
-Description=Check CC Hub updates daily
+export const SYSTEMD_UPDATE_TIMER = `[Unit]
+Description=Check ${IDENTITY.productName} updates daily
 
 [Timer]
 OnCalendar=daily
@@ -96,16 +97,20 @@ WantedBy=timers.target
  * The password is NOT embedded here — it is read from the macOS Keychain at
  * runtime by `cchub` itself, so the plist file stays free of secrets.
  */
-function buildLaunchdPlist(execPath: string, port: number): string {
+export function buildLaunchdPlist(execPath: string, port: number): string {
   const args = [execPath, '-p', String(port)];
-  const logPath = join(homedir(), '.cc-hub', 'cchub.log');
+  const logPath = join(
+    homedir(),
+    IDENTITY.dataDirName,
+    `${IDENTITY.binaryName}.log`,
+  );
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.cchub.server</string>
+  <string>${SERVICE.launchdServerLabel}</string>
   <key>ProgramArguments</key>
   <array>
 ${args.map(a => `    <string>${escapeXml(a)}</string>`).join('\n')}
@@ -128,14 +133,14 @@ ${args.map(a => `    <string>${escapeXml(a)}</string>`).join('\n')}
 `;
 }
 
-function buildLaunchdUpdatePlist(execPath: string): string {
-  const logPath = join(homedir(), '.cc-hub', 'update.log');
+export function buildLaunchdUpdatePlist(execPath: string): string {
+  const logPath = join(homedir(), IDENTITY.dataDirName, 'update.log');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.cchub.update</string>
+  <string>${SERVICE.launchdUpdateLabel}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${escapeXml(execPath)}</string>
@@ -159,7 +164,7 @@ function buildLaunchdUpdatePlist(execPath: string): string {
 // ─── herdr provisioning ───
 
 const HERDR_SYSTEMD_SERVICE = `[Unit]
-Description=herdr terminal multiplexer server (CC Hub backend)
+Description=herdr terminal multiplexer server (${IDENTITY.productName} backend)
 
 [Service]
 Type=simple
@@ -174,7 +179,7 @@ WantedBy=default.target
 `;
 
 function buildHerdrLaunchdPlist(herdrPath: string): string {
-  const logPath = join(homedir(), '.cc-hub', 'herdr.log');
+  const logPath = join(homedir(), IDENTITY.dataDirName, 'herdr.log');
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -206,7 +211,7 @@ function buildHerdrLaunchdPlist(herdrPath: string): string {
 `;
 }
 
-const HERDR_CONFIG_TOML = `# CC Hub herdr backend configuration (written by \`cchub setup\`)
+const HERDR_CONFIG_TOML = `# ${IDENTITY.productName} herdr backend configuration (written by \`${IDENTITY.binaryName} setup\`)
 
 [session]
 # Restart agent panes (Claude Code etc.) in their native conversation
@@ -384,7 +389,7 @@ export async function setupService(port: number, password?: string): Promise<voi
 async function setupLaunchd(port: number, password?: string): Promise<void> {
   const home = homedir();
   const launchAgentsDir = join(home, 'Library', 'LaunchAgents');
-  const logDir = join(home, '.cc-hub');
+  const logDir = join(home, IDENTITY.dataDirName);
   const execPath = process.execPath;
 
   console.log(t('setup.macTitle'));
@@ -404,12 +409,12 @@ async function setupLaunchd(port: number, password?: string): Promise<void> {
   }
 
   // Main service plist (no password embedded — read from Keychain at runtime)
-  const plistPath = join(launchAgentsDir, 'com.cchub.server.plist');
+  const plistPath = join(launchAgentsDir, SERVICE.launchdServerPlist);
   await writeFile(plistPath, buildLaunchdPlist(execPath, port));
   console.log(t('setup.serviceFile', { path: plistPath }));
 
   // Update plist
-  const updatePlistPath = join(launchAgentsDir, 'com.cchub.update.plist');
+  const updatePlistPath = join(launchAgentsDir, SERVICE.launchdUpdatePlist);
   await writeFile(updatePlistPath, buildLaunchdUpdatePlist(execPath));
   console.log(t('setup.updateServiceFile', { path: updatePlistPath }));
 
@@ -440,16 +445,22 @@ async function setupLaunchd(port: number, password?: string): Promise<void> {
 
   console.log('');
   console.log(t('setup.managementCommands'));
-  console.log('  launchctl list | grep cchub        # Status');
-  console.log(`  launchctl kickstart -k gui/$(id -u)/com.cchub.server  # Restart`);
-  console.log(`  launchctl bootout gui/$(id -u)/com.cchub.server       # Stop`);
-  console.log(`  tail -f ~/.cc-hub/cchub.log        # Logs`);
+  console.log(`  launchctl list | grep ${IDENTITY.binaryName}        # Status`);
+  console.log(
+    `  launchctl kickstart -k gui/$(id -u)/${SERVICE.launchdServerLabel}  # Restart`,
+  );
+  console.log(
+    `  launchctl bootout gui/$(id -u)/${SERVICE.launchdServerLabel}       # Stop`,
+  );
+  console.log(
+    `  tail -f ~/${IDENTITY.dataDirName}/${IDENTITY.binaryName}.log        # Logs`,
+  );
   console.log('');
 }
 
 async function setupSystemd(port: number, password?: string): Promise<void> {
   const home = homedir();
-  const configDir = join(home, '.config', 'cchub');
+  const configDir = join(home, '.config', IDENTITY.configDirName);
   const systemdDir = join(home, '.config', 'systemd', 'user');
   const execPath = process.execPath;
 
@@ -473,17 +484,17 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
     .replace(/__EXEC_PATH__/g, execPath)
     .replace(/__PORT__/g, String(port))
     .replace(/__PATH__/g, buildServicePath());
-  const servicePath = join(systemdDir, 'cchub.service');
+  const servicePath = join(systemdDir, SERVICE.unitFile);
   await writeFile(servicePath, serviceContent);
   console.log(t('setup.serviceFile', { path: servicePath }));
 
   // Update service
-  const updateServicePath = join(systemdDir, 'cchub-update.service');
+  const updateServicePath = join(systemdDir, SERVICE.updateUnitFile);
   await writeFile(updateServicePath, SYSTEMD_UPDATE_SERVICE.replace(/__EXEC_PATH__/g, execPath));
   console.log(t('setup.updateServiceFile', { path: updateServicePath }));
 
   // Update timer
-  const updateTimerPath = join(systemdDir, 'cchub-update.timer');
+  const updateTimerPath = join(systemdDir, SERVICE.updateTimerFile);
   await writeFile(updateTimerPath, SYSTEMD_UPDATE_TIMER);
   console.log(t('setup.updateTimerFile', { path: updateTimerPath }));
 
@@ -492,7 +503,13 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
   // Reload and enable
   Bun.spawnSync(['systemctl', '--user', 'daemon-reload']);
 
-  const enableResult = Bun.spawnSync(['systemctl', '--user', 'enable', '--now', 'cchub']);
+  const enableResult = Bun.spawnSync([
+    'systemctl',
+    '--user',
+    'enable',
+    '--now',
+    SERVICE.systemctl,
+  ]);
   if (enableResult.exitCode === 0) {
     console.log(`✅ ${t('setup.serviceEnabled')}`);
   } else {
@@ -500,14 +517,20 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
     console.error(enableResult.stderr.toString());
   }
 
-  const timerResult = Bun.spawnSync(['systemctl', '--user', 'enable', '--now', 'cchub-update.timer']);
+  const timerResult = Bun.spawnSync([
+    'systemctl',
+    '--user',
+    'enable',
+    '--now',
+    SERVICE.updateTimer,
+  ]);
   if (timerResult.exitCode === 0) {
     console.log(t('setup.autoUpdateTimerEnabled'));
   }
 
   console.log('');
   console.log(`📋 ${t('setup.commands')}`);
-  console.log('  systemctl --user status cchub    # Status');
+  console.log(`  systemctl --user status ${SERVICE.systemctl}    # Status`);
   console.log(`  ${t('setup.cmdRestart')}`);
   console.log(`  ${t('setup.cmdStop')}`);
   console.log(`  ${t('setup.cmdLogs')}`);
