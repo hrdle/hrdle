@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
 import { t } from '../i18n';
 import { deletePassword as deletePasswordFromKeychain } from '../utils/keychain';
+import { IDENTITY, SERVICE } from '../../../shared/identity';
 
 export async function uninstallService(): Promise<void> {
   if (platform() === 'darwin') {
@@ -18,8 +19,8 @@ export async function uninstallService(): Promise<void> {
 async function uninstallLaunchd(): Promise<void> {
   const home = homedir();
   const launchAgentsDir = join(home, 'Library', 'LaunchAgents');
-  const plistPath = join(launchAgentsDir, 'com.cchub.server.plist');
-  const updatePlistPath = join(launchAgentsDir, 'com.cchub.update.plist');
+  const plistPath = join(launchAgentsDir, SERVICE.launchdServerPlist);
+  const updatePlistPath = join(launchAgentsDir, SERVICE.launchdUpdatePlist);
   const uid = process.getuid?.() ?? 501;
 
   console.log(`🗑️  ${t('uninstall.title')}`);
@@ -50,7 +51,7 @@ async function uninstallLaunchd(): Promise<void> {
   console.log('');
   console.log(`✅ ${t('uninstall.done')}`);
 
-  const logDir = join(home, '.cc-hub');
+  const logDir = join(home, IDENTITY.dataDirName);
   if (existsSync(logDir)) {
     console.log('');
     console.log(`💡 ${t('uninstall.logsHint')}: rm -rf ${logDir}`);
@@ -60,18 +61,18 @@ async function uninstallLaunchd(): Promise<void> {
 async function uninstallSystemd(): Promise<void> {
   const home = homedir();
   const systemdDir = join(home, '.config', 'systemd', 'user');
-  const servicePath = join(systemdDir, 'cchub.service');
-  const updateServicePath = join(systemdDir, 'cchub-update.service');
-  const updateTimerPath = join(systemdDir, 'cchub-update.timer');
+  const servicePath = join(systemdDir, SERVICE.unitFile);
+  const updateServicePath = join(systemdDir, SERVICE.updateUnitFile);
+  const updateTimerPath = join(systemdDir, SERVICE.updateTimerFile);
 
   console.log(`🗑️  ${t('uninstall.title')}`);
   console.log('');
 
   // Stop and disable services
-  Bun.spawnSync(['systemctl', '--user', 'stop', 'cchub']);
-  Bun.spawnSync(['systemctl', '--user', 'disable', 'cchub']);
-  Bun.spawnSync(['systemctl', '--user', 'stop', 'cchub-update.timer']);
-  Bun.spawnSync(['systemctl', '--user', 'disable', 'cchub-update.timer']);
+  Bun.spawnSync(['systemctl', '--user', 'stop', SERVICE.systemctl]);
+  Bun.spawnSync(['systemctl', '--user', 'disable', SERVICE.systemctl]);
+  Bun.spawnSync(['systemctl', '--user', 'stop', SERVICE.updateTimer]);
+  Bun.spawnSync(['systemctl', '--user', 'disable', SERVICE.updateTimer]);
 
   for (const [path, label] of [
     [servicePath, t('uninstall.removedService')],
@@ -91,7 +92,7 @@ async function uninstallSystemd(): Promise<void> {
   console.log('');
   console.log(`✅ ${t('uninstall.done')}`);
 
-  const configDir = join(home, '.config', 'cchub');
+  const configDir = join(home, '.config', IDENTITY.configDirName);
   if (existsSync(configDir)) {
     console.log('');
     console.log(`💡 ${t('uninstall.configHint')}: rm -rf ${configDir}`);

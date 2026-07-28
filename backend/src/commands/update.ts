@@ -5,6 +5,12 @@ import { copyFile, rename, chmod, readFile, unlink } from 'node:fs/promises';
 import { platform } from 'node:os';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import {
+  assetName,
+  IDENTITY,
+  SERVICE,
+  userAgent,
+} from '../../../shared/identity';
 import { VERSION } from '../cli';
 import { t } from '../i18n';
 
@@ -62,16 +68,30 @@ async function getServiceBinaryPath(): Promise<string | null> {
   const isDarwin = platform() === 'darwin';
   try {
     if (isDarwin) {
-      const plistPath = join(homedir(), 'Library', 'LaunchAgents', 'com.cchub.server.plist');
+      const plistPath = join(
+        homedir(),
+        'Library',
+        'LaunchAgents',
+        SERVICE.launchdServerPlist,
+      );
       const content = await readFile(plistPath, 'utf-8');
       // Extract first <string> after <key>ProgramArguments</key> array
       const match = content.match(/<key>ProgramArguments<\/key>\s*<array>\s*<string>([^<]+)<\/string>/);
       return match?.[1] ?? null;
     } else {
-      const servicePath = join(homedir(), '.config', 'systemd', 'user', 'cchub.service');
+      const servicePath = join(
+        homedir(),
+        '.config',
+        'systemd',
+        'user',
+        SERVICE.unitFile,
+      );
       const content = await readFile(servicePath, 'utf-8');
       // Extract exec path from: ExecStart=/bin/zsh -lc 'exec /path/to/cchub ...'
-      const match = content.match(/exec\s+(\S+cchub)\b/) || content.match(/ExecStart=(\S+cchub)\b/);
+      const bin = IDENTITY.binaryName;
+      const match =
+        content.match(new RegExp(`exec\\s+(\\S+${bin})\\b`)) ||
+        content.match(new RegExp(`ExecStart=(\\S+${bin})\\b`));
       return match?.[1] ?? null;
     }
   } catch {
@@ -79,22 +99,22 @@ async function getServiceBinaryPath(): Promise<string | null> {
   }
 }
 
-const GITHUB_REPO = 'm0a/cc-hub';
+const GITHUB_REPO = IDENTITY.repo;
 
 function getBinaryName(): string {
   const platform = process.platform; // 'linux', 'darwin', etc.
   const arch = process.arch; // 'x64', 'arm64', etc.
 
   if (platform === 'linux' && arch === 'x64') {
-    return 'cchub-linux-x64';
+    return assetName('linux', 'x64');
   }
   if (platform === 'darwin' && arch === 'arm64') {
-    return 'cchub-macos-arm64';
+    return assetName('macos', 'arm64');
   }
 
   // Fallback: try platform-arch pattern
   const platformName = platform === 'darwin' ? 'macos' : platform;
-  return `cchub-${platformName}-${arch}`;
+  return assetName(platformName, arch);
 }
 
 interface GitHubRelease {
@@ -135,7 +155,7 @@ function getGitHubToken(): GitHubTokenInfo | null {
 async function getLatestRelease(tokenInfo: GitHubTokenInfo | null): Promise<GitHubRelease | null> {
   const headers: Record<string, string> = {
     'Accept': 'application/vnd.github.v3+json',
-    'User-Agent': `cchub/${VERSION}`,
+    'User-Agent': userAgent(VERSION),
   };
   if (tokenInfo) {
     headers.Authorization = `Bearer ${tokenInfo.token}`;
@@ -363,7 +383,12 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
 
   const isDarwin = platform() === 'darwin';
   const uid = process.getuid?.() ?? 501;
-  const plistPath = join(homedir(), 'Library', 'LaunchAgents', 'com.cchub.server.plist');
+  const plistPath = join(
+    homedir(),
+    'Library',
+    'LaunchAgents',
+    SERVICE.launchdServerPlist,
+  );
 
   // Stop service before replacing binary (macOS launchd holds the binary open)
   if (isDarwin) {
@@ -387,9 +412,11 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   } catch (error) {
     console.error('❌ バイナリの置き換えに失敗しました:', error);
     if (isDarwin) {
-      console.log('💡 ヒント: launchctl bootout gui/$(id -u)/com.cchub.server');
+      console.log(
+        `💡 ヒント: launchctl bootout gui/$(id -u)/${SERVICE.launchdServerLabel}`,
+      );
     } else {
-      console.log('💡 ヒント: systemctl --user stop cchub');
+      console.log(`💡 ヒント: systemctl --user stop ${SERVICE.systemctl}`);
     }
     // Try to restart service even if replace failed
     if (isDarwin) {
@@ -413,7 +440,12 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
       }
     }
   } else {
-    const restartResult = Bun.spawnSync(['systemctl', '--user', 'restart', 'cchub']);
+    const restartResult = Bun.spawnSync([
+      'systemctl',
+      '--user',
+      'restart',
+      SERVICE.systemctl,
+    ]);
     if (restartResult.exitCode === 0) {
       console.log(`🔄 ${t('update.serviceRestarted')}`);
     } else {
