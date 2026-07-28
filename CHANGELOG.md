@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.94] - 2026-07-29
+
+### Changed
+- **黙って壊れる名前をあと3件 identity に寄せ、走査で守る** (#657): 表示文字列の一括置換に着手するため残りのリテラルを仕分けていたところ、3件が表示ではなく運用系だった。いずれも #635 / #637 と同じ形で、**改名すると壊れるのに何も壊れたように見えない**
+  - `debug.ts` の `cchub.service.d` — systemd は `<unit>.d/` しか読まない。存在しない unit 用の drop-in を書いてもエラーにならず、`cchub debug enable` が黙って inspector を有効にしない
+  - `notify-command.ts` の `basename(execPath).startsWith('cchub')` — ユーザーの Claude/Codex hook 設定に何を書き込むかを決める箇所。通知がどのログにも何も残さず止まる
+  - `codex-hook-config.ts` の hook 検出正規表現 — 既存エントリの認識に使う。マッチしなくなると同じ hook をもう1つ書き足す
+  - **見逃した原因のほうを修正**: 2回の点検はどちらも目視だった。追跡下のソースを歩いて、unit 名・launchd ラベル・`/tmp` パス・データディレクトリが `identity.ts` の外でリテラルになっていないかを検査するテストを追加（`backend/tests/unit/identity-operational.test.ts`）。無関係なファイルに違反を植えて、ファイル名と行番号付きで検出されることを確認済み。意図的に狭く、「何かと一致していないと動かない名前」だけを対象とし、コメントやログ行は見ない
+- **メッセージカタログが identity 経由で製品名を名乗るようにする** (#658): 「この製品が何と呼ばれているか」を言うユーザー向けテキストが、`identity.json` の外に残っていた最後の大きな塊だった（backend カタログ28箇所、frontend カタログ6箇所、CLI ヘルプ16箇所）
+  - **呼び出し側は1箇所も変えていない**。どちらのカタログにも既に `{{param}}` 補間があったので、注入する側だけを変えた。backend は `t()` が identity セット（`product` / `bin` / `port` / `service` / `configDir` / `keychain`）を呼び出し側の引数の下にマージし、frontend は i18next の `defaultVariables` に `product` / `bin` を渡す。呼び出し側が同じキーを明示的に渡せば勝つ
+  - **改名時の注意**: CLI ヘルプの桁揃えはリテラルの空白で行っているため、長さの違う名前にすると手で調整が要る（`cchub` と `hrdle` がどちらも5文字なのは偶然）。パラメータ定義箇所にコメントとして記載
+  - この仕組みは文字列が使われる場所からは見えず、`defaultVariables` が失われると `{{product}}` がそのままユーザーに出る。しかもその中には hook setup prompt（エージェントに渡され、エージェントがそれを見てユーザーの設定ファイルを編集するもの）が含まれるため、テストを2つ追加。アプリ自身の i18n モジュールを import して実際の init を検証し、両カタログを走査して `{{product}}` / `{{bin}}` の生き残りを探す。`defaultVariables` を削除すると3文字列がキー名付きで検出されることを確認済み
+  - ヘルプ出力は en / ja とも従来とバイト単位で同一
+
 ## [0.2.93] - 2026-07-28
 
 ### Added
