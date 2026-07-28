@@ -1337,3 +1337,58 @@ describe('the scroll rests at the end before starting over', () => {
     expect(events).toEqual(['page:1@3', 'page:2@6'])
   })
 })
+
+describe('the screen stops drawing once nobody is being shown anything new', () => {
+  // Looping forever meant a redraw every five seconds over BLE for as long as
+  // the conversation stayed open — for nobody. The device's host started
+  // killing the app roughly eight times as often.
+  const DWELL_TICKS = 3
+  const MAX_PASSES = 2
+
+  function run(noticeSteps: number, totalPages: number, ticks: number) {
+    let w = 0, page = 0, waited = 0, passes = 0
+    let resting = false
+    let draws = 0
+    let restedAt = -1
+    for (let t = 1; t <= ticks; t++) {
+      if (resting) continue
+      if (w < noticeSteps - 1) { w++; waited = 0; draws++; continue }
+      if (++waited < DWELL_TICKS) continue
+      waited = 0
+      if (page < totalPages - 1) { page++; draws++; continue }
+      if (noticeSteps > 1 && w !== 0) {
+        w = 0; draws++
+        if (++passes >= MAX_PASSES) { resting = true; restedAt = t }
+        continue
+      }
+      resting = true; restedAt = t
+    }
+    return { draws, restedAt, passes }
+  }
+
+  test('it comes to rest, and stays there', () => {
+    const short = run(4, 1, 20)
+    const long = run(4, 1, 200)
+    // Ten times the wait draws nothing more.
+    expect(long.draws).toBe(short.draws)
+    expect(long.restedAt).toBe(short.restedAt)
+  })
+
+  test('the recap is shown twice before it rests', () => {
+    // Once is easy to miss; a third time is drawing for someone who is not there.
+    expect(run(4, 1, 200).passes).toBe(MAX_PASSES)
+  })
+
+  test('a screen with nothing to advance rests almost immediately', () => {
+    const r = run(1, 1, 100)
+    expect(r.draws).toBe(0)
+    expect(r.restedAt).toBe(DWELL_TICKS)
+  })
+
+  test('pages are all turned before it rests', () => {
+    // Resting early would leave the rest of the message unreachable by waiting,
+    // which is the whole point of the feature.
+    const r = run(4, 3, 200)
+    expect(r.draws).toBeGreaterThanOrEqual(3 + 2)
+  })
+})
