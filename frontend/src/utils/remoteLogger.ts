@@ -1,6 +1,7 @@
+import { storageKey } from "./app-storage";
 const LOG_ENDPOINT = "/api/logs";
 // Same key as useAuth — imported by value to avoid pulling React hooks in here.
-const TOKEN_KEY = "cc-hub-token";
+const TOKEN_KEY = storageKey("token");
 
 type LogLevel = "log" | "warn" | "error" | "info";
 

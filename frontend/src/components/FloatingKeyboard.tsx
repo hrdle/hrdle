@@ -20,13 +20,14 @@ import {
 	useState,
 } from "react";
 import { Keyboard } from "./Keyboard";
+import { storageKey } from "../utils/app-storage";
 
 export interface FloatingKeyboardRef {
 	setInputText: (text: string) => void;
 }
 
-const MINIMIZED_KEY = "cchub-floating-keyboard-minimized";
-const TRANSPARENT_KEY = "cchub-floating-keyboard-transparent";
+const MINIMIZED_KEY = storageKey("floating-keyboard-minimized");
+const TRANSPARENT_KEY = storageKey("floating-keyboard-transparent");
 
 type Orientation = "portrait" | "landscape";
 
@@ -83,7 +84,7 @@ export const FloatingKeyboard = forwardRef<
 
 	// Input history
 	const MAX_HISTORY = 50;
-	const HISTORY_KEY = "cchub-input-history";
+	const HISTORY_KEY = storageKey("input-history");
 	const historyRef = useRef<string[]>(
 		(() => {
 			try {

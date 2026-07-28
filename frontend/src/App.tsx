@@ -51,6 +51,7 @@ import {
 	type NotificationTarget,
 } from "./utils/notificationNavigation";
 import { soleVisiblePane } from "./utils/panes";
+import { storageKey } from "./utils/app-storage";
 
 // Loading screen with phase display and timeout detection
 function LoadingScreen({
@@ -196,8 +197,8 @@ function ConfirmDeleteDialog({
 // localStorage keys for session persistence. Values are composite
 // `peerId:id` keys (utils/sessionKey.ts); pre-#487 bare ids are normalized
 // to local keys on read.
-const STORAGE_KEY_LAST_SESSION = "cchub-last-session-id";
-const STORAGE_KEY_OPEN_SESSIONS = "cchub-open-sessions";
+const STORAGE_KEY_LAST_SESSION = storageKey("last-session-id");
+const STORAGE_KEY_OPEN_SESSIONS = storageKey("open-sessions");
 
 function saveLastSessionKey(sessionKey: string | null) {
 	if (sessionKey) {
@@ -382,7 +383,7 @@ export function App() {
 		Set<string>
 	>(() => {
 		try {
-			const saved = localStorage.getItem("cchub-conversation-mode-sessions");
+			const saved = localStorage.getItem(storageKey("conversation-mode-sessions"));
 			const parsed: unknown = saved ? JSON.parse(saved) : [];
 			if (!Array.isArray(parsed)) return new Set();
 			return new Set(
@@ -416,7 +417,7 @@ export function App() {
 	useEffect(() => {
 		try {
 			localStorage.setItem(
-				"cchub-conversation-mode-sessions",
+				storageKey("conversation-mode-sessions"),
 				JSON.stringify([...conversationModeSessions]),
 			);
 		} catch {
@@ -1107,7 +1108,7 @@ export function App() {
 		>
 			{/* Left: Session selector. Takes the bar's free space so the name gets
 			    every pixel the action buttons don't need — a fixed cap truncated
-			    names like "cchub-work-1" while the bar sat half empty. The action
+			    names like storageKey("work-1") while the bar sat half empty. The action
 			    group is shrink-0, so this only ever grows into real slack. */}
 			<button
 				type="button"

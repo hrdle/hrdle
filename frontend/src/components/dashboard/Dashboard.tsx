@@ -14,10 +14,11 @@ import { ModelUsageChart } from "./ModelUsageChart";
 import { NetworkLatency } from "./NetworkLatency";
 import { PeerServerCard } from "./PeerServerCard";
 import { UsageLimits } from "./UsageLimits";
+import { storageKey } from "../../utils/app-storage";
 
 // Onboarding localStorage keys
-const ONBOARDING_KEY = "cchub-onboarding-completed";
-const ONBOARDING_SESSIONLIST_KEY = "cchub-onboarding-sessionlist-completed";
+const ONBOARDING_KEY = storageKey("onboarding-completed");
+const ONBOARDING_SESSIONLIST_KEY = storageKey("onboarding-sessionlist-completed");
 
 interface DashboardProps {
 	className?: string;

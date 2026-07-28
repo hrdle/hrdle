@@ -4,6 +4,7 @@ import { authFetch, fetchWithTimeout } from "../services/api";
 import { reportWsLatency } from "../services/latency-store";
 import { appendWsToken } from "../services/peer-ws";
 import { getDeviceId } from "../utils/device-id";
+import { storageKey } from "../utils/app-storage";
 
 interface UseMultiplexedTerminalOptions {
 	sessionId: string;
@@ -86,7 +87,7 @@ const getWsBase = () => {
 };
 
 const getAuthToken = (): string | null => {
-	return localStorage.getItem("cc-hub-token");
+	return localStorage.getItem(storageKey("token"));
 };
 
 let sharedWs: WebSocket | null = null;

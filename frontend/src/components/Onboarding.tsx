@@ -1,9 +1,10 @@
 /** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: legacy click-on-div UI; keyboard navigation provided via main shortcuts */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { storageKey } from "../utils/app-storage";
 
-const ONBOARDING_KEY = "cchub-onboarding-completed";
-const ONBOARDING_SESSIONLIST_KEY = "cchub-onboarding-sessionlist-completed";
+const ONBOARDING_KEY = storageKey("onboarding-completed");
+const ONBOARDING_SESSIONLIST_KEY = storageKey("onboarding-sessionlist-completed");
 
 interface SpotlightStep {
 	// CSS selector for the target element

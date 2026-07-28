@@ -5,12 +5,13 @@ import { useTranslation } from "react-i18next";
 import type { FileChange, GitFileChange } from "../../../../shared/types";
 import { stripHomeProjectPrefix, toHomeShortPath } from "../../utils/path";
 import { getFileName } from "./file-types";
+import { storageKey } from "../../utils/app-storage";
 
 type ChangesSource = "claude" | "git";
 type ChangesDisplay = "list" | "tree";
 
-const CHANGES_SOURCE_KEY = "cchub-changes-source";
-const CHANGES_DISPLAY_KEY = "cchub-changes-display";
+const CHANGES_SOURCE_KEY = storageKey("changes-source");
+const CHANGES_DISPLAY_KEY = storageKey("changes-display");
 
 function getStoredChangesSource(): ChangesSource {
 	return (localStorage.getItem(CHANGES_SOURCE_KEY) as ChangesSource) || "git";

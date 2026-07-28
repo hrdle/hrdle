@@ -1,4 +1,5 @@
 import type { SessionTheme } from "../../../shared/types";
+import { storageKey } from "../utils/app-storage";
 
 // Terminal theme colors based on session theme (dark mode)
 const TERMINAL_THEMES_DARK: Record<
@@ -65,7 +66,7 @@ export function isLightMode() {
 }
 
 // Font size constants and helpers
-const FONT_SIZE_KEY_PREFIX = "cchub-terminal-font-size-";
+const FONT_SIZE_KEY_PREFIX = storageKey("terminal-font-size-");
 export const DEFAULT_FONT_SIZE = 14;
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 32;

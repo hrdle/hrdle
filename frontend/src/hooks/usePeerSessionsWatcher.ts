@@ -15,6 +15,7 @@ import {
 } from "../../../shared/types";
 import { appendWsToken, peerHttpUrlToWsUrl } from "../services/peer-ws";
 import { fireHookNotification } from "../utils/hookNotification";
+import { storageKey } from "../utils/app-storage";
 
 type PeerSessionsListener = (
 	sessionsByPeer: ReadonlyMap<string, PeerSession[]>,
@@ -51,7 +52,7 @@ function peerWsUrl(peer: PeerClientView): string {
 	if (isLocalPeer(peer)) {
 		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 		const base = `${protocol}//${window.location.host}`;
-		const token = localStorage.getItem("cc-hub-token");
+		const token = localStorage.getItem(storageKey("token"));
 		return appendWsToken(`${base}/ws/mux`, token);
 	}
 	const base = peerHttpUrlToWsUrl(peer.url);

@@ -40,6 +40,21 @@ export const IDENTITY = {
 } as const;
 
 /**
+ * Prefixes this app used for browser storage before the current one.
+ *
+ * Renaming a localStorage key does not fail, it forgets: the theme resets, the
+ * keyboard moves back to its default corner, and — because the auth token lives
+ * here too — everyone signs out. So old keys are carried forward rather than
+ * assumed absent.
+ *
+ * `cc-hub-` is here because the token key alone was spelled with the hyphen
+ * while everything else used `cchub-`. Normalising it is the first thing this
+ * mechanism does, which means a rename is not the first time it runs.
+ */
+export const LEGACY_STORAGE_PREFIXES: readonly string[] =
+  raw.legacyStoragePrefixes;
+
+/**
  * Scratch paths under /tmp.
  *
  * `imagesDir` had three separate copies of its literal (the server's static

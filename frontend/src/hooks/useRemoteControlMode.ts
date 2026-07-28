@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { storageKey } from "../utils/app-storage";
 
-const STORAGE_KEY = "cchub-remote-control";
+const STORAGE_KEY = storageKey("remote-control");
 
 function readFlag(): boolean {
 	try {
