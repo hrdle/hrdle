@@ -144,6 +144,15 @@ export interface AppState {
   /** Advances one frame per spinner tick while the shown session is working.
    *  Absent in states built before the spinner existed; treated as 0. */
   spinnerTick?: number
+  /**
+   * Which slice of an over-long notice is on screen.
+   *
+   * The recap and the waiting banner are capped at two lines because that is
+   * what the panel can spare, and the rest used to end at `…` — information
+   * the reader was told existed and then could not reach. The auto-advance
+   * clock walks this instead, so waiting is enough to see all of it.
+   */
+  noticeWindow?: number
   debugEvent?: string
   voicePhase?: VoicePhase
   voiceText?: string
@@ -285,10 +294,10 @@ function spinnerFrame(state: AppState): string {
  * five or six rows, crowding out the conversation it was meant to introduce.
  */
 function recapBlock(recap: string | undefined, maxLines = 2): string[] {
-  const body = recapBlockLines(recap, maxLines).flatMap(splitDisplayLines)
-  if (!body.length) return []
-  if (body.length <= maxLines) return body
-  return [...body.slice(0, maxLines - 1), ellipsize(body[maxLines - 1])]
+  // Every line, not the first two: the strip shows `NOTICE_LINES` of them at a
+  // time and the clock walks the rest. Cutting here would throw away what the
+  // walking is for.
+  return recapBlockLines(recap, maxLines).flatMap(splitDisplayLines)
 }
 
 /** Display label for a relay item's session (live session name, else the id). */
@@ -306,8 +315,8 @@ function relayBannerLines(state: AppState): string[] {
     const choiceHint = top.choices?.length ? `(選択${top.choices.length})` : ''
     const more = state.relayWaiting.length > 1 ? ` 他${state.relayWaiting.length - 1}件` : ''
     const head = splitDisplayLines(`[!]${relayLabel(state, top)}${choiceHint}${more}`)[0] || ''
-    const textLines = splitDisplayLines(top.text).slice(0, 2)
-    return [head, ...textLines]
+    // All of it; the strip windows what fits and the clock walks the rest.
+    return [head, ...splitDisplayLines(top.text)]
   }
   // Notifications get no body space here. The dialog already presented each
   // one full-screen, and the list keeps them in full afterwards; a third
@@ -528,8 +537,54 @@ export const NOTICE_BORDER = 1
 /** 0-15 on this panel's 16 greens. Bright enough to read as a rule, dim enough
  *  that it does not compete with the text it is separating. */
 export const NOTICE_BORDER_COLOR = 6
-/** A notice longer than the conversation it introduces has stopped helping. */
+/**
+ * Everything the notice strip has to say, before it is windowed.
+ *
+ * Shared with the auto-advance clock, which has to know how much is waiting
+ * behind the strip without rendering it.
+ */
+function conversationNoticeLines(state: AppState): string[] {
+  const session = state.sessions[state.sessionIndex]
+  const pane = state.selectedPaneId
+    ? (session?.panes ?? []).find((p) => p.paneId === state.selectedPaneId)
+    : undefined
+  const banner = relayBannerLines(state)
+  // Recap heads the latest view; deeper paging drops it for message space,
+  // and so does the conversation moving past it.
+  const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
+  const recapText = pane ? pane.recap : session?.ccRecap
+  const recapAt = pane ? pane.recapAt : session?.ccRecapAt
+  const recap = onLatest && recapIsCurrent(recapAt, state.conversation) ? recapBlock(recapText) : []
+  return [...banner, ...recap]
+}
+
+/** A notice longer than the conversation it introduces has stopped helping —
+ *  so a long one is shown this many lines at a time instead of all at once. */
 const NOTICE_MAX_LINES = 3
+
+/** The `window`-th slice of a notice, clamped to the last one. */
+function noticeWindowOf(lines: string[], window: number): string[] {
+  if (lines.length <= NOTICE_MAX_LINES) return lines
+  const last = noticeWindowCountOf(lines.length) - 1
+  const w = Math.max(0, Math.min(window, last))
+  return lines.slice(w * NOTICE_MAX_LINES, w * NOTICE_MAX_LINES + NOTICE_MAX_LINES)
+}
+
+function noticeWindowCountOf(total: number): number {
+  return Math.max(1, Math.ceil(total / NOTICE_MAX_LINES))
+}
+
+/**
+ * How many slices the notice takes to show in full.
+ *
+ * The auto-advance clock asks this to know whether waiting will reveal
+ * anything more, so it can move on to the conversation instead of sitting on
+ * a strip that has already shown everything it has.
+ */
+export function noticeWindowCount(state: AppState): number {
+  if (state.mode !== 'conversation') return 1
+  return noticeWindowCountOf(conversationNoticeLines(state).length)
+}
 
 export function noticeHeight(lines: number): number {
   return lines > 0 ? lines * LINE_H + 2 * NOTICE_PAD + 2 * NOTICE_BORDER : 0
@@ -564,13 +619,7 @@ function conversationContent(state: AppState): {
     ? Math.max(0, msgs.length - 1 - state.conversationOffset)
     : -1
   const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage)
-  const banner = relayBannerLines(state)
-  // Recap heads the latest view; deeper paging drops it for message space,
-  // and so does the conversation moving past it.
-  const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
-  const recapText = pane ? pane.recap : session?.ccRecap
-  const recapAt = pane ? pane.recapAt : session?.ccRecapAt
-  const recap = onLatest && recapIsCurrent(recapAt, msgs) ? recapBlock(recapText) : []
+  const allNotice = conversationNoticeLines(state)
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
   // Everything is measured in display lines — counting the conversation in
@@ -579,7 +628,7 @@ function conversationContent(state: AppState): {
   // The notice block gets its own container so the panel can draw the line
   // between them as a border. It used to be a row of dashes inside this one,
   // which spent 27px — a seventh of everything the reader gets — on a rule.
-  const noticeLines = [...banner, ...recap].slice(0, NOTICE_MAX_LINES)
+  const noticeLines = noticeWindowOf(allNotice, state.noticeWindow ?? 0)
   const noticeText = noticeLines.join('\n')
   // The body container clips overflow: cap the content at what is left once
   // the notice has taken its share, so a waiting banner never pushes

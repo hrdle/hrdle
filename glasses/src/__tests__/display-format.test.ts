@@ -5,7 +5,7 @@ import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { NOTICE_DISMISS_MS } from '../controller.ts'
-import { noticeHeight } from '../display.ts'
+import { noticeHeight, noticeWindowCount } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
@@ -190,13 +190,31 @@ describe('conversation body', () => {
     overlayItemId: null,
   })
 
-  test('a one-sentence recap is capped in display lines, not logical ones', () => {
-    // It used to pass the cap untouched and then wrap to six rows, leaving one
-    // line for the conversation it was meant to introduce.
-    const notice = (screenText(state(longRecap)).notice ?? '').split('\n')
-    expect(notice[0].startsWith('要約: ')).toBe(true)
-    expect(notice).toHaveLength(2)
-    expect(notice[1]).toEndWith('…')
+  test('a long recap is shown a window at a time, never cut', () => {
+    // It used to end at `…`: the reader was told there was more and given no
+    // way to reach it. The strip windows it and the clock walks the rest.
+    const first = (screenText(state(longRecap)).notice ?? '').split('\n')
+    expect(first[0].startsWith('要約: ')).toBe(true)
+    expect(first.length).toBeLessThanOrEqual(3)
+    expect(first.join('')).not.toEndWith('…')
+    expect(noticeWindowCount(state(longRecap) as never)).toBeGreaterThan(1)
+  })
+
+  test('waiting reaches the end of it, and then stops', () => {
+    const st = state(longRecap)
+    const windows = noticeWindowCount(st as never)
+    const seen = new Set<string>()
+    for (let w = 0; w < windows; w++) {
+      for (const line of (screenText({ ...st, noticeWindow: w }).notice ?? '').split('\n')) {
+        if (line) seen.add(line)
+      }
+    }
+    // Every line of the recap has been on screen by the last window.
+    const all = (screenText({ ...st, noticeWindow: 0 }).notice ?? '').split('\n')
+    expect(seen.size).toBeGreaterThan(all.length)
+    // Past the last window it holds rather than wrapping around.
+    const last = screenText({ ...st, noticeWindow: windows - 1 }).notice
+    expect(screenText({ ...st, noticeWindow: windows + 5 }).notice).toBe(last)
   })
 
   test('the rule between recap and conversation costs no line', () => {
@@ -1180,5 +1198,65 @@ describe('a pane is called what the user called it', () => {
     }))
     expect(s.header).toContain('買い物')
     expect(s.header).not.toContain('%3')
+  })
+})
+
+describe('waiting shows what did not fit', () => {
+  const longRecap = '要約の1文目です。'.repeat(30)
+  const st = (over: Record<string, unknown> = {}) => ({
+    mode: 'conversation' as const,
+    sessions: [{
+      id: 'a', name: 'グラス開発', state: 'working' as const,
+      ccRecap: longRecap, ccRecapAt: '2030-01-01T00:00:00Z',
+    }],
+    sessionIndex: 0,
+    conversation: [{ role: 'assistant' as const, content: 'x', timestamp: '2026-07-28T00:00:00Z' }],
+    conversationOffset: 0, conversationPage: 0, conversationLastLoaded: 0,
+    conversationHasMore: false, conversationLoading: false,
+    choiceIndex: 0, choiceOptions: [], relayWaiting: [], relayInfo: [],
+    overlayItemId: null, spinnerTick: 0,
+    ...over,
+  })
+
+  test('the strip reports how many windows it takes', () => {
+    // The clock asks this to know whether waiting reveals anything more, so it
+    // can move on to the conversation instead of sitting on a finished strip.
+    expect(noticeWindowCount(st() as never)).toBeGreaterThan(1)
+  })
+
+  test('a notice that fits takes exactly one window', () => {
+    const short = st({ sessions: [{ id: 'a', name: 'g', state: 'idle' as const, ccRecap: '短い', ccRecapAt: '2030-01-01T00:00:00Z' }] })
+    expect(noticeWindowCount(short as never)).toBe(1)
+  })
+
+  test('no notice at all takes one window, so the clock moves straight on', () => {
+    const none = st({ sessions: [{ id: 'a', name: 'g', state: 'idle' as const }] })
+    expect(noticeWindowCount(none as never)).toBe(1)
+  })
+
+  test('windows tile: no line is shown twice, none is skipped', () => {
+    // Distinguishable lines: a recap of one repeated phrase wraps into rows
+    // that are legitimately identical strings, which says nothing about tiling.
+    const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
+    const state = st({
+      sessions: [{
+        id: 'a', name: 'g', state: 'idle' as const,
+        ccRecap: numbered, ccRecapAt: '2030-01-01T00:00:00Z',
+      }],
+    })
+    const windows = noticeWindowCount(state as never)
+    const seen: string[] = []
+    for (let w = 0; w < windows; w++) {
+      seen.push(...(screenText({ ...state, noticeWindow: w }).notice ?? '').split('\n').filter(Boolean))
+    }
+    expect(new Set(seen).size).toBe(seen.length)
+    // And every line made it: the last one is on screen by the last window.
+    expect(seen).toContain('行8')
+  })
+
+  test('the recap is not counted while the reader has paged away from it', () => {
+    // Deeper paging drops the recap for message space; the clock must not then
+    // think there is a strip to walk.
+    expect(noticeWindowCount(st({ conversationPage: 2 }) as never)).toBe(1)
   })
 })

@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem } from './api.ts'
-import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, rowCursor } from './display.ts'
+import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, noticeWindowCount, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { CcHubWsClient } from './ws-client.ts'
@@ -43,6 +43,22 @@ const CONV_REFRESH_INTERVAL = 3000
  * looking through a message about something they already knew.
  */
 export const NOTICE_DISMISS_MS = 8000
+/**
+ * How long the ring has to be still before the screen starts moving itself.
+ *
+ * "しばらく待つと" — the point is that a reader who is working the ring is
+ * never fought for control. Long enough that a pause between gestures is not
+ * mistaken for having finished reading.
+ */
+const AUTO_ADVANCE_IDLE_MS = 10_000
+/**
+ * How long each step stays up.
+ *
+ * Slow on purpose: it is read at a glance while doing something else, and
+ * every step costs a redraw over BLE. Matched to the sessions push so the
+ * panel keeps one rhythm rather than two competing ones.
+ */
+const AUTO_ADVANCE_STEP_MS = 5000
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
@@ -149,6 +165,8 @@ export class GlassesController {
   private overlayReturnMode: 'session_list' | 'conversation' = 'session_list'
   /** Pending auto-dismissal of a notification overlay; null when none is due. */
   private noticeTimer: ReturnType<typeof setTimeout> | null = null
+  /** Last ring gesture, so the auto-advance clock can stay out of the way. */
+  private lastGestureAt = 0
 
   private audioChunks: Uint8Array[] = []
   private recording = false
@@ -177,6 +195,41 @@ export class GlassesController {
     // every state change. It costs nothing when nothing is working: the tick
     // returns before touching the display.
     setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
+    setInterval(() => this.tickAutoAdvance(), AUTO_ADVANCE_STEP_MS)
+  }
+
+  /**
+   * Show the next thing that does not fit.
+   *
+   * Seven lines is not enough for a recap and a conversation at once, so both
+   * used to end at `…` — the reader told there was more, with no way to reach
+   * it. This walks the overflow instead: the notice strip first, then the
+   * pages of the message, one step at a time, and stops when there is nothing
+   * left to show rather than looping back.
+   *
+   * One thing moves at a time. A screen with a scrolling recap above a paging
+   * conversation is not readable at a glance, which is the only way this
+   * screen is ever read.
+   */
+  private tickAutoAdvance(): void {
+    const st = this.state
+    if (st.mode !== 'conversation') return
+    // The reader is working the ring; do not fight them for it.
+    if (Date.now() - this.lastGestureAt < AUTO_ADVANCE_IDLE_MS) return
+
+    const windows = noticeWindowCount(st)
+    if ((st.noticeWindow ?? 0) < windows - 1) {
+      st.noticeWindow = (st.noticeWindow ?? 0) + 1
+      this.render()
+      return
+    }
+    const totalPages = this.currentMsgTotalPages()
+    if (st.conversationPage < totalPages - 1) {
+      st.conversationPage++
+      this.render()
+    }
+    // Everything on this screen has been shown. Stop: arriving at the end and
+    // staying there is what "read it all" looks like.
   }
 
   /** Advance the working indicator, but only where it is being looked at and
@@ -294,6 +347,10 @@ export class GlassesController {
 
   /** Explicit state machine dispatch: (mode, action) → transition. */
   private async handle(action: RingAction): Promise<void> {
+    // Every ring gesture goes through here, so this is the one place that has
+    // to know the reader is driving. The auto-advance clock stays out of the
+    // way for AUTO_ADVANCE_IDLE_MS afterwards.
+    this.lastGestureAt = Date.now()
     switch (this.state.mode) {
       case 'session_list': return this.onSessionListAction(action)
       case 'conversation': return this.onConversationAction(action)
@@ -341,6 +398,7 @@ export class GlassesController {
         st.conversation = []
         st.conversationOffset = 0
         st.conversationPage = 0
+        st.noticeWindow = 0
         this.render()
         await this.loadConversation()
         this.render()
@@ -392,6 +450,7 @@ export class GlassesController {
           const jump = getMultiCountAt(st.conversation, st.conversationOffset - 1)
           st.conversationOffset = Math.max(0, st.conversationOffset - jump)
           st.conversationPage = 0
+          st.noticeWindow = 0
         }
         this.render()
         return
@@ -448,6 +507,7 @@ export class GlassesController {
         if (st.conversationOffset > 0 || st.conversationPage > 0) {
           st.conversationOffset = 0
           st.conversationPage = 0
+          st.noticeWindow = 0
           this.render()
           // Live updates resume at the top, and whatever arrived while the
           // reader was back there should be waiting for them.
@@ -693,6 +753,7 @@ export class GlassesController {
     this.state.conversation = []
     this.state.conversationOffset = 0
     this.state.conversationPage = 0
+    this.state.noticeWindow = 0
     if (item.choices?.length) {
       this.enterChoice(item.choices, { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id })
       void this.loadConversation().then(() => this.render())
@@ -838,6 +899,7 @@ export class GlassesController {
     st.conversation = []
     st.conversationOffset = 0
     st.conversationPage = 0
+    st.noticeWindow = 0
     this.render()
     void this.loadConversation().then(() => this.render())
     return true
@@ -948,6 +1010,7 @@ export class GlassesController {
       this.state.conversationHasMore = rawPane.length >= INITIAL_LOAD_COUNT
       this.state.conversationOffset = 0
       this.state.conversationPage = 0
+      this.state.noticeWindow = 0
       return
     }
     if (!session?.ccSessionId) {
@@ -963,6 +1026,7 @@ export class GlassesController {
     this.state.conversationHasMore = raw.length >= INITIAL_LOAD_COUNT
     this.state.conversationOffset = 0
     this.state.conversationPage = 0
+    this.state.noticeWindow = 0
   }
 
   /** Load more older messages by requesting a larger `last` count. Returns true if new messages were added. */
