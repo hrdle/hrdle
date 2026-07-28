@@ -256,15 +256,19 @@ export function sanitizeForG2(text: string): string {
  * Empty when no recap. The glasses conversation view leads with the gist —
  * full history reading is the phone's job (real-device feedback, #504).
  */
-export function recapBlockLines(recap: string | undefined, maxLines = 2): string[] {
+export function recapBlockLines(recap: string | undefined, _maxLines = 2): string[] {
   const clean = sanitizeForG2((recap ?? '').trim())
   if (!clean) return []
   const lines = clean.split('\n')
-  const capped = lines.length > maxLines ? [...lines.slice(0, maxLines - 1), '…'] : lines
-  // No rule at the end: the recap is its own container now, and the panel
-  // draws the line between them as a border. A dash row cost a full 27px line
-  // out of the seven to do the same job.
-  return [`要約: ${capped[0]}`, ...capped.slice(1)]
+  // Uncapped: the notice strip shows a window of these and the auto-advance
+  // clock walks the rest, so cutting here would discard what it walks. It used
+  // to end at `…` — telling the reader there was more and leaving them no way
+  // to reach it.
+  //
+  // No rule at the end either: the recap is its own container now, and the
+  // panel draws the line between them as a border. A dash row cost a full 27px
+  // line out of the seven to do the same job.
+  return [`要約: ${lines[0]}`, ...lines.slice(1)]
 }
 
 
