@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.93] - 2026-07-28
+
+### Added
+- **herdr の named session で動かせるようにする** (#655): #459 は cchub と hrdle を1台のマシンでしばらく並走させる。両者が同じ herdr サーバーを共有すると互いのワークスペースが一覧に出て同じペインを奪い合う（#520 を音量を上げてやるようなもの）。herdr には既に named session があり、サーバー・ソケット・ワークスペース・永続化がまるごと分かれるので、`HERDR_SESSION` でそれを選べるようにした。**未設定なら挙動は従来と完全に同じ**
+  - **`HERDR_SESSION` は `HERDR_SOCKET_PATH` に優先する**。herdr は自分が起動するすべてのペインに `HERDR_SOCKET_PATH` を注入する（`HERDR_ENV` / `HERDR_PANE_ID` / `HERDR_WORKSPACE_ID` と並んで）ため、この変数は意図的な指定ではなく環境由来。素直な優先順位（明示的なソケットが勝つ）にすると、「別インスタンスのターミナルから起動して試す」という一番自然な検証手順で、セッション指定が無視されて同じサーバーに繋がる — しかも動いているように見える
+  - **サーバーは `--session` で起動する**。`HERDR_SOCKET_PATH=… herdr server` はそのソケットに bind はするが `logs: ~/.config/herdr/herdr-server.log` を報告する。つまりソケットは動くがセッションディレクトリは動かず、そこにある `session.json`（ワークスペース復元情報）を2つのサーバーが同時に書いて互いの状態を失う。子プロセスに継承された `HERDR_SOCKET_PATH` は明示的に落として元に戻らないようにした
+  - **子プロセスにソケットを明示する**（`herdrChildEnv()`）。`PaneController` の `herdr terminal session control` と herdr-update の `herdr status` はどちらも env 継承だけだった。systemd 配下には継承元の値が存在しないため、`HERDR_SESSION` で指定したサーバーを見ているのに default セッションのペインを操作することになっていた
+  - 検証: `HERDR_SESSION` 設定・サーバー無しの状態から起動してサーバーが立ち、`herdr session list` に独自ソケットと独自 `herdr-server.log` を持つセッションが出現。同じホストの同時刻で named 側 live=0 / 本番 live=10 と、2つのインスタンスが別のことを言うところまで確認した
+
 ## [0.2.92] - 2026-07-28
 
 ### Changed
