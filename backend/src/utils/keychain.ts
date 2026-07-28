@@ -3,10 +3,12 @@
 // Linux has no equivalent reliable headless secret store, so these helpers are
 // no-ops on non-darwin platforms.
 
-const SERVICE = 'cchub';
+import { IDENTITY } from '../../../shared/identity';
+
+const SERVICE = IDENTITY.keychainService;
 
 function getAccount(): string {
-  return process.env.USER || 'cchub';
+  return process.env.USER || IDENTITY.keychainService;
 }
 
 /** Read the cchub password from the macOS Keychain. Returns undefined if not stored or not on darwin. */

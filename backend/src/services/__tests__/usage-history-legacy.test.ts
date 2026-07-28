@@ -2,9 +2,10 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { UsageScopedLimit } from '../../../../shared/types';
 import { UsageHistoryService } from '../usage-history';
+import { TMP_PATHS } from '../../../../shared/identity';
 
 // getHistory reads this fixed path; the service has no injection seam.
-const HISTORY_FILE = '/tmp/cchub-usage-history.json';
+const HISTORY_FILE = TMP_PATHS.usageHistoryFile;
 
 const snap = (timestamp: string) => ({
   timestamp,

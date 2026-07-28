@@ -1,7 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { UsageScopedLimit, UsageSnapshot } from '../../../shared/types';
+import { TMP_PATHS } from '../../../shared/identity';
 
-const HISTORY_FILE = '/tmp/cchub-usage-history.json';
+const HISTORY_FILE = TMP_PATHS.usageHistoryFile;
 const THROTTLE_MS = 30 * 1000; // 30 seconds
 const MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000; // 8 days
 

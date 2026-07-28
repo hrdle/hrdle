@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { assetName, IDENTITY, SERVICE } from '../../../shared/identity';
+import {
+  assetName,
+  IDENTITY,
+  SERVICE,
+  TMP_PATHS,
+} from '../../../shared/identity';
 
 /**
  * `identity.json` is the single source of truth for what this product is
@@ -79,5 +84,33 @@ describe('derived service names', () => {
   test('asset names match what update.ts asks GitHub for', () => {
     expect(assetName('linux', 'x64')).toBe(`${IDENTITY.assetPrefix}-linux-x64`);
     expect(assetName('macos', 'arm64')).toBe(`${IDENTITY.assetPrefix}-macos-arm64`);
+  });
+});
+
+/**
+ * These are the paths of files that already exist on running installs. A
+ * refactor that moves one of them does not fail — it silently starts reading an
+ * empty history, or serving uploads from a directory nothing writes to.
+ */
+describe('scratch paths keep the values installs already use', () => {
+  test('images dir is what the three consumers used to hardcode', () => {
+    expect(TMP_PATHS.imagesDir).toBe('/tmp/cchub-images');
+  });
+
+  test('usage history file is unchanged', () => {
+    expect(TMP_PATHS.usageHistoryFile).toBe('/tmp/cchub-usage-history.json');
+  });
+
+  test('browser log keeps its hyphenated spelling', () => {
+    // Not `cchub-browser.log`: CLAUDE.md tells people to `tail -f` this exact
+    // path, so the odd spelling is load-bearing until a rename fixes it on
+    // purpose.
+    expect(TMP_PATHS.browserLogFile).toBe('/tmp/cc-hub-browser.log');
+  });
+
+  test('keychain service name is unchanged', () => {
+    // The macOS password lives under this service name. Changing it does not
+    // fail — it just stops finding the password that is already stored.
+    expect(IDENTITY.keychainService).toBe('cchub');
   });
 });

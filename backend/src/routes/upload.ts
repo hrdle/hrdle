@@ -2,11 +2,12 @@ import { Hono } from 'hono';
 import { randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { TMP_PATHS } from '../../../shared/identity';
 
 const upload = new Hono();
 
 // Directory for uploaded images (accessible from terminal sessions on this host)
-const UPLOAD_DIR = '/tmp/cchub-images';
+const UPLOAD_DIR = TMP_PATHS.imagesDir;
 
 async function ensureUploadDir() {
   try {

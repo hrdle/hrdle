@@ -6,6 +6,7 @@ import { FileService } from '../services/file-service';
 import { FileChangeTracker } from '../services/file-change-tracker';
 import { HerdrService } from '../services/herdr';
 import type { FileListResponse, FileReadResponse, FileChangesResponse, FileInfo, GitChangesResponse, GitDiffResponse, GitFileChange, GitChangeStatus } from '../../../shared/types';
+import { TMP_PATHS } from '../../../shared/identity';
 
 const fileService = new FileService();
 const changeTracker = new FileChangeTracker();
@@ -333,7 +334,7 @@ files.get('/language', async (c) => {
  * GET /files/images/:filename - Serve conversation images
  * Only serves images from /tmp/cchub-images/ for security
  */
-const IMAGES_DIR = '/tmp/cchub-images';
+const IMAGES_DIR = TMP_PATHS.imagesDir;
 
 files.get('/images/:filename', async (c) => {
   const filename = c.req.param('filename');

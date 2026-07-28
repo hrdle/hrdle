@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { appendFile } from 'node:fs/promises';
+import { TMP_PATHS } from '../../../shared/identity';
 
-const LOG_FILE = '/tmp/cc-hub-browser.log';
+const LOG_FILE = TMP_PATHS.browserLogFile;
 
 const logs = new Hono();
 
