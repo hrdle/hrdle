@@ -978,7 +978,15 @@ export function startDebugUI(): void {
       setMirrorUi(false, '実機が接続されていません')
       return
     }
-    paint({ header: screen.header, body: wrapForPanel(screen.body), footer: screen.footer }, screen.mode)
+    // Rebuilt field by field, so a new one added to GlassesScreen is dropped
+    // here unless it is named — which is exactly how the notice strip went
+    // missing from the mirror while the local panel drew it.
+    paint({
+      header: screen.header,
+      notice: screen.notice ? wrapForPanel(screen.notice) : undefined,
+      body: wrapForPanel(screen.body),
+      footer: screen.footer,
+    }, screen.mode)
     setMirrorUi(true, '実機と同期中')
   })
 
