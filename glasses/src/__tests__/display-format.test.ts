@@ -5,6 +5,7 @@ import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { NOTICE_DISMISS_MS } from '../controller.ts'
+import { noticeHeight } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
@@ -192,18 +193,28 @@ describe('conversation body', () => {
   test('a one-sentence recap is capped in display lines, not logical ones', () => {
     // It used to pass the cap untouched and then wrap to six rows, leaving one
     // line for the conversation it was meant to introduce.
-    const body = screenText(state(longRecap)).body.split('\n')
-    expect(body[0].startsWith('要約: ')).toBe(true)
-    // Two recap lines, then the separator — the rest of the page is the
-    // conversation.
-    expect(body.indexOf('-'.repeat(24))).toBe(2)
-    expect(body[1]).toEndWith('…')
+    const notice = (screenText(state(longRecap)).notice ?? '').split('\n')
+    expect(notice[0].startsWith('要約: ')).toBe(true)
+    expect(notice).toHaveLength(2)
+    expect(notice[1]).toEndWith('…')
   })
 
-  test('the body never exceeds one page, recap or not', () => {
+  test('the rule between recap and conversation costs no line', () => {
+    // It used to be a row of dashes inside the body — 27px, a seventh of
+    // everything the reader gets, spent on a separator the panel can draw.
+    const s = screenText(state(longRecap))
+    expect(s.notice).not.toContain('-'.repeat(24))
+    expect(s.body).not.toContain('-'.repeat(24))
+  })
+
+  test('notice and conversation together never exceed one page', () => {
     for (const recap of [undefined, longRecap]) {
-      const body = screenText(state(recap)).body
-      expect(wrapForPanel(body).split('\n').length).toBeLessThanOrEqual(7)
+      const s = screenText(state(recap))
+      const noticeLines = s.notice ? s.notice.split('\n').length : 0
+      const bodyLines = wrapForPanel(s.body).split('\n').length
+      // The strip is shorter than the lines it holds would be in the body:
+      // its padding is 2 where the body's is 6.
+      expect(noticeHeight(noticeLines) + bodyLines * 27).toBeLessThanOrEqual(288 - 2 * 36)
     }
   })
 })
@@ -416,7 +427,7 @@ describe('recap lifetime', () => {
     relayInfo: [],
     overlayItemId: null,
   })
-  const hasRecap = (st: ReturnType<typeof state>) => screenText(st).body.startsWith('要約: ')
+  const hasRecap = (st: ReturnType<typeof state>) => (screenText(st).notice ?? '').startsWith('要約: ')
 
   test('shows while nothing newer has arrived', () => {
     expect(hasRecap(state('2026-07-27T06:00:00.000Z', '2026-07-27T05:00:00.000Z'))).toBe(true)
@@ -1035,13 +1046,13 @@ describe('no notification about what is already on screen', () => {
   })
 
   test('a question about the open session still shows — it carries the choices', () => {
-    const body = screenText(mk({
+    const s = screenText(mk({
       relayWaiting: [{
         id: 'w', sessionId: 'a', kind: 'waiting' as const, text: 'Which one?',
         source: 'auto' as const, createdAt: 1, choices: ['A', 'B'],
       }],
-    })).body
-    expect(body).toContain('[!]グラス開発')
+    }))
+    expect(s.notice).toContain('[!]グラス開発')
   })
 
   test('the list is untouched: nothing there is "on screen"', () => {

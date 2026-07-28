@@ -991,6 +991,13 @@ export interface GlassesScreen {
   header: string;
   body: string;
   footer: string;
+  /**
+   * Recap / waiting banner, drawn in its own strip above the body with a rule
+   * between. Separate from `body` because that rule is a container border on
+   * the panel, not a row of text — a mirror that concatenates the two shows a
+   * screen the wearer is not looking at.
+   */
+  notice?: string;
   /** Which screen this is, for the mirror's status line. */
   mode: string;
   /** Epoch ms the frame was produced, so a stalled mirror is visible. */
@@ -1140,6 +1147,7 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
       header: z.string().max(500),
       body: z.string().max(4000),
       footer: z.string().max(500),
+      notice: z.string().max(1000).optional(),
       mode: z.string().max(40),
       at: z.number(),
     }),
