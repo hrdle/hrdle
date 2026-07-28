@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { HOOK_COMMAND, IDENTITY } from '../../../shared/identity';
 
 /**
  * The `cchub notify` invocation to write into an agent's hook config.
@@ -18,7 +19,7 @@ export function notifyCommandFor(execPath: string): string {
   // binary, and `<bun> notify` is not a command anyone wants baked into their
   // hooks. A bare name is the honest fallback there: dev is also where PATH is
   // most likely to be fine, since it was started from an interactive shell.
-  if (!basename(execPath).startsWith('cchub')) return 'cchub notify';
+  if (!basename(execPath).startsWith(IDENTITY.binaryName)) return HOOK_COMMAND;
   // Hook commands go through a shell, so a path with spaces needs quoting.
   return /\s/.test(execPath) ? `"${execPath}" notify` : `${execPath} notify`;
 }

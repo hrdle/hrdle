@@ -1,6 +1,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { resolveNotifyCommand } from './notify-command';
+import { HOOK_COMMAND_PATTERN } from '../../../shared/identity';
 
 interface JsonHookCommand {
   type?: string;
@@ -20,10 +21,8 @@ interface CodexHooksJson {
   [key: string]: unknown;
 }
 
-const CCHUB_NOTIFY_PATTERN = /(?:^|\/)cchub\s+notify(?:\s|$)/;
-
 function isCchubNotify(command: unknown): command is string {
-  return typeof command === 'string' && CCHUB_NOTIFY_PATTERN.test(command.trim());
+  return typeof command === 'string' && HOOK_COMMAND_PATTERN.test(command.trim());
 }
 
 function hasCchubHook(entries: JsonHookEntry[] | undefined, matcher?: string): boolean {

@@ -9,13 +9,14 @@ import { spawn } from 'node:child_process';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, writeFile, unlink, access } from 'node:fs/promises';
+import { SERVICE } from '../../../shared/identity';
 
 const DROP_IN_DIR = join(
   homedir(),
   '.config',
   'systemd',
   'user',
-  'cchub.service.d',
+  SERVICE.dropInDir,
 );
 const DROP_IN_FILE = join(DROP_IN_DIR, '99-inspect.conf');
 const DEFAULT_INSPECT_PORT = 9229;
@@ -57,8 +58,8 @@ async function enableInspector(): Promise<void> {
   await mkdir(DROP_IN_DIR, { recursive: true });
   await writeFile(DROP_IN_FILE, conf);
   await runSystemctl(['daemon-reload']);
-  console.log('🔧 Reloading systemd, restarting cchub.service…');
-  await runSystemctl(['restart', 'cchub.service']);
+  console.log(`🔧 Reloading systemd, restarting ${SERVICE.unitFile}…`);
+  await runSystemctl(['restart', SERVICE.unitFile]);
   console.log('');
   console.log(`✅ Inspector enabled on 0.0.0.0:${port}`);
   console.log('');
@@ -85,9 +86,9 @@ async function disableInspector(): Promise<void> {
     return;
   }
   await runSystemctl(['daemon-reload']);
-  console.log('🔧 Reloading systemd, restarting cchub.service…');
-  await runSystemctl(['restart', 'cchub.service']);
-  console.log('✅ Inspector disabled, cchub.service back to normal.');
+  console.log(`🔧 Reloading systemd, restarting ${SERVICE.unitFile}…`);
+  await runSystemctl(['restart', SERVICE.unitFile]);
+  console.log(`✅ Inspector disabled, ${SERVICE.unitFile} back to normal.`);
 }
 
 async function profileInspector(seconds: number): Promise<void> {
