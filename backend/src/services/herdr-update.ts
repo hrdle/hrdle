@@ -15,7 +15,7 @@
  */
 
 import type { HerdrUpdateStatus } from '../../../shared/types';
-import { herdrBin, herdrBinaryPath } from './herdr-client';
+import { herdrBin, herdrBinaryPath, herdrChildEnv } from './herdr-client';
 
 /** Matches the dashboard's own refresh cadence; a spawn per poll is plenty. */
 const CACHE_TTL_MS = 30_000;
@@ -105,7 +105,10 @@ export function buildHerdrApplyCommands(
 }
 
 async function runCapture(cmd: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe' });
+  // Pinned to our socket like every other herdr child: `herdr status` reports
+  // the running server's version, and reading the default server's would make
+  // the skew warning describe a server we are not talking to.
+  const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe', env: herdrChildEnv() });
   const timer = setTimeout(() => proc.kill(), SPAWN_TIMEOUT_MS);
   try {
     const [stdout, stderr, exitCode] = await Promise.all([

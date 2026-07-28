@@ -18,7 +18,12 @@ import { parseArgs, runCli, VERSION } from './cli';
 import { conditionalAuthMiddleware, isAuthRequired, getJwtSecret, initJwtSecret } from './middleware/auth';
 import { AuthService } from './services/auth';
 import { getDataDir } from './utils/storage';
-import { herdrBinaryPath, herdrRpc, herdrSocketPath } from './services/herdr-client';
+import {
+  herdrBinaryPath,
+  herdrRpc,
+  herdrSessionName,
+  herdrSocketPath,
+} from './services/herdr-client';
 import { t } from './i18n';
 import { TMP_PATHS } from '../../shared/identity';
 
@@ -292,12 +297,29 @@ async function herdrPing(): Promise<HerdrPong | null> {
 
 let herdrPong = await herdrPing();
 if (!herdrPong) {
-  console.log('⏳ herdr server not running; starting it...');
-  Bun.spawn([herdrPath, 'server'], {
-    stdin: 'ignore',
-    stdout: 'ignore',
-    stderr: 'ignore',
-  }).unref();
+  const herdrSession = herdrSessionName();
+  console.log(
+    herdrSession
+      ? `⏳ herdr server not running; starting it (session ${herdrSession})...`
+      : '⏳ herdr server not running; starting it...',
+  );
+  // `--session` rather than only pointing the child at a socket: HERDR_SOCKET_PATH
+  // moves the socket but leaves the logs and session.json in the default session
+  // directory, so two servers started that way would write the same workspace
+  // state over each other. Dropping it from the child's environment keeps an
+  // inherited value from quietly putting us back there.
+  const { HERDR_SOCKET_PATH: _inherited, ...childEnv } = process.env;
+  Bun.spawn(
+    herdrSession
+      ? [herdrPath, '--session', herdrSession, 'server']
+      : [herdrPath, 'server'],
+    {
+      stdin: 'ignore',
+      stdout: 'ignore',
+      stderr: 'ignore',
+      env: herdrSession ? childEnv : process.env,
+    },
+  ).unref();
   for (let i = 0; i < 20 && !herdrPong; i++) {
     await new Promise((r) => setTimeout(r, 250));
     herdrPong = await herdrPing();

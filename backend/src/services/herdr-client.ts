@@ -17,8 +17,54 @@ import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+/**
+ * Name of the herdr session to run against, or null for the default one.
+ *
+ * A named session is a separate herdr server with its own socket, workspaces
+ * and persisted state, which is how two builds of this app share a machine
+ * without seeing each other's panes (#459).
+ */
+export function herdrSessionName(): string | null {
+  return process.env.HERDR_SESSION || null;
+}
+
 export function herdrSocketPath(): string {
-  return process.env.HERDR_SOCKET_PATH || `${homedir()}/.config/herdr/herdr.sock`;
+  // HERDR_SESSION is checked first, and this order matters: herdr exports
+  // HERDR_SOCKET_PATH into every pane it runs (alongside HERDR_PANE_ID and
+  // friends), so a copy of this app launched from a terminal inside another
+  // copy inherits a socket nobody chose. Letting that win would silently attach
+  // the two to the same herdr server — the collision named sessions exist to
+  // prevent, reached by the one route where it looks like it is working.
+  const session = herdrSessionName();
+  // Verified against herdr 0.7.4: `herdr --session <name> server` reports this
+  // path, and `herdr session list --json` returns it as `socket_path`. Reading
+  // it from the CLI would be sturdier, but this is called once per RPC
+  // connection — and it has to answer before the session exists, which is
+  // exactly when it is not in that listing.
+  if (session) {
+    return `${homedir()}/.config/herdr/sessions/${session}/herdr.sock`;
+  }
+
+  // No session named: an inherited or explicit socket is all we have to go on.
+  if (process.env.HERDR_SOCKET_PATH) return process.env.HERDR_SOCKET_PATH;
+
+  return `${homedir()}/.config/herdr/herdr.sock`;
+}
+
+/**
+ * Environment for herdr CLI children, pinned to the socket this process
+ * resolved.
+ *
+ * Inheritance is not enough. A child run from a systemd unit has no ambient
+ * HERDR_SOCKET_PATH and would fall back to the default socket, so a server
+ * addressed by HERDR_SESSION would end up driving panes in somebody else's
+ * session. Saying it outright leaves nothing to infer.
+ */
+export function herdrChildEnv(): Record<string, string> {
+  return {
+    ...(process.env as Record<string, string>),
+    HERDR_SOCKET_PATH: herdrSocketPath(),
+  };
 }
 
 let cachedHerdrBinary: string | null | undefined;
@@ -480,7 +526,7 @@ export class PaneController {
     const sizeArgs = size ? ['--cols', String(size.cols), '--rows', String(size.rows)] : [];
     this.proc = Bun.spawn(
       [herdrBin(), 'terminal', 'session', 'control', herdrPaneId, '--takeover', ...sizeArgs],
-      { stdin: 'pipe', stdout: 'pipe', stderr: 'ignore' },
+      { stdin: 'pipe', stdout: 'pipe', stderr: 'ignore', env: herdrChildEnv() },
     );
     this.stdinWriter = this.proc.stdin as unknown as { write(s: string): unknown };
 
