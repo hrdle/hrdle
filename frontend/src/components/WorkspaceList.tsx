@@ -993,13 +993,17 @@ function TabRow({
 					{t("session.panes", { count: tab.paneCount })}
 				</span>
 			</div>
+			{/* Desktop only. opacity-0 still takes hit tests, so on a phone — where
+			    the hover that reveals it never happens — this left an invisible
+			    26px "close tab" target at the row's edge. Touch closes by long
+			    press instead. */}
 			{closeTab && (
 				<button
 					type="button"
 					onClick={closeTab}
 					title={t("session.closeTabTitle")}
 					aria-label={t("session.closeTabTitle")}
-					className="shrink-0 min-h-11 px-2 rounded-md text-zinc-600 opacity-0 transition-opacity hover:text-red-400 hover:bg-red-500/10 group-hover/tab:opacity-100 focus-visible:opacity-100"
+					className="hidden [@media(hover:hover)]:flex shrink-0 min-h-11 px-2.5 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-opacity hover:text-red-400 hover:bg-red-500/10 group-hover/tab:opacity-100 focus-visible:opacity-100"
 				>
 					<X className="w-3.5 h-3.5" />
 				</button>
