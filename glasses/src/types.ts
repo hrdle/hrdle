@@ -105,6 +105,9 @@ export interface GlassesScreen {
   header: string
   body: string
   footer: string
+  /** Recap / waiting banner strip, drawn above the body with a rule between.
+   *  Separate because that rule is a container border, not a row of text. */
+  notice?: string
   mode: string
   at: number
 }
@@ -258,7 +261,10 @@ export function recapBlockLines(recap: string | undefined, maxLines = 2): string
   if (!clean) return []
   const lines = clean.split('\n')
   const capped = lines.length > maxLines ? [...lines.slice(0, maxLines - 1), '…'] : lines
-  return [`要約: ${capped[0]}`, ...capped.slice(1), '-'.repeat(24)]
+  // No rule at the end: the recap is its own container now, and the panel
+  // draws the line between them as a border. A dash row cost a full 27px line
+  // out of the seven to do the same job.
+  return [`要約: ${capped[0]}`, ...capped.slice(1)]
 }
 
 

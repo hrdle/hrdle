@@ -12,7 +12,7 @@
 import { setBaseUrl, transcribe } from './api.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
-import { screenText, wrapForPanel } from './display.ts'
+import { NOTICE_BORDER, NOTICE_BORDER_COLOR, NOTICE_PAD, noticeHeight, screenText, wrapForPanel } from './display.ts'
 import { BAR_H, LINE_H, PANEL_H, PANEL_W, advance } from './metrics.ts'
 import type { AppState } from './display.ts'
 
@@ -361,11 +361,11 @@ export function startDebugUI(): void {
   // them with the same painter it uses for its own state. What the audience
   // sees is the wearer's screen, not a second interpretation of it.
   let mirroring = false
-  let localScreen = { header: '', body: '', footer: '' }
+  let localScreen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean } = { header: '', body: '', footer: '' }
   let localMode = 'session_list'
 
   function paint(
-    screen: { header: string; body: string; footer: string; headerless?: boolean },
+    screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean },
     mode: string,
   ): void {
     lastScreen = screen
@@ -430,7 +430,7 @@ export function startDebugUI(): void {
     }
   }
 
-  function drawPanel(screen: { header: string; body: string; footer: string; headerless?: boolean }): void {
+  function drawPanel(screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean }): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -443,9 +443,26 @@ export function startDebugUI(): void {
     ctx.fillStyle = `rgb(${GREEN})`
     if (!screen.headerless) drawRow(ctx, screen.header, HEADER_PAD, HEADER_BASE)
 
+    // The notice strip is its own container on the device, with a drawn border
+    // where a row of dashes used to be. Its height decides where the
+    // conversation starts, so this has to match the device's arithmetic or the
+    // window stops being worth the phrase in its own subtitle.
+    const noticeLines = screen.notice ? screen.notice.split('\n') : []
+    const nHeight = noticeHeight(noticeLines.length)
+    for (const [i, line] of noticeLines.entries()) {
+      drawRow(ctx, line, 4 + NOTICE_PAD + NOTICE_BORDER, BAR_H + NOTICE_PAD + NOTICE_BORDER + BASELINE + i * LINE_H)
+    }
+    if (nHeight > 0) {
+      // The container's own border, at the panel's own width and grey level.
+      ctx.strokeStyle = `rgba(${GREEN}, ${NOTICE_BORDER_COLOR / 15})`
+      ctx.lineWidth = NOTICE_BORDER
+      ctx.strokeRect(4 + NOTICE_BORDER / 2, BAR_H + NOTICE_BORDER / 2, PANEL_W - 8 - NOTICE_BORDER, nHeight - NOTICE_BORDER)
+      ctx.fillStyle = `rgb(${GREEN})`
+    }
+
     // Without a header container the body owns that band too, and starts where
     // it does rather than a bar below it.
-    const bodyTop = screen.headerless ? BODY_PAD + BASELINE : BODY_TOP
+    const bodyTop = screen.headerless ? BODY_PAD + BASELINE : BODY_TOP + nHeight
     for (const [i, line] of screen.body.split('\n').entries()) {
       drawRow(ctx, line, 4 + BODY_PAD, bodyTop + i * LINE_H)
     }
@@ -453,8 +470,6 @@ export function startDebugUI(): void {
     ctx.fillStyle = `rgba(${GREEN}, 0.78)`
     drawRow(ctx, screen.footer, HEADER_PAD, FOOTER_BASE)
 
-    // No rules between the zones: the containers carry borderWidth 0, so the
-    // panel has nothing there and neither should this.
     ctx.shadowBlur = 0
 
     // 4-bit: 16 alpha levels, nothing in between.

@@ -28,7 +28,7 @@ export const BAR_H = 36
 export const LINE_H = 27
 
 const HEADER_PAD = 4
-const BODY_PAD = 6
+export const BODY_PAD = 6
 
 /** Usable width of the header (and footer) container. Holds exactly one line:
  *  28px of inner height against a 27px line, so anything that wraps is gone. */

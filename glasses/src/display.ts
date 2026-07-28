@@ -8,10 +8,14 @@ import {
   AudioInputSource,
 } from '@evenrealities/even_hub_sdk'
 import {
+  BAR_H,
+  BODY_PAD,
   BODY_WIDTH,
   HEADER_WIDTH,
+  LINE_H,
   LIST_LINES,
   MAX_LINES,
+  PANEL_H,
   SPACE_W,
   ellipsize,
   splitLines,
@@ -281,12 +285,10 @@ function spinnerFrame(state: AppState): string {
  * five or six rows, crowding out the conversation it was meant to introduce.
  */
 function recapBlock(recap: string | undefined, maxLines = 2): string[] {
-  const block = recapBlockLines(recap, maxLines)
-  if (!block.length) return []
-  const body = block.slice(0, -1).flatMap(splitDisplayLines)
-  const separator = block[block.length - 1]
-  if (body.length <= maxLines) return [...body, separator]
-  return [...body.slice(0, maxLines - 1), ellipsize(body[maxLines - 1]), separator]
+  const body = recapBlockLines(recap, maxLines).flatMap(splitDisplayLines)
+  if (!body.length) return []
+  if (body.length <= maxLines) return body
+  return [...body.slice(0, maxLines - 1), ellipsize(body[maxLines - 1])]
 }
 
 /** Display label for a relay item's session (live session name, else the id). */
@@ -305,7 +307,7 @@ function relayBannerLines(state: AppState): string[] {
     const more = state.relayWaiting.length > 1 ? ` 他${state.relayWaiting.length - 1}件` : ''
     const head = splitDisplayLines(`[!]${relayLabel(state, top)}${choiceHint}${more}`)[0] || ''
     const textLines = splitDisplayLines(top.text).slice(0, 2)
-    return [head, ...textLines, SEPARATOR]
+    return [head, ...textLines]
   }
   // Notifications get no body space here. The dialog already presented each
   // one full-screen, and the list keeps them in full afterwards; a third
@@ -512,7 +514,39 @@ function recapIsCurrent(recapAt: string | undefined, msgs: ConversationMessage[]
   return newestTime <= recapTime
 }
 
-function conversationContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
+/**
+ * Geometry of the notice strip: how tall it is, and what the conversation has
+ * left underneath it.
+ *
+ * The rule between them is a container border, not a row of text, so it costs
+ * `NOTICE_BORDER` pixels instead of a 27px line. Padding is cut to 2 for the
+ * same reason — this strip is a label, not a page, and every pixel it does not
+ * take is one the conversation does.
+ */
+export const NOTICE_PAD = 2
+export const NOTICE_BORDER = 1
+/** 0-15 on this panel's 16 greens. Bright enough to read as a rule, dim enough
+ *  that it does not compete with the text it is separating. */
+export const NOTICE_BORDER_COLOR = 6
+/** A notice longer than the conversation it introduces has stopped helping. */
+const NOTICE_MAX_LINES = 3
+
+export function noticeHeight(lines: number): number {
+  return lines > 0 ? lines * LINE_H + 2 * NOTICE_PAD + 2 * NOTICE_BORDER : 0
+}
+
+/** Display lines the conversation keeps once the notice has taken its share. */
+export function conversationLines(noticeLines: number): number {
+  const body = PANEL_H - 2 * BAR_H - noticeHeight(noticeLines)
+  return Math.max(0, Math.floor((body - 2 * BODY_PAD) / LINE_H))
+}
+
+function conversationContent(state: AppState): {
+  headerText: string
+  noticeText: string
+  bodyText: string
+  footerText: string
+} {
   const session = state.sessions[state.sessionIndex]
   // Reading one pane of a workspace, its status is the one that applies — the
   // workspace's is a summary of panes the reader is not looking at.
@@ -542,7 +576,17 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   // Everything is measured in display lines — counting the conversation in
   // logical lines let a wrapped paragraph run off the bottom unnoticed.
   const content = convText.split('\n').flatMap(splitDisplayLines)
-  const bodyText = [...banner, ...recap, ...content].slice(0, MAX_LINES).join('\n')
+  // The notice block gets its own container so the panel can draw the line
+  // between them as a border. It used to be a row of dashes inside this one,
+  // which spent 27px — a seventh of everything the reader gets — on a rule.
+  const noticeLines = [...banner, ...recap].slice(0, NOTICE_MAX_LINES)
+  const noticeText = noticeLines.join('\n')
+  // The body container clips overflow: cap the content at what is left once
+  // the notice has taken its share, so a waiting banner never pushes
+  // conversation text off-screen. Everything is measured in display lines —
+  // counting the conversation in logical lines let a wrapped paragraph run off
+  // the bottom unnoticed.
+  const bodyText = content.slice(0, conversationLines(noticeLines.length)).join('\n')
   // With a waiting banner up, the ring is routed to the overlay item:
   // tap = respond/jump, double-tap = dismiss ("later / on PC").
   // Read some way back, the double-tap returns to the newest message rather
@@ -564,6 +608,7 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const notices = otherSessionInfoCount(state)
   const noticeMark = notices > 0 ? `  [i]${notices}` : ''
   return {
+    noticeText,
     headerText: withClock(
       `${session ? sName(session) : '---'}${pane ? ` ${paneName(pane, pane.paneId)}` : ''}`,
       `${statusBadge}${noticeMark}`,
@@ -628,6 +673,12 @@ export function screenText(state: AppState): {
   header: string
   body: string
   footer: string
+  /** Recap / waiting banner, in its own strip above the conversation with a
+   *  drawn rule between. Empty when there is nothing to say. Separate from
+   *  `body` because the rule is a container border on the device, so anything
+   *  redrawing these strings has to put a line there too or it shows a panel
+   *  the wearer is not looking at. */
+  notice?: string
   /** The list screen drops its header container, so its body starts at the top
    *  of the panel rather than below a bar. Anything drawing these strings has
    *  to know, or it renders a row lower than the device does. */
@@ -638,8 +689,8 @@ export function screenText(state: AppState): {
       // No header: the list screen gave that bar back to the list.
       return { header: '', body: sessionListBody(state), footer: sessionListFooter(state), headerless: true }
     case 'conversation': {
-      const { headerText, bodyText, footerText } = conversationContent(state)
-      return { header: headerText, body: bodyText, footer: footerText }
+      const { headerText, noticeText, bodyText, footerText } = conversationContent(state)
+      return { header: headerText, notice: noticeText, body: bodyText, footer: footerText }
     }
     case 'choice':
       return { header: choiceHeader(state), body: choiceBody(state), footer: FOOTER_CHOICE }
@@ -767,8 +818,21 @@ function buildSessionList(state: AppState): RebuildPageContainer {
   })
 }
 
+/**
+ * How many lines the notice strip is showing, which is the only thing about
+ * the conversation page whose *geometry* changes. Everything else is content,
+ * and content goes out as an in-place upgrade; a different height needs the
+ * page rebuilt, so `updateDisplay` watches this.
+ */
+function noticeLineCount(state: AppState): number {
+  const { noticeText } = conversationContent(state)
+  return noticeText ? noticeText.split('\n').length : 0
+}
+
 function buildConversation(state: AppState): RebuildPageContainer {
-  const { headerText, bodyText, footerText } = conversationContent(state)
+  const { headerText, noticeText, bodyText, footerText } = conversationContent(state)
+  const nLines = noticeText ? noticeText.split('\n').length : 0
+  const nHeight = noticeHeight(nLines)
 
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
@@ -780,12 +844,28 @@ function buildConversation(state: AppState): RebuildPageContainer {
     content: headerText,
   })
 
+  // The strip and its border are what used to be a row of dashes. Drawn by the
+  // panel, the rule costs NOTICE_BORDER px where the dashes cost a 27px line.
+  const notice = nLines > 0
+    ? new TextContainerProperty({
+        xPosition: 4, yPosition: 36,
+        width: W - 8, height: nHeight,
+        borderWidth: NOTICE_BORDER,
+        borderColor: NOTICE_BORDER_COLOR,
+        borderRadius: 0,
+        paddingLength: NOTICE_PAD,
+        containerID: 2, containerName: 'notice',
+        isEventCapture: 0,
+        content: noticeText,
+      })
+    : null
+
   const body = new TextContainerProperty({
-    xPosition: 4, yPosition: 36,
-    width: W - 8, height: H - 36 - 36,
+    xPosition: 4, yPosition: 36 + nHeight,
+    width: W - 8, height: H - 36 - 36 - nHeight,
     borderWidth: 0,
     paddingLength: 6,
-    containerID: 2, containerName: 'body',
+    containerID: notice ? 3 : 2, containerName: 'body',
     isEventCapture: 0,
     content: bodyText,
   })
@@ -795,14 +875,15 @@ function buildConversation(state: AppState): RebuildPageContainer {
     width: W, height: 36,
     borderWidth: 0,
     paddingLength: 4,
-    containerID: 3, containerName: 'footer',
+    containerID: notice ? 4 : 3, containerName: 'footer',
     isEventCapture: 1,
     content: footerText,
   })
 
+  const objects = notice ? [header, notice, body, footer] : [header, body, footer]
   return new RebuildPageContainer({
-    containerTotalNum: 3,
-    textObject: [header, body, footer],
+    containerTotalNum: objects.length,
+    textObject: objects,
   })
 }
 
@@ -962,6 +1043,9 @@ export function buildSetupGuide(): RebuildPageContainer {
 // ─── Display controller ───
 
 let currentMode: Mode | null = null
+/** Notice-strip height last sent, so a change in it triggers the rebuild the
+ *  new geometry needs. */
+let currentNoticeLines = 0
 
 export async function initDisplay(): Promise<Bridge | null> {
   try {
@@ -1033,8 +1117,13 @@ export async function updateHeader(bridge: Bridge | null, state: AppState): Prom
 export async function updateDisplay(bridge: Bridge | null, state: AppState): Promise<void> {
   if (!bridge) return
 
-  const needsRebuild = state.mode !== currentMode
+  // Geometry, not content, is what forces a rebuild: the notice strip changes
+  // the body container's height and the ids below it. Content alone goes out
+  // as in-place upgrades, which is why the panel is not rebuilt every render.
+  const notice = state.mode === 'conversation' ? noticeLineCount(state) : 0
+  const needsRebuild = state.mode !== currentMode || notice !== currentNoticeLines
   currentMode = state.mode
+  currentNoticeLines = notice
 
   if (needsRebuild) {
     let container: RebuildPageContainer
@@ -1066,18 +1155,23 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       break
     }
     case 'conversation': {
-      const { headerText, bodyText, footerText } = conversationContent(state)
+      const { headerText, noticeText, bodyText, footerText } = conversationContent(state)
+      const hasNotice = notice > 0
       await Promise.all([
         bridge.textContainerUpgrade(new TextContainerUpgrade({
           containerID: 1, containerName: 'header',
           content: headerText,
         })),
+        ...(hasNotice ? [bridge.textContainerUpgrade(new TextContainerUpgrade({
+          containerID: 2, containerName: 'notice',
+          content: noticeText,
+        }))] : []),
         bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
+          containerID: hasNotice ? 3 : 2, containerName: 'body',
           content: bodyText,
         })),
         bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 3, containerName: 'footer',
+          containerID: hasNotice ? 4 : 3, containerName: 'footer',
           content: footerText,
         })),
       ])
