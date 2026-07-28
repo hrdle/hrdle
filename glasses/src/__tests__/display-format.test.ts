@@ -1053,3 +1053,71 @@ describe('no notification about what is already on screen', () => {
     expect(body).toContain('[i]グラス開発: 応答が完了しました')
   })
 })
+
+describe('the header bar never overflows, whatever the clock reads', () => {
+  // A CI run in another timezone caught this: digit widths differ (`1` is 8px,
+  // `0` is wider), so the bar fit on the machine it was written on and not on
+  // the one that checked it. Sweeping the clock is the only honest test of a
+  // layout that measures itself against the time of day.
+  const RealDate = Date
+
+  const state = (name: string, notices: number) => ({
+    mode: 'conversation' as const,
+    sessions: [
+      { id: 'a', name, state: 'working' as const, indicatorState: 'waiting_input' as const },
+      { id: 'b', name: 'b', state: 'idle' as const },
+    ],
+    sessionIndex: 0,
+    conversation: [{ role: 'assistant' as const, content: 'x', timestamp: '2026-07-28T00:00:00Z' }],
+    conversationOffset: 0, conversationPage: 0, conversationLastLoaded: 0,
+    conversationHasMore: false, conversationLoading: false,
+    choiceIndex: 0, choiceOptions: [], relayWaiting: [],
+    relayInfo: Array.from({ length: notices }, (_, i) => ({
+      id: `i${i}`, sessionId: 'b', kind: 'info' as const, text: 'x',
+      source: 'auto' as const, createdAt: i,
+    })),
+    overlayItemId: null, spinnerTick: 0,
+  })
+
+  const NAMES = [
+    'とても長いワークスペース名前ですこれは実機の幅を超えます',
+    'wheel-leg-bot-with-a-very-long-name-indeed-truly',
+    'グラス開発',
+  ]
+
+  function sweep(check: (header: string, at: string) => void) {
+    try {
+      for (let m = 0; m < 1440; m += 7) {
+        const h = Math.floor(m / 60)
+        const mi = m % 60
+        // @ts-expect-error clock shim for the sweep
+        globalThis.Date = class extends RealDate {
+          getHours() { return h }
+          getMinutes() { return mi }
+        }
+        const at = `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`
+        for (const n of NAMES) check(screenText(state(n, 2) as never).header, `${at} / ${n}`)
+      }
+    } finally {
+      globalThis.Date = RealDate
+    }
+  }
+
+  test('it fits at every minute of the day', () => {
+    const over: string[] = []
+    sweep((header, at) => {
+      if (width(header) > HEADER_WIDTH) over.push(`${at}: ${width(header)}px "${header}"`)
+    })
+    expect(over).toEqual([])
+  })
+
+  test('the notice count is never what falls off the edge', () => {
+    // The title is truncatable context; the count is the news. If the bar has
+    // to lose something it must not be this.
+    const lost: string[] = []
+    sweep((header, at) => {
+      if (!header.includes('[i]2')) lost.push(`${at}: "${header}"`)
+    })
+    expect(lost).toEqual([])
+  })
+})

@@ -206,19 +206,25 @@ function withClock(title: string, tail = ''): string {
   const now = new Date()
   const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   const clockPx = textWidth(clock)
-  const fits = (s: string) => textWidth(s) + SPACE_W + clockPx <= HEADER_WIDTH
+  const build = (h: string, spaces: number) => `${h}${tail}${' '.repeat(spaces)}${clock}`
   let head = title
-  while (head && !fits(head + tail)) head = head.slice(0, -1)
-  // A tail long enough to overflow on its own is not worth protecting.
-  let label = head + tail
-  while (label && !fits(label)) label = label.slice(0, -1)
-  let spaces = Math.max(1, Math.floor((HEADER_WIDTH - textWidth(label) - clockPx) / SPACE_W))
+  while (head && textWidth(head + tail) + SPACE_W + clockPx > HEADER_WIDTH) head = head.slice(0, -1)
+  let spaces = Math.max(1, Math.floor((HEADER_WIDTH - textWidth(head + tail) - clockPx) / SPACE_W))
   // Kerning across the join can cost a pixel or two; give it back rather than
   // hand the container a line it has to wrap.
-  let out = `${label}${' '.repeat(spaces)}${clock}`
+  let out = build(head, spaces)
   while (spaces > 1 && textWidth(out) > HEADER_WIDTH) {
     spaces--
-    out = `${label}${' '.repeat(spaces)}${clock}`
+    out = build(head, spaces)
+  }
+  // One space is the floor, and measuring the parts separately can still land
+  // a pixel or two over once they are joined. Past that the title yields —
+  // never the tail, which is the thing the bar was widened to report. Without
+  // this the bar overflowed for roughly a fifth of the day, depending on which
+  // digits the clock happened to be showing.
+  while (head && textWidth(out) > HEADER_WIDTH) {
+    head = head.slice(0, -1)
+    out = build(head, spaces)
   }
   return out
 }
