@@ -5,7 +5,7 @@ import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { NOTICE_DISMISS_MS } from '../controller.ts'
-import { noticeHeight, noticeWindowCount } from '../display.ts'
+import { noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
@@ -197,12 +197,12 @@ describe('conversation body', () => {
     expect(first[0].startsWith('要約: ')).toBe(true)
     expect(first.length).toBeLessThanOrEqual(3)
     expect(first.join('')).not.toEndWith('…')
-    expect(noticeWindowCount(state(longRecap) as never)).toBeGreaterThan(1)
+    expect(noticeScrollSteps(state(longRecap) as never)).toBeGreaterThan(1)
   })
 
   test('waiting reaches the end of it, and then stops', () => {
     const st = state(longRecap)
-    const windows = noticeWindowCount(st as never)
+    const windows = noticeScrollSteps(st as never)
     const seen = new Set<string>()
     for (let w = 0; w < windows; w++) {
       for (const line of (screenText({ ...st, noticeWindow: w }).notice ?? '').split('\n')) {
@@ -1221,22 +1221,23 @@ describe('waiting shows what did not fit', () => {
   test('the strip reports how many windows it takes', () => {
     // The clock asks this to know whether waiting reveals anything more, so it
     // can move on to the conversation instead of sitting on a finished strip.
-    expect(noticeWindowCount(st() as never)).toBeGreaterThan(1)
+    expect(noticeScrollSteps(st() as never)).toBeGreaterThan(1)
   })
 
   test('a notice that fits takes exactly one window', () => {
     const short = st({ sessions: [{ id: 'a', name: 'g', state: 'idle' as const, ccRecap: '短い', ccRecapAt: '2030-01-01T00:00:00Z' }] })
-    expect(noticeWindowCount(short as never)).toBe(1)
+    expect(noticeScrollSteps(short as never)).toBe(1)
   })
 
   test('no notice at all takes one window, so the clock moves straight on', () => {
     const none = st({ sessions: [{ id: 'a', name: 'g', state: 'idle' as const }] })
-    expect(noticeWindowCount(none as never)).toBe(1)
+    expect(noticeScrollSteps(none as never)).toBe(1)
   })
 
-  test('windows tile: no line is shown twice, none is skipped', () => {
-    // Distinguishable lines: a recap of one repeated phrase wraps into rows
-    // that are legitimately identical strings, which says nothing about tiling.
+  test('it scrolls a line at a time, keeping the reader their place', () => {
+    // Paging replaces the whole strip and the reader has to find where they
+    // were in text they were mid-sentence through. Two of three lines carry
+    // over instead, so the new line arrives with its context already up.
     const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
     const state = st({
       sessions: [{
@@ -1244,19 +1245,36 @@ describe('waiting shows what did not fit', () => {
         ccRecap: numbered, ccRecapAt: '2030-01-01T00:00:00Z',
       }],
     })
-    const windows = noticeWindowCount(state as never)
-    const seen: string[] = []
-    for (let w = 0; w < windows; w++) {
-      seen.push(...(screenText({ ...state, noticeWindow: w }).notice ?? '').split('\n').filter(Boolean))
+    const at = (o: number) => (screenText({ ...state, noticeWindow: o }).notice ?? '').split('\n')
+    const first = at(0)
+    const second = at(1)
+    expect(second[0]).toBe(first[1])
+    expect(second[1]).toBe(first[2])
+    // One line is new each step, and the last line is reached by the last one.
+    const steps = noticeScrollSteps(state as never)
+    expect(at(steps - 1)).toContain('行8')
+  })
+
+  test('every line is on screen at some point', () => {
+    const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
+    const state = st({
+      sessions: [{
+        id: 'a', name: 'g', state: 'idle' as const,
+        ccRecap: numbered, ccRecapAt: '2030-01-01T00:00:00Z',
+      }],
+    })
+    const seen = new Set<string>()
+    for (let o = 0; o < noticeScrollSteps(state as never); o++) {
+      for (const l of (screenText({ ...state, noticeWindow: o }).notice ?? '').split('\n')) {
+        if (l) seen.add(l)
+      }
     }
-    expect(new Set(seen).size).toBe(seen.length)
-    // And every line made it: the last one is on screen by the last window.
-    expect(seen).toContain('行8')
+    for (let i = 0; i < 9; i++) expect([...seen].some((l) => l.includes(`行${i}`))).toBe(true)
   })
 
   test('the recap is not counted while the reader has paged away from it', () => {
     // Deeper paging drops the recap for message space; the clock must not then
     // think there is a strip to walk.
-    expect(noticeWindowCount(st({ conversationPage: 2 }) as never)).toBe(1)
+    expect(noticeScrollSteps(st({ conversationPage: 2 }) as never)).toBe(1)
   })
 })

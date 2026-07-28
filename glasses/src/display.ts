@@ -145,12 +145,12 @@ export interface AppState {
    *  Absent in states built before the spinner existed; treated as 0. */
   spinnerTick?: number
   /**
-   * Which slice of an over-long notice is on screen.
+   * How far an over-long notice has scrolled, in lines.
    *
-   * The recap and the waiting banner are capped at two lines because that is
+   * The recap and the waiting banner are capped at three lines because that is
    * what the panel can spare, and the rest used to end at `…` — information
    * the reader was told existed and then could not reach. The auto-advance
-   * clock walks this instead, so waiting is enough to see all of it.
+   * clock scrolls this instead, so waiting is enough to see all of it.
    */
   noticeWindow?: number
   debugEvent?: string
@@ -562,28 +562,35 @@ function conversationNoticeLines(state: AppState): string[] {
  *  so a long one is shown this many lines at a time instead of all at once. */
 const NOTICE_MAX_LINES = 3
 
-/** The `window`-th slice of a notice, clamped to the last one. */
-function noticeWindowOf(lines: string[], window: number): string[] {
+/**
+ * The notice, scrolled down by `offset` lines.
+ *
+ * A line at a time, not a page at a time: paging replaces the whole strip and
+ * the reader has to find their place again in text they were mid-sentence
+ * through. Scrolling keeps two of the three lines they were just reading, so
+ * the new one arrives with its context already on screen.
+ */
+function noticeScrollOf(lines: string[], offset: number): string[] {
   if (lines.length <= NOTICE_MAX_LINES) return lines
-  const last = noticeWindowCountOf(lines.length) - 1
-  const w = Math.max(0, Math.min(window, last))
-  return lines.slice(w * NOTICE_MAX_LINES, w * NOTICE_MAX_LINES + NOTICE_MAX_LINES)
+  const last = noticeScrollStepsOf(lines.length) - 1
+  const o = Math.max(0, Math.min(offset, last))
+  return lines.slice(o, o + NOTICE_MAX_LINES)
 }
 
-function noticeWindowCountOf(total: number): number {
-  return Math.max(1, Math.ceil(total / NOTICE_MAX_LINES))
+function noticeScrollStepsOf(total: number): number {
+  return Math.max(1, total - NOTICE_MAX_LINES + 1)
 }
 
 /**
- * How many slices the notice takes to show in full.
+ * How many steps the notice takes to scroll through in full.
  *
  * The auto-advance clock asks this to know whether waiting will reveal
  * anything more, so it can move on to the conversation instead of sitting on
  * a strip that has already shown everything it has.
  */
-export function noticeWindowCount(state: AppState): number {
+export function noticeScrollSteps(state: AppState): number {
   if (state.mode !== 'conversation') return 1
-  return noticeWindowCountOf(conversationNoticeLines(state).length)
+  return noticeScrollStepsOf(conversationNoticeLines(state).length)
 }
 
 export function noticeHeight(lines: number): number {
@@ -628,7 +635,7 @@ function conversationContent(state: AppState): {
   // The notice block gets its own container so the panel can draw the line
   // between them as a border. It used to be a row of dashes inside this one,
   // which spent 27px — a seventh of everything the reader gets — on a rule.
-  const noticeLines = noticeWindowOf(allNotice, state.noticeWindow ?? 0)
+  const noticeLines = noticeScrollOf(allNotice, state.noticeWindow ?? 0)
   const noticeText = noticeLines.join('\n')
   // The body container clips overflow: cap the content at what is left once
   // the notice has taken its share, so a waiting banner never pushes

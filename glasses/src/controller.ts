@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem } from './api.ts'
-import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, noticeWindowCount, rowCursor } from './display.ts'
+import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, noticeScrollSteps, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { CcHubWsClient } from './ws-client.ts'
@@ -52,13 +52,27 @@ export const NOTICE_DISMISS_MS = 8000
  */
 const AUTO_ADVANCE_IDLE_MS = 10_000
 /**
- * How long each step stays up.
+ * Seconds a line of Japanese gets before the screen moves on.
  *
- * Slow on purpose: it is read at a glance while doing something else, and
- * every step costs a redraw over BLE. Matched to the sessions push so the
- * panel keeps one rhythm rather than two competing ones.
+ * Measured against the device rather than guessed: five seconds for a whole
+ * three-line strip read as hurried, and fifteen for the same strip read right
+ * — which is this, per line.
+ *
+ * Every step is a redraw over BLE, so slow is also cheap.
  */
-const AUTO_ADVANCE_STEP_MS = 5000
+const SECONDS_PER_LINE_MS = 5000
+
+/**
+ * The notice scrolls a line at a time, so one line of reading buys one step.
+ */
+const AUTO_SCROLL_STEP_MS = SECONDS_PER_LINE_MS
+
+/**
+ * A page turn replaces the whole body, so it is priced as the strip was: three
+ * lines' worth. Not seven — a page is skimmed for where it left off, not read
+ * from the top.
+ */
+const AUTO_PAGE_STEP_MS = 3 * SECONDS_PER_LINE_MS
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
@@ -167,6 +181,8 @@ export class GlassesController {
   private noticeTimer: ReturnType<typeof setTimeout> | null = null
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
   private lastGestureAt = 0
+  /** Ticks since the last auto step, so a page turn can cost several of them. */
+  private autoTicks = 0
 
   private audioChunks: Uint8Array[] = []
   private recording = false
@@ -195,7 +211,7 @@ export class GlassesController {
     // every state change. It costs nothing when nothing is working: the tick
     // returns before touching the display.
     setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
-    setInterval(() => this.tickAutoAdvance(), AUTO_ADVANCE_STEP_MS)
+    setInterval(() => this.tickAutoAdvance(), AUTO_SCROLL_STEP_MS)
   }
 
   /**
@@ -217,14 +233,19 @@ export class GlassesController {
     // The reader is working the ring; do not fight them for it.
     if (Date.now() - this.lastGestureAt < AUTO_ADVANCE_IDLE_MS) return
 
-    const windows = noticeWindowCount(st)
-    if ((st.noticeWindow ?? 0) < windows - 1) {
+    const steps = noticeScrollSteps(st)
+    if ((st.noticeWindow ?? 0) < steps - 1) {
       st.noticeWindow = (st.noticeWindow ?? 0) + 1
+      this.autoTicks = 0
       this.render()
       return
     }
+    // A page turn costs more reading than a scrolled line, so it waits longer
+    // — counted in ticks of the same clock rather than run off a second timer.
     const totalPages = this.currentMsgTotalPages()
     if (st.conversationPage < totalPages - 1) {
+      if (++this.autoTicks < AUTO_PAGE_STEP_MS / AUTO_SCROLL_STEP_MS) return
+      this.autoTicks = 0
       st.conversationPage++
       this.render()
     }
