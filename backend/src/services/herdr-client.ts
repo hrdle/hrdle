@@ -89,6 +89,9 @@ export interface HerdrPane {
   revision: number;
   /** Absent on herdr servers older than protocol 16 (< v0.7.3). */
   scroll?: HerdrScroll;
+  /** Name the user gave the pane (`herdr pane rename`). Absent until they do,
+   *  which is why nothing may show it as a fallback for the pane id. */
+  label?: string;
 }
 
 export interface HerdrWorkspace {

@@ -397,6 +397,20 @@ function paneStatusLabel(p: Pane, frame: string): string {
  * learns nothing from the second one. What is left is the context figure,
  * which does differ, and says which of the two has been running longer.
  */
+/**
+ * What to call a pane.
+ *
+ * `%3` is an address, not a name: it says where the pane sits in the split
+ * tree and nothing about what is running there. herdr lets the user name one
+ * (`herdr pane rename`), and once they have, the name is the whole reason they
+ * bothered. The id stays as the fallback, because most panes are never named
+ * and an empty label would leave the row pointing at nothing.
+ */
+function paneName(p: Pane | undefined, paneId: string): string {
+  const label = p?.label?.trim()
+  return label || paneId
+}
+
 function paneDetail(p: Pane, siblings: Pane[]): string {
   const dirOf = (x: Pane) => x.currentPath?.split('/').filter(Boolean).pop() ?? ''
   const dirs = new Set(siblings.map(dirOf))
@@ -472,7 +486,7 @@ function sessionListBody(state: AppState): string {
     // with the badges either side of it.
     const last = panes[panes.length - 1]?.paneId === row.paneId
     const branch = last ? '└' : '├'
-    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${row.paneId}${detail ? `  ${detail}` : ''}`
+    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${paneName(p, row.paneId)}${detail ? `  ${detail}` : ''}`
   })
 
   return [...banner, ...listBody].join('\n')
@@ -551,7 +565,7 @@ function conversationContent(state: AppState): { headerText: string; bodyText: s
   const noticeMark = notices > 0 ? `  [i]${notices}` : ''
   return {
     headerText: withClock(
-      `${session ? sName(session) : '---'}${pane ? ` ${pane.paneId}` : ''}`,
+      `${session ? sName(session) : '---'}${pane ? ` ${paneName(pane, pane.paneId)}` : ''}`,
       `${statusBadge}${noticeMark}`,
     ),
     bodyText,

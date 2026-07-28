@@ -44,6 +44,8 @@ export interface Pane {
    *  pane whose tab is not the active one is running out of sight of the
    *  terminal — still a live agent, and now reachable from here. */
   tabId?: string
+  /** Name the user gave the pane (`herdr pane rename`). Absent until they do. */
+  label?: string
   currentCommand?: string
   currentPath?: string
   agent?: string
