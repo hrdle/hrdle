@@ -1,4 +1,4 @@
-import { envVar } from '../../../shared/identity';
+import { IDENTITY, envVar } from '../../../shared/identity';
 import { listWorkspaces } from './herdr-client';
 import { getAllSessionMetadata } from './session-metadata';
 
@@ -34,7 +34,7 @@ const GLOSSARY = [
   'ペイン',
   'ワークスペース',
   'セッション',
-  'cchub',
+  IDENTITY.binaryName,
   'herdr',
   'issue',
   'プッシュ',

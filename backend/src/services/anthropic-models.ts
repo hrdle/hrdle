@@ -1,4 +1,5 @@
 import { VERSION } from '../cli';
+import { userAgent } from '../../../shared/identity';
 import { getClaudeAccessToken } from '../utils/claude-credentials';
 
 interface ModelInfo {
@@ -25,7 +26,7 @@ async function fetchModels(): Promise<Map<string, number>> {
         Authorization: `Bearer ${token}`,
         'anthropic-version': '2023-06-01',
         'anthropic-beta': 'oauth-2025-04-20',
-        'User-Agent': `cchub/${VERSION}`,
+        'User-Agent': userAgent(VERSION),
       },
     });
     if (!response.ok) return new Map();

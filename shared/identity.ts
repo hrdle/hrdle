@@ -114,6 +114,29 @@ export function envVar(suffix: string): string {
   return `${IDENTITY.binaryName.toUpperCase()}_${suffix}`;
 }
 
+/**
+ * The environment variable holding the server password, e.g. `HRDLE_PASSWORD`.
+ *
+ * Both the writer (`setup`, which puts it in the service env file) and the
+ * reader (startup, and the auth middleware behind it) must use this one name.
+ * They did not: setup wrote a bare `PASSWORD=` while the server read
+ * `CCHUB_PASSWORD`, so a password configured through `setup -P` on Linux was
+ * never seen and the server came up **unauthenticated** while reporting itself
+ * as configured. Nothing fails when these disagree, which is why it lasted.
+ */
+export const PASSWORD_ENV = envVar('PASSWORD');
+
+/**
+ * Older spellings still accepted when reading the password, newest first.
+ *
+ * `CCHUB_PASSWORD` is what this app read before the rename and what anyone
+ * following `.env.example` has exported. The bare `PASSWORD` that setup used to
+ * write is deliberately NOT here: it is a name other things use, and picking it
+ * up out of the ambient environment would switch auth on with a password the
+ * user never chose. Re-running `setup` rewrites that file with the name above.
+ */
+export const LEGACY_PASSWORD_ENVS: readonly string[] = ['CCHUB_PASSWORD'];
+
 /** The hook command hosts are told to run, e.g. `cchub notify`. */
 export const HOOK_COMMAND = `${IDENTITY.binaryName} notify`;
 

@@ -25,7 +25,7 @@ import {
   herdrSocketPath,
 } from './services/herdr-client';
 import { t } from './i18n';
-import { IDENTITY, TMP_PATHS } from '../../shared/identity';
+import { IDENTITY, LEGACY_PASSWORD_ENVS, PASSWORD_ENV, TMP_PATHS, envVar } from '../../shared/identity';
 
 // Global error handlers to prevent silent crashes
 process.on('uncaughtException', (err) => {
@@ -88,13 +88,13 @@ app.get('/health', (c) => c.json({ status: 'ok', version: VERSION }));
 app.get('/clear-cache', (c) => {
   return c.html(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CC Hub - Clear Cache</title>
+<title>${IDENTITY.productName} - Clear Cache</title>
 <style>body{background:#1a1a1a;color:#fff;font-family:system-ui;padding:20px;text-align:center}
 .status{margin:20px 0;padding:15px;border-radius:8px;background:#333}
 .ok{color:#4ade80}.err{color:#f87171}button{padding:12px 24px;font-size:16px;
 background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:10px}
 button:active{background:#2563eb}</style></head>
-<body><h1>CC Hub Cache Clear</h1><div id="log"></div>
+<body><h1>${IDENTITY.productName} Cache Clear</h1><div id="log"></div>
 <button onclick="clearAll()">Clear Cache & Reload</button>
 <script>
 var log=document.getElementById('log');
@@ -407,13 +407,17 @@ if (needsCert) {
 
 // Store password in environment for auth middleware. Priority:
 //   1. -P CLI arg
-//   2. CCHUB_PASSWORD env var (set by systemd EnvironmentFile etc.)
-//   3. macOS Keychain (service: cchub) — populated by `cchub setup`
+//   2. PASSWORD_ENV (set by the systemd EnvironmentFile `setup` writes), then
+//      the spellings this app used before the rename
+//   3. macOS Keychain — populated by `setup`
 let resolvedPassword: string | undefined = args.password;
 let passwordSource: 'cli' | 'env' | 'keychain' | 'none' = args.password ? 'cli' : 'none';
-if (!resolvedPassword && process.env.CCHUB_PASSWORD) {
-  resolvedPassword = process.env.CCHUB_PASSWORD;
-  passwordSource = 'env';
+for (const name of [PASSWORD_ENV, ...LEGACY_PASSWORD_ENVS]) {
+  if (resolvedPassword) break;
+  if (process.env[name]) {
+    resolvedPassword = process.env[name];
+    passwordSource = 'env';
+  }
 }
 if (!resolvedPassword && process.platform === 'darwin') {
   const { readPassword } = await import('./utils/keychain');
@@ -424,7 +428,7 @@ if (!resolvedPassword && process.platform === 'darwin') {
   }
 }
 if (resolvedPassword) {
-  process.env.CCHUB_PASSWORD = resolvedPassword;
+  process.env[PASSWORD_ENV] = resolvedPassword;
   const sourceLabel = passwordSource === 'keychain' ? ' (Keychain)' :
     passwordSource === 'env' ? ' (env)' : '';
   console.log(`${t('server.passwordEnabled')}${sourceLabel}`);
@@ -440,7 +444,7 @@ await initJwtSecret();
 // Start server
 const port = args.port;
 const host = args.host;
-process.env.CCHUB_PORT = String(port);
+process.env[envVar('PORT')] = String(port);
 
 console.log(`${IDENTITY.productName} v${VERSION}`);
 console.log(`   URL: https://${tailscaleHostname}:${port}`);

@@ -52,7 +52,7 @@ function truncateRecap(content: string): string {
 }
 
 export interface ProjectInfo {
-  dirName: string;  // Directory name for API calls (e.g., "-home-m0a-cchub")
+  dirName: string;  // Directory name for API calls (e.g., "-home-m0a-hrdle")
   projectPath: string;
   projectName: string;
   sessionCount: number;

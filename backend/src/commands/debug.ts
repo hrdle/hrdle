@@ -1,4 +1,4 @@
-// `cchub debug` — toggle Bun inspector mode on the running systemd user service.
+// `<bin> debug` — toggle Bun inspector mode on the running systemd user service.
 //
 // Bun supports inspector / cpu profiling via the `BUN_OPTIONS` environment
 // variable on compiled binaries. We expose it as a systemd drop-in so the user
@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import { mkdir, writeFile, unlink, access } from 'node:fs/promises';
-import { SERVICE } from '../../../shared/identity';
+import { IDENTITY, SERVICE } from '../../../shared/identity';
 
 const DROP_IN_DIR = join(
   homedir(),
@@ -28,7 +28,7 @@ interface DebugOptions {
 
 export async function runDebug(opts: DebugOptions): Promise<void> {
   if (platform() !== 'linux') {
-    console.error('`hrdle debug` currently supports Linux systemd-user only.');
+    console.error(`\`${IDENTITY.binaryName} debug\` currently supports Linux systemd-user only.`);
     process.exit(1);
   }
 
@@ -66,10 +66,10 @@ async function enableInspector(): Promise<void> {
   console.log('Connect with Chrome DevTools:');
   console.log('  1. Open chrome://inspect');
   console.log(`  2. Configure… → add "<host>:${port}" (e.g. 100.91.210.90:${port})`);
-  console.log('  3. The "cchub" remote target should appear — click "inspect"');
+  console.log(`  3. The "${IDENTITY.binaryName}" remote target should appear — click "inspect"`);
   console.log('  4. Performance tab → Record → reproduce → Stop → save .cpuprofile');
   console.log('');
-  console.log('Disable again with: cchub debug disable');
+  console.log(`Disable again with: ${IDENTITY.binaryName} debug disable`);
 }
 
 async function disableInspector(): Promise<void> {
@@ -95,7 +95,7 @@ async function profileInspector(seconds: number): Promise<void> {
   await enableInspector();
   console.log('');
   console.log(`Profiling window: ${seconds}s. Inspector will be torn down automatically.`);
-  console.log('   Press Ctrl-C to keep it open longer — disable later with `cchub debug disable`.');
+  console.log(`   Press Ctrl-C to keep it open longer — disable later with \`${IDENTITY.binaryName} debug disable\`.`);
   await sleep(seconds * 1000);
   console.log('');
   console.log('⏰ Window elapsed, disabling inspector…');
