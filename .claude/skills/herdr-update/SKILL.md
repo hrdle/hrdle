@@ -1,110 +1,119 @@
 ---
 name: herdr-update
-description: herdr を新しいバージョンに上げる手順。hrdle は pane ごとに herdr のバイナリを子プロセスとして起動するので、バイナリを差し替えた瞬間から非互換が始まり、意図しないタイミングでサーバが再起動する。「herdr を更新して」「herdr のバージョンを上げて」「herdr が古い」「preview チャンネルに切り替えて」「hrdle が herdr のアップデート待ちと言っている」「更新したら壊れた/レジュームが壊れた」などで起動する。herdr 自体の操作（pane / tab / workspace）は別スキル（herdr）。
+description: How to move herdr to a new version. hrdle spawns the herdr binary as a child process per pane, so incompatibility starts the moment the binary is swapped and the server restarts at a time nobody chose. Triggers on "update herdr", "bump herdr's version", "herdr is old", "switch to the preview channel", "hrdle says a herdr update is pending", "the update broke it / resume is broken", "herdr を更新して", "herdr のバージョンを上げて", "herdr が古い". Driving herdr itself (panes, tabs, workspaces) is a different skill (herdr).
 ---
 
-# herdr の更新
+# Updating herdr
 
-## まず知っておくこと: 「バイナリだけ先に、再起動は後で」は成立しない
+## First: "swap the binary now, restart later" does not exist
 
-hrdle は pane ごとに `herdr terminal session control` を**子プロセスとして起動する**
-（`services/herdr-client.ts` の `PaneController`）。バイナリを差し替えた瞬間から、
-新しい CLI が古いサーバと話すことになり、controller が起動即終了を繰り返す。
-その混乱で systemd（`Restart=always`）が herdr を再起動し、**こちらが選んでいない
-タイミングでサーバが新バイナリで上がる**。
+hrdle **spawns `herdr terminal session control` as a child process** per pane
+(`PaneController` in `services/herdr-client.ts`). The moment the binary is
+replaced, a new CLI is talking to an old server and the controllers start
+exiting as soon as they spawn. That churn makes systemd (`Restart=always`)
+restart herdr, and **the server comes up on the new binary at a time nobody
+chose**.
 
-2026-07-30 に実際に起きたこと（0.7.4 → 0.7.5）:
+What actually happened on 2026-07-30 (0.7.4 -> 0.7.5):
 
-1. `~/.local/bin/herdr` を 0.7.5 に差し替え。サーバは 0.7.4 のまま
-2. `herdr status server` が `compatible: no`、CLI の `agent list` が 0 件になる
-3. hrdle のログに `controller exited` → `controller spawned` のループ（w4Y:p1）
-4. herdr サーバが再起動。`session.json` から復元され、**workspace id が
-   `w4W` → `w53` → `w54` と変わる**
-5. ユーザーから「レジューム機能が壊れた気がした」と報告される
-6. ログを見て「skew が実害を出している」と判断しバイナリを 0.7.4 に戻す —
-   **しかしサーバはすでに 0.7.5 になっていた**ので、逆向きの非互換を作る
-7. 気づいて 0.7.5 に戻し、ようやく整合
+1. `~/.local/bin/herdr` was replaced with 0.7.5. The server was still 0.7.4
+2. `herdr status server` reported `compatible: no`, and the CLI's `agent list`
+   returned nothing
+3. hrdle's log filled with a `controller exited` -> `controller spawned` loop
+   (w4Y:p1)
+4. The herdr server restarted. It restored from `session.json` and **the
+   workspace ids changed**, `w4W` -> `w53` -> `w54`
+5. The user reported that resume felt broken
+6. Reading the log, the conclusion was "the skew is doing damage, put 0.7.4
+   back" — **but the server was already on 0.7.5**, so rolling back
+   manufactured the mismatch in the other direction
+7. Once noticed, going back to 0.7.5 finally made it consistent
 
-6 が二重の失敗になっている。**慌てて戻す前に `herdr status server` でサーバ側の
-バージョンを見る。** 差し替えの結果としてサーバが再起動していれば、戻すべきは
-バイナリではなく判断のほう。
+Step 6 is the second failure. **Before undoing anything, ask
+`herdr status server` which version the server is on.** If the swap already
+caused a restart, what needs reverting is the decision, not the binary.
 
-## 正しい手順
+## The correct procedure
 
-### 1. 影響を確認して、必要なら合意を取る
+### 1. Check the impact, and get agreement if needed
 
-再起動は**全 pane の PTY を張り直す**。
+A restart **recreates every pane's PTY**.
 
-- エージェントの会話は戻る（`~/.config/herdr/config.toml` の
-  `resume_agents_on_restore = true` を確認する）
-- **実行中のコマンドは戻らない**
-- workspace id は変わる（ラベルは維持される）
-- **自分がその pane の中にいるなら、自分も再起動される。** 作業中なら要点を
-  書き出してから実行する
+- Agent conversations come back (confirm `resume_agents_on_restore = true` in
+  `~/.config/herdr/config.toml`)
+- **A running command does not come back**
+- Workspace ids change (labels are preserved)
+- **If you are inside one of those panes, you are restarted too.** Write down
+  what matters before running it
 
-### 2. 事前に記録する
+### 2. Record the state first
 
-復元されたかを後で言えるようにする。
+So that "was it restored?" can be answered afterwards.
 
 ```bash
 herdr --version
 herdr status server                      # version / protocol / compatible
-herdr workspace list                     # ラベルと pane 数
-herdr agent list                         # エージェント数と native session id
+herdr workspace list                     # labels and pane counts
+herdr agent list                         # agent count and native session ids
 grep resume_agents_on_restore ~/.config/herdr/config.toml
 ```
 
-### 3. hrdle 経由で適用する
+### 3. Apply it through hrdle
 
 ```bash
 curl -sk -X POST https://localhost:5924/api/herdr/apply-update
 ```
 
-Web UI のダッシュボードのボタンでも同じ。中身は systemd 環境なら
-`herdr update` → `systemctl --user restart herdr` の順で、`herdr update` が
-成功しなければ再起動には進まない（`services/herdr-update.ts` の
-`buildHerdrApplyCommands`）。
+The dashboard button in the web UI does the same thing. Under systemd it runs
+`herdr update` and then `systemctl --user restart herdr`, and a failed
+`herdr update` never reaches the restart (`buildHerdrApplyCommands` in
+`services/herdr-update.ts`).
 
-**これが唯一の正しい経路。** hrdle のサーバプロセスは herdr の外にいるので
-`herdr update` が通る。pane の中から叩くと弾かれる（下記）。
+**This is the only correct route.** hrdle's server process lives outside herdr,
+so `herdr update` is allowed there. Run from inside a pane it is refused (see
+below).
 
-`canApply: false` のときはボタンが出ない。`GET /api/dashboard` の `herdrUpdate` を見る:
+With `canApply: false` the button does not appear. Look at `herdrUpdate` in
+`GET /api/dashboard`:
 
 ```json
 {"binaryVersion":"0.7.5","serverVersion":"0.7.5","restartNeeded":false,"canApply":false}
 ```
 
-### 4. 復元を確認する
+### 4. Confirm the restore
 
 ```bash
-herdr status server                      # compatible: yes、version が新しい方
-herdr agent list                         # 数が事前と一致するか
+herdr status server                      # compatible: yes, and the newer version
+herdr agent list                         # the count matches what was recorded
 curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'
 ```
 
-## やらないこと
+## What not to do
 
-- **pane 内から `herdr update`** — `update failed: run 'herdr update' outside herdr
-  after detaching from the session` で拒否される。エージェントは基本 pane の中にいる
-- **`herdr update --handoff`** — `CLAUDE.md` が明示的に禁じている。引き継がれたサーバは
-  supervise されない
-- **バイナリを手で差し替える**（`gh release download` → `mv`）— 冒頭の事故がこれ。
-  実行中のバイナリは `cp` できず `Text file busy` になるので `mv` で入れ替わるが、
-  入れ替わった瞬間から非互換が始まる
-- **`hrdle update --auto` のタイマーから走らせる** — hrdle 側で意図的に排除されている。
-  再起動は人が選ぶ
+- **`herdr update` from inside a pane** — refused with `update failed: run
+  'herdr update' outside herdr after detaching from the session`. An agent is
+  normally inside a pane
+- **`herdr update --handoff`** — `CLAUDE.md` forbids it explicitly. A handed-over
+  server is not supervised
+- **Replacing the binary by hand** (`gh release download` then `mv`) — this is
+  the accident above. A running binary cannot be `cp`-ed over (`Text file busy`)
+  so `mv` swaps it, and incompatibility starts at that instant
+- **Running it from the `hrdle update --auto` timer** — hrdle excludes this
+  deliberately. A restart is a person's decision
 
-## 特定のバージョンに上げたいとき
+## When a specific version is needed
 
-`herdr update` は最新の安定版に上げる。preview や特定バージョンが必要な場合、
-`gh release list --repo ogulcancelik/herdr` で確認できるが、**手動差し替えは上記の
-理由で避ける**。preview チャンネルへの切り替え手段が herdr 側にあるかを先に調べる
-（`herdr update --help` は `[--handoff]` しか出さないので、チャンネル指定は別経路）。
+`herdr update` moves to the latest stable. For a preview or a specific version,
+`gh release list --repo ogulcancelik/herdr` shows what exists, but **a manual
+swap is to be avoided for the reason above**. Check first whether herdr itself
+offers a way to switch channels (`herdr update --help` only shows `[--handoff]`,
+so a channel would be somewhere else).
 
-## 関連
+## Related
 
-- 修正が入っているかを releases の日付で判断しない。issue の作成日と比べる。
-  2026-07-23 に報告された [herdr#1789](https://github.com/ogulcancelik/herdr/issues/1789)
-  は 2026-07-21 の v0.7.5 には入っておらず、v0.7.5 に上げても再現した（実測）
-- herdr 自体の操作は `herdr` スキル（`~/.claude/skills/herdr/` — herdr のリポジトリ
-  そのものなので書き込まない）
+- Do not judge whether a fix is in from a release date; compare it against the
+  issue's creation date. [herdr#1789](https://github.com/ogulcancelik/herdr/issues/1789),
+  reported on 2026-07-23, is not in v0.7.5 (released 2026-07-21), and it still
+  reproduced after updating to v0.7.5 (measured)
+- Driving herdr itself is the `herdr` skill (`~/.claude/skills/herdr/` — that is
+  herdr's own repository, so do not write to it)
