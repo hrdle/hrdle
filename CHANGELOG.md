@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.9] - 2026-07-30
+
+### Removed
+- **The URL button in the keyboard's action bar**. On a phone it called
+  `handleExtractUrls` in InputBar, whose body was a comment saying the mobile
+  path was not wired up: tapping it did nothing at all, and had done nothing
+  since it shipped
+  - The rest of the feature went with it. The action bar is shared with the
+    tablet's floating keyboard, which was the only thing that could open the URL
+    menu, so removing the key left DesktopLayout's menu unreachable.
+    `detectedUrls` / `showUrlMenu` / `urlPage`, the three handlers, the 90-line
+    panel and `Terminal.extractUrls()` are all gone (-140 lines)
+  - The `terminal.noUrls` i18n key was already unused (the panel had the string
+    inline), and the onboarding step no longer promises a URL list
+  - Worth noting for anyone tempted to rebuild it: `extractUrls` scanned
+    `term.buffer.active`, which with `scrollback: 0` holds only the visible
+    viewport, so even where it ran it saw one screen
+
 ## [0.3.8] - 2026-07-30
 
 ### Changed
