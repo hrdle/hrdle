@@ -116,6 +116,36 @@ HERDR_WORKSPACE_ID=w4Q
 これを逆にすると、「別インスタンスのターミナルから起動して試す」という
 一番自然な検証手順でセッション指定が無視され、しかも動いているように見える。
 
+### エージェントの中から検証サーバーを起動すると transcript が保存されない
+
+上の `HERDR_SOCKET_PATH` と同族で、**こちらのほうが静か**。
+
+Claude Code は子プロセスに `CLAUDE_CODE_CHILD_SESSION=1` を立てる。この環境から
+検証用サーバーを起動すると、そのマーカーが伝播する:
+
+```
+私 (Claude Code)  CLAUDE_CODE_CHILD_SESSION=1
+      ↓ ここから手動で hrdle を起動
+hrdle → herdr(hrdle) → pane → claude
+                                 └ 「子セッション」判定 → transcript 保存 OFF
+```
+
+ペインには `⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker`
+と出るが、**ターミナルを覗かない限り気づかない**。会話は普通に動くので、
+壊れていることが分かるのは**再起動して復元が走ったとき**:
+
+```
+claude --resume 25c60a6b-...
+No conversation found with session ID: 25c60a6b-...
+```
+
+`resume_agents_on_restore` が正しく resume を試みても、**復元すべきログが最初から
+存在しない**。2026-07-29 の再起動でこれを踏んだ。
+
+systemd から起動すれば環境はクリーンなので起きない（実測: unit 経由で起動した
+hrdle の MainPID の environ には `HERDR_SESSION` しかなく、そこで作ったセッションは
+`~/.claude/projects/<cwd>/<id>.jsonl` を 31KB 書いた）。**検証もサービス経由でやること。**
+
 ### `HERDR_SOCKET_PATH` だけではセッションは分離できない
 
 ```
