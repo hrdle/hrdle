@@ -229,6 +229,7 @@ export function startDebugUI(): void {
             <span class="mode-pill" id="g2-mode-jp">一覧</span>
             <span class="mode-id" id="g2-mode-id">session_list</span>
             <button type="button" id="g2-copy">画面をコピー</button>
+            <button type="button" id="g2-png">PNGを保存</button>
             <button type="button" id="g2-fs">全画面</button>
             <button type="button" id="g2-pip">小窓</button>
             <video id="g2-pip-video" muted playsinline hidden></video>
@@ -649,6 +650,37 @@ export function startDebugUI(): void {
       copied.className = 'hint'
     }
     setTimeout(() => { copied.textContent = '' }, 2000)
+  })
+
+  /**
+   * The panel alone, as a transparent PNG.
+   *
+   * What EVEN Hub's store listing wants: it supplies the room behind the lens
+   * (Home / Office / Store / Cafe) and composites the app's own drawing over
+   * it, so a submitted image must carry the drawing and nothing else. The
+   * canvas is already in that shape — 576×288, background at alpha 0, lit
+   * pixels green with alpha carrying the sixteen levels — so this is a
+   * download, not a conversion.
+   *
+   * Screenshotting the lens element instead bakes in whichever backdrop the
+   * simulator happens to be showing, which is the right image for judging
+   * legibility and the wrong one to submit. Two different jobs, hence a button
+   * beside 「画面をコピー」 rather than in place of it.
+   */
+  el('g2-png').addEventListener('click', () => {
+    try {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      const a = document.createElement('a')
+      a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${lastMode}-${stamp}.png`
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+      copied.textContent = 'PNGを保存しました（透過・576×288）'
+      copied.className = 'hint copied'
+    } catch {
+      copied.textContent = 'PNGを保存できませんでした'
+      copied.className = 'hint'
+    }
+    setTimeout(() => { copied.textContent = '' }, 2500)
   })
 
   // ── Backdrop controls ──
