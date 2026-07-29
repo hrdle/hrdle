@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.97] - 2026-07-29
+
+### Fixed
+- **改名が素通りする3つの穴を塞ぐ** (#668): fork 側で `identity.json` を実際に Hrdle へ書き換えて動かしたところ、改名とは無関係に cc-hub 側にあった「誰も照合していない名前のコピー」が3つ出た。cchub 名のまま切り出したもので、挙動は不変（`build.sh` は今も `dist/cchub` を出し、テストは今も temp dir へ逃がす）
+  - **`scripts/build.sh` が `dist/cchub` を自前で持っていた**。`identity.json` を読める位置にある唯一の consumer なのに読んでいなかった。`release.yml` は `dist/<binaryName>` を rename する一方、`identity-consistency.test.ts` は `release.yml` としか突き合わせないため、**ズレてもリリースビルドが落ちるまで誰も気づかない**。`identity.json` を読む形にし、キーが欠けている場合は非ゼロ終了する（欠けたキーは `undefined` を出力して exit 0 で返るため、`set -e` が素通りして `dist/undefined` ができ、CI の rename ステップで初めて落ちていた）
+  - **4つのテストが `CC_HUB_DATA_DIR` をベタ書きしていた**（`sessions.test.ts` / `jwt-secret.test.ts` / `peer-registry-lock.test.ts` / `session-metadata-lock.test.ts`）。env 名を変えるとその行は失敗せず「何も設定しない行」になり、**テストは実データディレクトリに fixture を書いたまま pass する**。実際に fork 側で `~/.hrdle` が偽セッション20件で埋まった。失敗ではなく汚染として出るので、テストが赤くなければ気づけない
+  - **`identity-operational.test.ts` のスキャン自身がリテラルだった**。改名後も pass し続けるが、存在しない名前を探しているだけになる。パターンを `IDENTITY` から合成するようにした
+- **そのスキャンがテストディレクトリを丸ごと除外していた** (#668): v0.2.94 (#657) で入れたスキャンの除外が `/tests/|__tests__/` だったため、**上記の4ファイルは原理的に検出できなかった**。除外をリテラルを持つことに意味がある4ファイル（`shared/identity.ts` と golden を持つ3テスト）だけに絞り、`backend/tests` を走査対象に追加。現行ツリーで新規検出0件、かつ植え込んだ違反がファイル名と行番号付きで報告されることを両方向で確認済み
+
+### Changed
+- **グラス: ホストが描画について返す結果を読む** (#667): SDK が公開する描画呼び出しはすべて結果を返すのに、そのすべてが捨てられていた（`createStartUpPageContainer` は success/invalid/oversize/outOfMemory を、upgrade / rebuild / shutdown は boolean を返す）。ログの欠落だけでは済まず、**書き込みが不要なときにコンテナ書き込みを飛ばす記録 `drawn` が、拒否された内容を画面に出たものとしてキャッシュ**していたため、コメントが約束する再送が起きずコンテナが古いまま固定された。ホストが拒否した rebuild はさらに悪く、モードが送信済みとして記録されるため以降のフレームがすべて geometry を最新と見なして rebuild を飛ばしていた
+
 ## [0.2.96] - 2026-07-29
 
 ### Fixed
