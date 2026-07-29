@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.96] - 2026-07-29
+
+### Fixed
+- **「クラッシュ」の正体は退出だった。ルート画面のダブルタップをホストに返す** (#665, グラス v0.1.60): 2日間 `host exit: system` をクラッシュとして追っていたが、[Even Realities の公式リファレンス](https://github.com/even-realities/everything-evenhub/blob/main/plugins/everything-evenhub/skills/handle-input/SKILL.md)に定義があった
+  - `SYSTEM_EXIT_EVENT` (7) = **System-level exit (e.g. user confirmed exit dialog)**。異常終了は `ABNORMAL_EXIT_EVENT` (6) の側で、**このアプリは一度も受け取っていない**。18件すべて `system` だった
+  - **なぜ意図せず終了するのか**: 審査要件に「Please ensure double tapping at the root page **on OS** can invoke exit dialogue」とあり、**ルート画面のダブルタップ＝終了は OS 側の約束事**。うちはそれを待機オーバーレイに使っていた。通知を見ようとした操作が終了ダイアログを呼び、確定すると落ちたようにしか見えない。死亡直前に心拍が30秒→最大60秒に伸びる現象（18件中12件）も、ダイアログ表示中に WebView が後ろへ回ったと読めば繋がる
+  - ルート画面で `shutDownPageContainer(1)` を呼ぶ。モード `1`（キャンセル可能）で、**後片付けはしない** — まだ終了は決まっておらず、先に unsubscribe すると「キャンセルされたのに反応しないアプリ」が残る
+  - **オーバーレイは失われない**。待機アイテムは到着時と再接続時に自分で開く。失われるのは「一度閉じたものを開き直す」操作だけで、件数はフッタに残る
+  - 公開申請すれば確実にリジェクトされる状態でもあった
+- **グラスが他のアプリを表示している間は描画しない** (#665, グラス v0.1.60): ログで `foreground: exited` の後も `writes` が増え続けていた。ホストは背面からの描画を**画面に届く前に捨てる**ため、誰も見ていないパネルへの BLE 送信だった。描画・スピナー・自動送りを停止し、復帰時に全画面を1回描く。要約も読みかけの位置のまま止まる
+
+### Changed
+- **`host exit` 行に直前のジェスチャを載せる** (#665): `host exit: system fg=0 gesture=doubleTap@0.4s`。上の説明が議論ではなく検証可能になる — 直前にダブルタップがあれば退出、無ければ別の原因
+
 ## [0.2.95] - 2026-07-29
 
 ### Changed
