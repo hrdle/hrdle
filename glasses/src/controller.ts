@@ -1149,6 +1149,24 @@ export class GlassesController {
   }
 
   /**
+   * Which conversation the open view is reading, and by whose reader.
+   *
+   * A pane of a multi-pane workspace is its own agent conversation, with its
+   * own session id — reading the workspace's showed one of them and silently
+   * omitted the rest. The workspace level is the fallback, and there a thread
+   * agent (kimi/codex/grok) carries `agentSessionId` where Claude carries
+   * `ccSessionId`: taking only the latter left those workspaces reading an
+   * empty Claude transcript, which is what `(no messages)` was (#5).
+   */
+  private conversationTarget(): { id: string; agent?: string } | undefined {
+    const pane = this.currentPane()
+    if (pane?.agentSessionId) return { id: pane.agentSessionId, agent: pane.agent }
+    const session = this.currentSession()
+    const id = session?.ccSessionId ?? session?.agentSessionId
+    return id ? { id, agent: session?.agent } : undefined
+  }
+
+  /**
    * Reload the open conversation.
    *
    * Deliberately leaves `noticeWindow` alone: this runs on every refresh of a
@@ -1157,27 +1175,14 @@ export class GlassesController {
    * different conversation resets it — those call sites do it themselves.
    */
   private async loadConversation(): Promise<void> {
-    const session = this.currentSession()
-    // A pane of a multi-pane workspace is its own agent conversation, with its
-    // own session id. Reading the workspace's showed one of them and silently
-    // omitted the rest.
-    const paneAgent = this.currentPane()?.agentSessionId
-    if (paneAgent) {
-      const rawPane = await getConversation(paneAgent, INITIAL_LOAD_COUNT)
-      this.state.conversation = filterConversation(rawPane)
-      this.state.conversationLastLoaded = INITIAL_LOAD_COUNT
-      this.state.conversationHasMore = rawPane.length >= INITIAL_LOAD_COUNT
-      this.state.conversationOffset = 0
-      this.state.conversationPage = 0
-      return
-    }
-    if (!session?.ccSessionId) {
+    const target = this.conversationTarget()
+    if (!target) {
       this.state.conversation = []
       this.state.conversationLastLoaded = 0
       this.state.conversationHasMore = false
       return
     }
-    const raw = await getConversation(session.ccSessionId, INITIAL_LOAD_COUNT)
+    const raw = await getConversation(target.id, INITIAL_LOAD_COUNT, target.agent)
     this.state.conversation = filterConversation(raw)
     this.state.conversationLastLoaded = INITIAL_LOAD_COUNT
     // If backend returned exactly the requested count, more may be available.
@@ -1188,14 +1193,17 @@ export class GlassesController {
 
   /** Load more older messages by requesting a larger `last` count. Returns true if new messages were added. */
   private async loadMoreConversation(): Promise<boolean> {
-    const session = this.currentSession()
-    if (!session?.ccSessionId) return false
+    // The same target the open view was loaded from: reading the workspace's
+    // Claude transcript here swapped the conversation out from under a reader
+    // who was paging back through a pane's.
+    const target = this.conversationTarget()
+    if (!target) return false
     if (!this.state.conversationHasMore || this.state.conversationLoading) return false
 
     this.state.conversationLoading = true
     try {
       const newLast = this.state.conversationLastLoaded + LOAD_MORE_INCREMENT
-      const raw = await getConversation(session.ccSessionId, newLast)
+      const raw = await getConversation(target.id, newLast, target.agent)
       const filtered = filterConversation(raw)
       // If no new messages were added, we've reached the beginning.
       if (filtered.length <= this.state.conversation.length) {
