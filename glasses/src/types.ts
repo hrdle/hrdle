@@ -21,6 +21,12 @@ export interface Session {
   activeTabId?: string
   ccFirstPrompt?: string
   ccSessionId?: string
+  /** Which agent runs here. Decides how the conversation is read. */
+  agent?: string
+  /** Native session id of a thread agent (kimi/codex/grok). The server sends
+   *  this *instead of* `ccSessionId` for them, so reading only the latter left
+   *  those workspaces with no conversation at all. */
+  agentSessionId?: string
   durationMinutes?: number
   messageCount?: number
   gitBranch?: string
@@ -57,6 +63,21 @@ export interface Pane {
   recap?: string
   recapAt?: string
   metrics?: { contextPercent?: number }
+}
+
+/**
+ * Thread-based agents — everything that is not Claude.
+ *
+ * Their transcript lives in the agent's own session store, and the history API
+ * only reaches it when asked by name (`?agent=`); unqualified, it reads
+ * Claude's jsonl and finds nothing. Returns the agent id, or undefined for
+ * Claude / an unnamed agent, so it doubles as the predicate.
+ *
+ * Mirrors `threadAgentOf` in shared/types.ts. Not imported from there on
+ * purpose: that module pulls in zod, and this bundle runs on the glasses.
+ */
+export function threadAgentOf(agent: string | undefined): string | undefined {
+  return agent && agent !== 'claude' ? agent : undefined
 }
 
 export interface ConversationMessage {
