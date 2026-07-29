@@ -566,6 +566,12 @@ export function startDebugUI(): void {
     requestExit() {
       setVoiceStatus('終了ダイアログを要求（実機ではホストの確認が出ます）')
     },
+    // The browser never backgrounds this the way the host does, so this only
+    // fires if the simulator is driven into that state deliberately. Reported
+    // rather than silent: the recovery it stands for is the whole point.
+    onForegroundRegained() {
+      setVoiceStatus('前面復帰を検知（操作が届いたので描画を再開）')
+    },
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
     saveState(json) {
