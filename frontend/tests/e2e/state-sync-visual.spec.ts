@@ -1,10 +1,11 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { IDENTITY } from '../../../shared/identity';
 
 // Verify the state-sync transport renders pane content into xterm by reading
 // terminal text back from the DOM.
 
-const FRONTEND_URL = 'https://localhost:5173';
-const BACKEND_URL = 'https://localhost:3456';
+const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
+const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
 
 test.use({ ignoreHTTPSErrors: true, baseURL: FRONTEND_URL });
 

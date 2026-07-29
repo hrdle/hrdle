@@ -1,8 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
+import { IDENTITY } from '../shared/identity';
 
 // The dev server serves over HTTPS when a Tailscale cert is present (see
 // vite.config.ts), which is the normal local setup but never the case in CI.
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
+//
+// The port is identity's: webServer waits on this URL before running anything,
+// so a number that disagrees with vite's does not fail a test — it hangs until
+// the 120s timeout and reports the server as never having come up (#459).
+const BASE_URL =
+  process.env.E2E_BASE_URL ?? `http://localhost:${IDENTITY.frontendDevPort}`;
 
 const RESPONSIVE = /responsive\/.*\.spec\.ts/;
 

@@ -7,7 +7,12 @@ const VERSION = pkg.version;
 
 // Development mode detection (running with bun run --watch)
 const isDev = process.argv.some(arg => arg.includes('--watch'));
-const DEFAULT_PORT = isDev ? 3456 : 5923;
+// Both ports are identity's (#459). Spelled out, they survive a rename in the
+// worst way: `--help` reads its number from identity and says one thing, while
+// the server binds the other. A renamed build then goes for the port the
+// product it replaces is already serving on, and dies with EADDRINUSE on a
+// machine where both are installed.
+const DEFAULT_PORT = isDev ? IDENTITY.devPort : IDENTITY.defaultPort;
 
 interface CliOptions {
   command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses';

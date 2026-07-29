@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { runSend, type SendOptions } from '../send';
+import { IDENTITY } from '../../../../shared/identity';
 
 /**
  * #351: --base64 must not be combined with --submit / --newline. Those flags
@@ -16,7 +17,7 @@ function opts(over: Partial<SendOptions>): SendOptions {
     newline: false,
     submit: false,
     base64: false,
-    localPort: 3456,
+    localPort: IDENTITY.devPort,
     wait: false,
     waitMs: 800,
     lines: 20,

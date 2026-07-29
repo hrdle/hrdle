@@ -5,8 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --watch src/index.ts -- -p 3456",
-    "dev:auth": "bun run --watch src/index.ts -- -p 3456 -P devpass",
+    "dev": "bun run --watch src/index.ts",
+    "dev:auth": "bun run --watch src/index.ts -- -P devpass",
     "build": "bun build src/index.ts --outdir dist --target bun",
     "start": "bun run dist/index.js",
     "test": "bun test",
