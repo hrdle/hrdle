@@ -464,7 +464,25 @@ https://<host>:5924/glasses          # 本番が配信
 bun run --filter glasses dev         # vite dev → :8391
 ```
 
-`?hub=<url>` で別サーバ、`?bg=<画像URL>` で背景。**「画面をコピー」で枠付きテキストが取れる**ので、指摘や issue にはスクリーンショットよりこれを貼る。**マイクは本物** — `getUserMedia` → `/api/glasses/stt`（Groq）を実際に叩くので、音声認識の検証にグラスは要らない。「STT result」欄に文字を入れると転写を短絡できる。
+`?hub=<url>` で別サーバ、`?bg=<画像URL>` で背景。**マイクは本物** — `getUserMedia` → `/api/glasses/stt`（Groq）を実際に叩くので、音声認識の検証にグラスは要らない。「STT result」欄に文字を入れると転写を短絡できる。
+
+画面の取り方は2通りあり、**見えるものが違う**ので使い分ける。片方だけ見て済ませない:
+
+| 取り方 | 分かること |
+|---|---|
+| **「画面をコピー」**（枠付きテキスト） | 折り返し位置・行数・文字の欠け。diff が取れて issue に貼れる。軽い |
+| **スクリーンショット**（`agent-browser screenshot "#lens" <path>`） | 映り込み・背景との重なり・実際の可読性。**テキストでは原理的に分からない** |
+
+後者が要るのは、G2 が透過ディスプレイだから。明るい壁やスクリーンに緑文字が重なると読めなくなるが、テキストで見ている限り「出ている」としか分からない。`#lens` を指定するとレンズ部分だけ（576×288 相当）が切り出せる。
+
+ヘッドレスでマイクを使うときは `getUserMedia` を差し替える（そのままだと `startMicCapture` が失敗し、いきなり「(認識できませんでした)」になる）:
+
+```js
+navigator.mediaDevices.getUserMedia = async () => {
+  const ctx = new AudioContext(); const dest = ctx.createMediaStreamDestination();
+  const osc = ctx.createOscillator(); osc.connect(dest); osc.start(); return dest.stream;
+};
+```
 
 サーバ側（`backend/`）だけの変更なら ehpk の再ビルドは不要（STT やリレーの挙動はサーバにある）。ビルドと EVEN Hub へのアップロードは `/glasses-upload` スキル。
 
