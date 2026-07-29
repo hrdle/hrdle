@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { sanitizeForG2, formatMessage } from '../types.ts'
-import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
+import { invalidatePanel, panelDrops, screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
-import { NOTICE_DISMISS_MS } from '../controller.ts'
-import { noticeHeight, noticeScrollSteps } from '../display.ts'
+import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
+import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
@@ -195,7 +195,7 @@ describe('conversation body', () => {
     // way to reach it. The strip windows it and the clock walks the rest.
     const first = (screenText(state(longRecap)).notice ?? '').split('\n')
     expect(first[0].startsWith('要約: ')).toBe(true)
-    expect(first.length).toBeLessThanOrEqual(3)
+    expect(first.length).toBeLessThanOrEqual(2)
     expect(first.join('')).not.toEndWith('…')
     expect(noticeScrollSteps(state(longRecap) as never)).toBeGreaterThan(1)
   })
@@ -1234,28 +1234,50 @@ describe('waiting shows what did not fit', () => {
     expect(noticeScrollSteps(none as never)).toBe(1)
   })
 
-  test('it scrolls a line at a time, keeping the reader their place', () => {
-    // Paging replaces the whole strip and the reader has to find where they
-    // were in text they were mid-sentence through. Two of three lines carry
-    // over instead, so the new line arrives with its context already up.
-    const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
+  test('it scrolls by characters, sliding the text instead of turning pages', () => {
+    // A line at a time replaced the whole strip in 27px jumps, and the reader
+    // had to find their place in a sentence they were mid-way through. Taking
+    // a few characters off the front and re-wrapping what is left slides the
+    // block instead, which is what reading along a line looks like.
+    const prose =
+      '認証まわりの実装を一通り終えてテストも通ったので次はエラー処理の見直しに入る予定です' +
+      'あわせてログ出力の粒度も揃えておきたいところですが優先度は低いので後回しにします'
     const state = st({
       sessions: [{
         id: 'a', name: 'g', state: 'idle' as const,
-        ccRecap: numbered, ccRecapAt: '2030-01-01T00:00:00Z',
+        ccRecap: prose, ccRecapAt: '2030-01-01T00:00:00Z',
       }],
     })
     const at = (o: number) => (screenText({ ...state, noticeWindow: o }).notice ?? '').split('\n')
+    const src = Array.from(`要約: ${prose}`)
     const first = at(0)
     const second = at(1)
-    expect(second[0]).toBe(first[1])
-    expect(second[1]).toBe(first[2])
-    // One line is new each step, and the last line is reached by the last one.
+
+    // Two lines at a time, and the first of them opens the recap.
+    expect(first.length).toBe(2)
+    expect(first[0].startsWith('要約: ')).toBe(true)
+
+    // One step on, the top line begins a few characters into the one before it
+    // — not at the line below it, which is what paging looked like.
+    expect(second[0]).not.toBe(first[1])
+    const dropped = src.slice(NOTICE_SCROLL_CHARS).join('').replace(/^\s+/, '')
+    expect(dropped.startsWith(second[0])).toBe(true)
+
+    // The walk ends with the recap's last characters on screen — the whole
+    // point of walking it — and holds there rather than wrapping round on its
+    // own. Going back to the top is the clock's decision, made after a rest.
     const steps = noticeScrollSteps(state as never)
-    expect(at(steps - 1)).toContain('行8')
+    expect(at(steps - 1).join('')).toContain(prose.slice(-10))
+    expect(at(steps + 5)).toEqual(at(steps - 1))
   })
 
   test('every line is on screen at some point', () => {
+    // Short lines are the shape that catches a stride longer than the strip:
+    // two display lines of `行N` hold barely six characters, so a step that
+    // always advanced `NOTICE_SCROLL_CHARS` would carry lines off the top that
+    // were never shown. Silently skipping part of the recap is the failure the
+    // scrolling exists to fix, so it is guarded here rather than in prose,
+    // which never steps far enough to notice.
     const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
     const state = st({
       sessions: [{
@@ -1390,5 +1412,191 @@ describe('the screen stops drawing once nobody is being shown anything new', () 
     // which is the whole point of the feature.
     const r = run(4, 3, 200)
     expect(r.draws).toBeGreaterThanOrEqual(3 + 2)
+  })
+})
+
+describe('a screen that has not changed is not sent again', () => {
+  // The panel was redrawn on every `sessions-updated` push — every five
+  // seconds, whether or not anything on it had changed. On the device that
+  // measured 0.2 full draws a second, indefinitely, over BLE, for a screen
+  // showing exactly what it showed five seconds ago.
+
+  function stubBridge() {
+    const calls: Array<{ id: number; content: string }> = []
+    let rebuilds = 0
+    const bridge = {
+      textContainerUpgrade: (u: { containerID: number; content: string }) => {
+        calls.push({ id: u.containerID, content: u.content })
+        return Promise.resolve()
+      },
+      rebuildPageContainer: () => {
+        rebuilds++
+        return Promise.resolve()
+      },
+    }
+    return { bridge: bridge as never, calls, rebuilds: () => rebuilds }
+  }
+
+  const listState = (name: string) =>
+    ({
+      mode: 'session_list' as const,
+      sessions: [{ id: 'a', name, state: 'idle' as const }],
+      sessionIndex: 0, selectedPaneId: null,
+      conversation: [], conversationOffset: 0, conversationPage: 0,
+      conversationHasMore: false, conversationLoading: false,
+      choiceIndex: 0, choiceOptions: [], relayWaiting: [], relayInfo: [],
+      overlayItemId: null, spinnerTick: 0,
+    }) as never
+
+  test('an identical frame sends no container at all', async () => {
+    const { bridge, calls } = stubBridge()
+    await updateDisplay(bridge, listState('alpha'))
+    calls.length = 0
+    await updateDisplay(bridge, listState('alpha'))
+    // Container 1 holds the rows. Asserted rather than the whole call list
+    // because container 2 is the footer, and the footer carries the clock —
+    // it legitimately changes once a minute, and a test that forbade it would
+    // fail whenever the two calls straddled a minute boundary.
+    expect(calls.filter((c) => c.id === 1)).toEqual([])
+  })
+
+  test('a frame that changes one container sends only that one', async () => {
+    const { bridge, calls } = stubBridge()
+    await updateDisplay(bridge, listState('alpha'))
+    calls.length = 0
+    await updateDisplay(bridge, listState('beta'))
+    const rows = calls.filter((c) => c.id === 1)
+    expect(rows.length).toBe(1)
+    expect(rows[0].content).toContain('beta')
+  })
+
+  test('the spinner tick is skipped too when the rows read the same', async () => {
+    // It fires every three seconds for as long as any agent is working, and
+    // the rows it redraws only move when the spinner glyph does.
+    const { bridge, calls } = stubBridge()
+    const s = listState('alpha')
+    await updateDisplay(bridge, s)
+    calls.length = 0
+    await updateHeader(bridge, s)
+    expect(calls).toEqual([])
+  })
+
+  // A host that refuses a write says so in the boolean it returns. Skipping
+  // the resend on the strength of a write the host dropped is how a container
+  // goes permanently stale, so the refusal has to beat the dedup record.
+
+  function refusingBridge(refuse: (id: number) => boolean) {
+    const calls: Array<{ id: number; content: string }> = []
+    const bridge = {
+      textContainerUpgrade: (u: { containerID: number; content: string }) => {
+        calls.push({ id: u.containerID, content: u.content })
+        return Promise.resolve(!refuse(u.containerID))
+      },
+      rebuildPageContainer: () => Promise.resolve(true),
+    }
+    return { bridge: bridge as never, calls }
+  }
+
+  /** Put the panel in list mode with 'alpha' on it, so the call under test is
+   *  an in-place upgrade rather than the rebuild a mode change forces. */
+  async function seated(bridge: never) {
+    invalidatePanel()
+    await updateDisplay(bridge, listState('alpha'))
+  }
+
+  test('a refused write is sent again on the next frame', async () => {
+    const { bridge, calls } = refusingBridge((id) => id === 1)
+    await seated(bridge)
+    await updateDisplay(bridge, listState('beta'))
+    calls.length = 0
+    // 'beta' is still what the state says, so only a record that took the
+    // refusal seriously would send anything here.
+    await updateDisplay(bridge, listState('beta'))
+    expect(calls.filter((c) => c.id === 1).length).toBe(1)
+  })
+
+  test('an accepted write is still not sent twice', async () => {
+    // The retry above must come from the refusal, not from having stopped
+    // recording writes altogether.
+    const { bridge, calls } = refusingBridge(() => false)
+    await seated(bridge)
+    await updateDisplay(bridge, listState('beta'))
+    calls.length = 0
+    await updateDisplay(bridge, listState('beta'))
+    expect(calls.filter((c) => c.id === 1)).toEqual([])
+  })
+
+  test('refusals are counted', async () => {
+    const { bridge } = refusingBridge((id) => id === 1)
+    await seated(bridge)
+    const before = panelDrops()
+    await updateDisplay(bridge, listState('beta'))
+    expect(panelDrops()).toBeGreaterThan(before)
+  })
+})
+
+describe('the root page hands the exit gesture back to the host', () => {
+  // `SYSTEM_EXIT_EVENT` — the only exit this app has ever been given — is
+  // documented as the user confirming the host's exit dialogue. Even Hub
+  // review requires the root page to raise that dialogue on a double-tap, and
+  // an app that keeps the gesture for itself gets exited anyway by a wearer
+  // who thought they were doing something else.
+
+  function stubPlatform() {
+    const calls: string[] = []
+    const platform = {
+      onDevice: false,
+      render: () => { calls.push('render') },
+      renderHeader: () => { calls.push('renderHeader') },
+      startMicCapture: async () => false,
+      stopMicCapture: async () => {},
+      transcribeAudio: async () => '',
+      saveState: () => {},
+      loadState: async () => null,
+      requestExit: () => { calls.push('requestExit') },
+    }
+    return { platform, calls }
+  }
+
+  const twoSessions = [
+    { id: 'a', name: 'alpha', state: 'idle' as const },
+    { id: 'b', name: 'beta', state: 'idle' as const },
+  ]
+
+  test('double-tap on the session list asks for the exit dialogue', async () => {
+    const { platform, calls } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    c.doubleTap()
+    await Promise.resolve()
+    expect(calls).toContain('requestExit')
+  })
+
+  test('the wearer\'s last gesture is available for the exit line', async () => {
+    const { platform } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    expect(c.lastGesture().kind).toBe('none')
+    expect(c.lastGesture().agoMs).toBe(-1)
+    c.doubleTap()
+    await Promise.resolve()
+    expect(c.lastGesture().kind).toBe('doubleTap')
+    expect(c.lastGesture().agoMs).toBeGreaterThanOrEqual(0)
+  })
+
+  test('nothing is drawn while the glasses are showing something else', async () => {
+    // Render calls made from the background are consumed by the host and
+    // dropped before the display, so they are BLE traffic for nobody.
+    const { platform, calls } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    c.state.sessions = twoSessions as never
+    c.swipeDown()
+    await Promise.resolve()
+    expect(calls).toContain('render')
+
+    c.onForegroundExit()
+    calls.length = 0
+    c.swipeDown()
+    c.swipeUp()
+    await Promise.resolve()
+    expect(calls).toEqual([])
   })
 })

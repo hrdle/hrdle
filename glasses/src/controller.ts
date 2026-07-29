@@ -63,9 +63,22 @@ const AUTO_ADVANCE_IDLE_MS = 10_000
 const SECONDS_PER_LINE_MS = 5000
 
 /**
- * The notice scrolls a line at a time, so one line of reading buys one step.
+ * How often the notice gives up another `NOTICE_SCROLL_CHARS` from its front.
+ *
+ * The strip scrolls by character now, so a step is a fraction of a line rather
+ * than a whole one and has to come round proportionally sooner. Ten characters
+ * every two and a half seconds is four a second — the same reading pace the
+ * five-second line was approved at, in thirds of a line instead of whole ones.
+ *
+ * Paced with `NOTICE_SCROLL_CHARS` rather than independently of it: the two
+ * set the reading speed together, and only their ratio to each other sets how
+ * often the glasses redraw. Halving both would read identically and cost twice
+ * as much over BLE.
+ *
+ * It is also the clock every other interval below is counted in, so those stay
+ * multiples of it.
  */
-const AUTO_SCROLL_STEP_MS = SECONDS_PER_LINE_MS
+const AUTO_SCROLL_STEP_MS = 2500
 
 /**
  * A page turn replaces the whole body, so it is priced as the strip was: three
@@ -123,6 +136,15 @@ export interface GlassesPlatform {
    *  storage, which outlives the page; the simulator uses localStorage. */
   saveState(json: string): void
   loadState(): Promise<string | null>
+  /**
+   * Ask the host to show its own exit confirmation.
+   *
+   * `shutDownPageContainer(1)`, not `(0)`: the user gets a dialogue they can
+   * cancel, and confirming it is what produces `SYSTEM_EXIT_EVENT`. Nothing is
+   * cleaned up here — the exit is not decided yet, and tearing down a listener
+   * for a dialogue the user then cancels leaves the app on screen and deaf.
+   */
+  requestExit(): void
 }
 
 /** Where a reply (choice keys / voice prompt) is routed. paneId targets the
@@ -202,6 +224,15 @@ export class GlassesController {
   private noticeTimer: ReturnType<typeof setTimeout> | null = null
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
   private lastGestureAt = 0
+  /** What that gesture was. Reported on the way out: `SYSTEM_EXIT_EVENT` is
+   *  the user confirming the host's exit dialogue, so what they pressed just
+   *  before it is the difference between "they meant to leave" and "the app
+   *  handed a gesture to the OS that the wearer meant for the app". */
+  private lastGestureKind: RingAction | 'none' = 'none'
+  /** Whether this app is the one the glasses are showing. Render calls made
+   *  while it is not are consumed by the host and never reach the display, so
+   *  they are pure BLE traffic for a panel nobody is looking at. */
+  private foreground = true
   /** Ticks since the last auto step, so a page turn can cost several of them. */
   private autoTicks = 0
   /** Completed passes over the recap, counted towards AUTO_SCROLL_MAX_PASSES. */
@@ -256,6 +287,10 @@ export class GlassesController {
   private tickAutoAdvance(): void {
     const st = this.state
     if (st.mode !== 'conversation') return
+    // Nobody is looking at this panel, and nothing sent to it would arrive.
+    // Advancing anyway would also walk the recap past the point the reader
+    // left it, so they come back to the middle of something.
+    if (!this.foreground) return
     // Everything has been shown, twice. Drawing again would be for nobody.
     if (this.autoResting) return
     // The reader is working the ring; do not fight them for it.
@@ -285,13 +320,13 @@ export class GlassesController {
       this.render()
       return
     }
-    // Nothing further to page to. Back to the top of the recap and round
-    // again, rather than sitting on its last three lines forever — the reader
-    // who looks up a minute later should find it readable from the start.
+    // Nothing further to page to. Back to the first character of the recap and
+    // round again, rather than sitting on its tail forever — the reader who
+    // looks up a minute later should find it readable from the start.
     if (steps > 1 && (st.noticeWindow ?? 0) !== 0) {
       // Back to the top, then count the pass. Resting at the top rather than
-      // on the last three lines: whenever the reader does look up, the recap
-      // reads from its beginning.
+      // on the tail: whenever the reader does look up, the recap reads from
+      // its beginning.
       st.noticeWindow = 0
       this.render()
       if (++this.autoPasses >= AUTO_SCROLL_MAX_PASSES) this.autoResting = true
@@ -307,6 +342,9 @@ export class GlassesController {
    *  only while there is something to indicate. */
   private tickSpinner(): void {
     const st = this.state
+    // Nothing drawn from the background arrives, so an animation run there is
+    // spent entirely on the way to being dropped.
+    if (!this.foreground) return
     if (!this.somethingIsWorking()) return
     st.spinnerTick = (st.spinnerTick ?? 0) + 1
     this.platform.renderHeader(st)
@@ -391,6 +429,7 @@ export class GlassesController {
 
   /** The app is back. Its socket died while it slept and its screen is stale. */
   onForegroundEnter(): void {
+    this.foreground = true
     this.state.spinnerTick = 0
     this.ws.connect()
     this.render()
@@ -398,7 +437,20 @@ export class GlassesController {
   }
 
   onForegroundExit(): void {
+    // Stop drawing. The host consumes render calls made from the background
+    // and drops them before the display, so everything sent from here is BLE
+    // traffic that reaches nobody — and a WebView burning its budget on that
+    // is a WebView the phone has a reason to throttle.
+    this.foreground = false
     this.saveResumePoint()
+  }
+
+  /** What the wearer last did, and how long ago — for the exit line. */
+  lastGesture(): { kind: RingAction | 'none'; agoMs: number } {
+    return {
+      kind: this.lastGestureKind,
+      agoMs: this.lastGestureAt ? Date.now() - this.lastGestureAt : -1,
+    }
   }
 
   onHostExit(_kind: 'abnormal' | 'system'): void {
@@ -422,6 +474,7 @@ export class GlassesController {
     // to know the reader is driving. The auto-advance clock stays out of the
     // way for AUTO_ADVANCE_IDLE_MS afterwards.
     this.lastGestureAt = Date.now()
+    this.lastGestureKind = action
     // Someone is here. Whatever the screen had settled into, it starts over.
     this.autoPasses = 0
     this.autoResting = false
@@ -479,12 +532,18 @@ export class GlassesController {
         return
       }
       case 'doubleTap':
-        // Manual entry to the waiting overlay (auto-entry covers the rest).
-        if (this.queue.topWaiting()) {
-          this.enterOverlay()
-          return
-        }
-        this.render()
+        // The root page owes the host its exit dialogue. Even Hub review
+        // rejects an app whose home screen does not call
+        // `shutDownPageContainer(1)` on a double-tap ("Please ensure double
+        // tapping at the root page on OS can invoke exit dialogue"), and the
+        // OS treats root double-tap as the way out whether or not the app
+        // agrees — which is how an app with its own meaning for the gesture
+        // gets exited by someone who thought they were doing something else.
+        //
+        // The waiting overlay used to be here. It is not lost: an item that
+        // needs an answer opens the overlay by itself, which is the path
+        // every waiting item has actually arrived by.
+        this.platform.requestExit()
         return
     }
   }
@@ -1150,7 +1209,16 @@ export class GlassesController {
     void this.loadConversation().then(() => this.render())
   }
 
+  /**
+   * Draw the current state — unless nobody would see it.
+   *
+   * The host drops render calls made from the background before they reach
+   * the display, so every one of them is BLE traffic spent on nothing. State
+   * still updates underneath; `onForegroundEnter` draws whatever it has become
+   * in one frame, which is the only frame that was ever going to be seen.
+   */
   private render(): void {
+    if (!this.foreground) return
     this.platform.render(this.state)
   }
 }
