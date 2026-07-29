@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>CC Hub Architecture</title>
+<title>Hrdle Architecture</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   :root {
@@ -102,7 +102,7 @@
 </head>
 <body>
 <header>
-  <h1>CC Hub Architecture</h1>
+  <h1>Hrdle Architecture</h1>
   <span class="version" id="hdr-version">v?.?.?</span>
   <div class="search"><input type="search" id="q" placeholder="検索 (name, file, description...)"></div>
   <div class="meta" id="hdr-meta"></div>
@@ -118,37 +118,37 @@
   <button data-tab="flows">Data Flows<span class="count" id="cnt-flows"></span></button>
 </nav>
 <main>
-  <div id="loading" class="loading">architecture.json を読み込み中…</div>
+  <div id="loading" class="loading">Loading architecture.json...</div>
   <script type="application/json" id="arch-data">{
-  "name": "CC Hub",
-  "version": "0.3.7",
+  "name": "Hrdle",
+  "version": "0.3.8",
   "generated": "2026-07-30",
-  "summary": "Web-based terminal session manager for Claude Code / Codex. Runs agents in herdr workspaces and provides a web UI for remote access from tablets/mobile devices",
+  "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones",
   "stack": {
     "backend": "Bun runtime + Hono",
     "frontend": "React 19 + Vite + Tailwind v4 + xterm.js",
     "shared": "Zod v4 schemas in shared/types.ts",
-    "transport": "Multiplexed WebSocket /ws/mux + herdr socket API (NDJSON RPC) + per-pane control streams。ターミナル表示はサーバーサイドスクロールバック方式: pane.read による PaneViewport フレーム配信 (履歴は herdr が保持、最大1000行)"
+    "transport": "Multiplexed WebSocket /ws/mux + the herdr socket API (NDJSON RPC) + per-pane control streams. The terminal is drawn server-side: PaneViewport frames composed from pane.read (herdr holds the history, up to 1000 lines)"
   },
   "workspaces": [
     {
       "name": "backend",
-      "desc": "Hono API サーバ (Bun)。herdr 制御・履歴・peer 連携・CLI (cchub) を提供"
+      "desc": "Hono API server (Bun). Drives herdr, serves history and peers, and provides the CLI"
     },
     {
       "name": "frontend",
-      "desc": "React SPA。タブレット/モバイル/デスクトップの3レイアウト"
+      "desc": "React SPA. Three layouts: tablet, mobile and desktop"
     },
     {
       "name": "glasses",
-      "desc": "EVEN G2 グラスアプリ (EvenHub SDK → out.ehpk)。型は手動複製のため WS プロトコル変更時は要追従"
+      "desc": "The EVEN G2 glasses app (EvenHub SDK -> out.ehpk). Its types are duplicated by hand, so a WS protocol change has to be followed here"
     }
   ],
   "diagram": [
     " Clients",
     "   |- Browser (React SPA) ------ tablet / mobile / desktop",
     "   |- G2 Glasses (EvenHub) ----- REST + /ws/mux",
-    "   '- cchub send / peek -------- CLI (REST)",
+    "   '- hrdle send / peek -------- CLI (REST)",
     "            |",
     "            |  HTTPS / WSS (Tailscale certs)",
     "            v",
@@ -160,7 +160,7 @@
     "            |  /api/peers (JWT proxy login, SSRF guard)",
     "            v",
     "   +------------------+",
-    "   | Peer CC Hub x N  |  Tailscale tailnet (auto-discovery)",
+    "   | Peer Hrdle x N   |  Tailscale tailnet (auto-discovery)",
     "   +------------------+"
   ],
   "backend": {
@@ -168,13 +168,13 @@
       {
         "name": "HerdrClient",
         "file": "backend/src/services/herdr-client.ts",
-        "summary": "herdr socket API の低レベルクライアント。NDJSON RPC (1接続=1リクエスト、events.subscribe のみ維持)、streaming TextDecoder による UTF-8 安全な行リーダー、pane id 変換 (%N ↔ wK:pN)、PaneController (常駐 control stream: raw入力 base64 / terminal.resize / terminal.frame 受信)",
+        "summary": "Low-level client for the herdr socket API. NDJSON RPC (one connection per request; only events.subscribe is held open), a UTF-8-safe line reader built on a streaming TextDecoder, pane id conversion (%N <-> wK:pN), and PaneController (a resident control stream: raw input as base64, terminal.resize, terminal.frame)",
         "deps": []
       },
       {
         "name": "HerdrControlSession",
         "file": "backend/src/services/herdr-control.ts",
-        "summary": "CC Hub セッション (= herdr workspace) ごとに1インスタンス。split 木の所有、フォーカス追跡、lazy controllers (WS購読/初回入力のみ、読み取りRESTは純RPC)、フレーム走査による cursor/alt-screen 追跡、30s grace。captureViewportHerdr で viewport 合成 (visible / recent スライス、1000行キャップ)。runtime 未起動のペインは scroll を返さないが、これは復元直後の正常な過渡状態なので拒否せずクライアントの rows にフォールバックして subscribe を続行する — 拒否すると herdr の resume (クライアントのサイズ待ち) と相互待ちになり永久に開けない (#407)",
+        "summary": "One instance per session (= one herdr workspace). Owns the split tree, tracks focus, spawns lazy controllers (WS subscribe or first input only; read-only REST stays pure RPC), tracks the cursor and alt-screen state by scanning frames, and gives a client a 30s grace period. captureViewportHerdr composes the viewport (the visible slice, then recent, capped at 1000 lines). A pane with no runtime yet returns no scroll, which is a normal transient state right after a restore rather than a reason to refuse: it falls back to the client's rows and continues the subscribe, because refusing deadlocks against herdr's resume (which waits for a client size) and the session never opens (#407)",
         "deps": [
           "HerdrClient",
           "HerdrLayout"
@@ -183,7 +183,7 @@
       {
         "name": "HerdrAgentStatusWatcher",
         "file": "backend/src/services/herdr-agent-status.ts",
-        "summary": "herdr の pane.agent_status_changed (pane_id 必須の per-pane 購読) と pane ライフサイクルを購読し、エージェントの状態変化を即座に sessions push へ反映。値は pane.list から取るため、イベント取りこぼしは遅延止まりで不整合にならない (#390)",
+        "summary": "Subscribes to herdr's pane.agent_status_changed (a per-pane subscription that requires pane_id) and to pane lifecycle events, pushing the session list the moment an agent's state changes. The values come from pane.list, so a dropped event costs latency rather than correctness (#390)",
         "deps": [
           "HerdrClient"
         ]
@@ -191,13 +191,13 @@
       {
         "name": "HerdrLayout",
         "file": "backend/src/services/herdr-layout.ts",
-        "summary": "CC Hub 自前の split 木 (headless では herdr グリッドがリサイズ不能)。split/close/zoom/ratio調整/絶対サイズ指定を tmux 慣習の TmuxLayoutNode 矩形にレンダリング",
+        "summary": "The split tree this app owns (herdr's grid cannot be resized headlessly). Split, close, zoom, ratio adjustment and absolute sizing, rendered to tmux-convention TmuxLayoutNode rectangles",
         "deps": []
       },
       {
         "name": "HerdrService",
         "file": "backend/src/services/herdr.ts",
-        "summary": "セッションレベル操作を herdr workspace にマッピング。一覧 (pane.process_info でエージェント検出、agent.list で native session id、agent_status: idle/working/blocked/done)、作成/削除、プレビュー",
+        "summary": "Maps session-level operations onto herdr workspaces: listing (agent detection from pane.process_info, native session ids from agent.list, agent_status: idle/working/blocked/done), create and kill, and previews",
         "deps": [
           "HerdrClient"
         ]
@@ -205,7 +205,7 @@
       {
         "name": "HerdrUpdateService",
         "file": "backend/src/services/herdr-update.ts",
-        "summary": "herdr のバイナリと稼働サーバの版ズレを検知 (herdr update はバイナリ置換のみで稼働サーバは旧版のまま)。herdr status --json を 30s キャッシュで読み、ダッシュボードに警告。適用 (update + 監視下再起動) は POST /api/herdr/apply-update のユーザー操作のみで、auto 更新経路からは呼ばない。判定不能な出力は警告せず degrade (#393)",
+        "summary": "Detects version skew between the herdr binary and the running server (herdr update swaps the binary and leaves the server on the old build). Reads herdr status --json with a 30s cache and warns on the dashboard. Applying it (update plus a supervised restart) happens only through POST /api/herdr/apply-update as a user action, never from the auto-update path. Output it cannot interpret degrades to no warning (#393)",
         "deps": [
           "HerdrClient"
         ]
@@ -213,85 +213,85 @@
       {
         "name": "PaneState",
         "file": "backend/src/services/pane-state.ts",
-        "summary": "stripAnsi / detectPaneState ヒューリスティック (cchub send --wait / peek 用のペイン状態判定)",
+        "summary": "The stripAnsi / detectPaneState heuristics (pane state for `send --wait` and `peek`)",
         "deps": []
       },
       {
         "name": "ClaudeCodeService",
         "file": "backend/src/services/claude-code.ts",
-        "summary": "~/.claude/projects の .jsonl から Claude Code セッション状態を監視。多段キャッシュ (TTY 10s / セッションデータ 30s / パス解決 3s、各上限 1000 件)。JSONL 解析で permission prompt / tool use / 入力待ちの waiting 状態を検出",
+        "summary": "Watches Claude Code session state through the .jsonl files under ~/.claude/projects. Layered caches (TTY 10s, session data 30s, path resolution 3s, each capped at 1000 entries). Parses the JSONL to detect a permission prompt, tool use and the waiting-for-input state",
         "deps": []
       },
       {
         "name": "SessionHistoryService",
         "file": "backend/src/services/session-history.ts",
-        "summary": "~/.claude/projects の JSONL から過去セッション履歴と会話を提供。プロジェクト並列スキャン、firstPrompt / lastPrompt / git branch / トークン使用量 / recap の抽出、ストリーミング全文検索 (SSE) を実装",
+        "summary": "Serves past session history and conversations from the JSONL under ~/.claude/projects. Scans projects in parallel, extracts firstPrompt / lastPrompt / git branch / token usage / recap, and implements streaming full-text search (SSE)",
         "deps": []
       },
       {
         "name": "SessionMetadataService",
         "file": "backend/src/services/session-metadata.ts",
-        "summary": "セッションのテーマ・タイトル・表示順を herdr-session-metadata.json に、再起動復旧用の herdr-last-known-sessions.json を分離して永続化 (tmux 版の store とはファイル名で分離)",
+        "summary": "Persists a session's theme, title and display order in herdr-session-metadata.json, with herdr-last-known-sessions.json kept separately for recovery after a restart (the file names keep it apart from the tmux-era store)",
         "deps": []
       },
       {
         "name": "SessionsService",
         "file": "backend/src/services/sessions.ts",
-        "summary": "セッションメタデータ (id, name, createdAt, lastAccessedAt, state) の CRUD をファイルベースで永続化。lastAccessedAt 降順ソート",
+        "summary": "File-based CRUD for session metadata (id, name, createdAt, lastAccessedAt, state), sorted by lastAccessedAt descending",
         "deps": []
       },
       {
         "name": "PromptHistoryService",
         "file": "backend/src/services/prompt-history.ts",
-        "summary": "~/.claude/history.jsonl をプロンプト部分一致検索 (大文字小文字無視)。プロジェクトパス・セッション ID 付きで新しい順に返す",
+        "summary": "Substring search over ~/.claude/history.jsonl (case-insensitive), returning matches newest first with their project path and session ID",
         "deps": []
       },
       {
         "name": "FileService",
         "file": "backend/src/services/file-service.ts",
-        "summary": "パストラバーサル防止付きの安全なファイル/ディレクトリ操作。拡張子 + ヒューリスティック (NUL バイト、制御文字比率) でバイナリ判定し、UTF-8 または base64 で返却",
+        "summary": "Safe file and directory operations with path traversal prevention. Decides binary from the extension plus a heuristic (NUL bytes, the ratio of control characters) and returns UTF-8 or base64",
         "deps": []
       },
       {
         "name": "FileChangeTracker",
         "file": "backend/src/services/file-change-tracker.ts",
-        "summary": "Claude Code JSONL から Write/Edit ツール使用 (パス・old/new string・タイムスタンプ) を抽出。パス単位で去重し時系列ソートして変更履歴 UI に提供",
+        "summary": "Extracts Write/Edit tool use (path, old/new string, timestamp) from the Claude Code JSONL. Deduplicates per path and sorts chronologically for the change-history UI",
         "deps": []
       },
       {
         "name": "AnthropicUsageService",
         "file": "backend/src/services/anthropic-usage.ts",
-        "summary": "Anthropic API から使用量リミット (5時間 / 7日サイクル) を取得。試行を開始時にスタンプして 60s TTL でゲートするため、前回が成功/失敗/例外のいずれで終わっても上流は 60s に1回まで (レート制限はアカウント単位なので、この絞りがポーリングと 429 の間の唯一の防壁)。429 は Retry-After に従いさらに長い窓で backoff、in-flight リクエストは合流 (coalescing)。現在ペースからのリミット到達予測も算出。`limits[]` の scope 付きエントリからモデル別リミット (Fable 等) も抽出 — 全体サイクルが余裕でもモデル別が振り切っていることがあるため。解釈できないエントリは推測せず捨てる",
+        "summary": "Fetches usage limits (the 5-hour and 7-day cycles) from the Anthropic API. The attempt is stamped when it starts and gated on a 60s TTL, so upstream sees at most one call a minute regardless of whether the last one succeeded, failed or threw (the rate limit is per account, making this the only thing standing between polling and a 429). A 429 backs off for longer, honoring Retry-After, and in-flight requests are coalesced. Also estimates when the current pace reaches the limit. Extracts per-model limits (Fable and friends) from the scoped entries in `limits[]` - the overall cycle can look comfortable while a model-specific one is pinned. Entries it cannot interpret are discarded rather than guessed at",
         "deps": []
       },
       {
         "name": "AnthropicModels",
         "file": "backend/src/services/anthropic-models.ts",
-        "summary": "Anthropic モデルのメタデータ (最大入力トークン等) を取得。24h cache + リクエスト合流。コスト/使用量計算が参照",
+        "summary": "Fetches Anthropic model metadata (maximum input tokens and so on). 24h cache with request coalescing. Used by the cost and usage calculations",
         "deps": []
       },
       {
         "name": "StatsService",
         "file": "backend/src/services/stats-service.ts",
-        "summary": "~/.claude/stats-cache.json (Claude CLI が生成) を読み、日別アクティビティ・モデル別トークン種別 (input/cache_read/cache_creation/output) を集計。固定価格表でコスト推定",
+        "summary": "Reads ~/.claude/stats-cache.json (written by the Claude CLI) and aggregates daily activity and per-model token kinds (input/cache_read/cache_creation/output). Estimates cost from a fixed price table",
         "deps": []
       },
       {
         "name": "UsageHistoryService",
         "file": "backend/src/services/usage-history.ts",
-        "summary": "使用量スナップショットを /tmp/cchub-usage-history.json に 30s スロットルで記録。最大 8 日分保持し、利用率トレンドのチャートに使用。モデル別リミットの値も `scoped` に記録 (このキーを持たない旧スナップショットは 0% ではなく「未計測」扱い)",
+        "summary": "Records usage snapshots to /tmp/hrdle-usage-history.json, throttled to 30s. Keeps 8 days for the utilization trend chart. Per-model limits are recorded under `scoped` (an older snapshot without that key counts as 'not measured' rather than 0%)",
         "deps": []
       },
       {
         "name": "SystemMetricsService",
         "file": "backend/src/services/system-metrics.ts",
-        "summary": "CPU% / メモリ / スワップ / ロードアベレージを収集。60 件のローリング履歴 (snapshot 最小間隔 3s)。スワップは /proc/meminfo から (Linux のみ)",
+        "summary": "Collects CPU%, memory, swap and load average. A rolling history of 60 entries (minimum 3s between snapshots). Swap comes from /proc/meminfo (Linux only)",
         "deps": []
       },
       {
         "name": "SessionMetricsService",
         "file": "backend/src/services/session-metrics.ts",
-        "summary": "JSONL からセッション毎のコンテキストトークン (最終ターンの input + cache_creation + cache_read)・合計トークンを集計 (mtime+size キャッシュ)。ps によるプロセスツリー RSS 取得 (1s cache)",
+        "summary": "Aggregates per-session context tokens (the last turn's input + cache_creation + cache_read) and totals from the JSONL, cached on mtime+size. Process-tree RSS comes from ps (1s cache)",
         "deps": [
           "AnthropicModels"
         ]
@@ -299,19 +299,19 @@
       {
         "name": "CodexService",
         "file": "backend/src/services/codex.ts",
-        "summary": "Codex の SQLite (state_5.sqlite) threads テーブルからアクティブ thread のメタデータ (title, tokens_used, git_branch, cwd) を取得。cwd キーの 5s cache。rollout ファイル末尾 (最大 4MB) からトークン使用量を抽出",
+        "summary": "Reads an active thread's metadata (title, tokens_used, git_branch, cwd) from Codex's SQLite threads table (state_5.sqlite), cached 5s by cwd. Token usage is extracted from the tail of the rollout file (up to 4MB)",
         "deps": []
       },
       {
         "name": "CodexConversationService",
         "file": "backend/src/services/codex-conversation.ts",
-        "summary": "Codex rollout JSONL のイベント (user_message / agent_message / function_call 等) を Claude 形式の ConversationMessage に変換。rollout パスは SQLite threads テーブルから解決",
+        "summary": "Converts Codex rollout JSONL events (user_message, agent_message, function_call and so on) into Claude-shaped ConversationMessages. The rollout path is resolved from the SQLite threads table",
         "deps": []
       },
       {
         "name": "CodexHistoryService",
         "file": "backend/src/services/codex-history.ts",
-        "summary": "~/.codex/sessions の日付パーティション木 (YYYY/MM/DD/rollout-*.jsonl) を mtime ベースのファイル毎キャッシュ付きでスキャンし、cwd でグループ化して Claude Code 履歴と統合表示",
+        "summary": "Scans the date-partitioned tree under ~/.codex/sessions (YYYY/MM/DD/rollout-*.jsonl) with a per-file mtime cache, groups by cwd and merges the result into the Claude Code history",
         "deps": [
           "CodexConversationService"
         ]
@@ -319,13 +319,13 @@
       {
         "name": "CodexUsageService",
         "file": "backend/src/services/codex-usage.ts",
-        "summary": "直近の rollout 最大 8 ファイルから rate_limits イベントを取得し、5h/7d サイクルの利用率・リセット時刻・到達予測を構築。30s cache",
+        "summary": "Takes rate_limits events from up to the 8 most recent rollouts and builds the 5h/7d cycles' utilization, reset times and limit-hit estimates. 30s cache",
         "deps": []
       },
       {
         "name": "ConversationWatcher",
         "file": "backend/src/services/conversation-watcher.ts",
-        "summary": "Claude Code / Codex の JSONL を fs.watch + 150ms デバウンスで監視し、新規ターンのみを WebSocket 購読者へ通知。mtime 追跡で冗長パースを回避",
+        "summary": "Watches the Claude Code / Codex JSONL with fs.watch plus a 150ms debounce and notifies WebSocket subscribers of new turns only. Tracks mtime to avoid redundant parsing",
         "deps": [
           "ClaudeCodeService",
           "SessionHistoryService"
@@ -334,25 +334,25 @@
       {
         "name": "HookStatusService",
         "file": "backend/src/services/hook-status.ts",
-        "summary": "CC Hub がまだ必要とする hook (Stop = 通知本文、PostToolUse/AskUserQuestion = 質問のツール名) の設定有無を報告。インジケータの状態遷移は herdr 由来なので PreToolUse/UserPromptSubmit は不要 (#390)",
+        "summary": "Reports whether the hooks this app still needs are configured (Stop for the notification body, PostToolUse/AskUserQuestion for the question's tool name). The indicator's state transitions come from herdr, so PreToolUse and UserPromptSubmit are unnecessary (#390)",
         "deps": []
       },
       {
         "name": "AuthService",
         "file": "backend/src/services/auth.ts",
-        "summary": "サーバパスワードによる認証と JWT セッショントークンの発行・検証",
+        "summary": "Server-password authentication, and issuing and verifying JWT session tokens",
         "deps": []
       },
       {
         "name": "PeerRegistry",
         "file": "backend/src/services/peer-registry.ts",
-        "summary": "peers.json を atomic rename + モジュールレベル mutation lock で永続化 (load→mutate→save を直列化)。wsToken / lastSeenAt / エラー記録、カラーパレットの round-robin 割当、peer 横断セッション順序を管理",
+        "summary": "Persists peers.json through an atomic rename plus a module-level mutation lock (serializing load-mutate-save). Manages wsToken, lastSeenAt and error records, round-robin color palette assignment, and cross-peer session order",
         "deps": []
       },
       {
         "name": "PeerAuth",
         "file": "backend/src/services/peer-auth.ts",
-        "summary": "peer への代理ログイン (POST /api/auth/login、5s timeout)。取得した JWT を保存して以降の API/WS に使用し、401 時は unauthorized として記録。/health で疎通確認",
+        "summary": "Logs in to a peer on the user's behalf (POST /api/auth/login, 5s timeout). Stores the JWT for later API and WS calls and records a 401 as unauthorized. Connectivity is checked through /health",
         "deps": [
           "PeerRegistry",
           "PeerUrl"
@@ -361,7 +361,7 @@
       {
         "name": "PeerDiscovery",
         "file": "backend/src/services/peer-discovery.ts",
-        "summary": "`tailscale status --json` で tailnet の online peer を列挙し、各 :5923/health を 3s timeout で並列 probe。cchub が動いていれば version 付き DiscoveredPeer として返す",
+        "summary": "Lists the tailnet's online peers through `tailscale status --json` and probes each :5923/health in parallel with a 3s timeout. A peer running the app comes back as a DiscoveredPeer with its version",
         "deps": [
           "PeerRegistry"
         ]
@@ -369,7 +369,7 @@
       {
         "name": "PeerUrl",
         "file": "backend/src/services/peer-url.ts",
-        "summary": "peer URL の SSRF ガード (#235)。https 以外・loopback・link-local・RFC1918・cloud metadata (169.254.169.254) を拒否し、Tailscale ホスト (*.ts.net、CGNAT 100.64.0.0/10、ULA fd7a:115c:a1e0::/48) のみ許可",
+        "summary": "SSRF guard for peer URLs (#235). Rejects anything that is not https, plus loopback, link-local, RFC1918 and cloud metadata (169.254.169.254), and allows only Tailscale hosts (*.ts.net, CGNAT 100.64.0.0/10, ULA fd7a:115c:a1e0::/48)",
         "deps": []
       }
     ],
@@ -378,490 +378,490 @@
         "method": "GET",
         "path": "/health",
         "group": "System",
-        "description": "ヘルスチェック。status と version を返す。認証不要 (peer discovery が利用)",
+        "description": "Health check. Returns status and version. Unauthenticated (peer discovery uses it)",
         "file": "backend/src/index.ts"
       },
       {
         "method": "GET",
         "path": "/clear-cache",
         "group": "System",
-        "description": "Service Worker 登録解除とキャッシュクリアを行う HTML ページ。認証不要",
+        "description": "An HTML page that unregisters the service worker and clears the caches. Unauthenticated",
         "file": "backend/src/index.ts"
       },
       {
         "method": "GET",
         "path": "/api/images/:filename",
         "group": "System",
-        "description": "アップロード画像の配信。認証不要",
+        "description": "Serves uploaded images. Unauthenticated",
         "file": "backend/src/index.ts"
       },
       {
         "method": "WS",
         "path": "/ws/mux",
         "group": "System",
-        "description": "多重化ターミナル WebSocket。viewport 配信・入力・レイアウト制御・会話ストリーム。token クエリで peer からの Bearer 認証に対応",
+        "description": "The multiplexed terminal WebSocket: viewport delivery, input, layout control and the conversation stream. The token query supports Bearer auth from a peer",
         "file": "backend/src/routes/terminal-mux.ts"
       },
       {
         "method": "GET",
         "path": "/api/auth/required",
         "group": "Auth",
-        "description": "パスワード認証が有効かどうかを返す",
+        "description": "Returns whether password authentication is enabled",
         "file": "backend/src/routes/auth.ts"
       },
       {
         "method": "POST",
         "path": "/api/auth/login",
         "group": "Auth",
-        "description": "サーバパスワードでログインし JWT トークンを返す。認証不要",
+        "description": "Logs in with the server password and returns a JWT. Unauthenticated",
         "file": "backend/src/routes/auth.ts"
       },
       {
         "method": "POST",
         "path": "/api/auth/logout",
         "group": "Auth",
-        "description": "ログアウト (ステートレス JWT のためダミー)",
+        "description": "Logout (a no-op, since the JWT is stateless)",
         "file": "backend/src/routes/auth.ts"
       },
       {
         "method": "GET",
         "path": "/api/auth/me",
         "group": "Auth",
-        "description": "現在のユーザー情報を返す。認証必須",
+        "description": "Returns the current user. Requires authentication",
         "file": "backend/src/routes/auth.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions",
         "group": "Sessions",
-        "description": "全セッション一覧 (Claude Code 状態・ペイン情報付き)",
+        "description": "Every session (with Claude Code state and pane info)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions",
         "group": "Sessions",
-        "description": "新規セッション作成。agent (claude/codex), name, workingDir, initialPrompt 指定可",
+        "description": "Creates a session. Accepts agent (claude/codex), name, workingDir and initialPrompt",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/:id",
         "group": "Sessions",
-        "description": "セッション詳細を取得",
+        "description": "Session details",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "DELETE",
         "path": "/api/sessions/:id",
         "group": "Sessions",
-        "description": "セッション (herdr workspace) を close。last-known 情報は保持",
+        "description": "Closes a session (a herdr workspace). The last-known information is kept",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/resume",
         "group": "Sessions",
-        "description": "セッション内でエージェントを resume (claude -r / codex resume)",
+        "description": "Resumes the agent inside a session (claude -r / codex resume)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "PUT",
         "path": "/api/sessions/:id/theme",
         "group": "Sessions",
-        "description": "セッションのカラーテーマを設定",
+        "description": "Sets a session's color theme",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "PUT",
         "path": "/api/sessions/:id/title",
         "group": "Sessions",
-        "description": "セッションのカスタムタイトルを設定",
+        "description": "Sets a session's custom title",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "PUT",
         "path": "/api/sessions/order",
         "group": "Sessions",
-        "description": "セッション表示順を保存",
+        "description": "Saves the session display order",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/focus",
         "group": "Sessions",
-        "description": "ペインにフォーカス ({ paneId })",
+        "description": "Focuses a pane ({ paneId })",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/close",
         "group": "Sessions",
-        "description": "ペインを閉じる。最後の 1 枚は拒否",
+        "description": "Closes a pane. The last one is refused",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/split",
         "group": "Sessions",
-        "description": "ペイン分割 ({ paneId, direction: 'h'|'v' })",
+        "description": "Splits a pane ({ paneId, direction: 'h'|'v' })",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/respawn",
         "group": "Sessions",
-        "description": "dead ペインを respawn",
+        "description": "Respawns a dead pane",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/input",
         "group": "Sessions",
-        "description": "ペインへ REST で入力送信 (cchub send / peer が使用)。wait=true で送信後の viewport スナップショットを返す",
+        "description": "Sends input to a pane over REST (used by `send` and by peers). With wait=true it returns a viewport snapshot taken after the send",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/:id/panes/:paneId/viewport",
         "group": "Sessions",
-        "description": "ペイン viewport を REST で取得 (cchub peek が使用)。lines クエリで末尾行数指定",
+        "description": "Captures a pane viewport over REST (used by `peek`). The lines query sets how many trailing rows to return",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/prompt",
         "group": "Sessions",
-        "description": "アクティブペインへプロンプトテキストを送信",
+        "description": "Sends prompt text to the active pane",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history",
         "group": "Session History",
-        "description": "最近のセッション履歴。metadata クエリでメタデータの遅延ロード可",
+        "description": "Recent session history. The metadata query loads the metadata lazily",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/projects",
         "group": "Session History",
-        "description": "プロジェクト一覧 (Claude Code + Codex 統合)",
+        "description": "The project list (Claude Code and Codex merged)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/projects/:dirName",
         "group": "Session History",
-        "description": "プロジェクト内のセッション一覧",
+        "description": "Sessions inside a project",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/search",
         "group": "Session History",
-        "description": "全プロジェクト横断のセッション検索 (q, limit)",
+        "description": "Session search across every project (q, limit)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/search/stream",
         "group": "Session History",
-        "description": "検索結果の SSE ストリーミング配信",
+        "description": "Streams search results over SSE",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/:sessionId/conversation",
         "group": "Session History",
-        "description": "セッションの会話を取得。agent=codex / projectDirName / last クエリ対応",
+        "description": "A session's conversation. Supports the agent=codex, projectDirName and last queries",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/history/metadata",
         "group": "Session History",
-        "description": "指定 sessionIds のメタデータを遅延ロード",
+        "description": "Lazily loads metadata for the given sessionIds",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/history/resume",
         "group": "Session History",
-        "description": "履歴からセッションを resume (新規 workspace 作成、会話記録の cwd を優先)",
+        "description": "Resumes a session from history (creates a new workspace, preferring the cwd recorded in the conversation log)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/prompts/search",
         "group": "Session History",
-        "description": "プロンプト履歴の検索 (q, limit)",
+        "description": "Searches the prompt history (q, limit)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/list",
         "group": "Files",
-        "description": "ディレクトリ一覧。sessionWorkingDir 配下に限定",
+        "description": "Directory listing, restricted to below sessionWorkingDir",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/read",
         "group": "Files",
-        "description": "ファイル内容を取得 (サイズ制限あり。画像/メディアはメタデータのみ)",
+        "description": "File contents (size-limited; images and media return metadata only)",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/raw",
         "group": "Files",
-        "description": "ファイルをインライン配信 (<img>/<video>/<audio> 用)。Range / 206 対応",
+        "description": "Serves a file inline (for <img>/<video>/<audio>). Range and 206 supported",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/download",
         "group": "Files",
-        "description": "ファイルを添付ダウンロード (Bun.file ストリーミング)",
+        "description": "Downloads a file as an attachment (streamed through Bun.file)",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "POST",
         "path": "/api/files/upload",
         "group": "Files",
-        "description": "multipart/form-data でファイル (複数可) をアップロード",
+        "description": "Uploads one or more files as multipart/form-data",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/browse",
         "group": "Files",
-        "description": "ホームディレクトリ配下をセッション非依存でブラウズ",
+        "description": "Browses below the home directory, independent of any session",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "POST",
         "path": "/api/files/mkdir",
         "group": "Files",
-        "description": "ディレクトリ作成 (ホーム配下のみ)",
+        "description": "Creates a directory (below home only)",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/changes/:sessionWorkingDir",
         "group": "Files",
-        "description": "JSONL 由来の Claude Code ファイル変更一覧",
+        "description": "Claude Code's file changes, from the JSONL",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/git-changes/:workingDir",
         "group": "Files",
-        "description": "git status --porcelain による変更ファイル一覧 (ブランチ情報付き)",
+        "description": "Changed files from git status --porcelain (with branch information)",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/git-diff/:workingDir",
         "group": "Files",
-        "description": "指定ファイルの unified diff (staged クエリ対応)",
+        "description": "Unified diff for one file (supports the staged query)",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/language",
         "group": "Files",
-        "description": "ファイルパスから言語識別子・isImage・isText を判定",
+        "description": "Derives the language identifier, isImage and isText from a file path",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/files/images/:filename",
         "group": "Files",
-        "description": "会話用アップロード画像の配信",
+        "description": "Serves images uploaded for a conversation",
         "file": "backend/src/routes/files.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers",
         "group": "Peers",
-        "description": "登録済み peer 一覧 (self 含む) を返す",
+        "description": "The registered peers (including self)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/discover",
         "group": "Peers",
-        "description": "Tailscale tailnet 内で稼働中の cchub を検出",
+        "description": "Finds instances running on the Tailscale tailnet",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "POST",
         "path": "/api/peers",
         "group": "Peers",
-        "description": "peer を登録 (nickname, url, password, color)。代理ログインして JWT を保存",
+        "description": "Registers a peer (nickname, url, password, color), logging in on the user's behalf and storing the JWT",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "PATCH",
         "path": "/api/peers/:id",
         "group": "Peers",
-        "description": "peer の nickname / color / password を更新",
+        "description": "Updates a peer's nickname, color or password",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "DELETE",
         "path": "/api/peers/:id",
         "group": "Peers",
-        "description": "peer を削除 (local は削除不可)",
+        "description": "Removes a peer (local cannot be removed)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "POST",
         "path": "/api/peers/:id/verify",
         "group": "Peers",
-        "description": "peer の疎通・認証を再確認しレイテンシを返す",
+        "description": "Re-checks a peer's connectivity and auth, returning the latency",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "PUT",
         "path": "/api/peers/order",
         "group": "Peers",
-        "description": "peer の表示順を保存",
+        "description": "Saves the peer display order",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/session-order",
         "group": "Peers",
-        "description": "peer 横断のセッション表示順を取得",
+        "description": "The cross-peer session display order",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "PUT",
         "path": "/api/peers/session-order",
         "group": "Peers",
-        "description": "peer 横断のセッション表示順を保存",
+        "description": "Saves the cross-peer session display order",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/sessions",
         "group": "Peers",
-        "description": "全 peer のアクティブセッションをマージして返す (peer 毎のエラー併載)",
+        "description": "Merges and returns the active sessions of every peer (with per-peer errors alongside)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/history/projects",
         "group": "Peers",
-        "description": "全 peer のプロジェクト履歴をマージして返す",
+        "description": "Merges and returns the project history of every peer",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/history/:peerId/projects/:dirName",
         "group": "Peers",
-        "description": "指定 peer のプロジェクト内セッション一覧",
+        "description": "Sessions inside one peer's project",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/history/:peerId/:sessionId/conversation",
         "group": "Peers",
-        "description": "指定 peer のセッション会話を取得",
+        "description": "A session's conversation on one peer",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "POST",
         "path": "/api/peers/history/:peerId/resume",
         "group": "Peers",
-        "description": "指定 peer 上でセッションを resume",
+        "description": "Resumes a session on one peer",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/:peerId/dashboard",
         "group": "Peers",
-        "description": "指定 peer (または self) のダッシュボード情報を取得",
+        "description": "Dashboard data for one peer (or self)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/peers/:peerId/files/browse",
         "group": "Peers",
-        "description": "peer 上のディレクトリブラウズ (プロキシ)",
+        "description": "Browses a directory on a peer (proxied)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "POST",
         "path": "/api/peers/:peerId/files/mkdir",
         "group": "Peers",
-        "description": "peer 上にディレクトリ作成 (プロキシ)",
+        "description": "Creates a directory on a peer (proxied)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "POST",
         "path": "/api/peers/:peerId/upload/image",
         "group": "Peers",
-        "description": "画像アップロードを peer へ転送し、peer 上の絶対パスを返す",
+        "description": "Forwards an image upload to a peer and returns its absolute path there",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "ALL",
         "path": "/api/peers/:peerId/files/*",
         "group": "Peers",
-        "description": "Files API の汎用プロキシ (list / read / raw / download / upload / language / changes / git-changes / git-diff / images を peer へ透過転送)",
+        "description": "A general proxy for the Files API (list / read / raw / download / upload / language / changes / git-changes / git-diff / images passed through to a peer)",
         "file": "backend/src/routes/peers.ts"
       },
       {
         "method": "GET",
         "path": "/api/dashboard",
         "group": "Dashboard",
-        "description": "ダッシュボード情報 (使用量リミット、統計、コスト推定、システムメトリクス、使用量履歴、接続クライアント数)",
+        "description": "Dashboard data (usage limits, statistics, cost estimates, system metrics, usage history, connected clients)",
         "file": "backend/src/routes/dashboard.ts"
       },
       {
         "method": "POST",
         "path": "/api/upload/image",
         "group": "Upload",
-        "description": "画像アップロード (PNG/JPEG/GIF/WebP, max 10MB)。ローカルパスを返す",
+        "description": "Image upload (PNG/JPEG/GIF/WebP, max 10MB). Returns the local path",
         "file": "backend/src/routes/upload.ts"
       },
       {
         "method": "POST",
         "path": "/api/notify",
         "group": "Notify",
-        "description": "Claude Code / Codex の hook イベントを受信し WebSocket でブロードキャスト。認証不要 (ローカル hook から呼ばれる)",
+        "description": "Receives Claude Code / Codex hook events and broadcasts them over the WebSocket. Unauthenticated (local hooks call it)",
         "file": "backend/src/routes/notify.ts"
       },
       {
         "method": "GET",
         "path": "/api/notify/hook-status",
         "group": "Notify",
-        "description": "Claude / Codex の hook 設定に cchub notify が登録済みかを確認。missing イベント一覧を返す",
+        "description": "Checks whether the notify command is registered in the Claude / Codex hook configuration. Returns the list of missing events",
         "file": "backend/src/routes/notify.ts"
       },
       {
         "method": "POST",
         "path": "/api/logs",
         "group": "Logs",
-        "description": "フロントエンドのログを受信し /tmp/cc-hub-browser.log に追記。認証不要",
+        "description": "Receives frontend logs and appends them to the browser log file. Unauthenticated",
         "file": "backend/src/routes/logs.ts"
       },
       {
         "method": "GET",
         "path": "/api/logs",
         "group": "Logs",
-        "description": "ブラウザログファイルをテキストで返す",
+        "description": "Returns the browser log file as text",
         "file": "backend/src/routes/logs.ts"
       },
       {
         "method": "DELETE",
         "path": "/api/logs",
         "group": "Logs",
-        "description": "ブラウザログをクリア",
+        "description": "Clears the browser log",
         "file": "backend/src/routes/logs.ts"
       }
     ]
@@ -871,7 +871,7 @@
       {
         "name": "App",
         "file": "frontend/src/App.tsx",
-        "summary": "ルートコンポーネント。mobile / tablet / desktop のデバイス判定でレイアウトを切り替え。認証・セッション管理・ファイルビューア・チャットビューを統合",
+        "summary": "The root component. Switches layout on a mobile / tablet / desktop device check, and ties together auth, session management, the file viewer and the chat view",
         "hooks": [
           "useAuth",
           "useSessions"
@@ -881,7 +881,7 @@
       {
         "name": "DesktopLayout",
         "file": "frontend/src/components/DesktopLayout.tsx",
-        "summary": "デスクトップ / タブレット向けメインレイアウト。ターミナル制御統合、ペインツリー管理、キーボードショートカット",
+        "summary": "The main layout for desktop and tablet: terminal control, the pane tree and keyboard shortcuts",
         "hooks": [
           "useMultiplexedTerminal",
           "usePeerConnection",
@@ -895,7 +895,7 @@
       {
         "name": "TerminalPage",
         "file": "frontend/src/pages/TerminalPage.tsx",
-        "summary": "モバイル向けターミナルページ。単一ペイン表示 + ペインタブバー + InputBar / ChatView 切替",
+        "summary": "The mobile terminal page: a single pane plus a pane tab bar, switching between the InputBar and ChatView",
         "hooks": [
           "useMultiplexedTerminal"
         ],
@@ -906,7 +906,7 @@
       {
         "name": "PaneContainer",
         "file": "frontend/src/components/PaneContainer.tsx",
-        "summary": "ペインツリーの再帰描画。ControlModeContext 経由で分割・クローズ・ズーム・リサイズ操作を提供",
+        "summary": "Recursively draws the pane tree. Split, close, zoom and resize are offered through ControlModeContext",
         "hooks": [],
         "parents": [
           "DesktopLayout",
@@ -916,7 +916,7 @@
       {
         "name": "Terminal",
         "file": "frontend/src/components/Terminal.tsx",
-        "summary": "xterm.js ターミナル (WebGL、scrollback:0)。viewport フレームを VT シーケンスに変換して term.write() で反映。レイアウト由来のサイズ同期 (setExactSize)、フォント調整、テキスト選択",
+        "summary": "The xterm.js terminal (WebGL, scrollback:0). Each viewport frame is converted into a VT sequence and applied with term.write(). Size comes from the layout (setExactSize), plus font adjustment and text selection",
         "hooks": [
           "useSelectionMode"
         ],
@@ -928,7 +928,7 @@
       {
         "name": "SelectionOverlay",
         "file": "frontend/src/components/SelectionOverlay.tsx",
-        "summary": "タッチ選択オーバーレイ。開始/終了ハンドルのドラッグとコピー/キャンセル操作",
+        "summary": "The touch selection overlay: draggable start and end handles with copy and cancel",
         "hooks": [
           "useSelectionMode"
         ],
@@ -939,7 +939,7 @@
       {
         "name": "SessionList",
         "file": "frontend/src/components/SessionList.tsx",
-        "summary": "セッション一覧 (Active / History / Dashboard タブ)。ペイン操作、ピンチズーム、History V1/V2 の分岐",
+        "summary": "The session list (Active / History / Dashboard tabs): pane operations, pinch zoom, and the History V1/V2 split",
         "hooks": [
           "useHistoryV2Flag",
           "useSessionHistory"
@@ -951,7 +951,7 @@
       {
         "name": "SessionModal",
         "file": "frontend/src/components/SessionModal.tsx",
-        "summary": "セッション選択モーダル (Ctrl+B)。ペイン数バッジと展開式ペイン一覧",
+        "summary": "The session picker modal (Ctrl+B), with pane-count badges and an expandable pane list",
         "hooks": [],
         "parents": [
           "DesktopLayout"
@@ -960,7 +960,7 @@
       {
         "name": "SessionHistory",
         "file": "frontend/src/components/SessionHistory.tsx",
-        "summary": "セッション履歴 V1 (プロジェクトグループ表示)。V2 安定化まで併存するレガシー実装",
+        "summary": "Session history V1 (grouped by project). The legacy implementation, kept until V2 settles",
         "hooks": [],
         "parents": [
           "SessionList"
@@ -969,7 +969,7 @@
       {
         "name": "SessionHistoryV2",
         "file": "frontend/src/components/history/SessionHistoryV2.tsx",
-        "summary": "セッション履歴 V2。フラットリスト + ファセット検索 + 仮想スクロール",
+        "summary": "Session history V2: a flat list with facet search and virtualized scrolling",
         "hooks": [
           "useFlatHistoryItems",
           "useHistoryActions"
@@ -981,7 +981,7 @@
       {
         "name": "VirtualizedHistoryList",
         "file": "frontend/src/components/history/VirtualizedHistoryList.tsx",
-        "summary": "大規模履歴の仮想化リスト描画",
+        "summary": "Virtualized rendering for a large history",
         "hooks": [],
         "parents": [
           "SessionHistoryV2"
@@ -990,7 +990,7 @@
       {
         "name": "HistoryRowV2",
         "file": "frontend/src/components/history/HistoryRowV2.tsx",
-        "summary": "履歴 1 行。resume / 会話表示などのハンドラ",
+        "summary": "One history row, with the resume and show-conversation handlers",
         "hooks": [],
         "parents": [
           "VirtualizedHistoryList"
@@ -999,7 +999,7 @@
       {
         "name": "HistoryFacetSidebar",
         "file": "frontend/src/components/history/HistoryFacetSidebar.tsx",
-        "summary": "ファセットフィルタ (project / agent / status) のデスクトップ用サイドバー",
+        "summary": "The desktop sidebar for facet filters (project / agent / status)",
         "hooks": [],
         "parents": [
           "SessionHistoryV2"
@@ -1008,7 +1008,7 @@
       {
         "name": "HistoryFacetDrawer",
         "file": "frontend/src/components/history/HistoryFacetDrawer.tsx",
-        "summary": "ファセットフィルタのモバイル用ドロワー",
+        "summary": "The mobile drawer for facet filters",
         "hooks": [],
         "parents": [
           "SessionHistoryV2"
@@ -1017,7 +1017,7 @@
       {
         "name": "HistoryActiveChips",
         "file": "frontend/src/components/history/HistoryActiveChips.tsx",
-        "summary": "適用中フィルタの chips 表示と解除",
+        "summary": "Shows the active filters as chips and clears them",
         "hooks": [],
         "parents": [
           "SessionHistoryV2"
@@ -1026,7 +1026,7 @@
       {
         "name": "ConversationViewer",
         "file": "frontend/src/components/ConversationViewer.tsx",
-        "summary": "会話の Markdown レンダリング表示 (画像対応)。スクロール位置の復元・自動スクロール",
+        "summary": "Markdown-rendered conversation display (images included), with scroll restoration and auto-scroll",
         "hooks": [
           "useScrollRatio"
         ],
@@ -1038,7 +1038,7 @@
       {
         "name": "ChatView",
         "file": "frontend/src/components/chat/ChatView.tsx",
-        "summary": "現在セッションの会話形式ビュー。「Chat」モード選択時にターミナル領域を置き換える",
+        "summary": "A conversation-style view of the current session, replacing the terminal area when Chat mode is selected",
         "hooks": [
           "useAgentConversation",
           "useInputEcho"
@@ -1051,7 +1051,7 @@
       {
         "name": "ChatComposer",
         "file": "frontend/src/components/chat/ChatComposer.tsx",
-        "summary": "ChatView 用の複数行メッセージコンポーザ",
+        "summary": "The multi-line message composer for ChatView",
         "hooks": [],
         "parents": [
           "ChatView"
@@ -1060,7 +1060,7 @@
       {
         "name": "InputBar",
         "file": "frontend/src/components/InputBar.tsx",
-        "summary": "ターミナル上部の常設入力バー。プロンプト履歴、スラッシュコマンドピッカー、画像アップロード",
+        "summary": "The persistent input bar above the terminal: prompt history, the slash-command picker and image upload",
         "hooks": [],
         "parents": [
           "DesktopLayout",
@@ -1070,7 +1070,7 @@
       {
         "name": "FloatingKeyboard",
         "file": "frontend/src/components/FloatingKeyboard.tsx",
-        "summary": "タブレット用ドラッグ可能フローティングキーボード。最小化対応、入力モード別に位置を保存",
+        "summary": "The draggable floating keyboard for tablets. Minimizable, and its position is saved per input mode",
         "hooks": [],
         "parents": [
           "DesktopLayout"
@@ -1079,7 +1079,7 @@
       {
         "name": "Keyboard",
         "file": "frontend/src/components/Keyboard.tsx",
-        "summary": "モバイル用仮想キーボード。長押しで記号入力、JA トグルで IME 切替",
+        "summary": "The virtual keyboard for mobile. Long press for symbols, and a JA toggle for the IME",
         "hooks": [],
         "parents": [
           "InputBar",
@@ -1089,7 +1089,7 @@
       {
         "name": "FileViewer",
         "file": "frontend/src/components/files/FileViewer.tsx",
-        "summary": "ファイルブラウザ + コンテンツビューアのコンテナ。Claude/Git 変更トグル、ブラウザ履歴ナビ、アップロード/ダウンロード、peerId 指定でリモート peer のファイル取得",
+        "summary": "The container for the file browser and content viewer: the Claude/Git change toggle, browser-history navigation, upload and download, and fetching a remote peer's files when a peerId is given",
         "hooks": [
           "useFileViewer",
           "useViewHistory",
@@ -1103,7 +1103,7 @@
       {
         "name": "FileBrowser",
         "file": "frontend/src/components/files/FileBrowser.tsx",
-        "summary": "ディレクトリツリーのナビゲーション",
+        "summary": "Directory tree navigation",
         "hooks": [],
         "parents": [
           "FileViewer"
@@ -1112,7 +1112,7 @@
       {
         "name": "FileContentView",
         "file": "frontend/src/components/files/FileContentView.tsx",
-        "summary": "ファイル内容を種別に応じて Code/Markdown/Image/Html ビューアへルーティング",
+        "summary": "Routes file contents to the code, Markdown, image or HTML viewer by type",
         "hooks": [],
         "parents": [
           "FileViewer"
@@ -1121,7 +1121,7 @@
       {
         "name": "ChangesView",
         "file": "frontend/src/components/files/ChangesView.tsx",
-        "summary": "Claude Code / Git の変更ファイル一覧。ファイル毎の diff ナビゲーション",
+        "summary": "The list of files changed by Claude Code or git, with per-file diff navigation",
         "hooks": [],
         "parents": [
           "FileViewer"
@@ -1130,7 +1130,7 @@
       {
         "name": "CodeViewer",
         "file": "frontend/src/components/files/CodeViewer.tsx",
-        "summary": "シンタックスハイライト表示。word-wrap / フォントサイズ設定",
+        "summary": "Syntax-highlighted display, with word-wrap and font size settings",
         "hooks": [
           "useViewerSettings"
         ],
@@ -1141,7 +1141,7 @@
       {
         "name": "DiffViewer",
         "file": "frontend/src/components/files/DiffViewer.tsx",
-        "summary": "ファイル変更の side-by-side / unified diff 表示",
+        "summary": "Side-by-side and unified diff display for a file change",
         "hooks": [
           "useViewerSettings"
         ],
@@ -1152,7 +1152,7 @@
       {
         "name": "MarkdownViewer",
         "file": "frontend/src/components/files/MarkdownViewer.tsx",
-        "summary": "Markdown レンダリング",
+        "summary": "Markdown rendering",
         "hooks": [
           "useViewerSettings"
         ],
@@ -1163,7 +1163,7 @@
       {
         "name": "ImageViewer",
         "file": "frontend/src/components/files/ImageViewer.tsx",
-        "summary": "画像プレビュー (ピンチズーム対応、大きい画像は /files/raw ストリーミング)",
+        "summary": "Image preview (pinch zoom; large images stream through /files/raw)",
         "hooks": [
           "usePinchZoom"
         ],
@@ -1174,7 +1174,7 @@
       {
         "name": "HtmlViewer",
         "file": "frontend/src/components/files/HtmlViewer.tsx",
-        "summary": "HTML ファイルの iframe 表示 (認証付き blob URL)",
+        "summary": "Renders an HTML file in an iframe (an authenticated blob URL)",
         "hooks": [
           "useAuthBlobUrl"
         ],
@@ -1185,7 +1185,7 @@
       {
         "name": "PromptComposer",
         "file": "frontend/src/components/files/PromptComposer.tsx",
-        "summary": "ファイルからプロンプトテキストを組み立てる UI",
+        "summary": "A UI for composing prompt text out of a file",
         "hooks": [],
         "parents": [
           "FileViewer"
@@ -1194,7 +1194,7 @@
       {
         "name": "Dashboard",
         "file": "frontend/src/components/dashboard/Dashboard.tsx",
-        "summary": "ダッシュボードのメインコンテナ。使用量・統計・peer サーバ一覧",
+        "summary": "The dashboard's main container: usage, statistics and the peer server list",
         "hooks": [
           "useDashboard",
           "usePeers",
@@ -1209,7 +1209,7 @@
       {
         "name": "DashboardPanel",
         "file": "frontend/src/components/DashboardPanel.tsx",
-        "summary": "ダッシュボードのサイドパネルラッパ (Ctrl+Shift+B)",
+        "summary": "The dashboard's side panel wrapper (Ctrl+Shift+B)",
         "hooks": [],
         "parents": [
           "DesktopLayout"
@@ -1218,7 +1218,7 @@
       {
         "name": "UsageLimits",
         "file": "frontend/src/components/dashboard/UsageLimits.tsx",
-        "summary": "5時間 / 7日サイクルの使用量プログレスバー表示",
+        "summary": "Usage progress bars for the 5-hour and 7-day cycles",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1227,7 +1227,7 @@
       {
         "name": "DailyUsageChart",
         "file": "frontend/src/components/dashboard/DailyUsageChart.tsx",
-        "summary": "日別のメッセージ数・セッション数バーチャート",
+        "summary": "Bar charts of daily message and session counts",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1236,7 +1236,7 @@
       {
         "name": "ModelUsageChart",
         "file": "frontend/src/components/dashboard/ModelUsageChart.tsx",
-        "summary": "モデル別トークン使用量の比較チャート",
+        "summary": "A comparison chart of per-model token usage",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1245,7 +1245,7 @@
       {
         "name": "HourlyHeatmap",
         "file": "frontend/src/components/dashboard/HourlyHeatmap.tsx",
-        "summary": "時間帯別アクティビティのヒートマップ",
+        "summary": "A heatmap of activity by hour",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1254,7 +1254,7 @@
       {
         "name": "UsageChart",
         "file": "frontend/src/components/dashboard/UsageChart.tsx",
-        "summary": "使用量履歴のラインチャート (リアルタイムスナップショット)",
+        "summary": "A line chart of usage history (with real-time snapshots)",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1263,7 +1263,7 @@
       {
         "name": "NetworkLatency",
         "file": "frontend/src/components/dashboard/NetworkLatency.tsx",
-        "summary": "WebSocket / API レイテンシ表示",
+        "summary": "WebSocket and API latency",
         "hooks": [
           "useNetworkLatency"
         ],
@@ -1274,7 +1274,7 @@
       {
         "name": "ServerInfo",
         "file": "frontend/src/components/dashboard/ServerInfo.tsx",
-        "summary": "サーバ情報とシステム詳細の表示",
+        "summary": "Server information and system details",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1283,7 +1283,7 @@
       {
         "name": "PeerServerCard",
         "file": "frontend/src/components/dashboard/PeerServerCard.tsx",
-        "summary": "peer サーバ毎の情報カード (CPU / メモリ / 接続数)",
+        "summary": "An information card per peer server (CPU, memory, connections)",
         "hooks": [
           "usePeerServerMetrics"
         ],
@@ -1294,7 +1294,7 @@
       {
         "name": "PeerManager",
         "file": "frontend/src/components/PeerManager.tsx",
-        "summary": "peer サーバ管理 UI (登録・検証・自動検出・並べ替え・削除)",
+        "summary": "The peer server management UI (register, verify, discover, reorder, remove)",
         "hooks": [
           "usePeers"
         ],
@@ -1305,7 +1305,7 @@
       {
         "name": "LoginForm",
         "file": "frontend/src/components/LoginForm.tsx",
-        "summary": "パスワード認証フォーム (パスワード設定時のみ表示)",
+        "summary": "The password authentication form (shown only when a password is set)",
         "hooks": [],
         "parents": [
           "App"
@@ -1314,7 +1314,7 @@
       {
         "name": "Onboarding",
         "file": "frontend/src/components/Onboarding.tsx",
-        "summary": "初回ユーザー向けスポットライト式ウォークスルー (デバイス別ステップ)",
+        "summary": "A spotlight-style walkthrough for first-time users (steps per device)",
         "hooks": [],
         "parents": [
           "App",
@@ -1326,143 +1326,143 @@
       {
         "name": "useMultiplexedTerminal",
         "file": "frontend/src/hooks/useMultiplexedTerminal.ts",
-        "summary": "/ws/mux への共有シングルトン WebSocket。自動再接続、keepalive ping、セッション購読、base64 入出力、viewport ディスパッチ。sendInput / resize / splitPane / requestViewport 等の操作 API を返す。peerWsBase 指定でリモート peer に接続"
+        "summary": "A shared singleton WebSocket to /ws/mux: auto-reconnect, keepalive pings, per-session subscription, base64 I/O and viewport dispatch. Returns the operations (sendInput, resize, splitPane, requestViewport and the rest). A peerWsBase connects it to a remote peer instead"
       },
       {
         "name": "useSessions",
         "file": "frontend/src/hooks/useSessions.ts",
-        "summary": "アクティブセッションの状態管理。usePeerSessionsWatcher で複数 peer を集約し module-level cache を共有。createSession / deleteSession / updateSessionTheme API"
+        "summary": "State for the active sessions. Aggregates several peers through usePeerSessionsWatcher over a shared module-level cache. Provides createSession, deleteSession and updateSessionTheme"
       },
       {
         "name": "useSessionHistory",
         "file": "frontend/src/hooks/useSessionHistory.ts",
-        "summary": "履歴ブラウジング。peer 横断の projects 取得、projectKey (peerId::dirName) 管理、SSE ストリーミング検索 (Bearer token 付与)、resumeSession / fetchConversation"
+        "summary": "History browsing: fetching projects across peers, managing the projectKey (peerId::dirName), SSE streaming search (with the Bearer token attached), resumeSession and fetchConversation"
       },
       {
         "name": "useFlatHistoryItems",
         "file": "frontend/src/hooks/useFlatHistoryItems.ts",
-        "summary": "プロジェクトグループの履歴をフラット化して History V2 のフィルタ可能リストに変換。4 並行 hydration、更新日時降順ソート"
+        "summary": "Flattens the project-grouped history into History V2's filterable list. Hydrates four at a time and sorts by modification time descending"
       },
       {
         "name": "useHistoryActions",
         "file": "frontend/src/hooks/useHistoryActions.ts",
-        "summary": "履歴の resume / ナビゲーション / 会話表示の共通ロジック (V1/V2 両ビューで使用)"
+        "summary": "The shared logic for resuming, navigating and showing a conversation from history (used by both the V1 and V2 views)"
       },
       {
         "name": "useHistoryV2Flag",
         "file": "frontend/src/hooks/useHistoryV2Flag.ts",
-        "summary": "History V2 のフィーチャーフラグ。localStorage cchub-history-v2 (デフォルト ON)、storage イベント監視"
+        "summary": "History V2's feature flag. localStorage `hrdle-history-v2` (older prefixes still read) (on by default), watching the storage event"
       },
       {
         "name": "useDashboard",
         "file": "frontend/src/hooks/useDashboard.ts",
-        "summary": "/api/dashboard のポーリング取得 (60s)。DashboardResponse を返す"
+        "summary": "Polls /api/dashboard (every 60s) and returns the DashboardResponse"
       },
       {
         "name": "useFileViewer",
         "file": "frontend/src/hooks/useFileViewer.ts",
-        "summary": "ファイルビューア状態。listDirectory / readFile / getChanges / getGitChanges / getGitDiff。peerId オプションでリモート peer のファイル取得"
+        "summary": "File viewer state: listDirectory, readFile, getChanges, getGitChanges, getGitDiff. An optional peerId fetches a remote peer's files"
       },
       {
         "name": "useViewHistory",
         "file": "frontend/src/hooks/useViewHistory.ts",
-        "summary": "ファイルビューアの戻るナビゲーション (browser/file/changes/diff の各 ViewMode)。in-memory スタック + window.history 同期"
+        "summary": "Back navigation for the file viewer (the browser/file/changes/diff view modes). An in-memory stack synchronized with window.history"
       },
       {
         "name": "useViewerSettings",
         "file": "frontend/src/hooks/useViewerSettings.ts",
-        "summary": "ビューア設定。word-wrap (ファイル毎) と フォントサイズ (グローバル、8-32px) を localStorage に永続化"
+        "summary": "Viewer settings. Word wrap (per file) and font size (global, 8-32px) persisted in localStorage"
       },
       {
         "name": "useAuth",
         "file": "frontend/src/hooks/useAuth.ts",
-        "summary": "認証状態管理。トークンを localStorage (cc-hub-token) に永続化、login / logout を提供"
+        "summary": "Authentication state. Persists the token in localStorage and provides login and logout"
       },
       {
         "name": "useAuthBlobUrl",
         "file": "frontend/src/hooks/useAuthBlobUrl.ts",
-        "summary": "認証ヘッダ付き fetch でリソースを取得し blob URL として返す (img / video / iframe の src 用)。自動 revoke"
+        "summary": "Fetches a resource with the auth header and exposes it as a blob URL (for the src of an img, video or iframe). Revokes it automatically"
       },
       {
         "name": "useTheme",
         "file": "frontend/src/hooks/useTheme.ts",
-        "summary": "ダーク / ライトテーマ切替 (localStorage cchub-theme)"
+        "summary": "Dark and light theme switching (localStorage)"
       },
       {
         "name": "useUiScale",
         "file": "frontend/src/hooks/useUiScale.ts",
-        "summary": "UI スケール倍率の永続化と CSS 変数への適用 (localStorage cchub-ui-scale)"
+        "summary": "Persists the UI scale factor and applies it to the CSS variable (localStorage)"
       },
       {
         "name": "useNetworkLatency",
         "file": "frontend/src/hooks/useNetworkLatency.ts",
-        "summary": "WebSocket / API レイテンシ計測 (30s 毎の /health ping、latency-store 購読)"
+        "summary": "Measures WebSocket and API latency (a /health ping every 30s, subscribing to the latency store)"
       },
       {
         "name": "useLineSelection",
         "file": "frontend/src/hooks/useLineSelection.ts",
-        "summary": "ファイルビューアの行範囲選択ユーティリティ"
+        "summary": "Line-range selection utilities for the file viewer"
       },
       {
         "name": "useSelectionMode",
         "file": "frontend/src/hooks/useSelectionMode.ts",
-        "summary": "SelectionOverlay 用のタッチ選択ステートマシン (開始/終了セル、ドラッグハンドル、クリップボードコピー)"
+        "summary": "The touch-selection state machine behind SelectionOverlay (start and end cells, drag handles, copying to the clipboard)"
       },
       {
         "name": "useInputEcho",
         "file": "frontend/src/hooks/useInputEcho.ts",
-        "summary": "ターミナル非表示時に InputBar の入力を会話/チャットビューへエコー表示。矢印・Ctrl 等の特殊キーは記号表示"
+        "summary": "Echoes what is typed into the InputBar back into the conversation or chat view while the terminal is hidden. Arrows, Ctrl and other special keys are shown as symbols"
       },
       {
         "name": "useConversationStream",
         "file": "frontend/src/hooks/useConversationStream.ts",
-        "summary": "/ws/mux の会話ストリーム購読 (subscribe-conversation)。増分の conversation-update を公開"
+        "summary": "Subscribes to the /ws/mux conversation stream (subscribe-conversation) and exposes the incremental conversation-update messages"
       },
       {
         "name": "useAgentConversation",
         "file": "frontend/src/hooks/useAgentConversation.ts",
-        "summary": "アクティブセッションの agent に応じて Claude (WebSocket ストリーム) / Codex (ポーリング) の会話ソースを選択する統合フック"
+        "summary": "A unified hook that picks the conversation source by the active session's agent: Claude over the WebSocket stream, Codex by polling"
       },
       {
         "name": "useCodexConversation",
         "file": "frontend/src/hooks/useCodexConversation.ts",
-        "summary": "Codex 会話のポーリングローダ (5s 間隔、transcript + トークン使用量)"
+        "summary": "The polling loader for a Codex conversation (every 5s, transcript plus token usage)"
       },
       {
         "name": "usePeers",
         "file": "frontend/src/hooks/usePeers.ts",
-        "summary": "peer 一覧の CRUD と状態管理 (5s ポーリング、module-level cache + broadcast)。addPeer / updatePeer / deletePeer / verifyPeer / reorderPeers"
+        "summary": "CRUD and state for the peer list (5s polling, a module-level cache with broadcast). addPeer, updatePeer, deletePeer, verifyPeer, reorderPeers"
       },
       {
         "name": "usePeerConnection",
         "file": "frontend/src/hooks/usePeerConnection.ts",
-        "summary": "セッションの peerId から接続情報 (wsBase / apiBase / token) を導出。リモート peer は peer.url から変換"
+        "summary": "Derives the connection info (wsBase, apiBase, token) from a session's peerId. A remote peer is converted from peer.url"
       },
       {
         "name": "usePeerSessionsWatcher",
         "file": "frontend/src/hooks/usePeerSessionsWatcher.ts",
-        "summary": "リモート peer 毎に /ws/mux への常時 WebSocket を張り、sessions-updated push と hook-event をポーリングなしで受信。自動再接続"
+        "summary": "Holds a persistent /ws/mux WebSocket per remote peer, so sessions-updated pushes and hook-events arrive without polling. Reconnects automatically"
       },
       {
         "name": "usePeerServerMetrics",
         "file": "frontend/src/hooks/usePeerServerMetrics.ts",
-        "summary": "peer のダッシュボードメトリクス (systemMetrics / diskUsage / connectedClients) を 30s ポーリング"
+        "summary": "Polls a peer's dashboard metrics (systemMetrics, diskUsage, connectedClients) every 30s"
       },
       {
         "name": "usePinchZoom",
         "file": "frontend/src/hooks/usePinchZoom.ts",
-        "summary": "2 本指ピンチズームのジェスチャ処理。min/max クランプ、transient (onChange) と persistent (onCommit) の分離"
+        "summary": "Two-finger pinch zoom gesture handling. Clamped to min/max, with the transient (onChange) and persistent (onCommit) paths separated"
       },
       {
         "name": "useScrollRatio",
         "file": "frontend/src/hooks/useScrollRatio.ts",
-        "summary": "スクロール要素の位置比率 (0..1) を追跡・復元"
+        "summary": "Tracks and restores a scrollable element's position ratio (0..1)"
       }
     ]
   },
   "websocket": {
     "endpoint": "/ws/mux",
-    "description": "単一の多重化 WebSocket。クライアントは subscribe でセッション毎に購読し、ターミナル表示は PaneViewport フレーム (offset ベースのサーバーサイドスクロールバック) で配信。request-viewport への応答に加え、live (offset=0) 購読者には herdr のフレーム到着時に未要求 push もされる。全クライアント入力フレームは zod で検証 (#231)",
+    "description": "One multiplexed WebSocket. The client subscribes per session, and the terminal is delivered as PaneViewport frames (offset-based, server-side scrollback). Besides answering request-viewport, a live subscriber (offset=0) also receives unsolicited pushes when a herdr frame arrives. Every client frame is validated with zod (#231)",
     "client_messages": {
       "mux_level": [
         "subscribe",
@@ -1506,7 +1506,7 @@
         "hook-event"
       ]
     },
-    "binary_format": "未使用 (全フレームが JSON テキスト。ペイン出力は viewport.lines に ANSI エンコード文字列で同梱)",
+    "binary_format": "Unused (every frame is JSON text; pane output rides along in viewport.lines as ANSI-encoded strings)",
     "intervals": {
       "sessions-updated push": "5s",
       "keepalive ping (client)": "10s",
@@ -1532,15 +1532,15 @@
     },
     {
       "name": "PaneViewport",
-      "fields": "paneId, cols, rows, lines (ちょうど rows 行・ANSI エンコード), cursor (PaneCursor), modes (PaneModes), historySize, offset (0 = live edge), atTail"
+      "fields": "paneId, cols, rows, lines (exactly rows lines, ANSI-encoded), cursor (PaneCursor), modes (PaneModes), historySize, offset (0 = the live edge), atTail"
     },
     {
       "name": "PaneCursor",
-      "fields": "x, y (0-based), visible (offset>0 では false)"
+      "fields": "x, y (0-based), visible (false when offset>0)"
     },
     {
       "name": "PaneModes",
-      "fields": "altScreen (vim / htop 等の alternate screen 判定)"
+      "fields": "altScreen (whether this is an alternate screen, as vim or htop use)"
     },
     {
       "name": "ControlClientMessage",
@@ -1564,15 +1564,15 @@
     },
     {
       "name": "PeerClientView",
-      "fields": "extends Peer + wsToken (peer 直結 WS 用 Bearer), status, lastSeenAt, latencyMs, errorMessage"
+      "fields": "extends Peer + wsToken (the Bearer for a WS straight to the peer), status, lastSeenAt, latencyMs, errorMessage"
     },
     {
       "name": "DiscoveredPeer",
-      "fields": "Tailscale 検出結果: host, url, version, alreadyRegistered"
+      "fields": "What Tailscale discovery found: host, url, version, alreadyRegistered"
     },
     {
       "name": "HistorySession",
-      "fields": "sessionId, projectPath, projectName, firstPrompt (旧称・実体は最終ユーザーメッセージ), lastPrompt, recap, recapAt, modified, messageCount, gitBranch, agent, peerId"
+      "fields": "sessionId, projectPath, projectName, firstPrompt (an old name; it actually holds the last user message), lastPrompt, recap, recapAt, modified, messageCount, gitBranch, agent, peerId"
     },
     {
       "name": "SessionMetrics",
@@ -1600,89 +1600,89 @@
     },
     {
       "name": "AgentProvider",
-      "fields": "'claude' | 'codex' (AGENT_PROVIDERS レジストリが resume コマンド等を定義)"
+      "fields": "'claude' | 'codex' (the AGENT_PROVIDERS registry defines the resume command and the rest)"
     }
   ],
   "data_flows": [
     {
-      "name": "ターミナル入力",
+      "name": "Terminal input",
       "steps": [
-        "ブラウザ (xterm onData / InputBar)",
+        "The browser (xterm onData / InputBar)",
         "useMultiplexedTerminal.sendInput → JSON { type:'input', sessionId, paneId, data: base64 }",
-        "/ws/mux (terminal-mux.ts) で zod 検証",
-        "HerdrControlSession.sendInput (control stream に raw bytes / base64)",
-        "herdr pane PTY → Claude Code / Codex プロセス"
+        "Validated with zod in /ws/mux (terminal-mux.ts)",
+        "HerdrControlSession.sendInput (raw bytes as base64 into the control stream)",
+        "The herdr pane's PTY -> the Claude Code / Codex process"
       ]
     },
     {
-      "name": "ターミナル出力表示 (viewport)",
+      "name": "Terminal output (viewport)",
       "steps": [
         "herdr terminal.frame (pane control stream)",
-        "HerdrControlSession が出力を検知 (フレーム到着)",
-        "PaneViewport が capture-pane -e -p で可視領域を取得 (非 altScreen は padFill)",
-        "viewport フレーム { paneId, lines, cursor, modes, historySize, offset, atTail } を live 購読者へ push",
-        "フロント: viewportToVTSequence() で VT シーケンス化",
-        "xterm.js term.write() で画面更新 (scrollback:0 の render-only)"
+        "HerdrControlSession sees the output (a frame arrives)",
+        "PaneViewport captures the visible region (padFill unless it is an alt screen)",
+        "The viewport frame { paneId, lines, cursor, modes, historySize, offset, atTail } is pushed to live subscribers",
+        "Frontend: viewportToVTSequence() turns it into a VT sequence",
+        "xterm.js term.write() updates the screen (render-only, scrollback:0)"
       ]
     },
     {
-      "name": "スクロールバック閲覧",
+      "name": "Reading the scrollback",
       "steps": [
-        "ユーザーのスクロール操作 (ホイール / タッチ)",
-        "request-viewport { paneId, offset: N } を送信",
-        "サーバが capture-pane -S/-E で N 行上の viewport を取得",
-        "viewport (atTail=false, cursor 非表示) を返信",
-        "ターミナルタップ or ソフトキーボード表示で offset=0 (live) に復帰"
+        "The user scrolls (wheel or touch)",
+        "Sends request-viewport { paneId, offset: N }",
+        "The server reads the viewport N lines up",
+        "Replies with a viewport (atTail=false, the cursor hidden)",
+        "Tapping the terminal or showing the soft keyboard returns to offset=0 (live)"
       ]
     },
     {
-      "name": "レイアウト同期",
+      "name": "Layout synchronization",
       "steps": [
-        "ペイン操作 (split / close / resize / zoom)",
-        "split/resize 操作 or pane イベント → reconcile",
-        "HerdrLayout が split 木を TmuxLayoutNode 矩形へ変換",
-        "layout フレームを全購読クライアントへ配信",
-        "PaneContainer がツリー再描画、Terminal.setExactSize() でサイズ確定"
+        "A pane operation (split / close / resize / zoom)",
+        "A split or resize, or a pane event, triggers a reconcile",
+        "HerdrLayout converts the split tree into TmuxLayoutNode rectangles",
+        "The layout frame goes to every subscribed client",
+        "PaneContainer redraws the tree and Terminal.setExactSize() fixes the size"
       ]
     },
     {
-      "name": "Claude Code hook 通知",
+      "name": "Hook notifications",
       "steps": [
-        "Claude Code / Codex の hook (Stop, PreToolUse, UserPromptSubmit, PostToolUse)",
-        "cchub notify (stdin の hook JSON を読む)",
-        "POST /api/notify (認証不要)",
-        "HookStatusService がセッションのインジケータ状態を更新",
-        "hook-event フレームを WebSocket broadcast (デバウンスで通知は 1 回)",
-        "ブラウザ Notification API で OS 通知"
+        "A Claude Code / Codex hook (Stop, PreToolUse, UserPromptSubmit, PostToolUse)",
+        "The notify command (reading the hook JSON from stdin)",
+        "POST /api/notify (unauthenticated)",
+        "HookStatusService updates the session's indicator state",
+        "The hook-event frame is broadcast over the WebSocket (debounced to one notification)",
+        "An OS notification through the browser Notification API"
       ]
     },
     {
-      "name": "会話リアルタイムストリーム",
+      "name": "The real-time conversation stream",
       "steps": [
-        "クライアントが subscribe-conversation { sessionId }",
-        "ConversationWatcher が対象 JSONL を fs.watch (150ms デバウンス)",
-        "initial-conversation で全文、以後 conversation-update で新規ターンのみ配信",
-        "ChatView / ConversationViewer が増分描画"
+        "The client sends subscribe-conversation { sessionId }",
+        "ConversationWatcher watches that JSONL with fs.watch (150ms debounce)",
+        "initial-conversation carries the whole thing; conversation-update then carries new turns only",
+        "ChatView / ConversationViewer render the increment"
       ]
     },
     {
-      "name": "Peer セッション集約",
+      "name": "Aggregating peer sessions",
       "steps": [
-        "PeerManager で peer 登録 (PeerAuth が代理ログインし JWT 保存、PeerUrl が SSRF ガード)",
-        "usePeers が /api/peers を 5s ポーリング (一覧・状態)",
-        "usePeerSessionsWatcher が各リモート peer の /ws/mux に wsToken で常時接続",
-        "各 peer の sessions-updated / hook-event を受信",
-        "useSessions がローカル + 全 peer のセッションをマージして UI に表示"
+        "A peer is registered in PeerManager (PeerAuth logs in and stores the JWT; PeerUrl guards against SSRF)",
+        "usePeers polls /api/peers every 5s (the list and its status)",
+        "usePeerSessionsWatcher holds a WS to each remote peer's /ws/mux with its wsToken",
+        "Each peer's sessions-updated and hook-event arrive",
+        "useSessions merges the local and peer sessions for the UI"
       ]
     },
     {
-      "name": "リモートペイン制御 (cchub send / peek)",
+      "name": "Remote pane control (`send` / `peek`)",
       "steps": [
-        "CLI: cchub send <peer>:<session>:<paneId> [text]",
-        "peer 解決 (local / peer id / nickname) と認証情報の取得",
-        "POST /api/sessions/:id/panes/input (--wait 時は送信後に viewport 取得)",
-        "GET /api/sessions/:id/panes/:paneId/viewport (cchub peek)",
-        "viewport の末尾 N 行と検出状態 (idle / processing / permission_prompt / ask_user_question) を表示"
+        "CLI: hrdle send <peer>:<session>:<paneId> [text]",
+        "Resolves the peer (local / peer id / nickname) and its credentials",
+        "POST /api/sessions/:id/panes/input (with --wait it captures a viewport afterwards)",
+        "GET /api/sessions/:id/panes/:paneId/viewport (hrdle peek)",
+        "Prints the viewport's last N lines and the detected state (idle / processing / permission_prompt / ask_user_question)"
       ]
     }
   ]
@@ -1707,12 +1707,12 @@ let DATA = null;
 let activeQuery = '';
 
 async function load() {
-  // 1) インライン JSON (cchub HTML viewer のような blob URL / sandbox 環境向け)
+  // 1) Inline JSON (for a blob URL or sandboxed environment, such as the HTML viewer)
   try {
     const inlineEl = document.getElementById('arch-data');
     const inlineRaw = inlineEl ? inlineEl.textContent.trim() : '';
-    // 未埋め込みの場合は中身が空 or プレースホルダーコメントのみなのでスキップ。
-    // 埋め込み済みなら必ず JSON object なので "{" で始まる。
+    // Not embedded yet means empty contents or just the placeholder comment, so skip.
+    // Once embedded it is always a JSON object, so it starts with "{".
     if (inlineRaw.startsWith('{')) {
       DATA = JSON.parse(inlineRaw);
     }
@@ -1720,14 +1720,14 @@ async function load() {
     console.warn('inline JSON parse failed, falling back to fetch:', err);
   }
 
-  // 2) fetch (http サーバ経由で開いた場合)。インライン取得済みなら背景更新として使う。
+  // 2) fetch (when opened through an http server). With the inline copy already read, this is a background refresh.
   if (!DATA) {
     try {
       const r = await fetch('architecture.json', { cache: 'no-store' });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       DATA = await r.json();
     } catch (err) {
-      $('#loading').innerHTML = `<div style="color:var(--red)">architecture.json を読み込めません: ${esc(err.message)}<br><br>埋め込み JSON も無いため表示できません。<code>build-architecture-html</code> 等で再生成するか、<code>python3 -m http.server</code> で配信してください。</div>`;
+      $('#loading').innerHTML = `<div style="color:var(--red)">Cannot load architecture.json: ${esc(err.message)}<br><br>There is no embedded JSON either, so nothing can be shown. Regenerate it with <code>build-architecture-html</code>, or serve the directory with <code>python3 -m http.server</code>.</div>`;
       return;
     }
   }
@@ -1807,7 +1807,7 @@ function svcCard(s, q) {
 
 function renderServices() {
   const p = $('[data-panel="backend-services"]');
-  p.innerHTML = DATA.backend.services.map(s => svcCard(s, activeQuery)).join('') || '<div class="empty">該当なし</div>';
+  p.innerHTML = DATA.backend.services.map(s => svcCard(s, activeQuery)).join('') || '<div class="empty">No matches</div>';
 }
 
 function routeCard(r, q) {
@@ -1835,7 +1835,7 @@ function renderRoutes() {
     if (!inner) continue;
     html += `<div class="group-header">${esc(g)}</div>${inner}`;
   }
-  p.innerHTML = html || '<div class="empty">該当なし</div>';
+  p.innerHTML = html || '<div class="empty">No matches</div>';
 }
 
 function compCard(c, q) {
@@ -1854,7 +1854,7 @@ function compCard(c, q) {
 
 function renderComponents() {
   const p = $('[data-panel="frontend-components"]');
-  p.innerHTML = DATA.frontend.components.map(c => compCard(c, activeQuery)).filter(Boolean).join('') || '<div class="empty">該当なし</div>';
+  p.innerHTML = DATA.frontend.components.map(c => compCard(c, activeQuery)).filter(Boolean).join('') || '<div class="empty">No matches</div>';
 }
 
 function hookCard(h, q) {
@@ -1871,7 +1871,7 @@ function hookCard(h, q) {
 
 function renderHooks() {
   const p = $('[data-panel="frontend-hooks"]');
-  p.innerHTML = DATA.frontend.hooks.map(h => hookCard(h, activeQuery)).filter(Boolean).join('') || '<div class="empty">該当なし</div>';
+  p.innerHTML = DATA.frontend.hooks.map(h => hookCard(h, activeQuery)).filter(Boolean).join('') || '<div class="empty">No matches</div>';
 }
 
 function renderWebSocket() {
@@ -1911,7 +1911,7 @@ function renderTypes() {
       <div class="tname">${esc(t.name)}</div>
       <div class="tfields">${esc(t.fields)}</div>
     </div>
-  `).join('') || '<div class="empty">該当なし</div>';
+  `).join('') || '<div class="empty">No matches</div>';
 }
 
 function renderFlows() {
@@ -1921,7 +1921,7 @@ function renderFlows() {
       <h3>${esc(f.name)}</h3>
       <ol>${f.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
     </div>
-  `).join('') || '<div class="empty">該当なし</div>';
+  `).join('') || '<div class="empty">No matches</div>';
 }
 
 function bindTabs() {
@@ -1932,12 +1932,12 @@ function bindTabs() {
       $$('.panel').forEach(p => p.classList.toggle('active', p.dataset.panel === tab));
     });
   });
-  // クリックで型名 / 依存先などにジャンプ
+  // Click to jump to a type name or a dependency
   document.addEventListener('click', e => {
     const t = e.target.closest('[data-jump]');
     if (!t) return;
     const name = t.dataset.jump;
-    // 検索ボックスに名前を入れて、最も該当しそうなタブに切替
+    // Put the name in the search box and switch to the most likely tab
     $('#q').value = name;
     onSearch();
     const tabPriority = [

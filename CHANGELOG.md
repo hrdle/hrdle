@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.8] - 2026-07-30
+
+### Changed
+- **The documentation is English too**. v0.3.6 moved the code and this file and
+  left the docs behind, which produced `glasses/README.md` explaining an English
+  codebase in Japanese, and a `CLAUDE.md` that states an English-only rule two
+  sections above two Japanese ones. Now English: `CLAUDE.md`'s hook-notification
+  and glasses sections, `glasses/README.md`, `HANDOFF.md`,
+  `poc/herdr/FINDINGS.md`, and the five skills
+  - Each skill's `description` keeps its Japanese trigger phrases. Those are
+    matching data rather than prose: translating them would stop "リリースして"
+    from invoking anything
+  - The notification table in `CLAUDE.md` was also still listing the Japanese
+    hook messages that v0.3.6 replaced
+- **`architecture.json` is English throughout** (226 strings), and with it the
+  viewer that embeds it. It still called itself "CC Hub Architecture", drew
+  `Peer CC Hub` in its diagram and named `cchub send / peek` - none of which
+  exist any more
+- `README.ja.md` stays Japanese: it is the Japanese README. So do the `ja` i18n
+  catalogs, the STT glossary, and the fixtures whose Japanese is the thing under
+  test
+
 ## [0.3.7] - 2026-07-30
 
 ### Fixed

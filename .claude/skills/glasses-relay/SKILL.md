@@ -1,56 +1,68 @@
 ---
 name: glasses-relay
-description: Hrdle の `hrdle glasses` で G2 グラス relay チャンネルへ自筆の連絡を送る。「判断に必要な一点だけ伝える。無ければ沈黙」が原則。「グラスに伝えて」「hrdle glasses」「主人に確認したい」「グラス通知」などで起動する。
+description: Send a note of your own to the G2 glasses relay channel with `hrdle glasses`. The rule is "say the one thing they need to decide, and otherwise stay silent". Triggers on "hrdle glasses", "tell the glasses", "グラスに伝えて", "主人に確認したい", "グラス通知".
 ---
 
 # glasses-relay
 
-G2 グラスは「要約を映す画面」ではなく、**エージェントが主人（ユーザー）に連絡を取るチャンネル**。
-表示は1ページ ≒ 日本語189字・7行しかない。機械的に縮めるのではなく、**主人が今何を知れば判断・行動できるか**だけを届ける。
+The G2 glasses are not a screen that shows summaries. They are **the channel an
+agent uses to reach its owner**. One page holds about 7 lines. Do not compress
+mechanically - send only **what the owner needs in order to decide or act right
+now**.
 
-## 判断基準（これがこのスキルの中核）
+## When to send (this is the heart of the skill)
 
-以下のどれか1つでも当てはまる時 **だけ** 送る:
+Send **only** when at least one of these is true:
 
-- 主人が**決める**ことがある？（承認・選択・方向づけ）
-- 主人にしか外せない**ブロッカー**がある？
-- 主人の**次の動きが変わる**出来事が起きた？
-- 知らせるべき**リスク/想定外**がある？
+- Is there something for them to **decide** (approve, choose, set a direction)?
+- Is there a **blocker** only they can clear?
+- Has something happened that **changes their next move**?
+- Is there a **risk or a surprise** they should know about?
 
-**どれも無ければ出さない（無音でいい）。** 進捗報告・作業ログ・全文要約は送らない。
-沈黙の規律が破れると、連絡チャンネル自体の信頼が損なわれる。
+**If none of them hold, send nothing. Silence is correct.** Never send progress
+reports, work logs or full summaries. Once the discipline of silence breaks, the
+channel itself stops being trusted.
 
-- ❌ 要約思考: 「3ファイル編集・テスト実行・1件失敗を修正・全緑」
-- ⭕ 連絡思考: 「テスト全緑。デプロイしていい?」
+- Summary thinking (wrong): "edited 3 files, ran the tests, fixed 1 failure, all
+  green"
+- Contact thinking (right): "Tests are green. Ship it?"
 
-## 使い方
+## Usage
 
 ```bash
-# 承認・選択を求める（回答があるまでグラスに残る）
-hrdle glasses "テスト全緑。デプロイしていい?" --kind waiting --choices "デプロイ,中止"
+# Ask for approval or a choice (stays on the glasses until answered)
+hrdle glasses "Tests are green. Ship it?" --kind waiting --choices "ship,hold"
 
-# 判断不要の完了報告（最新1件のみ保持・TTLで自動消滅）
-hrdle glasses "ステージングへのデプロイ完了" --kind info
+# Report something that needs no decision (only the newest is kept; expires by TTL)
+hrdle glasses "Deployed to staging" --kind info
 ```
 
-- `--kind waiting` + `--choices`: 承認/選択。グラスでリング選択（swipe=選択 / tap=決定）できる。
-- `--kind info`: 判断を要しない一事報告（完了など）。**1セッション1件・上書き**。
-- text は 1〜3行（日本語80字前後）を目標。上限はサーバー側で1ページ分に clamp される。
-- **waiting は1セッション1件**。未回答の waiting があると 409 で拒否される（上書き不可）。
-  送る前に「本当に主人の判断が要るか」を再確認すること。
+- `--kind waiting` + `--choices`: approval or choice. Answerable on the glasses
+  with the ring (swipe to select, tap to confirm).
+- `--kind info`: a single fact that needs no decision (a completion, say).
+  **One per session, overwritten.**
+- Aim for one to three lines of text. The server clamps it to one page anyway.
+- **One waiting item per session.** With an unanswered waiting item in place a
+  second is rejected with 409 (it cannot overwrite). Before sending, ask again
+  whether this really needs the owner's judgement.
 
-## セッション解決
+## Session resolution
 
-通常は**自動**（cwd 一致 → プロセス祖先照合の順）。worktree などで曖昧な場合はエラーになるので、
-その時だけ `--session <id>` を明示する:
+Usually **automatic** (a matching cwd first, then process ancestry). It errors
+when that is ambiguous - in a worktree, for instance - and only then does
+`--session <id>` need to be explicit:
 
 ```bash
 hrdle glasses "..." --kind waiting --session my-session
 ```
 
-## 注意
+## Notes
 
-- 送信は本番(5924)/dev(3457) 両叩き・**静黙失敗**（`hrdle notify` と同じ。Bash ターンをブロックしない）。
-- 無改造ワーカーの入力待ち（AskUserQuestion / permission）は hrdle が自動検知してグラスへ届ける。
-  このスキルで自筆するのは、自動検知では伝わらない**文脈ある判断依頼や完了報告**だけ。
-- 返信はグラス側が行う（選択=リング / 自由文=声）。こちらは送ったら待つだけでよい。
+- It posts to both the production (5924) and dev (3457) ports and **fails
+  silently**, exactly like `hrdle notify`, so it never blocks a Bash turn.
+- An unmodified worker waiting for input (AskUserQuestion, a permission prompt)
+  is detected by hrdle and reaches the glasses on its own. What you write here is
+  only the **contextual request for a decision, or a completion**, that automatic
+  detection cannot express.
+- Answers come from the glasses (a choice through the ring, free text by voice).
+  Your side just sends and waits.

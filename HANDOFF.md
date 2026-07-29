@@ -1,116 +1,127 @@
-# Hrdle — 移行の記録と、いま動いている構成
+# Hrdle — the record of the migration, and what is running now
 
-CC Hub (`m0a/cc-hub`) を Hrdle に改名するプロジェクト（[#459](https://github.com/m0a/cc-hub/issues/459)）。
-**2026-07-29 に移行は完了した。**この文書は「これからやること」ではなく、
-**何が起きたか・いま何が動いているか・どう戻すか**の記録。
+The project that renamed CC Hub (`m0a/cc-hub`) to Hrdle
+([#459](https://github.com/m0a/cc-hub/issues/459)). **The migration finished on
+2026-07-29.** This document is not a plan. It records **what happened, what is
+running, and how to go back**.
 
-## 移行は完了している
-
-```
-m0a/cc-hub    archived / v0.2.98 で凍結 / open issue 0 / open PR 0
-hrdle/hrdle   v0.3.0 リリース済み / issue 8件（cc-hub から移行）
-```
-
-`hrdle` が 5924 で default herdr セッション（＝全ワークスペース）を持つ。
-**cchub は畳んでいない** — 独自 herdr セッションに移して 5923 で生かしてある。
-
-### いま動いている構成
+## The migration is done
 
 ```
-herdr.service        active / enabled     default セッション  ← hrdle が使う
-herdr-cchub.service  active / enabled     cchub セッション    ← cchub が使う
-herdr-hrdle.service  inactive / disabled  並走期の名残。役目を終えた
-
-hrdle.service   active / enabled   :5924  default セッション  11 workspaces
-cchub.service   active / enabled   :5923  cchub セッション     0 workspaces（空）
+m0a/cc-hub    archived / frozen at v0.2.98 / 0 open issues / 0 open PRs
+hrdle/hrdle   v0.3.0 released / 8 issues (carried over from cc-hub)
 ```
 
-**役割が入れ替わっただけで、並走は続いている。**移行前は cchub が default で hrdle が
-named session、いまはその逆。どちらも `EnvironmentFile` の `HERDR_SESSION` 一行で決まる:
+`hrdle` holds the default herdr session (that is, every workspace) on 5924.
+**cchub was not shut down** — it was moved to its own herdr session and is alive
+on 5923.
 
-| | env | 意味 |
+### What is running
+
+```
+herdr.service        active / enabled     default session  <- used by hrdle
+herdr-cchub.service  active / enabled     cchub session    <- used by cchub
+herdr-hrdle.service  inactive / disabled  a leftover of running both; its job is done
+
+hrdle.service   active / enabled   :5924  default session  11 workspaces
+cchub.service   active / enabled   :5923  cchub session    0 workspaces (empty)
+```
+
+**The roles swapped; they still run side by side.** Before the migration cchub
+held the default session and hrdle a named one; now it is the other way around.
+Each is decided by one `HERDR_SESSION` line in its `EnvironmentFile`:
+
+| | env | meaning |
 |---|---|---|
-| `~/.config/hrdle/env` | （無し） | default セッションを掴む |
-| `~/.config/cchub/env` | `HERDR_SESSION=cchub` | 自分専用セッション |
+| `~/.config/hrdle/env` | (absent) | takes the default session |
+| `~/.config/cchub/env` | `HERDR_SESSION=cchub` | its own session |
 
-cchub 側は**空のセッションから始まる**。既存の11ワークスペースは hrdle が持っているので、
-cchub からは見えない。新しく作れば普通に使える。
+The cchub side **starts from an empty session**. The 11 existing workspaces
+belong to hrdle, so cchub cannot see them. Creating new ones works normally.
 
-### 継続手段は2段階ある
+### There are two ways to carry on
 
-**1. そのまま cchub で作業する** — 5923 は生きているので、新しいワークスペースを
-作って作業できる。hrdle に何かあっても**止める必要すらない**。
+**1. Just work in cchub** — 5923 is alive, so new workspaces can be created and
+used there. If something happens to hrdle, it does not even have to be stopped.
 
-**2. 11ワークスペースごと引き継ぐ** — hrdle が使えなくなった場合:
+**2. Take the 11 workspaces over** — if hrdle becomes unusable:
 
 ```bash
 systemctl --user stop hrdle
-# ~/.config/cchub/env から HERDR_SESSION=cchub の行を消す
-systemctl --user restart cchub          # :5923 が default セッションを掴む
+# remove the HERDR_SESSION=cchub line from ~/.config/cchub/env
+systemctl --user restart cchub          # :5923 takes the default session
 ```
 
-**先に hrdle を止めること。**両方が default を見ると同じペインを奪い合う（#520）。
+**Stop hrdle first.** With both looking at the default session they fight over
+the same panes (#520).
 
-生命線:
+The lifelines:
 
-- `~/bin/cchub`（v0.2.98）と `~/bin/cchub-v0.2.98-frozen`
-  — 後者は `cchub-update.timer` の射程外に置いた凍結コピー
-- `~/.cc-hub` — 中身は健在（`herdr-last-known-sessions.json` だけ、default 時代の
-  lost 19件が並ぶので空にした。バックアップは `.bak-preswap`）
-- `cchub.service` / `herdr-cchub.service` — どちらも enabled、再起動後も自動で上がる
+- `~/bin/cchub` (v0.2.98) and `~/bin/cchub-v0.2.98-frozen` — the latter is a
+  frozen copy placed out of reach of `cchub-update.timer`
+- `~/.cc-hub` — intact (it holds only `herdr-last-known-sessions.json`, which
+  listed 19 lost sessions from the default-session era, so it was emptied; the
+  backup is `.bak-preswap`)
+- `cchub.service` / `herdr-cchub.service` — both enabled, and both come back
+  after a reboot
 
-cc-hub はアーカイブされても**読み取りは変わらない**ので、リリース資産と `install.sh` は
-残り、`cchub update` は v0.2.98 まで解決し続ける（実測確認済み）。
+Archiving cc-hub **does not change reads**, so the release assets and
+`install.sh` remain and `cchub update` keeps resolving up to v0.2.98 (measured).
 
-### 残置物 — 消していいものと、消してはいけないもの
+### Leftovers — what may be deleted and what may not
 
-**恒久的に残す（rollback の生命線）:**
+**Kept permanently (the rollback lifeline):**
 
 | | |
 |---|---|
-| `~/bin/cchub` / `~/bin/cchub-v0.2.98-frozen` | 後者は `cchub-update.timer` の射程外に置いた凍結コピー |
-| `~/.cc-hub` | メタデータ・`peers.json`・`jwt-secret` |
-| `cchub.service` / `herdr-cchub.service` | どちらも enabled。**uninstall しない** |
+| `~/bin/cchub` / `~/bin/cchub-v0.2.98-frozen` | the latter is a frozen copy out of reach of `cchub-update.timer` |
+| `~/.cc-hub` | metadata, `peers.json`, `jwt-secret` |
+| `cchub.service` / `herdr-cchub.service` | both enabled. **Do not uninstall them** |
 
-**期限付き（2026-08-29 目安で見直し）:**
+**Time-limited (review around 2026-08-29):**
 
-- `~/cchub-work-1` / `-2` / `-3` — cc-hub 時代の作業用 clone（各 99MB 超、計約 300MB）。
-  herdr ワークスペースは 2026-07-29 に削除済みで、**ディレクトリだけが残っている**。
-  削除時点で未コミット 0 件・未 push 0 件を確認しており、中身は hrdle 側へ移送済み
-  （#664 は cherry-pick、#496 も同様）。origin は archived な `m0a/cc-hub` なので、
-  **ここから新しく push することはもうできない**。
-  移行直後の保険として1ヶ月置き、hrdle が問題なく回っていれば消してよい
+- `~/cchub-work-1` / `-2` / `-3` — the working clones from the cc-hub era (over
+  99MB each, about 300MB in total). Their herdr workspaces were deleted on
+  2026-07-29, and **only the directories remain**. Zero uncommitted and zero
+  unpushed were confirmed at deletion time, and the contents were moved to the
+  hrdle side (#664 by cherry-pick, and #496 the same way). Their origin is the
+  archived `m0a/cc-hub`, so **nothing new can be pushed from them**. Kept for a
+  month as insurance right after the migration; once hrdle has run without
+  trouble they can go
 
-hrdle 側の作業ディレクトリは `~/repos/hrdle-work-1..3`（`git worktree`、各 6.9MB + node_modules）。
-cchub 時代は独立 clone だったが、worktree なら `.git` を共有できるので置き換えた。
-**新しい worktree を足したら `bun install` を忘れないこと**（後述の落とし穴）。
+The hrdle working directories are `~/repos/hrdle-work-1..3` (`git worktree`,
+6.9MB each plus node_modules). The cchub era used independent clones; worktrees
+share one `.git`, so they replaced them. **Remember `bun install` after adding a
+worktree** (see the pitfalls below).
 
-### 配布経路は通しで検証済み
+### The distribution path is verified end to end
 
 ```
-タグ push → release.yml → GitHub Release → install.sh → hrdle update
+tag push -> release.yml -> GitHub Release -> install.sh -> hrdle update
 ```
 
-v0.3.0 で全部通した。`hrdle update` は Release から取得 → SHA256 検証 → バイナリ差し替え
-→ **systemd サービス自動再起動**まで動き、11 workspaces も無事だった（v0.2.97 → v0.3.0）。
-`install.sh` のワンライナーも `HRDLE_INSTALL_DIR` を temp に向けて実走確認済み。
+All of it ran for v0.3.0. `hrdle update` fetches from the release, verifies the
+SHA256, swaps the binary and **restarts the systemd service**, with the 11
+workspaces surviving (v0.2.97 -> v0.3.0). The `install.sh` one-liner was also run
+for real with `HRDLE_INSTALL_DIR` pointed at a temp directory.
 
-### 上流の準備工事（すべてリリース済み）
+### Groundwork upstream (all released)
 
-| リリース | PR | 内容 |
+| Release | PR | What |
 |---|---|---|
-| v0.2.84 | #635 | identity 一元化（インストーラ・サービス系） |
-| v0.2.85 | #637 | identity 一元化（実行時パス） |
-| v0.2.92 | #653 | localStorage キーの名前空間化 + legacy fallback |
-| v0.2.93 | #655 | herdr named session 対応（`HERDR_SESSION`） |
-| v0.2.94 | #658 | メッセージカタログの identity 経由化 |
-| v0.2.97 | #668 | 改名で壊れる3つの穴（build.sh / テストの dataDirEnv / operational scan） |
-| v0.2.98 | #672 | ポートと表示名の identity 経由化（**cc-hub 最終リリース**） |
+| v0.2.84 | #635 | identity consolidation (installer and service names) |
+| v0.2.85 | #637 | identity consolidation (runtime paths) |
+| v0.2.92 | #653 | namespacing the localStorage keys plus a legacy fallback |
+| v0.2.93 | #655 | herdr named session support (`HERDR_SESSION`) |
+| v0.2.94 | #658 | routing the message catalogs through identity |
+| v0.2.97 | #668 | three gaps a rename walks into (build.sh, dataDirEnv in tests, the operational scan) |
+| v0.2.98 | #672 | routing ports and display names through identity (**cc-hub's last release**) |
 
-### identity.json の値
+### The values in identity.json
 
-`identity.json` は以下の値になっている。`shared/identity.ts` がここから `SERVICE`（unit 名・
-launchd ラベル）、`TMP_PATHS`、`assetName()`、`HOOK_COMMAND` を合成する。**呼び出し側は無変更**。
+`identity.json` holds the values below. `shared/identity.ts` composes `SERVICE`
+(unit names, launchd labels), `TMP_PATHS`, `assetName()` and `HOOK_COMMAND` from
+them. **No call site changed.**
 
 ```json
 {
@@ -133,30 +144,33 @@ launchd ラベル）、`TMP_PATHS`、`assetName()`、`HOOK_COMMAND` を合成す
 }
 ```
 
-検証済み: 全テスト green（backend 535 / frontend 90 / glasses 120）、lint / typecheck green、
-`bun run build:binary` → `dist/hrdle`、`--help` が `hrdle` を名乗り default port 5924。
+Verified: every test green (backend 535 / frontend 90 / glasses 120), lint and
+typecheck green, `bun run build:binary` produced `dist/hrdle`, and `--help` calls
+itself `hrdle` with default port 5924.
 
-**注意: `bun install` を先に走らせること。** 依存が無いと `hono` の解決に失敗して backend の
-テストが大量に落ち、改名由来の失敗と見分けがつかなくなる。
+**Note: run `bun install` first.** Without dependencies, `hono` fails to resolve
+and a pile of backend tests fail in a way indistinguishable from rename damage.
 
-### `identity.json` を読めない箇所 — 2つではなく3つ
+### Places that cannot read `identity.json` — three, not two
 
-- `install.sh` — `curl | bash` で走るのでチェックアウトが存在しない
-- `.github/workflows/release.yml` — matrix はどのステップより先に評価される
-- `scripts/build.sh` — **読める位置にあるのに `dist/cchub` を自前で持っていた**。
-  release.yml 側は `mv dist/<binaryName>` を期待しているので、ズレると**CI ビルドだけが壊れる**。
-  テストは release.yml の文字列しか見ておらず、この2つの一致は誰も検査していなかった。
-  現在は `bun -e` で identity.json を読む形にしてあるので、コピーは2つに戻っている
+- `install.sh` — runs through `curl | bash`, so there is no checkout
+- `.github/workflows/release.yml` — the matrix is evaluated before any step
+- `scripts/build.sh` — **it was positioned to read the file and carried its own
+  `dist/cchub` instead**. release.yml expects `mv dist/<binaryName>`, so a drift
+  **breaks the CI build alone**. The test only looked at release.yml's string,
+  and nothing checked those two against each other. It reads identity.json
+  through `bun -e` now, which puts the number of copies back at two
 
-前2つは `backend/tests/unit/identity-consistency.test.ts` がズレを検出する。
+The first two are checked for drift by
+`backend/tests/unit/identity-consistency.test.ts`.
 
-## 実測で分かっている落とし穴
+## Pitfalls found by measurement
 
-### `dataDirEnv` の改名はテストを実データディレクトリに向ける（最重要）
+### Renaming `dataDirEnv` points the tests at the real data directory (the big one)
 
-4つのテストが `process.env.CC_HUB_DATA_DIR = tempDir` で書き込み先を一時ディレクトリに
-逃がしている。env 名を変えると、この行は**何も設定しない行**になり、テストは実データ
-ディレクトリに書く。
+Four tests escape their writes to a temp directory with
+`process.env.CC_HUB_DATA_DIR = tempDir`. Rename the env var and that line becomes
+**a line that sets nothing**, and the tests write into the real data directory.
 
 ```
 backend/tests/unit/sessions.test.ts
@@ -165,28 +179,32 @@ backend/src/services/__tests__/peer-registry-lock.test.ts
 backend/src/services/__tests__/session-metadata-lock.test.ts
 ```
 
-実際に `~/.hrdle` が作られ、偽セッション20件とテスト用メタデータ（`ses-a` / `ses-b` …）が
-残った。**失敗ではなく汚染として出る**ので、テストが赤くなければ気づけない。
-現在は4ファイルとも `IDENTITY.dataDirEnv` 経由。**同じ形の env 参照を新しく書かないこと。**
+`~/.hrdle` really was created, holding 20 fake sessions and test metadata
+(`ses-a`, `ses-b`, ...). **It shows up as contamination rather than failure**, so
+a green suite hides it. All four go through `IDENTITY.dataDirEnv` now. **Do not
+write a new env reference in that shape.**
 
-### `identity-operational.test.ts` は改名しても落ちない
+### `identity-operational.test.ts` does not fail on a rename
 
-v0.2.94 で入ったこのスキャンは `cchub.service` / `com.cchub` / `/tmp/cc-hub` /
-`.cc-hub` / `CC_HUB_DATA_DIR` を探す。改名後も **pass し続けるが、存在しない名前を
-探しているだけ**になる。現在はパターンを `IDENTITY` から合成しているので、次の改名でも
-追従する。
+The scan added in v0.2.94 looks for `cchub.service`, `com.cchub`, `/tmp/cc-hub`,
+`.cc-hub` and `CC_HUB_DATA_DIR`. After a rename it **keeps passing while looking
+for names that no longer exist**. The patterns are composed from `IDENTITY` now,
+so the next rename carries them along.
 
-### 改名で落ちるテストは「2ファイル」では済まない
+### A rename breaks more than "two files" of tests
 
-`identity.json` を書き換えると backend で21件落ちた。内訳と対処方針:
+Rewriting `identity.json` failed 21 backend tests. What they were and how to
+handle them:
 
-- **golden text**（`setup-units.test.ts` の systemd unit / launchd plist、
-  `identity-consistency.test.ts` の scratch パスと keychain）→ **リテラルのまま手で更新する**。
-  identity から合成し直した golden はどんな出力とも一致するので、golden の意味が消える
-- **ロジックのテストがたまたま名前を使っているもの**（hook 検出、codex hook 移行、
-  notifyCommandFor、herdr-agent-indicator）→ `HOOK_COMMAND` / `IDENTITY` 経由にする
+- **Golden text** (the systemd unit and launchd plist in `setup-units.test.ts`,
+  the scratch paths and keychain in `identity-consistency.test.ts`) -> **update
+  the literals by hand**. A golden recomposed from identity matches any output,
+  which destroys the point of a golden
+- **Logic tests that happen to use a name** (hook detection, the codex hook
+  migration, notifyCommandFor, herdr-agent-indicator) -> route them through
+  `HOOK_COMMAND` / `IDENTITY`
 
-### herdr は全ペインに `HERDR_SOCKET_PATH` を注入する
+### herdr injects `HERDR_SOCKET_PATH` into every pane
 
 ```
 $ env | grep HERDR
@@ -197,243 +215,277 @@ HERDR_TAB_ID=w4Q:t1
 HERDR_WORKSPACE_ID=w4Q
 ```
 
-つまりこの変数は**環境由来であって意図的な指定ではない**。
-だから `HERDR_SESSION` のほうが優先する実装になっている（#655）。
-これを逆にすると、「別インスタンスのターミナルから起動して試す」という
-一番自然な検証手順でセッション指定が無視され、しかも動いているように見える。
+So that variable **comes from the environment rather than from intent**, which is
+why `HERDR_SESSION` takes priority over it (#655). Inverting that makes the most
+natural way to test - starting it from a terminal inside another instance -
+ignore the session, while appearing to work.
 
-### エージェントの中から検証サーバーを起動すると transcript が保存されない
+### Starting a test server from inside an agent stops transcripts being saved
 
-上の `HERDR_SOCKET_PATH` と同族で、**こちらのほうが静か**。
+A relative of the `HERDR_SOCKET_PATH` problem above, and **quieter**.
 
-Claude Code は子プロセスに `CLAUDE_CODE_CHILD_SESSION=1` を立てる。この環境から
-検証用サーバーを起動すると、そのマーカーが伝播する:
+Claude Code sets `CLAUDE_CODE_CHILD_SESSION=1` on its children. Starting a test
+server from that environment propagates the marker:
 
 ```
-私 (Claude Code)  CLAUDE_CODE_CHILD_SESSION=1
-      ↓ ここから手動で hrdle を起動
-hrdle → herdr(hrdle) → pane → claude
-                                 └ 「子セッション」判定 → transcript 保存 OFF
+me (Claude Code)  CLAUDE_CODE_CHILD_SESSION=1
+      | starting hrdle by hand from here
+hrdle -> herdr(hrdle) -> pane -> claude
+                                  \- judged a "child session" -> transcript saving OFF
 ```
 
-ペインには `⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker`
-と出るが、**ターミナルを覗かない限り気づかない**。会話は普通に動くので、
-壊れていることが分かるのは**再起動して復元が走ったとき**:
+The pane says
+`Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker`, but
+**nobody sees it without looking at the terminal**. The conversation works
+normally, so the breakage only surfaces **when a restart tries to restore it**:
 
 ```
 claude --resume 25c60a6b-...
 No conversation found with session ID: 25c60a6b-...
 ```
 
-`resume_agents_on_restore` が正しく resume を試みても、**復元すべきログが最初から
-存在しない**。2026-07-29 の再起動でこれを踏んだ。
+`resume_agents_on_restore` does its job, and **the log it should restore never
+existed**. The restart on 2026-07-29 hit exactly this.
 
-systemd から起動すれば環境はクリーンなので起きない（実測: unit 経由で起動した
-hrdle の MainPID の environ には `HERDR_SESSION` しかなく、そこで作ったセッションは
-`~/.claude/projects/<cwd>/<id>.jsonl` を 31KB 書いた）。**検証もサービス経由でやること。**
+Started from systemd the environment is clean, so it does not happen (measured:
+the MainPID environ of an hrdle started through the unit held only
+`HERDR_SESSION`, and a session created there wrote 31KB to
+`~/.claude/projects/<cwd>/<id>.jsonl`). **Test through the service too.**
 
-### `HERDR_SOCKET_PATH` だけではセッションは分離できない
+### `HERDR_SOCKET_PATH` alone does not separate sessions
 
 ```
 $ HERDR_SOCKET_PATH=.../sessions/x/herdr.sock herdr server
-api socket: .../sessions/x/herdr.sock   ← 分離される
-logs:       ~/.config/herdr/herdr-server.log  ← default のまま
+api socket: .../sessions/x/herdr.sock   <- separated
+logs:       ~/.config/herdr/herdr-server.log  <- still the default
 ```
 
-ソケットは動くがセッションディレクトリは動かない。そこに `session.json`
-（ワークスペース復元情報）があるので、2つ起動すると互いの状態を潰す。
-**必ず `herdr --session <name> server` で起動すること。**
+The socket moves; the session directory does not. `session.json` (the workspace
+restore data) lives there, so two servers destroy each other's state. **Always
+start with `herdr --session <name> server`.**
 
-### `herdr session attach` は herdr ペイン内から実行できない
+### `herdr session attach` cannot run inside a herdr pane
 
-nested herdr 判定で弾かれる。installer が必要なのは attach ではなくサーバー起動なので実害は無い。
+The nested-herdr check rejects it. The installer needs the server started rather
+than attached, so this causes no harm.
 
-### 名前について（未解決の懸念）
+### About the name (an unresolved concern)
 
-`herdr` と `hrdle` は5文字で1回の転置違い。CLI・ログ・docs で並ぶと打ち間違える。
-またこのリポジトリは tmux → herdr を一度やっているので、バックエンド由来の命名は
-「また名前が実態と合わなくなる」実績がある。
-汎用性を上げるための改名で依存先の名前に寄せるのは方向が逆かもしれない、と一度提起したが、
-**ユーザーは Hrdle で進める判断を明示している**。蒸し返さないこと。
+`herdr` and `hrdle` are five characters apart by one transposition. Side by side
+in a CLI, a log or the docs, they get mistyped. This repository has also already
+migrated from tmux to herdr, so naming after the backend has a track record of
+**the name stopping matching reality**. It was raised once that naming a rename
+for generality after a dependency may point the wrong way, but **the user has
+explicitly decided to go with Hrdle**. Do not reopen it.
 
-## 移行の各段階（すべて完了）
+## The stages of the migration (all complete)
 
-### 1〜2. 上流への還元（完了 — v0.2.97 #668 / v0.2.98 #672）
+### 1-2. Contributing back upstream (done — v0.2.97 #668 / v0.2.98 #672)
 
-改名の過程で見つかった「identity を通っていない値」は、**cchub 名のまま上流に戻してから**
-取り込んだ。fork に置いたままだと同期のたびに衝突するし、どれも改名と無関係に
-cc-hub 側のバグだったため。
+Every "value that does not go through identity" found during the rename was
+**contributed upstream under the cchub name first** and then taken here. Leaving
+them in the fork means a conflict on every sync, and each one was a cc-hub bug
+independent of the rename.
 
-結果として **fork と upstream のコード差分はゼロ**になり、違いは `identity.json` の値と
-アイコンとこの文書だけになった。フリーズが「remote を見るのをやめる」だけの操作で済んだ。
+The result is **zero code difference between the fork and upstream**: only the
+values in `identity.json`, the icon and this document differ. Freezing therefore
+came down to "stop looking at the remote".
 
-還元したもの: `build.sh` の自前コピー / テストの `dataDirEnv` リテラル /
-operational scan の自己無効化 / `cli.ts` と `glasses.ts` のポート /
-`index.html` の FOUC スクリプト / 表示文字列 / `frontendDevPort` /
-`identity.json` の Node import 対応。
+What went back: build.sh's own copy, the `dataDirEnv` literals in tests, the
+operational scan disabling itself, the ports in `cli.ts` and `glasses.ts`, the
+FOUC script in `index.html`, the display strings, `frontendDevPort`, and making
+`identity.json` importable from Node.
 
-**上流で1件差し戻された。**`backend/package.json` から `-p 3456` を外したのは誤りで、
-`isDev = process.argv.some(a => a.includes('--watch'))` が**常に false**（bun は
-`--watch` を子プロセスの argv に渡さない）。明示ポートという唯一の防波堤を外したことで、
-**死んでいたコードが初めて実行経路になり dev が本番ポートを掴む**状態になっていた。
-上流が `scripts/dev-backend.sh` + 判定削除で修正（4c9864a）。
-教訓は「分岐の中身だけ見て分岐自体を検証しなかった」こと。
+**One thing was sent back.** Removing `-p 3456` from `backend/package.json` was
+wrong: `isDev = process.argv.some(a => a.includes('--watch'))` is **always
+false** (bun does not pass `--watch` into a child's argv). Removing the explicit
+port - the only breakwater - **turned dead code into a live path and let dev grab
+the production port**. Upstream fixed it with `scripts/dev-backend.sh` and by
+deleting the check (4c9864a). The lesson is that the branch's body was reviewed
+and the branch itself was not.
 
-### 3. 並走の実地検証（完了）
+### 3. Running both for real (done)
 
 ```bash
-# hrdle 側
-HERDR_SESSION=hrdle  # 別 herdr セッション（別サーバー・別ワークスペース・別 session.json）
-port 5924            # dev は 3457 / 5174（cchub の 3456 / 5173 から1つずらし）
-~/.hrdle             # 別データディレクトリ
+# the hrdle side
+HERDR_SESSION=hrdle  # a separate herdr session (own server, own workspaces, own session.json)
+port 5924            # dev on 3457 / 5174 (one along from cchub's 3456 / 5173)
+~/.hrdle             # a separate data directory
 ```
 
-**ポート番号を identity に通していない箇所が複数あった。**改名で最も静かに壊れる種類のもの:
+**Several ports did not go through identity.** This is the kind of thing a rename
+breaks most quietly:
 
-- `backend/src/cli.ts` の `DEFAULT_PORT = isDev ? 3456 : 5923` — `--help` は identity から
-  5924 と表示する一方、実際には **5923 を bind しに行く**。つまり改名ビルドが cchub の
-  ポートを奪いに行き、両方入っているマシンでは EADDRINUSE で落ちる。
-  `-p` を明示している限り顕在化しないので、検証中ずっと気づかなかった
-- `backend/src/commands/glasses.ts` の `PRODUCTION_PORT = 5923` / `DEV_PORT = 3456` —
-  `hrdle glasses` のメモが cchub へ飛ぶ
-- `frontend/playwright.config.ts` の `webServer.url` — vite の port と食い違うとテストは
-  失敗せず、120秒待って「サーバーが起動しなかった」と報告する
+- `DEFAULT_PORT = isDev ? 3456 : 5923` in `backend/src/cli.ts` — `--help` printed
+  5924 from identity while it actually **bound 5923**. A renamed build would go
+  after cchub's port, and on a machine with both it dies with EADDRINUSE. It
+  never surfaced during testing because `-p` was always explicit
+- `PRODUCTION_PORT = 5923` / `DEV_PORT = 3456` in
+  `backend/src/commands/glasses.ts` — a `hrdle glasses` note flies to cchub
+- `webServer.url` in `frontend/playwright.config.ts` — when it disagrees with
+  vite's port the tests do not fail; they wait 120 seconds and report that the
+  server did not start
 
-`identity-operational` のスキャンは**ポート番号を見ていない**（数字なので誤検知しやすい）。
-この層は今のところ人力で探すしかない。
+The `identity-operational` scan **does not look at port numbers** (they are
+digits, so false positives are easy). For now that layer is found by hand.
 
-**先に `rm -rf ~/.hrdle`**（上記の汚染で偽セッション20件が入っている場合）。
+**`rm -rf ~/.hrdle` first** (if the contamination above left 20 fake sessions).
 
-**検証すること**（ここまで机上で詰めたが、実地では未確認）:
+**To verify** (worked out on paper, unconfirmed in the field):
 
-- 2つのサービスが同時に常駐して干渉しないか
-- hook がどちらに飛ぶか（`~/.claude/settings.json` の `cchub notify` をどう扱うか）
-- 両方の UI を同時に開いて #520（takeover 合戦）が起きないこと
-  — herdr セッションが分かれているので理論上は起きないはず
-- peer discovery が 5923/5924 をどう見るか
+- Whether two services resident at once interfere
+- Which one hooks reach (what to do about `cchub notify` in
+  `~/.claude/settings.json`)
+- That opening both UIs at once does not produce #520 (the takeover fight) — with
+  the herdr sessions separated it should not, in theory
+- How peer discovery sees 5923/5924
 
-### 3.5 再起動検証（supervised 構成の答え合わせ）
+### 3.5 Restart verification (checking the supervised setup)
 
-2026-07-29 に systemd 構成を組み直した。**再起動しないと確かめられない部分が残っている。**
+The systemd arrangement was rebuilt on 2026-07-29. **Parts of it can only be
+confirmed by rebooting.**
 
-組んだもの:
+What was built:
 
 ```
-herdr.service         inactive/enabled   default セッション（cchub 用）
-herdr-hrdle.service   inactive/enabled   hrdle セッション（新規作成）
+herdr.service         inactive/enabled   default session (for cchub)
+herdr-hrdle.service   inactive/enabled   hrdle session (new)
 cchub.service         Wants/After=herdr.service
-hrdle.service         Wants/After=herdr-hrdle.service, EnvironmentFile に HERDR_SESSION=hrdle
+hrdle.service         Wants/After=herdr-hrdle.service, HERDR_SESSION=hrdle in its EnvironmentFile
 ```
 
-依存を足したのは、**cchub が herdr より先に起動すると herdr を systemd の外に spawn し、
-`herdr.service` が「already running」で無限に失敗する**ため。実際 7/26 から 3 日間、
-2 秒ごとに 114,629 回失敗し続けていた（`systemctl --user stop herdr` で停止済み・
-**disable はしていない**。次回起動で systemd に先を取らせるため）。
+The dependencies exist because **cchub starting before herdr spawns herdr outside
+systemd, and `herdr.service` then fails forever with "already running"**. It did
+exactly that for three days from 7/26, failing 114,629 times at two-second
+intervals (stopped with `systemctl --user stop herdr`; **not disabled**, so
+systemd gets there first next boot).
 
-#### 再起動前スナップショット（2026-07-29 20:28）
+#### Snapshot before the reboot (2026-07-29 20:28)
 
 ```
-port 5923 (cchub): 19 sessions (working 1 / lost 8)
+port 5923 (cchub): 19 sessions (1 working / 8 lost)
 port 5924 (hrdle):  2 sessions (Welcome, parallel-check)
-default のワークスペース: hrdle, cchub-work-3, cchub-work-1, cchub-work-2, wheel-leg-bot,
-                          life, linux, pixel-customrom, repos, lifestyle-app-work-1, 汎用質問
+workspaces in the default session: hrdle, cchub-work-3, cchub-work-1, cchub-work-2,
+                                   wheel-leg-bot, life, linux, pixel-customrom, repos,
+                                   lifestyle-app-work-1, general questions
 ```
 
-#### 再起動後に確認すること
+#### What to check after the reboot
 
 ```bash
-# 1. herdr が systemd 管理下で上がったか（両方 active なら成功）
+# 1. did herdr come up under systemd (both active means yes)
 systemctl --user is-active herdr herdr-hrdle cchub hrdle
 
-# 2. ループが再発していないか（No entries なら成功）
+# 2. has the loop returned (No entries means no)
 journalctl --user -u herdr --since '2 minutes ago' | tail -5
 
-# 3. セッションが復元されたか
-curl -sk https://localhost:5923/api/sessions | jq '.sessions | length'   # 19 期待
-curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'   # 下記参照
+# 3. were the sessions restored
+curl -sk https://localhost:5923/api/sessions | jq '.sessions | length'   # expect 19
+curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'   # see below
 ```
 
-**hrdle セッションは復元されない可能性が高い。**`~/.config/herdr/sessions/hrdle/` に
-`session.json` が無い（default 側にはある）。named session が復元情報を書かないのか、
-書くタイミングが来ていないだけなのかは未確認。**再起動がその答え合わせになる。**
-復元されなくても hrdle 側は検証用の 2 セッションだけなので実害はないが、
-**切替後は hrdle が全ワークスペースを持つので、ここが復元されないなら切替を止める理由になる。**
+**The hrdle session probably will not be restored.** There is no `session.json`
+in `~/.config/herdr/sessions/hrdle/` (the default session has one). Whether a
+named session never writes the restore data, or simply had no reason to yet, is
+unconfirmed. **The reboot answers that.** Losing it costs nothing here (the hrdle
+side holds only two test sessions), but **after the switch hrdle owns every
+workspace, so a failure to restore would be a reason not to switch.**
 
-失敗時の復旧: `systemctl --user start herdr` で default セッションは `session.json` から復元される。
+Recovery if it fails: `systemctl --user start herdr` restores the default session
+from `session.json`.
 
-### 3.9 「動かして初めて見つかる」層は最後まで出続けた
+### 3.9 The "only found by running it" layer kept coming
 
-改名の穴は**テストでも CI でも見つからず、実際に起動して目で見るまで分からない**ものが
-最後まで出続けた。時系列で:
+The rename's gaps **were found by neither the tests nor CI; they needed the thing
+started and looked at**, right to the end. In order:
 
-| 見つけ方 | 見つかったもの |
+| How it was found | What it was |
 |---|---|
-| サーバーを起動した | 起動バナーが `🚀 CC Hub` |
-| 会話画面を開いた | 画像が生パス表示（正規表現が `/tmp/cchub-images` 固定） |
-| 引数なしで起動した | `--help` と違うポートを bind（`cli.ts` の `isDev` ベタ書き） |
-| 再起動した | `claude --resume` が `No conversation found` |
-| **`update --check` を叩いた** | **「更新するには: cchub update」** |
+| Started the server | The startup banner said `CC Hub` |
+| Opened a conversation | Images rendered as raw paths (the regex hardcoded `/tmp/cchub-images`) |
+| Started it with no arguments | It bound a different port than `--help` printed (`isDev` written out in `cli.ts`) |
+| Rebooted | `claude --resume` answered `No conversation found` |
+| **Ran `update --check`** | **"To update: cchub update"** |
 
-最後のものは v0.3.0 リリース後、アップデータの実走検証で出た。案内どおり打つと
-`command not found` になる。**更新を促すメッセージという、改名で最も目立つ場所**だった。
+The last one turned up after the v0.3.0 release, during a real run of the
+updater. Typing what it says gives `command not found` — in **the message that
+prompts an update, the most visible place a rename can be wrong**.
 
-共通するのは「値が間違っていても例外にならず、テストは緑のまま」という点。
-`identity-operational.test.ts` のスキャンはこの層を狙ったものだが、
-**ポート番号（数字なので誤検知しやすい）と表示文字列は今も対象外**。
+What they share is that a wrong value throws nothing and the tests stay green.
+The scan in `identity-operational.test.ts` targets this layer, but **port numbers
+(digits, so false positives are easy) and display strings are still outside it**.
 
-### 4. 切替（promote — 完了 2026-07-29 21:44）
+### 4. The switch (promote — done 2026-07-29 21:44)
 
-`~/.config/hrdle/env` から `HERDR_SESSION=hrdle` を消し、`hrdle.service` の依存を
-`herdr-hrdle.service` → `herdr.service` に付け替えて再起動。cchub を先に停止してから
-切り替える（逆順だと同じワークスペースを両者が掴んで #520 になる）。
+`HERDR_SESSION=hrdle` was removed from `~/.config/hrdle/env`, `hrdle.service`'s
+dependency moved from `herdr-hrdle.service` to `herdr.service`, and both
+restarted. cchub is stopped before switching (the other order has both holding
+the same workspaces, which is #520).
 
-引き継ぎ結果は**実ワークスペース11件が完全一致**。`lost` が 19→0 になったのは
-正しい挙動で、19 のうち 8 は cchub 側 `~/.cc-hub` のキャッシュに残っていた lost。
-hrdle は `~/.hrdle` を見るので過去の lost を持ち込まない。**実体は1件も欠けていない。**
+The handover came out as **an exact match on all 11 real workspaces**. `lost`
+going 19 -> 0 is correct: 8 of the 19 were lost entries cached in cchub's
+`~/.cc-hub`, and hrdle reads `~/.hrdle`, so it does not carry old lost sessions
+in. **Nothing real was missing.**
 
-port は 5924 のまま据え置いた。5923 を空けておけば cchub を enable するだけで戻せる。
-この判断により `peer-discovery.ts` の `DEFAULT_PORT = 5923` は「移行期の小問題」ではなく
-**恒久的な問題**になった（他マシンの hrdle を永久に発見できない）。
+The port stayed 5924. Leaving 5923 free means enabling cchub is all it takes to
+go back. That decision turns `DEFAULT_PORT = 5923` in `peer-discovery.ts` from "a
+small migration-period issue" into **a permanent one** (another machine's hrdle
+can never be discovered).
 
-### 5. リポジトリ（完了）
+### 5. The repository (done)
 
-- `m0a/cc-hub` は **archived**（v0.2.98 で凍結、open issue / PR とも 0）
-- **`m0a/hrdle` はまだ空いている。** rename の選択肢を残すため、この名前は取らないこと
-- **`gh issue transfer` は使えなかった** — GitHub の transfer は**同一 owner 内でのみ**動く。
-  `m0a`（個人）→ `hrdle`（organization）は不可で `New repository must have the same owner`
-  になる。issue 8件は**コピーで移行**し（hrdle#3〜#10）、cc-hub 側は移行先リンク付きで close した。
-  **コメント履歴は引き継げない**が、cc-hub は読めるまま残るので元 URL から辿れる
-- open PR 2件（#664 音声認識の語彙プロンプト / #496 ペイン indicator の偽バッジ）は
-  **cherry-pick して hrdle#2 でマージ**。フリーズ済みの上流でマージせず fork に移した
-- 更新経路は分離済み: cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から
+- `m0a/cc-hub` is **archived** (frozen at v0.2.98, zero open issues and PRs)
+- **`m0a/hrdle` is still unclaimed.** Do not take that name; it keeps the rename
+  option open
+- **`gh issue transfer` could not be used** — GitHub's transfer works **only
+  within one owner**. `m0a` (a person) to `hrdle` (an organization) is refused
+  with `New repository must have the same owner`. The 8 issues were **migrated by
+  copying** (hrdle#3-#10) and the cc-hub ones closed with a link to their new
+  home. **Comment history does not carry over**, but cc-hub stays readable, so
+  the original URL still works
+- The 2 open PRs (#664, the vocabulary prompt for speech recognition, and #496,
+  the false pane indicator badge) were **cherry-picked and merged as hrdle#2**,
+  moved to the fork rather than merged into a frozen upstream
+- The update paths are separate: cchub from `m0a/cc-hub`, hrdle from
+  `hrdle/hrdle`
 
-## いま残っているもの
+## What is still open
 
-**どれも家業の継続には関わらない。**急ぐ理由はない。
+**None of it affects keeping the shop running.** There is no rush.
 
-- **hrdle#3〜#10** — cc-hub から移行した宿題8件
-- **probe ポートのリスト化** — `peer-discovery.ts`。「他人を叩きに行くポート」は
-  `IDENTITY.defaultPort`（＝うちのポート）ではなくプロトコル定数で、正しい形は
-  **probe ポートのリスト**、`defaultPort` はその1要素。上流レビューでの指摘
-- **置換漏れガード** — `transformIndexHtml` で `/%[A-Z_]+%/` が残ったら throw する。
-  残ると FOUC スクリプトが SyntaxError になる
-- **ポートのガード（スキャン）** — probe リストと同時に。注意: 素の `\b3456\b` は
-  `formatUsd(12.3456)` にマッチする（`.` が word boundary を作る）。`(?<![\d.])` か
-  `:PORT` の文脈で。スキャン対象に `frontend/tests` / `glasses/src` / `scripts` / 各 config を追加
-- **glasses の表示名** — `phone-ui.ts` / `verify.html` の `CC Hub` / `cchub` リテラル。
-  `__DEFAULT_PORT__` と同じ define 経路で通せる
-- **`legacyNames`** — 改名後に残った旧名リテラル（`cchub.service` など）は
-  存在しない unit を指す実バグなので拾う価値がある。`legacyStoragePrefixes` に倣った形で
-- **#664 の実機検証** — 音声認識の語彙プロンプトは**合成音声でしか検証されていない**。
-  実機マイクでの効き目は未確認のまま取り込んである
-- **`~/.cc-hub` のメタデータ移行** — テーマ・カスタムタイトルは `~/.hrdle` に
-  引き継いでいない（hrdle 側は初期状態）。必要なら手で `cp`。
-  **コードの fallback は作らない**（split-brain を生み、切替後は確実に死ぬコードになる）
+- **hrdle#3-#10** — the 8 items carried over from cc-hub
+- **A list of probe ports** — `peer-discovery.ts`. "The port we go knocking on"
+  is a protocol constant rather than `IDENTITY.defaultPort` (our own port), and
+  the right shape is **a list of probe ports** with `defaultPort` as one entry.
+  Raised in the upstream review
+- **A guard for missed substitutions** — have `transformIndexHtml` throw when
+  `/%[A-Z_]+%/` survives. Left in place, the FOUC script becomes a SyntaxError
+- **A port guard (a scan)** — together with the probe list. Careful: a bare
+  `\b3456\b` matches `formatUsd(12.3456)` (the `.` creates a word boundary). Use
+  `(?<![\d.])` or require a `:PORT` context. Add `frontend/tests`, `glasses/src`,
+  `scripts` and the config files to what is scanned
+- **`legacyNames`** — old-name literals surviving a rename (`cchub.service` and
+  the like) point at units that do not exist, which makes them real bugs worth
+  catching. Shaped after `legacyStoragePrefixes`
+- **Verifying #664 on the device** — the vocabulary prompt for speech recognition
+  **was only ever verified against synthetic speech**. Its effect on a real
+  microphone is still unknown
+- **Migrating the metadata in `~/.cc-hub`** — themes and custom titles were not
+  carried into `~/.hrdle` (the hrdle side starts fresh). `cp` them by hand if
+  needed. **Do not build a fallback in code** (it creates a split brain and
+  becomes code that is guaranteed to be dead after the switch)
 
-## 参照
+Done since this list was written: the glasses display names (`phone-ui.ts` and
+`verify.html` now come from the `define` path, v0.3.6), and the password
+environment variable that `setup` wrote but the server never read (v0.3.7).
 
-- 設計議論の本体: [m0a/cc-hub#459](https://github.com/m0a/cc-hub/issues/459)（完了 close 済み）
-  ただし**本文は古い**。方針が3回変わっていて、本文・コメント1・コメント2・コメント3が
-  互いに矛盾している。**現行の正はこの HANDOFF.md**。だから #459 は hrdle にコピーしなかった
-- 移行した issue: hrdle#3（wire プロトコル）/ #4（Web Push）/ #5（glasses × kimi）/
-  #6（takeover 合戦）/ #7〜#9（レイアウト統合・UI統一・タップ領域）/ #10（グラス連絡チャンネル）
+## References
+
+- The design discussion itself:
+  [m0a/cc-hub#459](https://github.com/m0a/cc-hub/issues/459) (closed as done).
+  **Its body is out of date** though: the approach changed three times, and the
+  body, comment 1, comment 2 and comment 3 contradict each other. **This
+  HANDOFF.md is the current truth**, which is why #459 was not copied to hrdle
+- The migrated issues: hrdle#3 (the wire protocol) / #4 (Web Push) / #5 (glasses
+  and kimi) / #6 (the takeover fight) / #7-#9 (layout consolidation, UI
+  unification, tap targets) / #10 (the glasses relay channel)

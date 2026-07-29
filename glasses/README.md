@@ -1,68 +1,80 @@
 # Hrdle Glasses
 
-EVEN Realities G2 スマートグラス用の Hrdle クライアントアプリ（EvenHub SDK 製、
-`com.hrdle.glasses`）。Hrdle サーバに接続し、セッション一覧・会話・選択肢への
-応答をグラスのディスプレイに表示する。スマホ側にはコンパニオン UI を出す。
+The Hrdle client for the EVEN Realities G2 smart glasses (built on the EvenHub
+SDK, `com.hrdle.glasses`). It connects to a Hrdle server and puts the session
+list, the conversation and the answer to a question on the glasses' display,
+with a companion UI on the phone.
 
-「Glasses」が付くのはリポジトリ内で本体と区別するときだけで、表に出る名前
-（`app.json` の `name`、画面上の表記、EVEN Hub のアプリ名）は本体と同じ `Hrdle`。
+"Glasses" is only here to tell this apart from the server inside the repository.
+Every name that faces outward — `name` in `app.json`, what the screen says, the
+app's name on EVEN Hub — is the same `Hrdle`.
 
-## 機能
+## What it does
 
-- セッション一覧（状態インジケータ付き）/ 会話ビュー / choice（AskUserQuestion への応答）の3モード
-- `/ws/mux` WebSocket で `sessions-updated` 購読 + ターミナル出力受信（ANSI・非ASCII は除去して表示）
-- REST（`/api/sessions`, `/api/dashboard`, 会話取得）でデータ補完
-- 接続先 URL は localStorage（`hrdle-url`）に保存。キーの綴りは `identity.json` の
-  `storagePrefix` から組み立て、旧プレフィックスは読むときだけ見る（`src/storage.ts`）
+- Three modes: the session list (with status indicators), the conversation view
+  and choice (answering an AskUserQuestion)
+- Subscribes to `sessions-updated` over the `/ws/mux` WebSocket and receives
+  terminal output (ANSI and non-ASCII are stripped before display)
+- Fills in the rest over REST (`/api/sessions`, `/api/dashboard`, conversation
+  fetches)
+- The server URL lives in localStorage (`hrdle-url`). The key is composed from
+  `storagePrefix` in `identity.json`, and older prefixes are consulted only when
+  reading (`src/storage.ts`)
 
-## 構成
+## Layout
 
-- `src/main.ts` — アプリ状態・モード遷移・ページング
-- `src/display.ts` — G2 ディスプレイ描画。実機計測値: 描画領域 576×288、ボディは 7 行 ×
-  半角 52 字/行（CJK は約 1.86 倍幅として折り返し計算）
-- `src/ws-client.ts` — `/ws/mux` クライアント
-- `src/api.ts` — REST クライアント
-- `src/phone-ui.ts` — スマホ側コンパニオン UI
-- `src/types.ts` — 型定義と整形ヘルパ
-- `src/storage.ts` — localStorage キーの綴りと旧キーの読み替え
+- `src/main.ts` — app state, mode transitions, paging
+- `src/display.ts` — drawing on the G2 display. Measured on the device: a
+  576x288 drawing area, and a body of 7 rows at 52 half-width characters per row
+  (CJK wraps at roughly 1.86x the width)
+- `src/ws-client.ts` — the `/ws/mux` client
+- `src/api.ts` — the REST client
+- `src/phone-ui.ts` — the companion UI on the phone
+- `src/types.ts` — types and formatting helpers
+- `src/storage.ts` — how localStorage keys are spelled, and reading older ones
 
-## ビルドと配布
+## Building and shipping
 
 ```bash
-bun run build       # 実機用 (--mode device) → dist、ehpk の中身
-bun run build:web   # ブラウザ用 (base=/glasses/) → dist-web、Hrdle が配信
-bun run pack        # evenhub pack → out.ehpk
+bun run build       # for the device (--mode device) -> dist, the ehpk's contents
+bun run build:web   # for a browser (base=/glasses/) -> dist-web, served by Hrdle
+bun run pack        # evenhub pack -> out.ehpk
 bun run typecheck   # tsgo --noEmit
 ```
 
-生成された `out.ehpk` を EVEN Hub にアップロードして配布する（`/glasses-upload`
-スキルでビルド〜アップロードを自動化）。バージョンは `app.json` の `version` で管理。
+Upload the resulting `out.ehpk` to EVEN Hub to ship it (the `/glasses-upload`
+skill automates build through upload). The version is managed by `version` in
+`app.json`.
 
-ビルドが2種類あるのは、ehpk がルート基準のパスを必要とするのに対し、サーバ配信版は
-`/glasses/` 配下に置かれるため。`public/` の背景写真も実機側には不要なので、
-`--mode device` で除外している（`vite.config.ts` の `publicDir`）。
+There are two builds because the ehpk needs root-relative paths while the
+server-hosted copy lives under `/glasses/`. The background photo in `public/` is
+not needed on the device either, so `--mode device` excludes it (`publicDir` in
+`vite.config.ts`).
 
-## ブラウザシミュレータ
+## Browser simulator
 
-実機なしで画面を確認できる。Hrdle が起動していれば `/glasses` で開ける。
+Shows the screen without the device. With Hrdle running it opens at `/glasses`.
 
 ```
 https://<host>:5924/glasses
-https://<host>:5924/glasses?bg=<画像URL>   # 背景を差し替える
+https://<host>:5924/glasses?bg=<image URL>   # replace the background
 ```
 
-表示は実機と同じ `screenText()` を通し、576×288 の canvas に描いて 16 階調へ量子化
-しているので、折り返し・行数制限・解像度感が実機と一致する。「画面をコピー」で
-枠付きテキストとして取得できる。
+It goes through the same `screenText()` the device does and draws onto a 576x288
+canvas quantized to 16 levels, so wrapping, the line limit and the sense of
+resolution all match the device. "Copy screen" takes the whole thing as framed
+text.
 
-背景の既定は `public/scene-meeting.jpg`。
-出典: [Unsplash](https://unsplash.com/photos/a-group-of-people-sitting-around-a-conference-room-LJ8vdm37J7Y)
-（撮影: Walls.io、Unsplash License — 商用利用可・帰属不要）。表示比率に合わせて
-1152×576 にクロップ済み。読み込めない場合は CSS で描いた室内シーンにフォールバックする。
+The default background is `public/scene-meeting.jpg`. Source:
+[Unsplash](https://unsplash.com/photos/a-group-of-people-sitting-around-a-conference-room-LJ8vdm37J7Y)
+(by Walls.io, Unsplash License — commercial use allowed, no attribution
+required), cropped to 1152x576 for the display's aspect ratio. If it cannot be
+loaded, a room drawn in CSS takes its place.
 
-## 注意: shared/types.ts との手動結合
+## Note: types are duplicated from shared/types.ts by hand
 
-このワークスペースは `shared/types.ts` を import せず、必要な型を `src/types.ts` に
-複製している。バックエンド側で `MuxServerMessage` / `ControlServerMessage` などの
-WebSocket プロトコルを変更した場合は、`src/ws-client.ts`・`src/types.ts` を追従させて
-ehpk を再ビルドし、EVEN Hub で Beta 昇格まで行うこと。
+This workspace does not import `shared/types.ts`; it keeps a copy of the types it
+needs in `src/types.ts`. When the backend changes the WebSocket protocol
+(`MuxServerMessage`, `ControlServerMessage` and friends), `src/ws-client.ts` and
+`src/types.ts` have to follow, and the ehpk has to be rebuilt and promoted to
+Beta on EVEN Hub.
