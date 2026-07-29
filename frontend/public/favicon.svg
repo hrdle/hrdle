@@ -1,8 +1,54 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#1a1a1a"/>
-  <text x="256" y="320" font-family="monospace" font-size="280" font-weight="bold" fill="#22c55e" text-anchor="middle">Hr</text>
-  <rect x="80" y="380" width="352" height="8" rx="4" fill="#22c55e" opacity="0.5"/>
-  <rect x="80" y="380" width="180" height="8" rx="4" fill="#22c55e">
-    <animate attributeName="width" values="0;180;352;180;0" dur="3s" repeatCount="indefinite"/>
-  </rect>
+  <!-- Hrdle — 走査するスキャナー。
+       幾何: セグメント 11 枚 / 灯の位置 0.33（左寄り）/ 帯の折れ S×0.028
+       （中央が下がる浅い V）/ スリット 0.78×0.155S / 発光 rgb(255, 39, 24)。
+       icon-192.png と icon-512.png は同じ数値を Canvas で描いたもので、
+       ヘアライン・グレイン・ガラスの映り込みはそちらにだけ載せてある。
+       ここに載せないのは、16px では潰れて濁りにしかならないため。 -->
+  <defs>
+    <linearGradient id="case" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#26292c"/>
+      <stop offset="0.5" stop-color="#141618"/>
+      <stop offset="1" stop-color="#08090a"/>
+    </linearGradient>
+    <radialGradient id="spill">
+      <stop offset="0" stop-color="rgb(255,39,24)" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="rgb(255,39,24)" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.6"/>
+    </linearGradient>
+    <clipPath id="slit">
+      <path d="M56.32 201.98L256 216.32L455.68 201.98L455.68 281.34L256 295.68L56.32 281.34Z"/>
+    </clipPath>
+  </defs>
+
+  <rect width="512" height="512" rx="112.64" fill="url(#case)"/>
+
+  <!-- 灯がパネルに回り込む。縦より横に伸びるのがこの意匠の顔 -->
+  <ellipse cx="188.11" cy="251.13" rx="184.32" ry="66.56" fill="url(#spill)"/>
+
+  <!-- 帯の奥の暗がり -->
+  <path d="M56.32 201.98L256 216.32L455.68 201.98L455.68 281.34L256 295.68L56.32 281.34Z" fill="#160607"/>
+
+  <!-- ランプ。中央が白く飛ぶのは 1〜2 枚だけ -->
+  <g clip-path="url(#slit)">
+    <path d="M58.86 202.17L90.08 204.41L90.08 283.77L58.86 281.53Z" fill="rgb(255,39,24)" opacity="0.06"/>
+    <path d="M95.17 204.77L126.39 207.01L126.39 286.37L95.17 284.13Z" fill="rgb(255,39,24)" opacity="0.25"/>
+    <path d="M131.47 207.38L162.69 209.62L162.69 288.98L131.47 286.74Z" fill="rgb(255,39,24)" opacity="0.65"/>
+    <path d="M131.47 215.32L162.69 217.56L162.69 281.05L131.47 278.8Z" fill="rgb(255,232,222)" opacity="0.25"/>
+    <path d="M167.78 209.99L199 212.23L199 291.59L167.78 289.35Z" fill="rgb(255,39,24)" opacity="0.96"/>
+    <path d="M167.78 217.92L199 220.16L199 283.65L167.78 281.41Z" fill="rgb(255,232,222)" opacity="0.91"/>
+    <path d="M204.08 212.59L235.31 214.83L235.31 294.19L204.08 291.95Z" fill="rgb(255,39,24)" opacity="0.76"/>
+    <path d="M204.08 220.53L235.31 222.77L235.31 286.26L204.08 284.02Z" fill="rgb(255,232,222)" opacity="0.49"/>
+    <path d="M240.39 215.2L271.61 215.2L271.61 294.56L240.39 294.56Z" fill="rgb(255,39,24)" opacity="0.33"/>
+    <path d="M276.69 214.83L307.92 212.59L307.92 291.95L276.69 294.19Z" fill="rgb(255,39,24)" opacity="0.09"/>
+  </g>
+
+  <!-- 枠。上に光、下に影 -->
+  <path d="M43.01 188.67L256 203.01L468.99 188.67L468.99 294.66L256 308.99L43.01 294.66Z"
+        fill="none" stroke="url(#frame)" stroke-width="3.58" stroke-linejoin="round"/>
 </svg>
+
