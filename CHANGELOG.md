@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-07-29
+
+Hrdle としての最初のリリース。中身は cc-hub v0.2.98 と同一で、違うのは
+`identity.json` の値だけ（コードの差分はゼロ）。
+
+### Changed
+- **CC Hub から Hrdle に改名** ([#459](https://github.com/m0a/cc-hub/issues/459))。
+  `identity.json` を書き換えると、そこから合成されるもの — systemd unit / launchd
+  ラベル / データディレクトリ / scratch パス / Keychain / localStorage キー /
+  hook コマンドと検出パターン / CLI ヘルプ / PWA manifest — が呼び出し側の変更なしで
+  追従する。上流 (`m0a/cc-hub`) 側の準備工事 (#635 / #637 / #653 / #655 / #658 /
+  #668 / #672) が揃ったことで、改名の本体が1ファイルの書き換えになった
+- **既定ポートは 5924**。移行期に cchub と並走するためだが、切替後も 5924 のまま
+  据え置く。5923 を空けておけば、何かあったとき cchub を起動するだけで戻れる —
+  ポートが衝突しないので両方同時に立ち上げられる。dev も 3457 / 5174 に1つずらし、
+  両製品の dev サーバーが同時に動くようにした
+- **tagline を `Coding Agent Session Manager` に**。Claude / Codex / Grok / Kimi を
+  扱うようになって久しく、最初に実態と合わなくなった名前がこれだった
+- アイコンは造り（角丸チャコール・緑モノスペース・下のプログレスバー）を保ったまま
+  `CC` → `Hr`
+
+### Notes
+- 更新経路は分離済み。cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から。
+  cc-hub はアーカイブ後も読み取りは変わらないので、`cchub update` は v0.2.98 まで
+  解決し続ける。**旧環境へのフォールバックは維持される**
+- 並走期は hook が両方に飛ぶ。担当外のサーバーが受けた通知はタップしても該当
+  セッションが無く何も起きないので、実害は「通知が二重に出る」だけ
+
 ## [0.2.98] - 2026-07-29
 
 ### Fixed
