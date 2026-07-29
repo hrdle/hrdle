@@ -1,17 +1,52 @@
-# Hrdle 移行作業 — 引き継ぎ
+# Hrdle — 移行の記録と、いま動いている構成
 
 CC Hub (`m0a/cc-hub`) を Hrdle に改名するプロジェクト（[#459](https://github.com/m0a/cc-hub/issues/459)）。
-このリポジトリは `m0a/cc-hub` の fork で、**改名作業はここで行う**。
+**2026-07-29 に移行は完了した。**この文書は「これからやること」ではなく、
+**何が起きたか・いま何が動いているか・どう戻すか**の記録。
 
-## なぜ改名するのか
+## 移行は完了している
 
-「CC Hub」という名前が Claude Code に紐づきすぎている。実際にはもう Claude / Codex / Grok / Kimi を扱う。
-最終的に Hrdle へ全面移行し、cchub は畳む。並走は移行期間だけの措置。
+```
+m0a/cc-hub    archived / v0.2.98 で凍結 / open issue 0 / open PR 0
+hrdle/hrdle   v0.3.0 リリース済み / issue 8件（cc-hub から移行）
+```
 
-## 現在地
+`hrdle` が 5924 で default herdr セッション（＝全ワークスペース）を持ち、cchub は停止。
+**cchub 側のデータ・バイナリ・unit は rollback 用に手つかずで残してある。**
 
-**identity.json の書き換えは完了している**（ブランチ `feat/rename-to-hrdle`）。
-fork は upstream v0.2.94 と同期済み（`8c45396` でマージ、origin へ push 済み）。
+### いま動いている構成
+
+```
+herdr.service        active / enabled     default セッション（supervised）
+hrdle.service        active / enabled     :5924, Wants/After=herdr.service
+herdr-hrdle.service  inactive / disabled  並走期の named session 用。役目を終えた
+cchub.service        inactive / disabled  unit は残置（uninstall していない）
+```
+
+`hrdle.service` は `EnvironmentFile=%h/.config/hrdle/env` を読む。並走期はそこに
+`HERDR_SESSION=hrdle` があり、promote でその行を消した。**戻すときは書き戻すだけ。**
+
+### rollback
+
+並走が終わったので、**同時起動はできない**（同じ herdr ワークスペースを奪い合う = #520）。
+rollback は切り替え操作になる。
+
+```bash
+systemctl --user stop hrdle
+systemctl --user enable --now cchub     # :5923 で同じワークスペースを引き継ぐ
+```
+
+生命線は3つとも健在:
+
+- `~/bin/cchub`（v0.2.98）と `~/bin/cchub-v0.2.98-frozen`
+  — 後者は `cchub-update.timer` の射程外に置いた凍結コピー
+- `~/.cc-hub` — promote で**一切触っていない**
+- `cchub.service` unit — disable しただけ
+
+cc-hub はアーカイブされても**読み取りは変わらない**ので、リリース資産と `install.sh` は
+残り、`cchub update` は v0.2.98 まで解決し続ける（実測確認済み）。
+
+### 上流の準備工事（すべてリリース済み）
 
 | リリース | PR | 内容 |
 |---|---|---|
@@ -20,8 +55,10 @@ fork は upstream v0.2.94 と同期済み（`8c45396` でマージ、origin へ 
 | v0.2.92 | #653 | localStorage キーの名前空間化 + legacy fallback |
 | v0.2.93 | #655 | herdr named session 対応（`HERDR_SESSION`） |
 | v0.2.94 | #658 | メッセージカタログの identity 経由化 |
+| v0.2.97 | #668 | 改名で壊れる3つの穴（build.sh / テストの dataDirEnv / operational scan） |
+| v0.2.98 | #672 | ポートと表示名の identity 経由化（**cc-hub 最終リリース**） |
 
-### 済んだこと
+### identity.json の値
 
 `identity.json` は以下の値になっている。`shared/identity.ts` がここから `SERVICE`（unit 名・
 launchd ラベル）、`TMP_PATHS`、`assetName()`、`HOOK_COMMAND` を合成する。**呼び出し側は無変更**。
@@ -170,27 +207,30 @@ nested herdr 判定で弾かれる。installer が必要なのは attach では�
 汎用性を上げるための改名で依存先の名前に寄せるのは方向が逆かもしれない、と一度提起したが、
 **ユーザーは Hrdle で進める判断を明示している**。蒸し返さないこと。
 
-## 残っている作業
+## 移行の各段階（すべて完了）
 
-### 1. 表示文字列・ログの IDENTITY 経由化（上流でやるべき）
+### 1〜2. 上流への還元（完了 — v0.2.97 #668 / v0.2.98 #672）
 
-`backend/src` / `frontend/src` / `glasses/src` に残っている。v0.2.94 (#658) で i18n
-カタログ分は上流が消化した。コメントは放置でよい（改名時に掃く。衝突しても解決は自明）。
+改名の過程で見つかった「identity を通っていない値」は、**cchub 名のまま上流に戻してから**
+取り込んだ。fork に置いたままだと同期のたびに衝突するし、どれも改名と無関係に
+cc-hub 側のバグだったため。
 
-**これは upstream（`m0a/cc-hub`）でやってから取り込むほうが良い。**
-fork 側で全識別子を書き換えると、upstream 取り込みが毎回ほぼ全ファイルで衝突する。
-upstream は1日に数回リリースが走るくらい動いている。
+結果として **fork と upstream のコード差分はゼロ**になり、違いは `identity.json` の値と
+アイコンとこの文書だけになった。フリーズが「remote を見るのをやめる」だけの操作で済んだ。
 
-### 2. 上流に還元すべき修正（改名と無関係な cc-hub 側のバグ）
+還元したもの: `build.sh` の自前コピー / テストの `dataDirEnv` リテラル /
+operational scan の自己無効化 / `cli.ts` と `glasses.ts` のポート /
+`index.html` の FOUC スクリプト / 表示文字列 / `frontendDevPort` /
+`identity.json` の Node import 対応。
 
-改名の過程で見つかった以下は cchub のままでも有効な修正。fork に置いたままだと
-次の同期で毎回衝突する。
+**上流で1件差し戻された。**`backend/package.json` から `-p 3456` を外したのは誤りで、
+`isDev = process.argv.some(a => a.includes('--watch'))` が**常に false**（bun は
+`--watch` を子プロセスの argv に渡さない）。明示ポートという唯一の防波堤を外したことで、
+**死んでいたコードが初めて実行経路になり dev が本番ポートを掴む**状態になっていた。
+上流が `scripts/dev-backend.sh` + 判定削除で修正（4c9864a）。
+教訓は「分岐の中身だけ見て分岐自体を検証しなかった」こと。
 
-- `scripts/build.sh` が `dist/cchub` を自前で持っている（release.yml とズレると CI が壊れる）
-- 4つのテストが `CC_HUB_DATA_DIR` をリテラルで持ち、env 名が変わると実データを汚す
-- `identity-operational.test.ts` のスキャンが改名で無効化される
-
-### 3. 並走の実地検証（このリポジトリの本題・次にやること）
+### 3. 並走の実地検証（完了）
 
 ```bash
 # hrdle 側
@@ -272,29 +312,56 @@ curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'   # 下�
 
 失敗時の復旧: `systemctl --user start herdr` で default セッションは `session.json` から復元される。
 
-### 4. 切替（promote）
+### 4. 切替（promote — 完了 2026-07-29 21:44）
 
-- `HERDR_SESSION` を**外して**再起動 → default セッション（＝既存の全ワークスペース）を引き継ぐ
-- **port は 5924 のまま**。5923 を空けておけば、何かあったとき cchub を enable するだけで戻せる。
-  ポートが衝突しないので両方同時に起動でき、rollback が一段確実になる。
-  この判断のせいで `peer-discovery.ts` の `DEFAULT_PORT = 5923` は「移行期の小問題」ではなく
-  **恒久的な問題**になった（他マシンの hrdle を永久に発見できない）ので、identity 化が必須
-- cchub は uninstall せず disable で数週間残す（rollback 用）
-- 引き継ぎたい設定があれば `cp -r ~/.cc-hub ~/.hrdle` を1回。**コードの fallback は作らない**
-  （並走期に split-brain を作り、切替後は確実に死ぬコードになるため）
-- `hrdle update` は `hrdle/hrdle` の Releases を見る。まだ 0 リリースなので、
-  リリース整備までは自前ビルド（`bun run build:binary`）で回す
+`~/.config/hrdle/env` から `HERDR_SESSION=hrdle` を消し、`hrdle.service` の依存を
+`herdr-hrdle.service` → `herdr.service` に付け替えて再起動。cchub を先に停止してから
+切り替える（逆順だと同じワークスペースを両者が掴んで #520 になる）。
 
-### 5. リポジトリ
+引き継ぎ結果は**実ワークスペース11件が完全一致**。`lost` が 19→0 になったのは
+正しい挙動で、19 のうち 8 は cchub 側 `~/.cc-hub` のキャッシュに残っていた lost。
+hrdle は `~/.hrdle` を見るので過去の lost を持ち込まない。**実体は1件も欠けていない。**
 
+port は 5924 のまま据え置いた。5923 を空けておけば cchub を enable するだけで戻せる。
+この判断により `peer-discovery.ts` の `DEFAULT_PORT = 5923` は「移行期の小問題」ではなく
+**恒久的な問題**になった（他マシンの hrdle を永久に発見できない）。
+
+### 5. リポジトリ（完了）
+
+- `m0a/cc-hub` は **archived**（v0.2.98 で凍結、open issue / PR とも 0）
 - **`m0a/hrdle` はまだ空いている。** rename の選択肢を残すため、この名前は取らないこと
-- Issue は `gh issue transfer` で移せる
-- 更新経路は分離済み: cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から。
-  リダイレクト依存が無い
+- **`gh issue transfer` は使えなかった** — GitHub の transfer は**同一 owner 内でのみ**動く。
+  `m0a`（個人）→ `hrdle`（organization）は不可で `New repository must have the same owner`
+  になる。issue 8件は**コピーで移行**し（hrdle#3〜#10）、cc-hub 側は移行先リンク付きで close した。
+  **コメント履歴は引き継げない**が、cc-hub は読めるまま残るので元 URL から辿れる
+- open PR 2件（#664 音声認識の語彙プロンプト / #496 ペイン indicator の偽バッジ）は
+  **cherry-pick して hrdle#2 でマージ**。フリーズ済みの上流でマージせず fork に移した
+- 更新経路は分離済み: cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から
+
+## いま残っているもの
+
+**どれも家業の継続には関わらない。**急ぐ理由はない。
+
+- **hrdle#3〜#10** — cc-hub から移行した宿題8件
+- **probe ポートのリスト化** — `peer-discovery.ts`。「他人を叩きに行くポート」は
+  `IDENTITY.defaultPort`（＝うちのポート）ではなくプロトコル定数で、正しい形は
+  **probe ポートのリスト**、`defaultPort` はその1要素。上流レビューでの指摘
+- **置換漏れガード** — `transformIndexHtml` で `/%[A-Z_]+%/` が残ったら throw する。
+  残ると FOUC スクリプトが SyntaxError になる
+- **ポートのガード（スキャン）** — probe リストと同時に。注意: 素の `\b3456\b` は
+  `formatUsd(12.3456)` にマッチする（`.` が word boundary を作る）。`(?<![\d.])` か
+  `:PORT` の文脈で。スキャン対象に `frontend/tests` / `glasses/src` / `scripts` / 各 config を追加
+- **glasses の表示名** — `phone-ui.ts` / `verify.html` の `CC Hub` / `cchub` リテラル。
+  `__DEFAULT_PORT__` と同じ define 経路で通せる
+- **`legacyNames`** — 改名後に残った旧名リテラル（`cchub.service` など）は
+  存在しない unit を指す実バグなので拾う価値がある。`legacyStoragePrefixes` に倣った形で
+- **#664 の実機検証** — 音声認識の語彙プロンプトは**合成音声でしか検証されていない**。
+  実機マイクでの効き目は未確認のまま取り込んである
 
 ## 参照
 
-- 設計議論の本体: [m0a/cc-hub#459](https://github.com/m0a/cc-hub/issues/459)
+- 設計議論の本体: [m0a/cc-hub#459](https://github.com/m0a/cc-hub/issues/459)（完了 close 済み）
   ただし**本文は古い**。方針が3回変わっていて、本文・コメント1・コメント2・コメント3が
-  互いに矛盾している。現行方針はこの HANDOFF.md が正
-- 関連 issue: #520（takeover 合戦）、#514（タップ領域）、#515/#516（レイアウト統合）
+  互いに矛盾している。**現行の正はこの HANDOFF.md**。だから #459 は hrdle にコピーしなかった
+- 移行した issue: hrdle#3（wire プロトコル）/ #4（Web Push）/ #5（glasses × kimi）/
+  #6（takeover 合戦）/ #7〜#9（レイアウト統合・UI統一・タップ領域）/ #10（グラス連絡チャンネル）
