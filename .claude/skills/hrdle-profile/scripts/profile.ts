@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // @ts-nocheck — standalone bun script, lives outside the project tsconfig.
 //
-// End-to-end CPU profile capture against the running cchub.service.
+// End-to-end CPU profile capture against the running hrdle.service.
 //
 // Subcommands:
 //   profile [--seconds N] [--out PATH]   Enable inspector → capture → disable.
@@ -36,7 +36,7 @@ function usage(): void {
 
 function parseProfileArgs(args: string[]): { seconds: number; out: string } {
 	let seconds = 30;
-	let out = "/tmp/cchub.profile.json";
+	let out = "/tmp/hrdle.profile.json";
 	for (let i = 0; i < args.length; i++) {
 		if (args[i] === "--seconds") seconds = Number(args[++i]);
 		else if (args[i] === "--out") out = args[++i];
@@ -49,9 +49,9 @@ function parseProfileArgs(args: string[]): { seconds: number; out: string } {
 }
 
 async function cmdProfile({ seconds, out }: { seconds: number; out: string }) {
-	const enable = spawnSync("cchub", ["debug", "enable"], { stdio: "inherit" });
+	const enable = spawnSync("hrdle", ["debug", "enable"], { stdio: "inherit" });
 	if (enable.status !== 0) {
-		console.error("cchub debug enable failed");
+		console.error("hrdle debug enable failed");
 		process.exit(1);
 	}
 
@@ -67,7 +67,7 @@ async function cmdProfile({ seconds, out }: { seconds: number; out: string }) {
 		console.error(`[cdp] saved ${out}`);
 		console.error("\nrun `bun .../profile.ts analyze " + out + "` to see hot functions.");
 	} finally {
-		spawnSync("cchub", ["debug", "disable"], { stdio: "inherit" });
+		spawnSync("hrdle", ["debug", "disable"], { stdio: "inherit" });
 	}
 }
 
@@ -95,7 +95,7 @@ async function findWsUrl(): Promise<string> {
 			[
 				"--user",
 				"-u",
-				"cchub.service",
+				"hrdle.service",
 				"--since",
 				"1 minute ago",
 				"--no-pager",

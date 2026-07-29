@@ -11,8 +11,8 @@ EVEN Hub 上のアプリは **Hrdle**（Plugin ID `com.hrdle.glasses`）。表�
 **Plugin ID は変更できない。** Console の Store listing → Project details に表示専用で
 出るだけで、Edit があるのは App name / tagline / icon / description / privacy のみ。ID を
 変えるには ehpk を「Upload package」に落として**別プロジェクトを新規作成**するしかなく、
-ビルド履歴・Testing group・Store listing は引き継がれない（2026-07-29 に cchub →
-hrdle でこれを実施済み。旧 `com.m0a.cchubglasses` は Private のまま退避先として残置）。
+ビルド履歴・Testing group・Store listing は引き継がれない（2026-07-29 に hrdle →
+hrdle でこれを実施済み。旧 `com.m0a.hrdleglasses` は Private のまま退避先として残置）。
 
 ## Workflow
 

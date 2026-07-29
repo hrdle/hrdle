@@ -1,15 +1,15 @@
 ---
-name: cchub-test
-description: CC Hub のブラウザテストを実行する。dev環境を起動し、agent-browser でUIを検証する。「/cchub-test」「テストして」「ブラウザテスト」などで起動。
+name: hrdle-test
+description: Hrdle のブラウザテストを実行する。dev環境を起動し、agent-browser でUIを検証する。「/hrdle-test」「テストして」「ブラウザテスト」などで起動。
 ---
 
-# CC Hub Browser Test
+# Hrdle Browser Test
 
-CC Hub のターミナル機能（herdr バックエンド）をブラウザで自動テストするスキル。
+Hrdle のターミナル機能（herdr バックエンド）をブラウザで自動テストするスキル。
 
 ## Prerequisites
 
-- dev環境が起動していること（ポート3456 + 5173）
+- dev環境が起動していること（ポート3457 + 5174）
 - agent-browser が利用可能であること
 
 ## Test Workflow
@@ -18,13 +18,13 @@ CC Hub のターミナル機能（herdr バックエンド）をブラウザで�
 
 ```bash
 # ポート確認
-fuser 3456/tcp 2>/dev/null && echo "Backend OK" || echo "Backend NOT running"
-fuser 5173/tcp 2>/dev/null && echo "Frontend OK" || echo "Frontend NOT running"
+fuser 3457/tcp 2>/dev/null && echo "Backend OK" || echo "Backend NOT running"
+fuser 5174/tcp 2>/dev/null && echo "Frontend OK" || echo "Frontend NOT running"
 
 # 起動されていない場合
-cd /home/m0a/cchub-work-1
-fuser -k -9 3456/tcp 2>/dev/null; fuser -k -9 5173/tcp 2>/dev/null
-sleep 1 && nohup bun run dev > /tmp/cchub-dev.log 2>&1 &
+cd /home/m0a/repos/hrdle-work-1
+fuser -k -9 3457/tcp 2>/dev/null; fuser -k -9 5174/tcp 2>/dev/null
+sleep 1 && nohup bun run dev > /tmp/hrdle-dev.log 2>&1 &
 sleep 4
 ```
 
@@ -32,7 +32,7 @@ sleep 4
 
 ```bash
 agent-browser close 2>/dev/null
-agent-browser --ignore-https-errors open "https://localhost:3456?skipOnboarding=true"
+agent-browser --ignore-https-errors open "https://localhost:3457?skipOnboarding=true"
 agent-browser wait 4000
 ```
 
@@ -59,21 +59,21 @@ agent-browser screenshot
 
 #### 4-3. ペイン分割テスト (Ctrl+D)
 ```bash
-curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 agent-browser press Control+d  # 横分割
 sleep 2
-curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 agent-browser screenshot
 ```
 
 #### 4-4. ペインリサイズ ショートカットテスト
 ```bash
-echo "=== Before ===" && curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+echo "=== Before ===" && curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 
 # Ctrl+Shift+Right: 右に5カラム広げる
 agent-browser press Control+Shift+ArrowRight
 sleep 1
-echo "=== After Right ===" && curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+echo "=== After Right ===" && curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 
 # Ctrl+Shift+Left: 左に5カラム縮める
 agent-browser press Control+Shift+ArrowLeft
@@ -82,7 +82,7 @@ sleep 1
 # Ctrl+Shift+=: 均等化
 agent-browser press Control+Shift+Equal
 sleep 1
-echo "=== After equalize ===" && curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+echo "=== After equalize ===" && curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 ```
 
 **注意**: headless ブラウザで `Ctrl+Alt+Arrow` は動作しないが `Ctrl+Shift+Arrow` は動作する。
@@ -110,23 +110,23 @@ agent-browser mouse up
 
 # サイズ変更確認 (viewport REST の rows/cols で検証)
 sleep 3
-curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 ```
 
 #### 4-6. リサイズ無限ループ確認
 ```bash
 # 5秒待ってリサイズログを確認
 sleep 5
-tail -100 /tmp/cchub-dev.log | grep -c '\[Resize\]'
+tail -100 /tmp/hrdle-dev.log | grep -c '\[Resize\]'
 # 2-3回以内ならOK。10回以上なら無限ループ発生
 ```
 
 #### 4-7. リロード後の維持確認
 ```bash
-echo "=== Before reload ===" && curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
-agent-browser open https://localhost:3456
+echo "=== Before reload ===" && curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+agent-browser open https://localhost:3457
 agent-browser wait 5000
-echo "=== After reload ===" && curl -sk "https://localhost:3456/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
+echo "=== After reload ===" && curl -sk "https://localhost:3457/api/sessions/<session>/panes/%251/viewport?lines=1" | jq '{rows, cols}'   # ペインPTYサイズ確認
 # サイズが同じであること
 ```
 
@@ -152,6 +152,6 @@ agent-browser close
 
 ## Log Locations
 
-- Dev server log: `/tmp/cchub-dev.log`
-- Frontend log (remote): `tail -f logs/frontend.log` (from cchub-work-1 dir)
-- Resize events: `grep '\[Resize\]' /tmp/cchub-dev.log`
+- Dev server log: `/tmp/hrdle-dev.log`
+- Frontend log (remote): `tail -f logs/frontend.log` (from hrdle-work-1 dir)
+- Resize events: `grep '\[Resize\]' /tmp/hrdle-dev.log`
