@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.98] - 2026-07-29
+
+### Fixed
+- **ポートと表示名を identity 経由にする** (#672): fork で改名を実際に走らせて見つかった、identity を通っていない値をまとめて戻した。`identity.json` は今も cchub / 5923 / 3456 を返すので挙動は不変
+  - **`cli.ts` が `--help` と違うポートを bind していた**。ヘルプは #658 で identity からポートを読むようになった一方、実際に bind する `DEFAULT_PORT` はベタ書きのままだった。今の名前では偶然一致しているが、改名すると**ヘルプが言う番号と bind する番号が食い違い、置き換える側の製品が使っているポートを奪いに行く**
+  - **`index.html` の FOUC スクリプトが移動済みの localStorage キーを読んでいた**。#653 で名前空間化した際、素の `<script>` は取り残されていた。**アプリがもう書かないキーを、first paint 前のテーマ判定が読み続けていた**（改名とは無関係な既存バグ）。`transformIndexHtml` プラグイン（`enforce: 'pre'`）でビルド時にプレースホルダを差し込み、アプリ本体と同じ prefix リスト（legacy 込み）を辿るようにした
+  - **`glasses.ts` が `notify.ts` の隣で本番/dev ポートを自前に持っていた**。改名すると `cchub glasses` のメモが別製品のサーバーへ飛ぶ
+  - **会話ビューの画像パス正規表現**が `/tmp/cchub-images` をベタ書きしていた。`tmpPrefix` が変わると**何にもマッチせず**、会話中のスクリーンショットが全部生パス表示に劣化する
+  - 起動バナーと、cwd の無い hook 通知のタイトルも identity 経由に
+  - dev ポート（vite の `server.port` / proxy target / playwright の `webServer.url` / e2e 5本）も同様に。frontend の dev ポートは `identity.json` に居場所が無かったが、`playwright.config.ts` の値が vite とズレると**テスト失敗ではなく、120秒待って「dev サーバーが起動しなかった」と報告する**形で落ちるため `frontendDevPort` を追加した
+  - **`shared/identity.ts` が Node から import できなかった**。Bun と Vite は attribute 無しの JSON import を通すが Node は要求する。`playwright.config.ts` が Bun/Vite 以外で初めての利用者になった瞬間、テストが1件も走らないまま `ERR_IMPORT_ATTRIBUTE_MISSING` で落ちていた
+- **dev サーバーが本番ポートを掴む状態になりかけていた** (#672): 上の変更で backend の dev スクリプトから `-p 3456` が外れ、ポートの決定が「argv に `--watch` があるか」という判定に委ねられた。**bun は `--watch` を子プロセスの argv に渡さないのでこの判定は常に false** で、dev サーバーが本番ポートに bind する（インストール済みサービスがあれば EADDRINUSE、無ければ dev が 5923 を占有して vite の proxy が空振りする）。`bun run stop` が開けるのは 3456/5173 なので、**dev が掴むポートを stop が解放しない**組み合わせにもなっていた。`scripts/dev-backend.sh` が `devPort` を読んで `-p` を渡す形にし、判定自体は**修復ではなく削除**した — 同じ既定値が `cchub send` / `cchub peek` のローカル宛先でもあり、そちらはインストール済みサービスを向くべきなので、判定が効くようにすると dev 起動した CLI からの送信が黙って dev サーバーへ向く
+- **グラスのスマホ UI がポート無し URL を旧ポートで補完していた** (#672): `phone-ui.ts` が `:5923` をベタ書きで足していた。ラベルではなく**端末が実際に繋ぎに行く先**なので、改名後は旧製品のサーバーへ接続する。`define` による注入にした（`import` ではないのは glasses/src が意図的に shared/ に依存しておらず、ehpk が端末に載るため）
+
 ## [0.2.97] - 2026-07-29
 
 ### Fixed
