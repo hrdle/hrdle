@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { herdrStatusToIndicator } from '../../routes/sessions';
+import { herdrStatusToIndicator, paneIndicatorState } from '../../routes/sessions';
 import { parseHookJson, parseHookToml } from '../hook-status';
 import { HOOK_COMMAND } from '../../../../shared/identity';
 
@@ -24,6 +24,99 @@ describe('herdrStatusToIndicator', () => {
     expect(herdrStatusToIndicator('unknown')).toBeNull();
     expect(herdrStatusToIndicator(undefined)).toBeNull();
     expect(herdrStatusToIndicator('thinking_very_hard')).toBeNull();
+  });
+});
+
+describe('paneIndicatorState', () => {
+  it('never lets a stale hook override outrank a live herdr status', () => {
+    // Repro of the false 許可待ち badge: PostToolUse/AskUserQuestion set a
+    // waiting_input override (24h TTL), the user answered, and Claude kept
+    // working — nothing fires to clear the override until Stop, but herdr
+    // already reports `working`.
+    expect(
+      paneIndicatorState({
+        paneAgent: 'claude',
+        paneAgentStatus: 'working',
+        sessionIndicator: 'processing',
+        hookState: 'waiting_input',
+      }),
+    ).toBe('processing');
+  });
+
+  it('shows waiting_input when herdr itself reports blocked', () => {
+    expect(
+      paneIndicatorState({
+        paneAgent: 'claude',
+        paneAgentStatus: 'blocked',
+        sessionIndicator: 'waiting_input',
+        hookState: null,
+      }),
+    ).toBe('waiting_input');
+  });
+
+  it('does not remap a completed Claude pane to waiting_input', () => {
+    // The tmux-era pane list showed idle-at-prompt as waiting_input; today
+    // that state pulses yellow and derives the card's 許可待ち badge, so a
+    // finished turn must stay `completed` even while a stale override lives.
+    expect(
+      paneIndicatorState({
+        paneAgent: 'claude',
+        paneAgentStatus: 'done',
+        sessionIndicator: 'completed',
+        hookState: 'waiting_input',
+      }),
+    ).toBe('completed');
+  });
+
+  it('falls back to the session indicator when herdr has no status for a Claude pane', () => {
+    expect(
+      paneIndicatorState({
+        paneAgent: 'claude',
+        paneAgentStatus: undefined,
+        sessionIndicator: 'processing',
+        hookState: null,
+      }),
+    ).toBe('processing');
+  });
+
+  it('keeps hooks first for thread agents, then herdr, then idle', () => {
+    // Mirrors the session-level rule: herdr's status accuracy for thread
+    // agents is unverified (#390).
+    expect(
+      paneIndicatorState({
+        paneAgent: 'codex',
+        paneAgentStatus: 'working',
+        sessionIndicator: 'processing',
+        hookState: 'completed',
+      }),
+    ).toBe('completed');
+    expect(
+      paneIndicatorState({
+        paneAgent: 'kimi',
+        paneAgentStatus: 'idle',
+        sessionIndicator: 'completed',
+        hookState: null,
+      }),
+    ).toBe('completed');
+    expect(
+      paneIndicatorState({
+        paneAgent: 'codex',
+        paneAgentStatus: undefined,
+        sessionIndicator: 'completed',
+        hookState: null,
+      }),
+    ).toBe('idle');
+  });
+
+  it('reports idle for panes with no agent', () => {
+    expect(
+      paneIndicatorState({
+        paneAgent: undefined,
+        paneAgentStatus: 'working',
+        sessionIndicator: 'processing',
+        hookState: 'processing',
+      }),
+    ).toBe('idle');
   });
 });
 
