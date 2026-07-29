@@ -11,40 +11,66 @@ m0a/cc-hub    archived / v0.2.98 で凍結 / open issue 0 / open PR 0
 hrdle/hrdle   v0.3.0 リリース済み / issue 8件（cc-hub から移行）
 ```
 
-`hrdle` が 5924 で default herdr セッション（＝全ワークスペース）を持ち、cchub は停止。
-**cchub 側のデータ・バイナリ・unit は rollback 用に手つかずで残してある。**
+`hrdle` が 5924 で default herdr セッション（＝全ワークスペース）を持つ。
+**cchub は畳んでいない** — 独自 herdr セッションに移して 5923 で生かしてある。
 
 ### いま動いている構成
 
 ```
-herdr.service        active / enabled     default セッション（supervised）
-hrdle.service        active / enabled     :5924, Wants/After=herdr.service
-herdr-hrdle.service  inactive / disabled  並走期の named session 用。役目を終えた
-cchub.service        inactive / disabled  unit は残置（uninstall していない）
+herdr.service        active / enabled     default セッション  ← hrdle が使う
+herdr-cchub.service  active / enabled     cchub セッション    ← cchub が使う
+herdr-hrdle.service  inactive / disabled  並走期の名残。役目を終えた
+
+hrdle.service   active / enabled   :5924  default セッション  11 workspaces
+cchub.service   active / enabled   :5923  cchub セッション     0 workspaces（空）
 ```
 
-`hrdle.service` は `EnvironmentFile=%h/.config/hrdle/env` を読む。並走期はそこに
-`HERDR_SESSION=hrdle` があり、promote でその行を消した。**戻すときは書き戻すだけ。**
+**役割が入れ替わっただけで、並走は続いている。**移行前は cchub が default で hrdle が
+named session、いまはその逆。どちらも `EnvironmentFile` の `HERDR_SESSION` 一行で決まる:
 
-### rollback
+| | env | 意味 |
+|---|---|---|
+| `~/.config/hrdle/env` | （無し） | default セッションを掴む |
+| `~/.config/cchub/env` | `HERDR_SESSION=cchub` | 自分専用セッション |
 
-並走が終わったので、**同時起動はできない**（同じ herdr ワークスペースを奪い合う = #520）。
-rollback は切り替え操作になる。
+cchub 側は**空のセッションから始まる**。既存の11ワークスペースは hrdle が持っているので、
+cchub からは見えない。新しく作れば普通に使える。
+
+### 継続手段は2段階ある
+
+**1. そのまま cchub で作業する** — 5923 は生きているので、新しいワークスペースを
+作って作業できる。hrdle に何かあっても**止める必要すらない**。
+
+**2. 11ワークスペースごと引き継ぐ** — hrdle が使えなくなった場合:
 
 ```bash
 systemctl --user stop hrdle
-systemctl --user enable --now cchub     # :5923 で同じワークスペースを引き継ぐ
+# ~/.config/cchub/env から HERDR_SESSION=cchub の行を消す
+systemctl --user restart cchub          # :5923 が default セッションを掴む
 ```
 
-生命線は3つとも健在:
+**先に hrdle を止めること。**両方が default を見ると同じペインを奪い合う（#520）。
+
+生命線:
 
 - `~/bin/cchub`（v0.2.98）と `~/bin/cchub-v0.2.98-frozen`
   — 後者は `cchub-update.timer` の射程外に置いた凍結コピー
-- `~/.cc-hub` — promote で**一切触っていない**
-- `cchub.service` unit — disable しただけ
+- `~/.cc-hub` — 中身は健在（`herdr-last-known-sessions.json` だけ、default 時代の
+  lost 19件が並ぶので空にした。バックアップは `.bak-preswap`）
+- `cchub.service` / `herdr-cchub.service` — どちらも enabled、再起動後も自動で上がる
 
 cc-hub はアーカイブされても**読み取りは変わらない**ので、リリース資産と `install.sh` は
 残り、`cchub update` は v0.2.98 まで解決し続ける（実測確認済み）。
+
+### 配布経路は通しで検証済み
+
+```
+タグ push → release.yml → GitHub Release → install.sh → hrdle update
+```
+
+v0.3.0 で全部通した。`hrdle update` は Release から取得 → SHA256 検証 → バイナリ差し替え
+→ **systemd サービス自動再起動**まで動き、11 workspaces も無事だった（v0.2.97 → v0.3.0）。
+`install.sh` のワンライナーも `HRDLE_INSTALL_DIR` を temp に向けて実走確認済み。
 
 ### 上流の準備工事（すべてリリース済み）
 
@@ -312,6 +338,26 @@ curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'   # 下�
 
 失敗時の復旧: `systemctl --user start herdr` で default セッションは `session.json` から復元される。
 
+### 3.9 「動かして初めて見つかる」層は最後まで出続けた
+
+改名の穴は**テストでも CI でも見つからず、実際に起動して目で見るまで分からない**ものが
+最後まで出続けた。時系列で:
+
+| 見つけ方 | 見つかったもの |
+|---|---|
+| サーバーを起動した | 起動バナーが `🚀 CC Hub` |
+| 会話画面を開いた | 画像が生パス表示（正規表現が `/tmp/cchub-images` 固定） |
+| 引数なしで起動した | `--help` と違うポートを bind（`cli.ts` の `isDev` ベタ書き） |
+| 再起動した | `claude --resume` が `No conversation found` |
+| **`update --check` を叩いた** | **「更新するには: cchub update」** |
+
+最後のものは v0.3.0 リリース後、アップデータの実走検証で出た。案内どおり打つと
+`command not found` になる。**更新を促すメッセージという、改名で最も目立つ場所**だった。
+
+共通するのは「値が間違っていても例外にならず、テストは緑のまま」という点。
+`identity-operational.test.ts` のスキャンはこの層を狙ったものだが、
+**ポート番号（数字なので誤検知しやすい）と表示文字列は今も対象外**。
+
 ### 4. 切替（promote — 完了 2026-07-29 21:44）
 
 `~/.config/hrdle/env` から `HERDR_SESSION=hrdle` を消し、`hrdle.service` の依存を
@@ -357,6 +403,9 @@ port は 5924 のまま据え置いた。5923 を空けておけば cchub を en
   存在しない unit を指す実バグなので拾う価値がある。`legacyStoragePrefixes` に倣った形で
 - **#664 の実機検証** — 音声認識の語彙プロンプトは**合成音声でしか検証されていない**。
   実機マイクでの効き目は未確認のまま取り込んである
+- **`~/.cc-hub` のメタデータ移行** — テーマ・カスタムタイトルは `~/.hrdle` に
+  引き継いでいない（hrdle 側は初期状態）。必要なら手で `cp`。
+  **コードの fallback は作らない**（split-brain を生み、切替後は確実に死ぬコードになる）
 
 ## 参照
 

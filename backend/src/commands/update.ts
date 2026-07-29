@@ -323,7 +323,9 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
 
   if (checkOnly) {
     console.log('');
-    console.log('更新するには: cchub update');
+    // The one line here that tells the reader what to type. Spelled out, a
+    // renamed build hands them a command that does not exist (#459).
+    console.log(`更新するには: ${IDENTITY.binaryName} update`);
     return;
   }
 
