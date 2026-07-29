@@ -389,7 +389,16 @@ export function Keyboard({
 		);
 	};
 
-	// Action button component
+	// Action button component.
+	//
+	// These flex to fill the row the way the main keys do, rather than sitting at
+	// a fixed 34px with the rest of the width empty. So the bar stays as wide as
+	// the keyboard, each target grows on a wider screen, and removing a key (the
+	// URL one, v0.3.9) widens the others instead of leaving a hole.
+	const ACTION_SIZE = compact
+		? "h-[26px] text-[10px] min-w-[34px]"
+		: "h-[34px] text-[12px] min-w-[40px]";
+
 	const ActionButton = ({ keyDef }: { keyDef: KeyDef }) => {
 		const handleClick = () => {
 			if (keyDef.key === "FILE_PICKER") {
@@ -420,7 +429,7 @@ export function Keyboard({
 				<button
 					type="button"
 					disabled
-					className={`${compact ? "h-[26px] text-[10px]" : "h-[30px] text-[11px]"} min-w-[34px] px-1.5 flex items-center justify-center rounded-md font-medium select-none bg-white/[0.06] text-zinc-600`}
+					className={`${ACTION_SIZE} flex-1 px-2 flex items-center justify-center rounded-md font-medium select-none bg-white/[0.06] text-zinc-600`}
 					data-onboarding="image-upload"
 				>
 					⏳
@@ -439,7 +448,7 @@ export function Keyboard({
 				type="button"
 				onClick={handleClick}
 				onContextMenu={(e) => e.preventDefault()}
-				className={`${compact ? "h-[26px] text-[10px]" : "h-[30px] text-[11px]"} min-w-[34px] px-1.5 flex items-center justify-center rounded-md font-medium select-none ${getBgColor()}`}
+				className={`${ACTION_SIZE} flex-1 px-2 flex items-center justify-center rounded-md font-medium select-none ${getBgColor()}`}
 				data-onboarding={getOnboardingAttr()}
 			>
 				{keyDef.key === "\t" && shiftPressed ? "⇧TAB" : keyDef.label}
@@ -479,7 +488,7 @@ export function Keyboard({
 						</button>
 					</div>
 				)}
-				<div className="flex gap-1 overflow-x-auto">
+				<div className="flex gap-1.5 flex-1 min-w-0 overflow-x-auto">
 					{ACTION_BAR.map((keyDef, index) => (
 						<ActionButton
 							// biome-ignore lint/suspicious/noArrayIndexKey: ACTION_BAR is a static, never-reordered config

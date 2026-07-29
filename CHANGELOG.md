@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.10] - 2026-07-30
+
+### Changed
+- **The keyboard's action bar fills the row, so the keys are easier to hit**.
+  ESC / TAB / ^C / ^E / ^O / the file picker sat at a fixed `min-w-[34px]`
+  packed against the left edge, while the keys below them (q, w, e, ...) have
+  always flexed to fill the width - so the bar left empty space on the right and
+  the targets stayed small. They flex now, the same way the main keys do
+  - Measured on an emulated phone (412px wide, touch): each key went from about
+    34x30 to **45x34**, and the row now reaches the right edge instead of
+    stopping 100px short. The gap between them went from 4px to 6px
+  - It adapts rather than being a new fixed number: on a wider screen the keys
+    grow further, and removing one widens the rest instead of leaving a hole
+  - The tablet's floating keyboard uses the same bar and keeps its compact
+    height; it gains the same spread
+
 ## [0.3.9] - 2026-07-30
 
 ### Removed
