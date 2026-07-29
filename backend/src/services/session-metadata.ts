@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { ensureDataDir, atomicWriteFile, createMutationLock } from '../utils/storage';
 import type { AgentProvider, SessionTheme } from '../../../shared/types';
 
-// The data dir (~/.cc-hub) is shared with tmux-era CC Hub installs
-// (production service on another port). The herdr backend uses its own
-// store files so tmux-era session lists don't bleed into the herdr UI as
-// phantom "Lost" entries — and vice versa.
+// The `herdr-` prefix dates from the tmux-era CC Hub, which shared one data
+// dir between backends running on different ports and needed separate stores
+// so tmux-era session lists didn't bleed into the herdr UI as phantom "Lost"
+// entries. The prefix stays after the rename: these names are what installs
+// already have on disk.
 const METADATA_FILE = 'herdr-session-metadata.json';
 const LAST_KNOWN_FILE = 'herdr-last-known-sessions.json';
 

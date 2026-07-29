@@ -2,6 +2,7 @@ import { describe, expect, test, beforeAll, afterAll } from 'bun:test';
 import { rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AuthService } from '../../src/services/auth';
+import { IDENTITY } from '../../../shared/identity';
 
 // Regression for #230: the JWT signing secret must never fall back to a
 // guessable hardcoded default. initJwtSecret() generates and persists a random
@@ -15,7 +16,9 @@ let getJwtSecret: () => string;
 
 beforeAll(async () => {
   delete process.env.JWT_SECRET;
-  process.env.CC_HUB_DATA_DIR = TEST_DATA_DIR;
+  // From identity: a hardcoded variable stops redirecting the data directory
+  // after a rename, and the secret then lands in the real one. #459
+  process.env[IDENTITY.dataDirEnv] = TEST_DATA_DIR;
   await rm(TEST_DATA_DIR, { recursive: true, force: true });
   // Import after env setup so the module's secret starts uninitialized.
   ({ initJwtSecret, getJwtSecret } = await import('../../src/middleware/auth'));

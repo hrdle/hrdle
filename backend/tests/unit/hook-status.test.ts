@@ -3,17 +3,18 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { getHookStatus, parseHookJson, parseHookToml } from '../../src/services/hook-status';
+import { HOOK_COMMAND, IDENTITY } from '../../../shared/identity';
 
 // Only Stop and PostToolUse/AskUserQuestion are tracked: herdr reports agent
 // status itself, so the transition hooks (PreToolUse / UserPromptSubmit) are no
 // longer installed and their absence must not be reported as missing (#390).
 describe('hook status parsing', () => {
-  test('detects cchub notify in Claude-style JSON hooks', () => {
+  test('detects our notify hook in Claude-style JSON hooks', () => {
     const parsed = parseHookJson(
       JSON.stringify({
         hooks: {
-          Stop: [{ hooks: [{ type: 'command', command: 'cchub notify' }] }],
-          PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: 'cchub notify' }] }],
+          Stop: [{ hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
+          PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
         },
       }),
     );
@@ -28,8 +29,8 @@ describe('hook status parsing', () => {
     const parsed = parseHookJson(
       JSON.stringify({
         hooks: {
-          PreToolUse: [{ hooks: [{ type: 'command', command: 'cchub notify' }] }],
-          UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'cchub notify' }] }],
+          PreToolUse: [{ hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
+          UserPromptSubmit: [{ hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
         },
       }),
     );
@@ -40,18 +41,18 @@ describe('hook status parsing', () => {
     });
   });
 
-  test('detects cchub notify in Codex-style TOML hooks', () => {
+  test('detects our notify hook in Codex-style TOML hooks', () => {
     const parsed = parseHookToml(`
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
 type = "command"
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 
 [[hooks.PostToolUse]]
 matcher = "AskUserQuestion"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 `);
 
     expect(parsed).toEqual({
@@ -70,7 +71,7 @@ command = "smart-notify.py"
 [[hooks.PreToolUse]]
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 `);
 
     expect(parsed).toEqual({
@@ -85,7 +86,7 @@ command = "cchub notify"
 matcher = "^Bash$"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 `);
 
     expect(parsed).toEqual({
@@ -100,7 +101,7 @@ command = "cchub notify"
 matcher = "^AskUserQuestion$"
 [[hooks.PostToolUse.hooks]]
 type = "command"
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 `);
 
     expect(parsed).toEqual({
@@ -110,7 +111,7 @@ command = "cchub notify"
   });
 
   test('reads repo-local codex hooks status', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cchub-hook-status-'));
+    const dir = mkdtempSync(join(tmpdir(), `${IDENTITY.tmpPrefix}-hook-status-`));
     const codexDir = join(dir, '.codex');
     const originalCwd = process.cwd();
 
@@ -120,8 +121,8 @@ command = "cchub notify"
         join(codexDir, 'hooks.json'),
         JSON.stringify({
           hooks: {
-            Stop: [{ hooks: [{ type: 'command', command: 'cchub notify' }] }],
-            PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: 'cchub notify' }] }],
+            Stop: [{ hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
+            PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
           },
         }),
       );
@@ -146,20 +147,20 @@ command = "cchub notify"
   });
 
   test('grok provider follows Claude-compat hook files', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cchub-hook-status-'));
+    const dir = mkdtempSync(join(tmpdir(), `${IDENTITY.tmpPrefix}-hook-status-`));
     const claudeDir = join(dir, '.claude');
     const originalCwd = process.cwd();
 
     try {
       mkdirSync(claudeDir, { recursive: true });
       // Grok Build scans Claude's settings.json hooks by default, so a
-      // cchub-notify entry there configures grok too.
+      // notify entry of ours there configures grok too.
       writeFileSync(
         join(claudeDir, 'settings.json'),
         JSON.stringify({
           hooks: {
-            Stop: [{ hooks: [{ type: 'command', command: 'cchub notify' }] }],
-            PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: 'cchub notify' }] }],
+            Stop: [{ hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
+            PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ type: 'command', command: HOOK_COMMAND }] }],
           },
         }),
       );

@@ -9,18 +9,24 @@ import {
   deleteSession,
   updateSessionAccess,
 } from '../../src/services/sessions';
+import { IDENTITY } from '../../../shared/identity';
 
-const TEST_DATA_DIR = join(tmpdir(), 'cc-hub-test-sessions-' + Date.now());
+const TEST_DATA_DIR = join(tmpdir(), `${IDENTITY.tmpPrefix}-test-sessions-` + Date.now());
+
+// Read from identity rather than written out: a rename that changes the
+// variable leaves a hardcoded one setting something nothing reads, and these
+// tests then create their fixture sessions in the real data directory. #459
+const DATA_DIR_ENV = IDENTITY.dataDirEnv;
 
 describe('Sessions Service', () => {
   beforeEach(async () => {
-    process.env.CC_HUB_DATA_DIR = TEST_DATA_DIR;
+    process.env[DATA_DIR_ENV] = TEST_DATA_DIR;
     await mkdir(TEST_DATA_DIR, { recursive: true });
   });
 
   afterEach(async () => {
     await rm(TEST_DATA_DIR, { recursive: true, force: true });
-    delete process.env.CC_HUB_DATA_DIR;
+    delete process.env[DATA_DIR_ENV];
   });
 
   describe('createSession', () => {

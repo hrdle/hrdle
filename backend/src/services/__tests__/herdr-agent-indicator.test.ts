@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { herdrStatusToIndicator } from '../../routes/sessions';
 import { parseHookJson, parseHookToml } from '../hook-status';
+import { HOOK_COMMAND } from '../../../../shared/identity';
 
 /**
  * #390: herdr's own agent detection drives the indicator, so the
@@ -30,8 +31,8 @@ describe('hook status expectations', () => {
   it('only requires the hooks herdr cannot replace', () => {
     const settings = JSON.stringify({
       hooks: {
-        Stop: [{ hooks: [{ command: 'cchub notify' }] }],
-        PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ command: 'cchub notify' }] }],
+        Stop: [{ hooks: [{ command: HOOK_COMMAND }] }],
+        PostToolUse: [{ matcher: 'AskUserQuestion', hooks: [{ command: HOOK_COMMAND }] }],
       },
     });
     const parsed = parseHookJson(settings);
@@ -41,10 +42,10 @@ describe('hook status expectations', () => {
 
   it('does not credit an untracked TOML section to the hook parsed before it', () => {
     // Regression: dropping PreToolUse from the section regex left currentEvent
-    // pointing at Stop, so PreToolUse's `cchub notify` marked stop configured.
+    // pointing at Stop, so PreToolUse's notify hook marked stop configured.
     const toml = `
 [[hooks.PreToolUse]]
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 `;
     expect(parseHookToml(toml)).toEqual({ stop: false, askUserQuestion: false });
   });
@@ -52,11 +53,11 @@ command = "cchub notify"
   it('still detects the hooks it does track in TOML', () => {
     const toml = `
 [[hooks.Stop]]
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 
 [[hooks.PostToolUse]]
 matcher = "AskUserQuestion"
-command = "cchub notify"
+command = "${HOOK_COMMAND}"
 `;
     expect(parseHookToml(toml)).toEqual({ stop: true, askUserQuestion: true });
   });

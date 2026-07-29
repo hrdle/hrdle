@@ -86,7 +86,7 @@ export const SERVICE = {
   launchdUpdateLabel: `${IDENTITY.launchdPrefix}.update`,
   launchdServerPlist: `${IDENTITY.launchdPrefix}.server.plist`,
   launchdUpdatePlist: `${IDENTITY.launchdPrefix}.update.plist`,
-  /** `cchub.service.d` — where systemd looks for drop-in overrides. */
+  /** `hrdle.service.d` — where systemd looks for drop-in overrides. */
   dropInDir: `${IDENTITY.serviceName}.service.d`,
 } as const;
 

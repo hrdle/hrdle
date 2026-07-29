@@ -332,7 +332,7 @@ files.get('/language', async (c) => {
 
 /**
  * GET /files/images/:filename - Serve conversation images
- * Only serves images from /tmp/cchub-images/ for security
+ * Only serves images from /tmp/hrdle-images/ for security
  */
 const IMAGES_DIR = TMP_PATHS.imagesDir;
 

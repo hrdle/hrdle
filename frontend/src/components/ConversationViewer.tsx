@@ -60,7 +60,7 @@ function getPinchDistance(touches: TouchList): number {
 	return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Convert [Image: source: /tmp/cchub-images/xxx.png] to actual image
+// Convert [Image: source: /tmp/hrdle-images/xxx.png] to actual image
 function processImageReferences(content: string): string {
 	return content.replace(
 		/\[Image: source: \/tmp\/cchub-images\/([^\]]+)\]/g,
