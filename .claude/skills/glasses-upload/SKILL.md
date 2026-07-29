@@ -5,16 +5,26 @@ description: G2グラスアプリをビルドしてEVEN Hubにアップロード
 
 # G2 Glasses EVEN Hub Upload
 
+EVEN Hub 上のアプリは **Hrdle**（Plugin ID `com.hrdle.glasses`）。表示名は本体と同じで、
+「Glasses」が付くのはリポジトリ内で区別するときだけ。
+
+**Plugin ID は変更できない。** Console の Store listing → Project details に表示専用で
+出るだけで、Edit があるのは App name / tagline / icon / description / privacy のみ。ID を
+変えるには ehpk を「Upload package」に落として**別プロジェクトを新規作成**するしかなく、
+ビルド履歴・Testing group・Store listing は引き継がれない（2026-07-29 に cchub →
+hrdle でこれを実施済み。旧 `com.m0a.cchubglasses` は Private のまま退避先として残置）。
+
 ## Workflow
 
 1. **バージョンバンプ**: `glasses/app.json` の `version` をpatchインクリメント
 
 2. **ビルド**:
    ```bash
-   cd /home/m0a/cchub-work-1/glasses
+   cd <repo>/glasses      # 例: /home/m0a/repos/hrdle-work-1/glasses
    bun run build
    ```
    ※ ルートが bun workspaces なので `npm run build` ではなく `bun run build` を使う
+   ※ ワークスペースは複数ある（hrdle-work-1/2/3）ので、作業中のリポジトリの `glasses/` を使う
 
 3. **ehpkパック**:
    ```bash
@@ -48,8 +58,8 @@ description: G2グラスアプリをビルドしてEVEN Hubにアップロード
 
 6. **アプリ詳細ページに移動**:
    ```bash
-   # "CC Hub Glasses" をクリック (viewport が 1280x800 以上ないと URL 遷移しないので注意)
-   agent-browser --session-name evenhub click @eXX  # snapshot結果の CC Hub Glasses の ref
+   # "Hrdle" をクリック (viewport が 1280x800 以上ないと URL 遷移しないので注意)
+   agent-browser --session-name evenhub click @eXX  # snapshot結果の Hrdle の ref
    agent-browser --session-name evenhub wait --load networkidle
    ```
 
@@ -100,7 +110,7 @@ description: G2グラスアプリをビルドしてEVEN Hubにアップロード
            found = await send_cmd('DOM.querySelector', {'nodeId': root, 'selector': 'input[type=file]'})
            result = await send_cmd('DOM.setFileInputFiles', {
                'nodeId': found['result']['nodeId'],
-               'files': ['/home/m0a/cchub-work-1/glasses/out.ehpk'],
+               'files': ['<repo>/glasses/out.ehpk'],
            })
            print(f'Result: {json.dumps(result)}')
 
@@ -157,10 +167,10 @@ description: G2グラスアプリをビルドしてEVEN Hubにアップロード
 
 ## Important Notes
 
-- **viewport 設定が必須**: agent-browser のデフォルトは 393x852 (mobile)。CC Hub Glasses 詳細ページに遷移できなかったり、Beta バッジが viewport の外 (x=1200+) に出る。先頭で必ず `set viewport 1280 800`
+- **viewport 設定が必須**: agent-browser のデフォルトは 393x852 (mobile)。Hrdle 詳細ページに遷移できなかったり、Beta バッジが viewport の外 (x=1200+) に出る。先頭で必ず `set viewport 1280 800`
 - **bun を使う**: ルートが bun workspaces なので、`npm run build` / `npx evenhub pack` は workspace package.json と干渉して失敗する。`bun run build` / `bun run pack` を使う（`pack` は版数一致を検査してから evenhub CLI に渡す）
 - **EVEN Hub CLI にアップロードコマンドはない**: ブラウザ自動化が必要
 - **session-name evenhub でセッション永続化**: 一度ログインすれば再実行時はスキップできる
 - **Beta バッジは snapshot ref では操作できない**: `elementFromPoint(x, y)?.click()` を使う。座標はバッジを `querySelectorAll` + `getBoundingClientRect` で動的取得
 - **CDP `/json/list` の curl は file 経由で**: シェルラッパが stdout を `...(N bytes total)` に切り詰めることがある。直接 pipe ではなく `> /tmp/cdp-list.json` してから python3 で読む
-- **EVEN Hub は public web (`hub.evenrealities.com`)** — Tailscale IP は不要 (CC Hub 本体の話と混同しないこと)
+- **EVEN Hub は public web (`hub.evenrealities.com`)** — Tailscale IP は不要 (Hrdle 本体の話と混同しないこと)

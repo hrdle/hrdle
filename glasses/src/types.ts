@@ -1,4 +1,4 @@
-// CC Hub API response types (subset relevant to G2 display)
+// Server API response types (subset relevant to G2 display)
 import { BODY_WIDTH, clipToWidth, stripUnrenderable, textWidth } from './metrics.ts'
 
 type IndicatorState = 'processing' | 'waiting_input' | 'idle' | 'completed'

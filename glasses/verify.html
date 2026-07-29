@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CC Hub Glasses - Verify</title>
+  <title>Hrdle - Verify</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, sans-serif; background: #111; color: #eee; padding: 16px; }
@@ -25,7 +25,7 @@
 <body>
   <!-- Phone UI (default) -->
   <div id="phone-ui">
-    <h1>CC Hub Glasses 確認ツール</h1>
+    <h1>Hrdle 確認ツール</h1>
 
     <!-- 1. Launch Source -->
     <div class="card">
@@ -56,7 +56,7 @@
     <!-- 4. LocalStorage -->
     <div class="card">
       <h2>4. LocalStorage 共有テスト</h2>
-      <input id="ls-key" type="text" value="cchub-url" placeholder="キー" />
+      <input id="ls-key" type="text" value="hrdle-url" placeholder="キー" />
       <input id="ls-value" type="text" placeholder="保存する値" />
       <button id="ls-save">保存</button>
       <button id="ls-load">読み取り</button>
@@ -80,7 +80,7 @@
   <!-- Glasses UI -->
   <div id="glasses-ui">
     <div style="background:#000; color:#0f0; font-family:monospace; padding:8px; font-size:14px;">
-      <div id="g2-content">CC Hub Glasses Verify</div>
+      <div id="g2-content">Hrdle Verify</div>
     </div>
   </div>
 
@@ -137,9 +137,9 @@
 
       // Auto-read LocalStorage on glasses and show in initial UI
       try {
-        const savedUrl = await bridge.getLocalStorage('cchub-url')
+        const savedUrl = await bridge.getLocalStorage('hrdle-url')
         const lsText = savedUrl ? `LS OK: ${savedUrl}` : 'LS: (empty)'
-        log('cchub-url: ' + (savedUrl || '(empty)'))
+        log('hrdle-url: ' + (savedUrl || '(empty)'))
         // Update both containers with LS result
         const { TextContainerUpgrade } = await import('@evenrealities/even_hub_sdk')
         await bridge.textContainerUpgrade(new TextContainerUpgrade({

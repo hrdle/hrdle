@@ -2,8 +2,9 @@
 
 import type { Bridge } from './display.ts'
 import { setBaseUrl, getDashboard, getSessions } from './api.ts'
+import { clearStored, readStored, storageKey } from './storage.ts'
 
-const LS_KEY = 'cchub-url'
+const URL_SUFFIX = 'url'
 
 export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app')!
@@ -11,7 +12,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
   // Load saved URL
   let savedUrl = ''
   if (bridge) {
-    savedUrl = await bridge.getLocalStorage(LS_KEY) || ''
+    savedUrl = (await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)) || ''
   }
 
   const isConnected = !!savedUrl
@@ -24,7 +25,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
           <div style="width: 44px; height: 44px; background: #0f0; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px;">⌘</div>
           <div>
-            <h1 style="font-size: 22px; margin: 0; font-weight: 700;">CC Hub Glasses</h1>
+            <h1 style="font-size: 22px; margin: 0; font-weight: 700;">${__PRODUCT_NAME__}</h1>
             <p style="color: #888; font-size: 12px; margin: 2px 0 0;">for EVEN G2</p>
           </div>
         </div>
@@ -35,12 +36,12 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
       <div style="padding: 16px 20px;">
 
-        <!-- What is CC Hub (shown when not connected) -->
+        <!-- What the server is (shown when not connected) -->
         <div id="about-section" style="display: ${isConnected ? 'none' : 'block'};">
           <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">CC Hub とは？</h2>
+            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">${__PRODUCT_NAME__} とは？</h2>
             <p style="font-size: 13px; color: #bbb; line-height: 1.7; margin: 0 0 12px;">
-              <a href="https://github.com/m0a/cc-hub" style="color: #4a9; text-decoration: none;">CC Hub</a> は、
+              <a href="https://github.com/${__REPO__}" style="color: #4a9; text-decoration: none;">${__PRODUCT_NAME__}</a> は、
               Claude Code セッションをWebブラウザからリモート管理するターミナルマネージャーです。
               複数のClaude Codeセッションの同時実行・監視・操作ができます。
             </p>
@@ -93,9 +94,9 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
               <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                 <div style="background: #0f0; color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">1</div>
                 <div>
-                  <div style="font-weight: 600; margin-bottom: 2px;">CC Hub をインストール</div>
+                  <div style="font-weight: 600; margin-bottom: 2px;">${__PRODUCT_NAME__} をインストール</div>
                   <div style="position: relative;">
-                    <code id="install-cmd" style="background: #1a1a1a; padding: 8px; border-radius: 4px; font-size: 11px; color: #0f0; display: block; word-break: break-all; line-height: 1.5;">curl -fsSL https://raw.githubusercontent.com/m0a/cc-hub/main/install.sh | bash</code>
+                    <code id="install-cmd" style="background: #1a1a1a; padding: 8px; border-radius: 4px; font-size: 11px; color: #0f0; display: block; word-break: break-all; line-height: 1.5;">curl -fsSL https://raw.githubusercontent.com/${__REPO__}/main/install.sh | bash</code>
                     <button id="btn-copy-install" style="position: absolute; top: 4px; right: 4px; background: #333; border: none; color: #aaa; font-size: 11px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">copy</button>
                   </div>
                 </div>
@@ -103,8 +104,8 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
               <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                 <div style="background: #0f0; color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">2</div>
                 <div>
-                  <div style="font-weight: 600; margin-bottom: 2px;">CC Hub を起動</div>
-                  <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #0f0;">cchub</code>
+                  <div style="font-weight: 600; margin-bottom: 2px;">${__PRODUCT_NAME__} を起動</div>
+                  <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #0f0;">${__BINARY_NAME__}</code>
                   <span style="color: #888; font-size: 12px; margin-left: 8px;">（デフォルトポート: ${__DEFAULT_PORT__}）</span>
                 </div>
               </div>
@@ -127,8 +128,8 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
         <!-- Connection -->
         <div style="background: #111; border: 1px solid ${isConnected ? '#1a3a1a' : '#222'}; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-          <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">CC Hub 接続設定</h2>
-          <div style="font-size: 12px; color: #888; margin-bottom: 8px;">CC Hub サーバーの Tailscale URL を入力してください</div>
+          <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">${__PRODUCT_NAME__} 接続設定</h2>
+          <div style="font-size: 12px; color: #888; margin-bottom: 8px;">${__PRODUCT_NAME__} サーバーの Tailscale URL を入力してください</div>
           <input id="url-input" type="url" value="${savedUrl}"
             placeholder="https://hostname.tail*****.ts.net:${__DEFAULT_PORT__}"
             style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #eee; font-size: 14px; margin-bottom: 10px; box-sizing: border-box; font-family: monospace;"
@@ -162,8 +163,8 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
         <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 32px;">
           <h2 style="font-size: 15px; color: #888; margin: 0 0 8px; font-weight: 600;">リンク</h2>
           <div style="font-size: 13px; line-height: 2;">
-            <a href="https://github.com/m0a/cc-hub" style="color: #4a9; text-decoration: none;">CC Hub GitHub →</a><br>
-            <a href="https://github.com/m0a/cc-hub#installation" style="color: #4a9; text-decoration: none;">インストール手順 →</a><br>
+            <a href="https://github.com/${__REPO__}" style="color: #4a9; text-decoration: none;">${__PRODUCT_NAME__} GitHub →</a><br>
+            <a href="https://github.com/${__REPO__}#installation" style="color: #4a9; text-decoration: none;">インストール手順 →</a><br>
             <a href="https://tailscale.com/download" style="color: #4a9; text-decoration: none;">Tailscale ダウンロード →</a>
           </div>
         </div>
@@ -229,7 +230,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
   btnDisconnect.addEventListener('click', async () => {
     if (bridge) {
-      await bridge.setLocalStorage(LS_KEY, '')
+      await clearStored((key, value) => bridge.setLocalStorage(key, value), URL_SUFFIX)
     }
     connectedInfo.style.display = 'none'
     btnDisconnect.style.display = 'none'
@@ -241,14 +242,14 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
   let diagClient: any = null
 
   async function startWsDiag(sessions: Array<{ id: string; indicatorState?: string; panes?: Array<{ paneId: string }> }>) {
-    const { CcHubWsClient } = await import('./ws-client.ts')
+    const { WsClient } = await import('./ws-client.ts')
     const diagEl = document.getElementById('ws-diag')
     if (!diagEl) return
 
     diagClient?.close()
     const firstSession = sessions[0]
 
-    diagClient = new CcHubWsClient({
+    diagClient = new WsClient({
       onSessionsUpdated() {},
       onTerminalOutput() {},
       onReady() {
@@ -290,7 +291,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
       // Save URL
       if (bridge) {
-        await bridge.setLocalStorage(LS_KEY, url)
+        await bridge.setLocalStorage(storageKey(URL_SUFFIX), url)
       }
       urlInput.value = url
 

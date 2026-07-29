@@ -12,13 +12,14 @@ import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
 import { startDebugUI } from './debug-ui.ts'
+import { readStored, storageKey } from './storage.ts'
 
-const LS_KEY = 'cchub-url'
+const URL_SUFFIX = 'url'
 const MIC_SAMPLE_RATE = 16000
 // Slow now that the crash is understood: enough to date a silent death, not
 // so often that the log is mostly heartbeat.
 const HEARTBEAT_MS = 30_000
-const RESUME_KEY = 'cchub-glasses-resume'
+const RESUME_SUFFIX = 'glasses-resume'
 
 // ── Crash reporting ──
 //
@@ -65,23 +66,22 @@ function installCrashReporting(): void {
 // ── Glasses mode: G2 display + ring controls ──
 
 async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof initDisplay>>>) {
-  // Load CC Hub URL from LocalStorage
-  let savedUrl = await bridge.getLocalStorage(LS_KEY)
+  // Load the server URL from LocalStorage
+  let savedUrl = await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)
   // Dev mode: use proxy (relative URL) when running via Vite dev server
   if (!savedUrl && location.hostname === 'localhost') {
     savedUrl = location.origin
-    await bridge.setLocalStorage(LS_KEY, savedUrl)
+    await bridge.setLocalStorage(storageKey(URL_SUFFIX), savedUrl)
   }
   if (!savedUrl) {
     // Show setup guide and poll for URL
     await bridge.rebuildPageContainer(buildSetupGuide())
-    await new Promise<void>((resolve) => {
+    savedUrl = await new Promise<string>((resolve) => {
       const poll = setInterval(async () => {
-        const url = await bridge.getLocalStorage(LS_KEY)
+        const url = await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)
         if (url) {
           clearInterval(poll)
-          savedUrl = url
-          resolve()
+          resolve(url)
         }
       }, 2000)
     })
@@ -160,11 +160,11 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     },
     // The host app's own store, which outlives the WebView the phone suspends.
     saveState(json) {
-      void bridge?.setLocalStorage(RESUME_KEY, json).catch(() => {})
+      void bridge?.setLocalStorage(storageKey(RESUME_SUFFIX), json).catch(() => {})
     },
     async loadState() {
       try {
-        return (await bridge?.getLocalStorage(RESUME_KEY)) || null
+        return await readStored((key) => bridge.getLocalStorage(key), RESUME_SUFFIX)
       } catch {
         return null
       }
