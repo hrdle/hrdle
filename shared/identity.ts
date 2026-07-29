@@ -100,6 +100,20 @@ export function assetName(platform: string, arch: string): string {
   return `${IDENTITY.assetPrefix}-${platform}-${arch}`;
 }
 
+/**
+ * An environment variable this app reads, e.g. `HRDLE_STT_PROMPT`.
+ *
+ * `dataDirEnv` predates this and stays spelled out in identity.json: it is
+ * documented and someone may have it exported, so it is a value a rename
+ * decides about rather than one that follows automatically. Variables added
+ * since compose from the binary name here — `CCHUB_STT_PROMPT` survived the
+ * rename by a day precisely because it was written out at the call site, and
+ * `glasses/vite.config.ts` was already building `HRDLE_URL` this way.
+ */
+export function envVar(suffix: string): string {
+  return `${IDENTITY.binaryName.toUpperCase()}_${suffix}`;
+}
+
 /** The hook command hosts are told to run, e.g. `cchub notify`. */
 export const HOOK_COMMAND = `${IDENTITY.binaryName} notify`;
 

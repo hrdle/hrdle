@@ -42,7 +42,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  * Response: `{ text }`.
  *
  * Sends a vocabulary prompt built from live workspace names plus this
- * product's own terms (see `stt-prompt.ts`); `CCHUB_STT_PROMPT=off` disables it.
+ * product's own terms (see `stt-prompt.ts`); `HRDLE_STT_PROMPT=off` disables it.
  *
  * Used by the G2 glasses voice-input flow (SDK gives raw mic PCM only, so STT
  * is done server-side; the key never leaves this host).

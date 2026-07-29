@@ -1,3 +1,4 @@
+import { envVar } from '../../../shared/identity';
 import { listWorkspaces } from './herdr-client';
 import { getAllSessionMetadata } from './session-metadata';
 
@@ -133,14 +134,17 @@ export async function currentWorkspaceNames(): Promise<{ titles: string[]; label
 const CACHE_TTL_MS = 60_000;
 let cached: { prompt: string; at: number } | null = null;
 
+/** `HRDLE_STT_PROMPT`, composed so a rename cannot leave it behind again. */
+const OVERRIDE_ENV = envVar('STT_PROMPT');
+
 /**
  * The prompt to send with a transcription, or `undefined` to send none.
  *
- * `CCHUB_STT_PROMPT=off` disables the bias, which is how the two are compared
+ * `HRDLE_STT_PROMPT=off` disables the bias, which is how the two are compared
  * without a rebuild; any other value is used verbatim.
  */
 export async function sttPrompt(now = Date.now()): Promise<string | undefined> {
-  const override = process.env.CCHUB_STT_PROMPT;
+  const override = process.env[OVERRIDE_ENV];
   if (override === 'off') return undefined;
   if (override) return override;
 
