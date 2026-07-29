@@ -297,7 +297,6 @@
 		"paneTab": "ペイン {{id}}"
 	},
 	"url": {
-		"noUrls": "URLが見つかりません",
 		"copy": "コピー",
 		"open": "開く",
 		"prev": "前へ",
@@ -351,7 +350,7 @@
 		"step5Title": "会話履歴",
 		"step5Description": "Claude Codeとの会話履歴を確認できます。過去のやり取りやコンテキストを簡単に確認できます。",
 		"step6Title": "キーボード",
-		"step6Description": "ターミナル画面をタップするとキーボードが起動します。日本語入力対応、📁で画像送信、🔗でURL一覧表示も可能です。",
+		"step6Description": "ターミナル画面をタップするとキーボードが起動します。日本語入力対応、📁で画像送信も可能です。",
 		"step7Title": "リロード",
 		"step7Description": "ターミナルの表示が乱れた時、このボタンで表示をリセットできます。",
 		"splitPaneTitle": "画面分割",

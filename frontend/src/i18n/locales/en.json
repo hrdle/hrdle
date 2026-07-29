@@ -299,7 +299,6 @@
 		"paneTab": "Pane {{id}}"
 	},
 	"url": {
-		"noUrls": "No URLs found",
 		"copy": "Copy",
 		"open": "Open",
 		"prev": "Prev",
@@ -353,7 +352,7 @@
 		"step5Title": "Conversation History",
 		"step5Description": "View the conversation history with Claude Code. Easily review past exchanges and context.",
 		"step6Title": "Keyboard",
-		"step6Description": "Tap the terminal to open the keyboard. Supports Japanese input, 📁 for image upload, and 🔗 for URL listing.",
+		"step6Description": "Tap the terminal to open the keyboard. Supports Japanese input and 📁 for image upload.",
 		"step7Title": "Reload",
 		"step7Description": "If the terminal display gets corrupted, tap this button to reset and fix the display.",
 		"splitPaneTitle": "Split Pane",

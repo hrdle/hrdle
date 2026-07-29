@@ -199,11 +199,6 @@ export const InputBar = memo(
 
 		const handleOpenFilePicker = () => fileInputRef.current?.click();
 
-		const handleExtractUrls = () => {
-			// URL extraction is handled by DesktopLayout via terminalRef.extractUrls();
-			// mobile path is not yet wired up.
-		};
-
 		const handleInputBarTouchStart = (e: React.TouchEvent) => {
 			inputBarSwipeRef.current = {
 				startX: e.touches[0].clientX,
@@ -329,7 +324,6 @@ export const InputBar = memo(
 									<Keyboard
 										onSend={(char) => sendRef.current(char)}
 										onFilePicker={handleOpenFilePicker}
-										onUrlExtract={handleExtractUrls}
 										isUploading={isUploading}
 										compact={isTablet}
 										showModeToggle={true}
@@ -438,7 +432,6 @@ export const InputBar = memo(
 							<Keyboard
 								onSend={(char) => sendRef.current(char)}
 								onFilePicker={handleOpenFilePicker}
-								onUrlExtract={handleExtractUrls}
 								isUploading={isUploading}
 								compact={isTablet}
 								showModeToggle={true}
