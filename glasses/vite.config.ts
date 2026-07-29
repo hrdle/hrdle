@@ -49,6 +49,12 @@ export default defineConfig(({ mode }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
     __BUILD_COMMIT__: JSON.stringify(BUILD_COMMIT),
+    // Injected rather than imported: glasses/src deliberately keeps no
+    // dependency on shared/ (see the mirrored types in src/types.ts), and the
+    // ehpk is shipped to a device where every KB counts. It still has to come
+    // from identity — the phone UI completes a port-less URL with it, so a
+    // literal would keep pointing the device at the previous product (#459).
+    __DEFAULT_PORT__: JSON.stringify(IDENTITY.defaultPort),
   },
   // public/ holds the simulator's backdrop photo, which only the web build
   // wants: the G2 bundle has no browser simulator, and the ehpk is shipped to

@@ -105,7 +105,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
                 <div>
                   <div style="font-weight: 600; margin-bottom: 2px;">CC Hub を起動</div>
                   <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #0f0;">cchub</code>
-                  <span style="color: #888; font-size: 12px; margin-left: 8px;">（デフォルトポート: 5923）</span>
+                  <span style="color: #888; font-size: 12px; margin-left: 8px;">（デフォルトポート: ${__DEFAULT_PORT__}）</span>
                 </div>
               </div>
               <div style="display: flex; gap: 10px; margin-bottom: 12px;">
@@ -130,7 +130,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
           <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">CC Hub 接続設定</h2>
           <div style="font-size: 12px; color: #888; margin-bottom: 8px;">CC Hub サーバーの Tailscale URL を入力してください</div>
           <input id="url-input" type="url" value="${savedUrl}"
-            placeholder="https://hostname.tail*****.ts.net:5923"
+            placeholder="https://hostname.tail*****.ts.net:${__DEFAULT_PORT__}"
             style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #eee; font-size: 14px; margin-bottom: 10px; box-sizing: border-box; font-family: monospace;"
           />
           <div style="display: flex; gap: 8px;">
@@ -204,9 +204,9 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
     if (!url.match(/^https?:\/\//)) {
       url = `https://${url}`
     }
-    // Add :5923 if no port
+    // Add the default port if none was typed
     if (!url.match(/:\d+$/)) {
-      url = `${url}:5923`
+      url = `${url}:${__DEFAULT_PORT__}`
     }
     return url
   }
