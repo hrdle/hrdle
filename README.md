@@ -6,20 +6,6 @@ A web-based terminal manager for coding agent sessions. Run Claude Code, Codex, 
 
 > **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here — the name said Claude Code, and this had long since stopped being only that. Existing installs keep working: that repository stays readable, so its releases and `install.sh` remain available and `cchub update` still resolves. Hrdle installs alongside rather than over it (separate binary, service, port and herdr session), so both can run on one machine.
 
-## Screenshot
-
-![Hrdle on tablet — multi-pane terminal, floating keyboard, and dashboard](docs/images/tablet-mode.jpg)
-
-Tablet mode showing multi-pane terminal, floating keyboard, and the dashboard panel (usage limits, daily activity, model usage).
-
-![Session list with auto-recap](docs/images/session-list.jpg)
-
-Session list with Claude Code auto-recap, status badges (waiting / processing / lost), context usage, and color-coded themes per session.
-
-<img src="docs/images/mobile-session-list.png" alt="Mobile session list" width="320" />&nbsp;&nbsp;<img src="docs/images/mobile-keyboard.png" alt="Mobile terminal with custom keyboard" width="320" />
-
-Left: session list adapts to a single-column layout on smartphones. Right: terminal with the custom on-screen keyboard (long-press for symbols, JA toggle for IME).
-
 ## Features
 
 - **Multi-session Management** - Run and switch between multiple agent sessions (Claude Code, Codex, Grok, Kimi)
@@ -47,8 +33,32 @@ Left: session list adapts to a single-column layout on smartphones. Right: termi
 - **Chat View** - Conversation-style view of the current session as an alternative to the terminal
 - **Peer Servers** - Connect multiple Hrdle servers over Tailscale (auto-discovery, aggregated sessions/history/dashboard)
 - **Remote Pane Control** - `hrdle send` / `hrdle peek` to drive panes on local or peer servers from the CLI
+- **Smart Glasses** - Read sessions and answer questions on EVEN Realities G2 (see below)
 - **i18n** - English and Japanese UI with automatic language detection
 - **Onboarding Walkthrough** - Spotlight-style guide for first-time users
+
+## Smart Glasses (EVEN Realities G2)
+
+A companion app for the G2 (`glasses/`, built with the EvenHub SDK) turns the glasses
+into a read-and-answer surface for your sessions — useful when the agent needs a decision
+and you are not at a screen.
+
+- **Three modes** — session list with status indicators, conversation view, and a choice
+  mode that answers `AskUserQuestion` prompts
+- **Notifications go to the lenses, not the browser** — while the app is connected, hook
+  events become 90-second relay items on the G2 display. If the glasses are absent or the
+  session cannot be resolved, the browser notification fires as before, so nothing is lost
+- **Voice input** — the G2 SDK emits raw PCM, so transcription happens server-side via
+  `POST /api/glasses/stt` (Groq `whisper-large-v3-turbo`). **The audio and the API key
+  never leave your host**
+- **Agent-written notes** — `hrdle glasses "<text>"` lets an agent put one line in front of
+  you, with optional choices to answer. The session is resolved from the working directory,
+  so agents rarely need to name it
+- **Simulator** — the same app builds for the browser and is served at `/glasses`, so you
+  can try it without hardware
+
+Build and distribution live in [`glasses/README.md`](glasses/README.md). The packaged
+`out.ehpk` is uploaded to EVEN Hub.
 
 ## Installation
 
