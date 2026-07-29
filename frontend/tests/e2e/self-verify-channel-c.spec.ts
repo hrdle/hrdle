@@ -1,12 +1,13 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { IDENTITY } from '../../../shared/identity';
 import { readFileSync, existsSync } from 'node:fs';
 
 // Channel C smoke test. Requires the dev server to be started with
 // CCHUB_SELF_VERIFY=1. Drives a brief session and asserts the server wrote
 // drift records to /tmp/cchub-drift.log.
 
-const FRONTEND_URL = 'https://localhost:5173';
-const BACKEND_URL = 'https://localhost:3456';
+const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
+const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
 const DRIFT_LOG = '/tmp/cchub-drift.log';
 
 test.use({

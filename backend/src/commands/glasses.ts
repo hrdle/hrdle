@@ -6,13 +6,16 @@
  *
  * セッション解決: cwd unique 一致 → 曖昧なら /proc の ppid 祖先と pane の
  * foreground pid 照合（worktree 対策）→ それでも駄目なら --session 必須エラー。
- * 送信は notify と同じく本番(5923)/dev(3456) 両叩き・静黙失敗（-p で単一宛）。
+ * 送信は notify と同じく本番/dev 両叩き・静黙失敗（-p で単一宛）。
  */
 
 import { readFileSync } from 'node:fs';
+import { IDENTITY } from '../../../shared/identity';
 
-const PRODUCTION_PORT = 5923;
-const DEV_PORT = 3456;
+// notify.ts と同じく identity 由来 (#459)。ベタ書きだと改名後も旧製品の
+// ポートへ送り続け、届いた側には解決できないセッションとして出る。
+const PRODUCTION_PORT = IDENTITY.defaultPort;
+const DEV_PORT = IDENTITY.devPort;
 
 export interface GlassesCliOptions {
   text?: string;

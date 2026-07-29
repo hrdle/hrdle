@@ -5,9 +5,23 @@ import { IDENTITY } from '../../shared/identity';
 
 const VERSION = pkg.version;
 
-// Development mode detection (running with bun run --watch)
-const isDev = process.argv.some(arg => arg.includes('--watch'));
-const DEFAULT_PORT = isDev ? 3456 : 5923;
+/**
+ * The port, from identity (#459). Spelled out, it survives a rename in the
+ * worst way: `--help` reads its number from identity and says one thing, while
+ * the server binds the other. A renamed build then goes for the port the
+ * product it replaces is already serving on, and dies with EADDRINUSE on a
+ * machine where both are installed.
+ *
+ * There is deliberately no dev branch here. One used to sit in front of this,
+ * picking `devPort` when `--watch` appeared in argv — but bun does not pass
+ * `--watch` to the script, so it was false in every run and the explicit
+ * `-p` in the dev script was what actually chose the port. Restoring the
+ * detection would do more than undo dead code: this default is also where
+ * `cchub send` and `cchub peek` address the local server (`options.port`
+ * below), and those want the installed service, not whatever a checkout
+ * happens to be running. scripts/dev-backend.sh passes `-p` instead.
+ */
+const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface CliOptions {
   command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses';

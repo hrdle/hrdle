@@ -5,6 +5,11 @@
  *  instead of by comparing timestamps against when a build was promoted. */
 declare const __APP_VERSION__: string
 
+/** The server's default port, injected at build time from identity.json. The
+ *  phone UI appends it to a URL typed without one, so it is what the device
+ *  actually connects to — not a label. */
+declare const __DEFAULT_PORT__: number
+
 /** Short commit the bundle was built from, `+dirty` when `src/` or the shared
  *  types had uncommitted edits, `nogit` when the build had no repository to
  *  ask. The version says which number a build claims; this says which code it

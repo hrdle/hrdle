@@ -7,6 +7,7 @@
 
 import { toHomeShortPath } from "./path";
 import { dispatchNotificationNavigation } from "./notificationNavigation";
+import { IDENTITY } from "../../../shared/identity";
 
 const EVENT_MESSAGES: Record<string, string> = {
 	Stop: "応答が完了しました",
@@ -83,7 +84,7 @@ export function fireHookNotification(
 	lastNotification = { key, time: now };
 
 	// Title: project/directory name (e.g. "~/lifestyle-app-work-1")
-	const projectName = toHomeShortPath(cwd) || "CC Hub";
+	const projectName = toHomeShortPath(cwd) || IDENTITY.productName;
 	// Body: smart message from transcript, or fallback
 	const body = smartMessage || EVENT_MESSAGES[event] || `Hook: ${event}`;
 

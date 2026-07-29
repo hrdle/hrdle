@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import os from 'os';
+import { IDENTITY, LEGACY_STORAGE_PREFIXES } from '../shared/identity';
 
 // The release version lives in the root package.json. Baking it into the bundle
 // keeps the frontend in step with the backend it talks to: every release changes
@@ -73,7 +74,7 @@ function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
       }
     }
 
-    console.log(`🔒 HTTPS: https://${hostname}:5173`);
+    console.log(`🔒 HTTPS: https://${hostname}:${IDENTITY.frontendDevPort}`);
     return {
       key: fs.readFileSync(keyPath),
       cert: fs.readFileSync(certPath),
@@ -91,6 +92,24 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   plugins: [
+    // index.html is a static file that cannot import identity, and the two
+    // names it holds are load-bearing: the title is what a PWA installs itself
+    // as, and the FOUC script reads the theme key before any bundle runs — a
+    // stale prefix there means every load flashes the wrong theme. Substituted
+    // at build time so a rename reaches them (#459). `pre` so this runs before
+    // Vite's own %VITE_*% substitution looks at the placeholders.
+    {
+      name: 'identity-html',
+      enforce: 'pre' as const,
+      transformIndexHtml(html: string) {
+        return html
+          .replaceAll('%PRODUCT_NAME%', IDENTITY.productName)
+          .replaceAll(
+            '%STORAGE_PREFIXES%',
+            JSON.stringify([IDENTITY.storagePrefix, ...LEGACY_STORAGE_PREFIXES]),
+          );
+      },
+    },
     react(),
     tailwindcss(),
     VitePWA({
@@ -108,9 +127,9 @@ export default defineConfig({
       injectRegister: null,
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'CC Hub',
-        short_name: 'CC Hub',
-        description: 'Claude Code Terminal Hub',
+        name: IDENTITY.productName,
+        short_name: IDENTITY.productName,
+        description: IDENTITY.tagline,
         theme_color: '#1a1a1a',
         background_color: '#1a1a1a',
         display: 'standalone',
@@ -158,7 +177,7 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5173,
+    port: IDENTITY.frontendDevPort,
     host: '0.0.0.0',
     allowedHosts: true,
     https: httpsConfig,
@@ -176,7 +195,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://localhost:3456',
+        target: `https://localhost:${IDENTITY.devPort}`,
         changeOrigin: true,
         secure: false,
         // Allow long uploads (videos etc.)
@@ -194,7 +213,7 @@ export default defineConfig({
         },
       },
       '/ws': {
-        target: 'wss://localhost:3456',
+        target: `wss://localhost:${IDENTITY.devPort}`,
         ws: true,
         secure: false,
       },
