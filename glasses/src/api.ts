@@ -1,4 +1,5 @@
 import type { SessionsResponse, DashboardResponse, ConversationResponse, ConversationMessage } from './types.ts'
+import { threadAgentOf } from './types.ts'
 
 let baseUrl = ''
 
@@ -24,10 +25,22 @@ export function getDashboard(): Promise<DashboardResponse> {
   return fetchJson('/api/dashboard')
 }
 
-export async function getConversation(ccSessionId: string, last = 10): Promise<ConversationMessage[]> {
+/** Conversation history for one agent session.
+ *
+ *  `agent` names the reader on the server side: a thread agent (kimi/codex/grok)
+ *  keeps its transcript in its own store and is only reachable via `?agent=`.
+ *  Omitted — or Claude — the server reads Claude's jsonl, which is the right
+ *  default and the wrong answer for everyone else. */
+export async function getConversation(
+  sessionId: string,
+  last = 10,
+  agent?: string
+): Promise<ConversationMessage[]> {
+  const thread = threadAgentOf(agent)
+  const agentParam = thread ? `&agent=${encodeURIComponent(thread)}` : ''
   try {
     const data = await fetchJson<ConversationResponse>(
-      `/api/sessions/history/${ccSessionId}/conversation?last=${last}`
+      `/api/sessions/history/${encodeURIComponent(sessionId)}/conversation?last=${last}${agentParam}`
     )
     return data.messages
   } catch {
