@@ -145,6 +145,15 @@ export interface GlassesPlatform {
    * for a dialogue the user then cancels leaves the app on screen and deaf.
    */
   requestExit(): void
+  /**
+   * A gesture arrived while this app was believed to be in the background.
+   *
+   * The host routes ring input to whatever the glasses are showing, so the
+   * gesture is proof the belief is wrong. The platform layer keeps its own
+   * copy of that flag (the heartbeat reports it) and its own idea of what the
+   * panel is showing, and both are stale by the time this is called.
+   */
+  onForegroundRegained(): void
 }
 
 /** Where a reply (choice keys / voice prompt) is routed. paneId targets the
@@ -475,6 +484,15 @@ export class GlassesController {
     // way for AUTO_ADVANCE_IDLE_MS afterwards.
     this.lastGestureAt = Date.now()
     this.lastGestureKind = action
+    // Only the app the glasses are showing is given ring input, so a gesture
+    // outranks a stale `FOREGROUND_EXIT`. Without this the app draws nothing
+    // for the rest of its life the first time an ENTER goes missing — which is
+    // what cancelling the host's exit dialogue does — and a screen frozen on
+    // its last frame is far worse than the traffic the flag was saving.
+    if (!this.foreground) {
+      this.foreground = true
+      this.platform.onForegroundRegained()
+    }
     // Someone is here. Whatever the screen had settled into, it starts over.
     this.autoPasses = 0
     this.autoResting = false

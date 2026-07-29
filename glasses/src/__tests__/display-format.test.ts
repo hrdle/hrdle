@@ -1554,6 +1554,7 @@ describe('the root page hands the exit gesture back to the host', () => {
       saveState: () => {},
       loadState: async () => null,
       requestExit: () => { calls.push('requestExit') },
+      onForegroundRegained: () => { calls.push('onForegroundRegained') },
     }
     return { platform, calls }
   }
@@ -1582,7 +1583,7 @@ describe('the root page hands the exit gesture back to the host', () => {
     expect(c.lastGesture().agoMs).toBeGreaterThanOrEqual(0)
   })
 
-  test('nothing is drawn while the glasses are showing something else', async () => {
+  test('a push from the server draws nothing while we are in the background', async () => {
     // Render calls made from the background are consumed by the host and
     // dropped before the display, so they are BLE traffic for nobody.
     const { platform, calls } = stubPlatform()
@@ -1594,9 +1595,42 @@ describe('the root page hands the exit gesture back to the host', () => {
 
     c.onForegroundExit()
     calls.length = 0
-    c.swipeDown()
-    c.swipeUp()
+    // The five-second session push, which arrives whether anyone is looking
+    // or not — reached directly because nothing public drives it.
+    const push = c as unknown as { onSessionsUpdated: (s: unknown[]) => void }
+    push.onSessionsUpdated(twoSessions)
     await Promise.resolve()
     expect(calls).toEqual([])
+  })
+
+  test('a gesture outranks a stale background flag', async () => {
+    // The host only routes ring input to the app the glasses are showing, so
+    // a gesture arriving is proof the flag is wrong. Believing the flag over
+    // the gesture is how the screen froze on its last frame for the rest of
+    // the run: cancelling the host's exit dialogue leaves the ENTER unsent.
+    const { platform, calls } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    c.state.sessions = twoSessions as never
+
+    c.onForegroundExit()
+    calls.length = 0
+    c.swipeDown()
+    await Promise.resolve()
+    expect(calls).toContain('onForegroundRegained')
+    expect(calls).toContain('render')
+  })
+
+  test('the panel is only reclaimed once, not on every later gesture', async () => {
+    const { platform, calls } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    c.state.sessions = twoSessions as never
+
+    c.onForegroundExit()
+    c.swipeDown()
+    await Promise.resolve()
+    calls.length = 0
+    c.swipeUp()
+    await Promise.resolve()
+    expect(calls).not.toContain('onForegroundRegained')
   })
 })
