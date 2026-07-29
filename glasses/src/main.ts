@@ -172,6 +172,17 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
     transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
+    requestExit() {
+      // Mode 1 — the host's own confirmation, which the user can cancel. Only
+      // if they confirm does `SYSTEM_EXIT_EVENT` arrive, and the cleanup goes
+      // there rather than here.
+      trace('exit dialogue requested (root double-tap)')
+      try {
+        void bridge.shutDownPageContainer(1)
+      } catch (err) {
+        trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
+      }
+    },
   }
   const controller = new GlassesController(platform)
   trace('controller constructed')
@@ -208,10 +219,19 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       controller.onForegroundExit()
     },
     onExit(kind) {
-      // The host says why it is stopping us. Worth its own line: it is the
-      // difference between "backgrounded" and "killed", which no amount of
-      // guessing from inside the page could settle.
-      trace(`host exit: ${kind} fg=${foreground ? 1 : 0}`, 'error')
+      // The host says why it is stopping us, and the two kinds mean opposite
+      // things: `abnormal` is an unexpected disconnect, `system` is the user
+      // confirming the host's exit dialogue. Only ever having seen `system` is
+      // the finding — this app was being left, not crashing.
+      //
+      // So the gesture goes out with it. A double-tap moments before says the
+      // wearer walked out through the dialogue; silence says something else
+      // closed us, and that is a different problem entirely.
+      const g = controller.lastGesture()
+      trace(
+        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}`,
+        'error',
+      )
       controller.onHostExit(kind)
     },
     onSwipeDown: () => controller.swipeDown(),

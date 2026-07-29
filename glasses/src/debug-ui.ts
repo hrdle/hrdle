@@ -560,6 +560,12 @@ export function startDebugUI(): void {
     renderHeader(state) {
       platform.render(state)
     },
+    // There is no host here to show an exit dialogue and no app to be exited
+    // from, so this reports rather than acts — the simulator's job is to make
+    // the gesture's new meaning visible while it is being designed.
+    requestExit() {
+      setVoiceStatus('終了ダイアログを要求（実機ではホストの確認が出ます）')
+    },
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
     saveState(json) {
