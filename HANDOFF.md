@@ -62,6 +62,29 @@ systemctl --user restart cchub          # :5923 が default セッションを�
 cc-hub はアーカイブされても**読み取りは変わらない**ので、リリース資産と `install.sh` は
 残り、`cchub update` は v0.2.98 まで解決し続ける（実測確認済み）。
 
+### 残置物 — 消していいものと、消してはいけないもの
+
+**恒久的に残す（rollback の生命線）:**
+
+| | |
+|---|---|
+| `~/bin/cchub` / `~/bin/cchub-v0.2.98-frozen` | 後者は `cchub-update.timer` の射程外に置いた凍結コピー |
+| `~/.cc-hub` | メタデータ・`peers.json`・`jwt-secret` |
+| `cchub.service` / `herdr-cchub.service` | どちらも enabled。**uninstall しない** |
+
+**期限付き（2026-08-29 目安で見直し）:**
+
+- `~/cchub-work-1` / `-2` / `-3` — cc-hub 時代の作業用 clone（各 99MB 超、計約 300MB）。
+  herdr ワークスペースは 2026-07-29 に削除済みで、**ディレクトリだけが残っている**。
+  削除時点で未コミット 0 件・未 push 0 件を確認しており、中身は hrdle 側へ移送済み
+  （#664 は cherry-pick、#496 も同様）。origin は archived な `m0a/cc-hub` なので、
+  **ここから新しく push することはもうできない**。
+  移行直後の保険として1ヶ月置き、hrdle が問題なく回っていれば消してよい
+
+hrdle 側の作業ディレクトリは `~/repos/hrdle-work-1..3`（`git worktree`、各 6.9MB + node_modules）。
+cchub 時代は独立 clone だったが、worktree なら `.git` を共有できるので置き換えた。
+**新しい worktree を足したら `bun install` を忘れないこと**（後述の落とし穴）。
+
 ### 配布経路は通しで検証済み
 
 ```
