@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { sanitizeForG2, formatMessage } from '../types.ts'
-import { screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
+import { invalidatePanel, panelDrops, screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
@@ -1479,6 +1479,59 @@ describe('a screen that has not changed is not sent again', () => {
     calls.length = 0
     await updateHeader(bridge, s)
     expect(calls).toEqual([])
+  })
+
+  // A host that refuses a write says so in the boolean it returns. Skipping
+  // the resend on the strength of a write the host dropped is how a container
+  // goes permanently stale, so the refusal has to beat the dedup record.
+
+  function refusingBridge(refuse: (id: number) => boolean) {
+    const calls: Array<{ id: number; content: string }> = []
+    const bridge = {
+      textContainerUpgrade: (u: { containerID: number; content: string }) => {
+        calls.push({ id: u.containerID, content: u.content })
+        return Promise.resolve(!refuse(u.containerID))
+      },
+      rebuildPageContainer: () => Promise.resolve(true),
+    }
+    return { bridge: bridge as never, calls }
+  }
+
+  /** Put the panel in list mode with 'alpha' on it, so the call under test is
+   *  an in-place upgrade rather than the rebuild a mode change forces. */
+  async function seated(bridge: never) {
+    invalidatePanel()
+    await updateDisplay(bridge, listState('alpha'))
+  }
+
+  test('a refused write is sent again on the next frame', async () => {
+    const { bridge, calls } = refusingBridge((id) => id === 1)
+    await seated(bridge)
+    await updateDisplay(bridge, listState('beta'))
+    calls.length = 0
+    // 'beta' is still what the state says, so only a record that took the
+    // refusal seriously would send anything here.
+    await updateDisplay(bridge, listState('beta'))
+    expect(calls.filter((c) => c.id === 1).length).toBe(1)
+  })
+
+  test('an accepted write is still not sent twice', async () => {
+    // The retry above must come from the refusal, not from having stopped
+    // recording writes altogether.
+    const { bridge, calls } = refusingBridge(() => false)
+    await seated(bridge)
+    await updateDisplay(bridge, listState('beta'))
+    calls.length = 0
+    await updateDisplay(bridge, listState('beta'))
+    expect(calls.filter((c) => c.id === 1)).toEqual([])
+  })
+
+  test('refusals are counted', async () => {
+    const { bridge } = refusingBridge((id) => id === 1)
+    await seated(bridge)
+    const before = panelDrops()
+    await updateDisplay(bridge, listState('beta'))
+    expect(panelDrops()).toBeGreaterThan(before)
   })
 })
 

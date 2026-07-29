@@ -6,7 +6,7 @@
 // Groq STT) and the LocalStorage URL setup flow.
 
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
-import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, invalidatePanel, startMic, stopMic } from './display.ts'
+import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, panelDrops, setPanelTrace, invalidatePanel, startMic, stopMic } from './display.ts'
 import type { AppState } from './display.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
@@ -178,7 +178,9 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       // there rather than here.
       trace('exit dialogue requested (root double-tap)')
       try {
-        void bridge.shutDownPageContainer(1)
+        void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {
+          if (ok === false) trace('shutDownPageContainer refused by host', 'error')
+        })
       } catch (err) {
         trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
       }
@@ -270,7 +272,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   const bootAt = Date.now()
   setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}`,
     )
   }, HEARTBEAT_MS)
 }
@@ -279,6 +281,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
 async function main(): Promise<void> {
   installCrashReporting()
+  // Before initDisplay, so the host's answer to the very first page-container
+  // create reaches the log — that call is the one most likely to report a
+  // host that has run out of room.
+  setPanelTrace((message, level) => trace(`display: ${message}`, level ?? 'info'))
   // The SDK's window.EvenAppBridge stub can exist in a plain desktop browser,
   // so waitForEvenAppBridge() resolving is not proof of the Even Hub WebView.
   // The real Flutter WebView injects `flutter_inappwebview` (its absence is
