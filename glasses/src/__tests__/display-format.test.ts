@@ -4,7 +4,7 @@ import { sanitizeForG2, formatMessage } from '../types.ts'
 import { screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
-import { NOTICE_DISMISS_MS } from '../controller.ts'
+import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
 import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
@@ -1478,6 +1478,72 @@ describe('a screen that has not changed is not sent again', () => {
     await updateDisplay(bridge, s)
     calls.length = 0
     await updateHeader(bridge, s)
+    expect(calls).toEqual([])
+  })
+})
+
+describe('the root page hands the exit gesture back to the host', () => {
+  // `SYSTEM_EXIT_EVENT` — the only exit this app has ever been given — is
+  // documented as the user confirming the host's exit dialogue. Even Hub
+  // review requires the root page to raise that dialogue on a double-tap, and
+  // an app that keeps the gesture for itself gets exited anyway by a wearer
+  // who thought they were doing something else.
+
+  function stubPlatform() {
+    const calls: string[] = []
+    const platform = {
+      onDevice: false,
+      render: () => { calls.push('render') },
+      renderHeader: () => { calls.push('renderHeader') },
+      startMicCapture: async () => false,
+      stopMicCapture: async () => {},
+      transcribeAudio: async () => '',
+      saveState: () => {},
+      loadState: async () => null,
+      requestExit: () => { calls.push('requestExit') },
+    }
+    return { platform, calls }
+  }
+
+  const twoSessions = [
+    { id: 'a', name: 'alpha', state: 'idle' as const },
+    { id: 'b', name: 'beta', state: 'idle' as const },
+  ]
+
+  test('double-tap on the session list asks for the exit dialogue', async () => {
+    const { platform, calls } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    c.doubleTap()
+    await Promise.resolve()
+    expect(calls).toContain('requestExit')
+  })
+
+  test('the wearer\'s last gesture is available for the exit line', async () => {
+    const { platform } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    expect(c.lastGesture().kind).toBe('none')
+    expect(c.lastGesture().agoMs).toBe(-1)
+    c.doubleTap()
+    await Promise.resolve()
+    expect(c.lastGesture().kind).toBe('doubleTap')
+    expect(c.lastGesture().agoMs).toBeGreaterThanOrEqual(0)
+  })
+
+  test('nothing is drawn while the glasses are showing something else', async () => {
+    // Render calls made from the background are consumed by the host and
+    // dropped before the display, so they are BLE traffic for nobody.
+    const { platform, calls } = stubPlatform()
+    const c = new GlassesController(platform as never)
+    c.state.sessions = twoSessions as never
+    c.swipeDown()
+    await Promise.resolve()
+    expect(calls).toContain('render')
+
+    c.onForegroundExit()
+    calls.length = 0
+    c.swipeDown()
+    c.swipeUp()
+    await Promise.resolve()
     expect(calls).toEqual([])
   })
 })
