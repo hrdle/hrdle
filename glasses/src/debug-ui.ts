@@ -17,13 +17,13 @@ import { BAR_H, LINE_H, PANEL_H, PANEL_W, advance } from './metrics.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
 
-/** Japanese screen names — the shared vocabulary used when reporting issues. */
+/** Screen names — the shared vocabulary used when reporting issues. */
 const MODE_LABEL: Record<string, string> = {
-  session_list: '一覧',
-  conversation: '会話',
-  overlay: '割り込み',
-  choice: '選択',
-  voice: '音声',
+  session_list: 'List',
+  conversation: 'Conversation',
+  overlay: 'Interrupt',
+  choice: 'Choice',
+  voice: 'Voice',
 }
 
 const STYLE = `
@@ -198,7 +198,7 @@ export function startDebugUI(): void {
   const savedBg = readStoredSync(BG_SUFFIX)
   const bgUrl = params.get('bg') ?? savedBg ?? DEFAULT_BG
 
-  document.title = `${__PRODUCT_NAME__} — シミュレータ`
+  document.title = `${__PRODUCT_NAME__} - simulator`
   const style = document.createElement('style')
   style.textContent = STYLE
   document.head.appendChild(style)
@@ -207,8 +207,8 @@ export function startDebugUI(): void {
   app.innerHTML = `
     <div class="sim-wrap">
       <div class="sim-title">
-        <h1>${__PRODUCT_NAME__} シミュレータ</h1>
-        <span class="sub">実機と同じ描画（576×288 / 7行・幅は実測px）</span>
+        <h1>${__PRODUCT_NAME__} simulator</h1>
+        <span class="sub">Draws exactly what the device draws (576x288 / 7 rows, widths measured in px)</span>
       </div>
       <div class="sim-main">
         <div class="lens-col">
@@ -226,14 +226,14 @@ export function startDebugUI(): void {
             </div>
           </div>
           <div class="lens-meta">
-            <span class="mode-pill" id="g2-mode-jp">一覧</span>
+            <span class="mode-pill" id="g2-mode-jp">List</span>
             <span class="mode-id" id="g2-mode-id">session_list</span>
-            <button type="button" id="g2-copy">画面をコピー</button>
-            <button type="button" id="g2-png">PNGを保存</button>
-            <button type="button" id="g2-fs">全画面</button>
-            <button type="button" id="g2-pip">小窓</button>
+            <button type="button" id="g2-copy">Copy screen</button>
+            <button type="button" id="g2-png">Save PNG</button>
+            <button type="button" id="g2-fs">Fullscreen</button>
+            <button type="button" id="g2-pip">Picture-in-picture</button>
             <video id="g2-pip-video" muted playsinline hidden></video>
-            <label class="mirror"><input type="checkbox" id="g2-mirror" />実機ミラー</label>
+            <label class="mirror"><input type="checkbox" id="g2-mirror" />Mirror the device</label>
             <span class="hint" id="g2-mirror-status"></span>
             <span class="hint" id="g2-copied"></span>
           </div>
@@ -242,27 +242,27 @@ export function startDebugUI(): void {
         </div>
 
         <div class="panel">
-          <h2>リング操作</h2>
+          <h2>Ring controls</h2>
           <div class="ring">
-            <button type="button" id="btn-up">スワイプ↑</button>
-            <button type="button" id="btn-down">スワイプ↓</button>
-            <button type="button" id="btn-tap">タップ</button>
-            <button type="button" id="btn-dbl">ダブルタップ</button>
+            <button type="button" id="btn-up">Swipe up</button>
+            <button type="button" id="btn-down">Swipe down</button>
+            <button type="button" id="btn-tap">Tap</button>
+            <button type="button" id="btn-dbl">Double tap</button>
           </div>
-          <h2>音声入力</h2>
-          <input type="text" id="dbg-stt" placeholder="STTを飛ばす場合の文字列（任意）" />
-          <p class="hint" id="voice-status">会話画面でタップすると録音を開始し、もう一度タップで Groq に送る。文字列を入れておくと録音せずそれを認識結果として扱う。</p>
+          <h2>Voice input</h2>
+          <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
+          <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
 
-          <h2>背景</h2>
+          <h2>Background</h2>
           <div class="bg-row">
-            <button type="button" id="bg-pick">画像を選ぶ</button>
-            <button type="button" id="bg-cam">カメラ</button>
-            <button type="button" id="bg-reset">既定に戻す</button>
-            <label class="mirror"><input type="checkbox" id="g2-glassy" checked />映り込み</label>
+            <button type="button" id="bg-pick">Pick an image</button>
+            <button type="button" id="bg-cam">Camera</button>
+            <button type="button" id="bg-reset">Reset</button>
+            <label class="mirror"><input type="checkbox" id="g2-glassy" checked />Reflection</label>
           </div>
           <input type="file" id="bg-file" accept="image/*" hidden />
-          <input type="text" id="bg-url" placeholder="画像URLを貼り付け（Enter）" />
-          <p class="hint" id="bg-status">画面にドラッグ＆ドロップでも差し替えられる。</p>
+          <input type="text" id="bg-url" placeholder="Paste an image URL (Enter)" />
+          <p class="hint" id="bg-status">You can also drag and drop onto the screen to replace it.</p>
         </div>
       </div>
     </div>
@@ -298,14 +298,14 @@ export function startDebugUI(): void {
   new ResizeObserver(fitPanel).observe(document.body)
   fitPanel()
 
-  const DEFAULT_BG_HINT = '画面にドラッグ＆ドロップでも差し替えられる。'
+  const DEFAULT_BG_HINT = 'You can also drag and drop onto the screen to replace it.'
   function setBgStatus(message: string): void {
     const node = document.getElementById('bg-status')
     if (node) node.textContent = message || DEFAULT_BG_HINT
   }
 
   const DEFAULT_VOICE_HINT =
-    '会話画面でタップすると録音を開始し、もう一度タップで Groq に送る。文字列を入れておくと録音せずそれを認識結果として扱う。'
+    'Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.'
   function setVoiceStatus(message: string): void {
     const node = document.getElementById('voice-status')
     if (node) node.textContent = message || DEFAULT_VOICE_HINT
@@ -335,7 +335,7 @@ export function startDebugUI(): void {
       }
       setBgStatus('')
     })
-    probe.addEventListener('error', () => setBgStatus('画像を読み込めませんでした'))
+    probe.addEventListener('error', () => setBgStatus('Could not load the image'))
     probe.src = url
   }
 
@@ -408,8 +408,8 @@ export function startDebugUI(): void {
   // proportional (a space is 5px, `i` is 4, `W` is 16) and no browser
   // monospace comes close, so a right-aligned clock ended up near the middle
   // of the panel. Advancing by the firmware's own per-character widths —
-  // kerning included — is the only way this window earns the phrase "実機と
-  // 同じ描画" in its own subtitle.
+  // kerning included - is the only way this window earns the phrase "draws
+  // exactly what the device draws" in its own subtitle.
   function drawRow(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
     let dx = 0
     let prev = ''
@@ -524,10 +524,10 @@ export function startDebugUI(): void {
       source.connect(micNode)
       micNode.connect(mute)
       mute.connect(micCtx.destination)
-      setVoiceStatus('録音中… マイクに向かって話してください')
+      setVoiceStatus('Recording... speak into the microphone')
       return true
     } catch (err) {
-      setVoiceStatus(`マイクを使えません: ${err instanceof Error ? err.message : err}`)
+      setVoiceStatus(`Cannot use the microphone: ${err instanceof Error ? err.message : err}`)
       return false
     }
   }
@@ -564,13 +564,13 @@ export function startDebugUI(): void {
     // from, so this reports rather than acts — the simulator's job is to make
     // the gesture's new meaning visible while it is being designed.
     requestExit() {
-      setVoiceStatus('終了ダイアログを要求（実機ではホストの確認が出ます）')
+      setVoiceStatus('Requested the exit dialog (on the device the host asks for confirmation)')
     },
     // The browser never backgrounds this the way the host does, so this only
     // fires if the simulator is driven into that state deliberately. Reported
     // rather than silent: the recovery it stands for is the whole point.
     onForegroundRegained() {
-      setVoiceStatus('前面復帰を検知（操作が届いたので描画を再開）')
+      setVoiceStatus('Detected a return to the foreground (input arrived, so drawing resumes)')
     },
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
@@ -588,16 +588,16 @@ export function startDebugUI(): void {
     transcribeAudio: async (pcm) => {
       const scripted = sttInput.value.trim()
       if (scripted) {
-        setVoiceStatus(`STT欄の文字列を使用: ${scripted}`)
+        setVoiceStatus(`Using the text from the STT field: ${scripted}`)
         return scripted
       }
-      setVoiceStatus(`認識中… (${(pcm.length / 2 / MIC_RATE).toFixed(1)}秒の音声を送信)`)
+      setVoiceStatus(`Transcribing... (sent ${(pcm.length / 2 / MIC_RATE).toFixed(1)}s of audio)`)
       try {
         const text = await transcribe(pcm, MIC_RATE)
-        setVoiceStatus(text ? `認識結果: ${text}` : '認識できませんでした')
+        setVoiceStatus(text ? `Transcript: ${text}` : 'Nothing was recognized')
         return text
       } catch (err) {
-        setVoiceStatus(`認識に失敗: ${err instanceof Error ? err.message : err}`)
+        setVoiceStatus(`Transcription failed: ${err instanceof Error ? err.message : err}`)
         return ''
       }
     },
@@ -625,7 +625,7 @@ export function startDebugUI(): void {
   function screenAsText(): string {
     const rule = '─'.repeat(52)
     return [
-      `[${MODE_LABEL[lastMode] ?? lastMode} / ${lastMode}]${mirroring ? ' 実機ミラー' : ''}`,
+      `[${MODE_LABEL[lastMode] ?? lastMode} / ${lastMode}]${mirroring ? ' mirroring the device' : ''}`,
       rule,
       lastScreen.header,
       rule,
@@ -643,10 +643,10 @@ export function startDebugUI(): void {
   el('g2-copy').addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(screenAsText())
-      copied.textContent = 'コピーしました'
+      copied.textContent = 'Copied'
       copied.className = 'hint copied'
     } catch {
-      copied.textContent = 'コピーできませんでした'
+      copied.textContent = 'Could not copy'
       copied.className = 'hint'
     }
     setTimeout(() => { copied.textContent = '' }, 2000)
@@ -665,7 +665,7 @@ export function startDebugUI(): void {
    * Screenshotting the lens element instead bakes in whichever backdrop the
    * simulator happens to be showing, which is the right image for judging
    * legibility and the wrong one to submit. Two different jobs, hence a button
-   * beside 「画面をコピー」 rather than in place of it.
+   * beside "Copy screen" rather than in place of it.
    */
   el('g2-png').addEventListener('click', () => {
     try {
@@ -674,10 +674,10 @@ export function startDebugUI(): void {
       a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${lastMode}-${stamp}.png`
       a.href = canvas.toDataURL('image/png')
       a.click()
-      copied.textContent = 'PNGを保存しました（透過・576×288）'
+      copied.textContent = 'Saved the PNG (transparent, 576x288)'
       copied.className = 'hint copied'
     } catch {
-      copied.textContent = 'PNGを保存できませんでした'
+      copied.textContent = 'Could not save the PNG'
       copied.className = 'hint'
     }
     setTimeout(() => { copied.textContent = '' }, 2500)
@@ -691,7 +691,7 @@ export function startDebugUI(): void {
   /** Show a local file without persisting it: a blob URL is dead on reload. */
   function useLocalFile(file: File): void {
     if (!file.type.startsWith('image/')) {
-      setBgStatus('画像ファイルではありません')
+      setBgStatus('That is not an image file')
       return
     }
     applyBackdrop(URL.createObjectURL(file), false)
@@ -731,7 +731,7 @@ export function startDebugUI(): void {
     camStream = null
     camEl.srcObject = null
     lensEl.classList.remove('cam-on')
-    camBtn.textContent = 'カメラ'
+    camBtn.textContent = 'Camera'
   }
 
   async function startCam(): Promise<void> {
@@ -742,11 +742,11 @@ export function startDebugUI(): void {
       })
       camEl.srcObject = camStream
       lensEl.classList.add('cam-on')
-      camBtn.textContent = 'カメラを止める'
+      camBtn.textContent = 'Stop the camera'
       setBgStatus('')
       startCameraPump()
     } catch {
-      setBgStatus('カメラを開けませんでした（権限とHTTPSを確認）')
+      setBgStatus('Could not open the camera (check permissions and HTTPS)')
     }
   }
 
@@ -762,14 +762,14 @@ export function startDebugUI(): void {
 
   el('g2-fs').addEventListener('click', () => {
     if (document.fullscreenElement) void document.exitFullscreen()
-    else void lensEl.requestFullscreen().catch(() => setBgStatus('全画面にできませんでした'))
+    else void lensEl.requestFullscreen().catch(() => setBgStatus('Could not go fullscreen'))
   })
 
   document.addEventListener('fullscreenchange', () => {
     const on = document.fullscreenElement === lensEl
     lensEl.classList.toggle('fs', on)
     if (!on) lensEl.style.removeProperty('--fs-scale')
-    el('g2-fs').textContent = on ? '全画面を終了' : '全画面'
+    el('g2-fs').textContent = on ? 'Exit fullscreen' : 'Fullscreen'
     fitPanel()
   })
   window.addEventListener('resize', fitPanel)
@@ -925,7 +925,7 @@ export function startDebugUI(): void {
       await pipVideo.requestPictureInPicture()
       startPipPump()
     } catch {
-      setBgStatus('小窓にできませんでした（対応していないブラウザかもしれません）')
+      setBgStatus('Could not open picture-in-picture (the browser may not support it)')
     }
   }
 
@@ -935,10 +935,10 @@ export function startDebugUI(): void {
   })
 
   pipVideo.addEventListener('enterpictureinpicture', () => {
-    el('g2-pip').textContent = '小窓を閉じる'
+    el('g2-pip').textContent = 'Close picture-in-picture'
   })
   pipVideo.addEventListener('leavepictureinpicture', () => {
-    el('g2-pip').textContent = '小窓'
+    el('g2-pip').textContent = 'Picture-in-picture'
     stopPipPump()
   })
 
@@ -1023,7 +1023,7 @@ export function startDebugUI(): void {
     if (!screen) {
       // The publisher's socket closed. Say so — a mirror still showing the
       // last frame is indistinguishable from a live one that has gone quiet.
-      setMirrorUi(false, '実機が接続されていません')
+      setMirrorUi(false, 'No device is connected')
       return
     }
     // Rebuilt field by field, so a new one added to GlassesScreen is dropped
@@ -1035,14 +1035,14 @@ export function startDebugUI(): void {
       body: wrapForPanel(screen.body),
       footer: screen.footer,
     }, screen.mode)
-    setMirrorUi(true, '実機と同期中')
+    setMirrorUi(true, 'In sync with the device')
   })
 
   mirrorToggle.addEventListener('change', () => {
     mirroring = mirrorToggle.checked
     if (mirroring) {
       controller.ws.subscribeGlassesScreen()
-      setMirrorUi(false, '実機を待っています…')
+      setMirrorUi(false, 'Waiting for the device...')
     } else {
       controller.ws.unsubscribeGlassesScreen()
       setMirrorUi(false, '')

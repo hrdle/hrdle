@@ -61,23 +61,23 @@ function toClientView(peer: StoredPeer & {
   };
 }
 
-// GET /api/peers - peer 一覧 (selfを含む)
+// GET /api/peers - list peers (including self)
 peers.get('/', async (c) => {
   const all = await listPeers();
   return c.json({ peers: all.map(toClientView) });
 });
 
-// GET /api/peers/discover - Tailscale tailnet 内で cchub が動いている peer を検出
+// GET /api/peers/discover - find peers running hrdle on the Tailscale tailnet
 peers.get('/discover', async (c) => {
   const discovered = await discoverPeers();
   return c.json({ discovered });
 });
 
-// POST /api/peers - peer を追加
+// POST /api/peers - add a peer
 peers.post('/', zValidator('json', PeerCreateSchema), async (c) => {
   const { nickname, url, password, color } = c.req.valid('json');
 
-  // 追加前に必ず疎通＆ログインを試す
+  // Always probe connectivity and log in before registering
   let token: string;
   try {
     token = await loginToPeer(url, password);
@@ -92,7 +92,7 @@ peers.post('/', zValidator('json', PeerCreateSchema), async (c) => {
   return c.json({ peer: toClientView(peer) });
 });
 
-// PATCH /api/peers/:id - nickname/color/password 更新
+// PATCH /api/peers/:id - update nickname/color/password
 peers.patch('/:id', zValidator('json', PeerUpdateSchema), async (c) => {
   const id = c.req.param('id');
   const { nickname, color, password } = c.req.valid('json');
@@ -129,14 +129,14 @@ peers.delete('/:id', async (c) => {
   return c.json({ success: true });
 });
 
-// PUT /api/peers/order - peer 並び替え
+// PUT /api/peers/order - reorder peers
 peers.put('/order', zValidator('json', PeerOrderSchema), async (c) => {
   const { order } = c.req.valid('json');
   await setPeerOrder(order);
   return c.json({ success: true });
 });
 
-// POST /api/peers/:id/verify - 疎通確認
+// POST /api/peers/:id/verify - check connectivity
 peers.post('/:id/verify', async (c) => {
   const id = c.req.param('id');
   const peer = await listPeers().then(ps => ps.find(p => p.id === id));
@@ -155,10 +155,10 @@ peers.post('/:id/verify', async (c) => {
 });
 
 // -----------------------------------------------------------------------------
-// History アグリゲーション
-// 各 peer の `/api/sessions/history/...` を並列 fetch して merge する。
-// dirName は peer 間で衝突しうるので、peer 情報を必ず併載してクライアントが
-// (peerId, dirName) の複合キーで識別できるようにする。
+// History aggregation
+// Fetches every peer's `/api/sessions/history/...` in parallel and merges them.
+// dirName can collide across peers, so the peer info always rides along and the
+// client identifies a project by the composite (peerId, dirName) key.
 // -----------------------------------------------------------------------------
 
 interface HistoryProjectsResp {
@@ -205,7 +205,7 @@ function peerRecentlyFailed(peer: { lastErrorAt?: string }): boolean {
   return !Number.isNaN(ts) && Date.now() - ts < PEER_ERROR_COOLDOWN_MS;
 }
 
-// GET /api/peers/history/projects - 全 peer のプロジェクトを merge
+// GET /api/peers/history/projects - merge the projects of every peer
 peers.get('/history/projects', async (c) => {
   const allPeers = await listPeers();
   const errors: { peerId: string; message: string }[] = [];
@@ -272,7 +272,7 @@ async function buildLocalProjectSessions(dirName: string): Promise<HistorySessio
   return merged;
 }
 
-// GET /api/peers/history/:peerId/projects/:dirName - 指定 peer のプロジェクト内 session 一覧
+// GET /api/peers/history/:peerId/projects/:dirName - sessions inside one peer's project
 peers.get('/history/:peerId/projects/:dirName', async (c) => {
   const peerId = c.req.param('peerId');
   const dirName = c.req.param('dirName');
@@ -289,7 +289,7 @@ peers.get('/history/:peerId/projects/:dirName', async (c) => {
     const data = (await res.json()) as { sessions: HistorySession[] };
     sessions = data.sessions ?? [];
   }
-  // peer 情報を付与
+  // Attach the peer info
   const enriched = sessions.map(s => ({
     ...s,
     peerId: peer.id,
@@ -299,7 +299,7 @@ peers.get('/history/:peerId/projects/:dirName', async (c) => {
   return c.json({ sessions: enriched });
 });
 
-// GET /api/peers/history/:peerId/:sessionId/conversation - 指定 peer の会話履歴
+// GET /api/peers/history/:peerId/:sessionId/conversation - conversation history from one peer
 peers.get('/history/:peerId/:sessionId/conversation', async (c) => {
   const peerId = c.req.param('peerId');
   const sessionId = c.req.param('sessionId');
@@ -331,7 +331,7 @@ peers.get('/history/:peerId/:sessionId/conversation', async (c) => {
   return c.json(data);
 });
 
-// POST /api/peers/history/:peerId/resume - 指定 peer 上で session を resume
+// POST /api/peers/history/:peerId/resume - resume a session on one peer
 peers.post('/history/:peerId/resume', async (c) => {
   const peerId = c.req.param('peerId');
   const peer = (await listPeers()).find(p => p.id === peerId);
@@ -340,12 +340,10 @@ peers.post('/history/:peerId/resume', async (c) => {
   const body = await c.req.json().catch(() => ({}));
 
   if (peer.url === SELF_PEER_URL) {
-    // self: Hub の resume 処理を呼ぶしかないが、 sessions.ts が export してないので
-    // peer の REST API 経由で投げる (localhost 越しではなく Hub 自身に対しては
-    // 認証無効/有効に関わらず直接 fetch では成り立たない)。
-    // → /api/peers の同期 fetch を経由しない最もシンプルな方法: 内部関数を export
-    // 今回は最小実装として「self の resume はクライアント側で Hub の /api/sessions/history/resume を直に呼ぶ」前提にし、
-    // この endpoint は remote 専用とする。
+    // self would have to call the hub's own resume path, but sessions.ts does not
+    // export it, and fetching the hub from inside the hub does not hold up either
+    // way once auth is in play. So this endpoint stays remote-only: the client
+    // calls /api/sessions/history/resume directly for local sessions.
     return c.json({ error: 'Use /api/sessions/history/resume for local sessions' }, 400);
   }
 
@@ -357,15 +355,15 @@ peers.post('/history/:peerId/resume', async (c) => {
   const path = '/api/sessions/history/resume';
   const res = await peerFetch(peer.id, peer.url, peer.wsToken, path, init);
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  // peer 側のステータスをそのまま透過 (duplicate_working_dir などのコードもクライアントに届ける)
+  // Pass the peer's status through untouched, so codes like duplicate_working_dir reach the client
   if (res.ok) return c.json(data);
   return c.json(data, (res.status >= 400 && res.status < 600 ? res.status : 502) as 400 | 401 | 404 | 409 | 500 | 502);
 });
 
 // -----------------------------------------------------------------------------
-// Files API プロキシ (peer 上のディレクトリ browse / mkdir 用)
-// 新規セッション作成ダイアログで peer 側の filesystem を参照させるため、
-// /api/files/browse と /api/files/mkdir を peer-aware にする。
+// Files API proxy (browse / mkdir on a peer)
+// The new-session dialog has to show the peer's filesystem, so /api/files/browse
+// and /api/files/mkdir are made peer-aware.
 // -----------------------------------------------------------------------------
 
 // GET /api/peers/:peerId/files/browse?path=...
@@ -379,8 +377,8 @@ peers.get('/:peerId/files/browse', async (c) => {
   const path = `/api/files/browse${suffix}`;
 
   if (peer.url === SELF_PEER_URL) {
-    // self は Hub の /api/files/browse をそのまま使えるが、ルーター越しに呼ぶより
-    // クライアントが直接 /api/files/browse を叩いた方が良いので、ここは remote 専用と割り切る
+    // self can use the hub's own /api/files/browse, and the client calling that
+    // directly beats routing through here, so this path is remote-only
     return c.json({ error: 'Use /api/files/browse for local peer' }, 400);
   }
 
@@ -412,14 +410,14 @@ peers.post('/:peerId/files/mkdir', async (c) => {
 });
 
 // POST /api/peers/:peerId/upload/image
-// 画像アップロードを peer 側に転送し、peer のローカル絶対パスを返す。
-// peer 上で動いている Claude Code が、そのパスを直接読めるようにするため必須。
+// Forwards an image upload to the peer and returns the peer's local absolute path.
+// Required so the Claude Code running on that peer can read the file directly.
 peers.post('/:peerId/upload/image', async (c) => {
   const peerId = c.req.param('peerId');
   const peer = (await listPeers()).find(p => p.id === peerId);
   if (!peer) return c.json({ error: 'Peer not found' }, 404);
 
-  // ── local: ハブ自身に保存
+  // -- local: store on the hub itself
   if (peer.url === SELF_PEER_URL) {
     try {
       const formData = await c.req.formData();
@@ -437,7 +435,7 @@ peers.post('/:peerId/upload/image', async (c) => {
     }
   }
 
-  // ── remote: peer の /api/upload/image に multipart を中継
+  // -- remote: relay the multipart body to the peer's /api/upload/image
   let incoming: FormData;
   try {
     incoming = await c.req.formData();
@@ -449,8 +447,8 @@ peers.post('/:peerId/upload/image', async (c) => {
     return c.json({ error: 'No image file provided' }, 400);
   }
 
-  // 新しい FormData に詰め直して peer に転送 (元の FormData をそのまま fetch
-  // body に渡すと boundary 制御が安定しないことがあるため)
+  // Repack into a fresh FormData before forwarding: passing the original one
+  // straight to fetch as the body makes boundary handling unreliable
   const outgoing = new FormData();
   outgoing.append('image', file, file.name);
 
@@ -471,7 +469,7 @@ peers.post('/:peerId/upload/image', async (c) => {
   }
 });
 
-// GET /api/peers/:peerId/dashboard - peer (or self) の dashboard を返す
+// GET /api/peers/:peerId/dashboard - return the dashboard of a peer (or self)
 peers.get('/:peerId/dashboard', async (c) => {
   const peerId = c.req.param('peerId');
   const peer = (await listPeers()).find(p => p.id === peerId);
@@ -495,7 +493,7 @@ peers.get('/:peerId/dashboard', async (c) => {
   }
 });
 
-// GET /api/peers/sessions - 全 peer のセッション一覧をマージして返す
+// GET /api/peers/sessions - merge and return the session list of every peer
 peers.get('/sessions', async (c) => {
   const allPeers = await listPeers();
   const errors: { peerId: string; message: string }[] = [];

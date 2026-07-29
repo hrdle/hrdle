@@ -11,8 +11,8 @@ import { authFetch, getAuthToken, isTransientNetworkError } from "../services/ap
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-// Multi-server: 内部キーは `${peerId}::${dirName}` で識別する (peer 跨ぎで dirName が
-// 衝突しうるため)。UI 側もこのキーで expand 状態などを持つ。
+// Multi-server: the internal key is `${peerId}::${dirName}`, because dirName can
+// collide across peers. The UI keys its expand state off the same thing.
 export type ProjectKey = string;
 export function projectKey(peerId: string, dirName: string): ProjectKey {
 	return `${peerId}::${dirName}`;
@@ -71,7 +71,7 @@ export function useSessionHistory(): UseSessionHistoryResult {
 	const [isSearching, setIsSearching] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 
-	// 全 peer のプロジェクト一覧を取得
+	// Fetch the project list of every peer
 	const fetchProjects = useCallback(async (silent = false) => {
 		try {
 			if (!silent) {
@@ -217,10 +217,11 @@ export function useSessionHistory(): UseSessionHistoryResult {
 		[],
 	);
 
-	// Search は Hub の SSE をそのまま使用 (Phase: peer 横断 search は未実装)。
-	// EventSource は Authorization ヘッダを送れず、password 認証時に 401 で無言失敗
-	// する。fetch + ReadableStream で Bearer を付与し SSE を手動パースする。
-	// AbortController で重複検索/アンマウント時に前のストリームを確実に閉じる。#238
+	// Search uses the hub's own SSE (cross-peer search is not implemented yet).
+	// EventSource cannot send an Authorization header and fails silently with 401
+	// under password auth, so the Bearer goes through fetch + ReadableStream and the
+	// SSE is parsed by hand. An AbortController closes the previous stream on a
+	// repeated search or unmount. #238
 	const searchAbortRef = useRef<AbortController | null>(null);
 	const searchSessions = useCallback(async (query: string) => {
 		setSearchQuery(query);

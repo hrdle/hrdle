@@ -84,9 +84,9 @@ export function normalizeHookBody(body: Record<string, unknown>): Record<string,
 }
 
 /**
- * Grok の transcript (updates.jsonl, JSON-RPC session/update ストリーム) から
- * 通知メッセージを生成する。最後の user_message_chunk 以降の
- * agent_message_chunk を連結して最後の応答本文とみなす。
+ * Builds a notification message from a Grok transcript (updates.jsonl, the
+ * JSON-RPC session/update stream). The agent_message_chunks after the last
+ * user_message_chunk are concatenated and treated as the final response.
  */
 function generateGrokSmartMessage(entries: Array<Record<string, unknown>>): string | undefined {
   const tools: string[] = [];
@@ -116,10 +116,10 @@ function generateGrokSmartMessage(entries: Array<Record<string, unknown>>): stri
 
   let action: string;
   const hasTool = (pattern: RegExp) => tools.some((t) => pattern.test(t));
-  if (hasTool(/edit|write|create_file|apply_patch/i)) action = 'ファイル編集完了';
-  else if (hasTool(/terminal|bash|command/i)) action = 'コマンド実行完了';
-  else if (hasTool(/read|search|grep|glob/i)) action = '調査完了';
-  else action = '完了';
+  if (hasTool(/edit|write|create_file|apply_patch/i)) action = 'Edited files';
+  else if (hasTool(/terminal|bash|command/i)) action = 'Ran a command';
+  else if (hasTool(/read|search|grep|glob/i)) action = 'Finished investigating';
+  else action = 'Done';
 
   let inCodeBlock = false;
   for (const line of responseText.split('\n')) {
@@ -134,7 +134,7 @@ function generateGrokSmartMessage(entries: Array<Record<string, unknown>>): stri
   return action;
 }
 
-/** transcriptファイルからコンテキストに応じた通知メッセージを生成する */
+/** Builds a context-aware notification message from a transcript file */
 async function generateSmartMessage(transcriptPath: string, _event: string): Promise<string | undefined> {
   try {
     const recentLines = await readTrailingLines(transcriptPath, 50);
@@ -144,12 +144,12 @@ async function generateSmartMessage(transcriptPath: string, _event: string): Pro
       try { entries.push(JSON.parse(line)); } catch {}
     }
 
-    // Grok transcript は Claude の .jsonl と行形式が違うので専用パスへ
+    // A Grok transcript has a different line shape than Claude's .jsonl, so it takes its own path
     if (entries.some((e) => e?.method === 'session/update')) {
       return generateGrokSmartMessage(entries);
     }
 
-    // 使用されたツールを収集
+    // Collect the tools that were used
     const tools: string[] = [];
     for (const entry of entries) {
       if (entry.type === 'assistant') {
@@ -161,19 +161,19 @@ async function generateSmartMessage(transcriptPath: string, _event: string): Pro
       }
     }
 
-    // アクション種別を判定
+    // Decide which kind of action this was
     let action: string;
-    if (tools.includes('Edit') || tools.includes('Write')) action = 'ファイル編集完了';
-    else if (tools.includes('Bash')) action = 'コマンド実行完了';
-    else if (tools.includes('Grep') || tools.includes('Glob') || tools.includes('Read')) action = '調査完了';
-    else action = '完了';
+    if (tools.includes('Edit') || tools.includes('Write')) action = 'Edited files';
+    else if (tools.includes('Bash')) action = 'Ran a command';
+    else if (tools.includes('Grep') || tools.includes('Glob') || tools.includes('Read')) action = 'Finished investigating';
+    else action = 'Done';
 
-    // 最後のアシスタントメッセージのテキストを取得
+    // Take the text of the last assistant message
     for (let i = entries.length - 1; i >= 0; i--) {
       if (entries[i].type !== 'assistant') continue;
       for (const block of entries[i].message?.content || []) {
         if (block.type !== 'text') continue;
-        // コードブロックを除いた最初の有意な行
+        // First meaningful line outside a code block
         let inCodeBlock = false;
         for (const line of (block.text || '').split('\n')) {
           const trimmed = line.trim();
@@ -195,11 +195,11 @@ async function generateSmartMessage(transcriptPath: string, _event: string): Pro
 
 const notify = new Hono();
 
-// hookイベントによるindicatorStateの一時オーバーライド
-// ccSessionId → { state, expiresAt }
+// Temporary indicatorState override driven by hook events
+// ccSessionId -> { state, expiresAt }
 const stateOverrides = new Map<string, { state: IndicatorState; expiresAt: number; toolName?: string }>();
-// TTLは安全弁。StopやPostToolUse/PreToolUseで明示的に上書きされる。
-const OVERRIDE_TTL = 24 * 60 * 60_000; // 24時間
+// The TTL is a safety valve; Stop and PostToolUse/PreToolUse overwrite it explicitly.
+const OVERRIDE_TTL = 24 * 60 * 60_000; // 24 hours
 // `/api/notify` is intentionally unauthenticated (local hooks call into it),
 // so a network attacker can flood the endpoint with arbitrary session_ids to
 // blow up `stateOverrides`. Validate the id format and bound the Map size so a
@@ -225,11 +225,11 @@ function evictStateOverrides(): void {
  * channels describe the same event in the same words.
  */
 const HOOK_RELAY_TEXT: Record<string, string> = {
-  Stop: '応答が完了しました',
-  Notification: 'ユーザー入力を待っています',
-  SubagentStop: 'サブエージェントが完了しました',
-  TaskCompleted: 'タスクが完了しました',
-  PostToolUse: 'ユーザー入力を待っています',
+  Stop: 'Response complete',
+  Notification: 'Waiting for your input',
+  SubagentStop: 'Subagent finished',
+  TaskCompleted: 'Task complete',
+  PostToolUse: 'Waiting for your input',
 };
 
 function hookEventToState(event: string, toolName?: string): IndicatorState | null {
@@ -251,7 +251,7 @@ function hookEventToState(event: string, toolName?: string): IndicatorState | nu
   }
 }
 
-/** セッションリスト取得時にオーバーライドを適用する */
+/** Applies the override when the session list is built */
 export function getIndicatorOverride(ccSessionId: string): { state: IndicatorState; toolName?: string } | null {
   const override = stateOverrides.get(ccSessionId);
   if (!override) return null;
@@ -263,15 +263,15 @@ export function getIndicatorOverride(ccSessionId: string): { state: IndicatorSta
 }
 
 /**
- * Claude Code / Codex hook イベントを受信して WebSocket 経由で全クライアントにブロードキャストする。
- * Stop, Notification 等の hook から curl で呼ばれる想定。
+ * Receives Claude Code / Codex hook events and broadcasts them to every client
+ * over the WebSocket. Meant to be called from Stop, Notification and similar hooks.
  *
- * リクエストボディ: hook の stdin JSON をそのまま渡す
+ * Request body: the hook's stdin JSON, passed through unchanged
  * {
  *   "hook_event_name": "Stop" | "Notification" | ...,
  *   "session_id": "...",
  *   "cwd": "/path/to/project",
- *   ...その他のhook固有フィールド
+ *   ...other hook-specific fields
  * }
  */
 notify.post('/', async (c) => {
@@ -281,11 +281,11 @@ notify.post('/', async (c) => {
     const cwd = body.cwd as string | undefined;
     const sessionId = body.session_id as string | undefined;
 
-    // hook固有の情報を data に格納
+    // Put the hook-specific fields into data
     const { hook_event_name, cwd: _cwd, session_id: _sid, transcript_path: _tp, ...rest } = body;
     const transcriptPath = body.transcript_path as string | undefined;
 
-    // indicatorStateオーバーライドを保存
+    // Store the indicatorState override
     // session_id must look like a real agent session id (Claude/Codex UUIDs,
     // herdr workspace labels). Reject anything that doesn't and bound the Map so
     // an unauth flood costs O(MAX) memory, not O(requests). #254
@@ -303,7 +303,7 @@ notify.post('/', async (c) => {
       }
     }
 
-    // transcriptからスマートなメッセージを生成
+    // Build a smarter message out of the transcript
     let message: string | undefined;
     if (transcriptPath && (await isAllowedTranscriptPath(transcriptPath))) {
       message = await generateSmartMessage(transcriptPath, event);

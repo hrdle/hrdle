@@ -23,9 +23,10 @@ import type { ControlModeConfig } from "./Terminal";
 import { TerminalComponent, type TerminalRef } from "./Terminal";
 import { soleVisiblePane, visiblePanes } from "../utils/panes";
 
-// ペインノード型定義。
-// sessionKey は `peerId:id` の複合キー (utils/sessionKey.ts) — セッション id
-// (herdr workspace 名) は peer 間で衝突するため、ツリーは常に複合キーで持つ。
+// Pane node types.
+// sessionKey is the composite `peerId:id` key (utils/sessionKey.ts): session ids
+// (herdr workspace names) collide across peers, so the tree always holds the
+// composite key.
 export type PaneNode =
 	| { type: "terminal"; sessionKey: string | null; id: string }
 	| {
@@ -386,10 +387,10 @@ function TerminalPane({
 								}`}
 								title={
 									showConversation
-										? "ターミナルに切替"
+										? "Switch to terminal"
 										: conversationAvailable
-											? "会話履歴に切替"
-											: "エージェントが起動していません"
+											? "Switch to conversation history"
+											: "No agent is running"
 								}
 								aria-label={
 									showConversation ? "Switch to Terminal" : "Switch to Chat"
@@ -539,7 +540,7 @@ function TerminalPane({
 									controlModeContext.splitPane(paneId, "h");
 								}}
 								className="p-1.5 text-white/50 hover:text-th-text transition-colors"
-								title="縦分割 (Ctrl+D)"
+								title="Split vertically (Ctrl+D)"
 								data-onboarding="split-pane"
 							>
 								<svg
@@ -561,7 +562,7 @@ function TerminalPane({
 									controlModeContext.splitPane(paneId, "v");
 								}}
 								className="p-1.5 text-white/50 hover:text-th-text transition-colors"
-								title="横分割 (Ctrl+Shift+D)"
+								title="Split horizontally (Ctrl+Shift+D)"
 							>
 								<svg
 									aria-hidden="true"

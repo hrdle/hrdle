@@ -477,7 +477,7 @@ describe('resolveHookTarget', () => {
 
 describe('postHookRelay', () => {
   test('without a subscriber it delivers nothing and reports so', () => {
-    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(false);
+    expect(postHookRelay({ sessionId: 's1', text: 'Response complete' })).toBe(false);
   });
 
   test('delivers an info item that expires far sooner than an agent note', async () => {
@@ -486,13 +486,13 @@ describe('postHookRelay', () => {
     await subscribeGlassesRelay(sock);
     sock.messages = [];
 
-    expect(postHookRelay({ sessionId: 's1', paneId: '%1', text: '応答が完了しました' })).toBe(true);
+    expect(postHookRelay({ sessionId: 's1', paneId: '%1', text: 'Response complete' })).toBe(true);
     const upserts = sock.ofType('glasses-relay');
     expect(upserts).toHaveLength(1);
     const item = upserts[0].item as { kind: string; paneId: string; text: string; expiresAt: number };
     expect(item.kind).toBe('info');
     expect(item.paneId).toBe('%1');
-    expect(item.text).toBe('応答が完了しました');
+    expect(item.text).toBe('Response complete');
     // Notification-lifetime, not the 5-minute agent-note lifetime.
     expect(item.expiresAt - Date.now()).toBeLessThanOrEqual(90_000);
     expect(item.expiresAt - Date.now()).toBeGreaterThan(60_000);
@@ -505,7 +505,7 @@ describe('postHookRelay', () => {
     postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'Which one?' });
     sock.messages = [];
 
-    expect(postHookRelay({ sessionId: 's1', text: 'ユーザー入力を待っています' })).toBe(true);
+    expect(postHookRelay({ sessionId: 's1', text: 'Waiting for your input' })).toBe(true);
     expect(sock.ofType('glasses-relay')).toHaveLength(0);
   });
 
@@ -517,7 +517,7 @@ describe('postHookRelay', () => {
     dismissRelayItem(waiting.id);
     sock.messages = [];
 
-    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(true);
+    expect(postHookRelay({ sessionId: 's1', text: 'Response complete' })).toBe(true);
     expect(sock.ofType('glasses-relay')).toHaveLength(1);
   });
 
@@ -556,7 +556,7 @@ describe('postHookRelay', () => {
     await subscribeGlassesRelay(sock);
     await trackGlassesRelay(); // baseline
 
-    postHookRelay({ sessionId: 's1', text: 'ユーザー入力を待っています' });
+    postHookRelay({ sessionId: 's1', text: 'Waiting for your input' });
     const hookInfoId = (sock.ofType('glasses-relay')[0].item as { id: string }).id;
     const agentNote = mustItem(postAgentRelay({ sessionId: 's2', kind: 'info', text: 'agent note' }));
     sock.messages = [];
@@ -581,7 +581,7 @@ describe('simulator vs device', () => {
     sim.messages = [];
 
     // Undelivered as far as the browser is concerned...
-    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(false);
+    expect(postHookRelay({ sessionId: 's1', text: 'Response complete' })).toBe(false);
     // ...but the panel it previews still shows what the panel would show.
     expect(sim.ofType('glasses-relay')).toHaveLength(1);
   });
@@ -593,7 +593,7 @@ describe('simulator vs device', () => {
     await subscribeGlassesRelay(sim, false);
     await subscribeGlassesRelay(dev, true);
 
-    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(true);
+    expect(postHookRelay({ sessionId: 's1', text: 'Response complete' })).toBe(true);
     expect(sim.ofType('glasses-relay')).toHaveLength(1);
     expect(dev.ofType('glasses-relay')).toHaveLength(1);
   });
@@ -602,7 +602,7 @@ describe('simulator vs device', () => {
     const old = new FakeSocket();
     glassesRelayDeps.listWorkspaces = async () => [];
     await subscribeGlassesRelay(old);
-    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(true);
+    expect(postHookRelay({ sessionId: 's1', text: 'Response complete' })).toBe(true);
   });
 
   test('an unanswered question suppresses only when a device is watching', async () => {
@@ -611,7 +611,7 @@ describe('simulator vs device', () => {
     await subscribeGlassesRelay(sim, false);
     postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'Which one?' });
 
-    expect(postHookRelay({ sessionId: 's1', text: 'ユーザー入力を待っています' })).toBe(false);
+    expect(postHookRelay({ sessionId: 's1', text: 'Waiting for your input' })).toBe(false);
   });
 
   test('a device that disconnects stops counting', async () => {
@@ -621,7 +621,7 @@ describe('simulator vs device', () => {
     expect(glassesDeviceCount()).toBe(1);
     unsubscribeGlassesRelay(dev);
     expect(glassesDeviceCount()).toBe(0);
-    expect(postHookRelay({ sessionId: 's1', text: '応答が完了しました' })).toBe(false);
+    expect(postHookRelay({ sessionId: 's1', text: 'Response complete' })).toBe(false);
   });
 
   test('resubscribing as a simulator drops the device claim', async () => {

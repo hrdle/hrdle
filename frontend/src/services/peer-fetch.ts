@@ -1,8 +1,9 @@
 /**
- * Multi-server: session の peerId に応じて peer 側 API を直接叩くヘルパー。
+ * Multi-server: helper that calls a peer's API directly based on a session's peerId.
  *
- * Hub の REST API (/api/workspaces/:id/theme 等) は local session 用なので、
- * peer のセッションには peer 自身の URL + 取得済みトークンで fetch する。
+ * The hub's REST API (/api/workspaces/:id/theme and friends) only covers local
+ * sessions, so a peer's session is fetched from the peer's own URL with the
+ * token already stored for it.
  */
 import { LOCAL_PEER_ID, type PeerClientView } from "../../../shared/types";
 import { authFetch, fetchWithTimeout } from "./api";
@@ -31,8 +32,8 @@ function resolveSessionApi(
 }
 
 /**
- * Session が remote peer に属するなら peer URL + そのトークンで fetch、
- * それ以外なら Hub に対する authFetch にフォールバックする。
+ * Fetches from the peer URL with that peer's token when the session belongs to a
+ * remote peer, and falls back to authFetch against the hub otherwise.
  */
 export async function sessionFetch(
 	session: SessionWithPeer | undefined,

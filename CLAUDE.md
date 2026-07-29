@@ -10,6 +10,29 @@ Hrdle is a web-based terminal session manager for coding agents — Claude Code,
 
 Formerly CC Hub, renamed in #459: the old name said Claude Code, which stopped being the whole story once the other agents arrived. `m0a/cc-hub` is archived at v0.2.98 and this repository carries development forward. The rename lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
 
+## Language and Style Rules
+
+**Write in English, no emoji.** These are hard rules, not preferences.
+
+English is required for:
+
+- Code comments (including JSDoc/TSDoc and inline notes)
+- Log and console output: `console.log` / `console.warn` / `console.error`, backend logger calls, CLI stdout and stderr
+- Test names (`describe` / `it` / `test` titles)
+- `CHANGELOG.md`
+- Commit messages, PR titles and PR bodies
+- UI strings written directly in components (strings that do not go through i18n)
+
+Japanese stays only where it is data, not prose written by us:
+
+- `frontend/src/i18n/locales/ja.json` and the `ja` table in `backend/src/i18n/index.ts` — these *are* the Japanese product surface. Add new user-facing text as an i18n key with both locales rather than hardcoding either language
+- Test fixtures whose Japanese is the thing under test (CJK line wrapping, full-width punctuation, the G2 display formatter)
+
+No emoji in comments, log output, CLI output, `CHANGELOG.md` or commit messages. Status is carried by the words themselves (`error:`, `warning:`, `done`), not by a glyph. Two exceptions, both functional rather than decorative:
+
+- `glasses/src/metrics.ts` — the emoji-to-G2-symbol substitution table; the emoji are input data the firmware cannot render
+- Emoji used as a control's own label where it is the affordance (for example the file-picker and URL keys in `frontend/src/components/Keyboard.tsx`)
+
 ## Commands
 
 ```bash

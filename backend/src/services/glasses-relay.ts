@@ -227,7 +227,7 @@ async function assembleWaitingPayload(
   ws: WorkspaceInfo,
   tmuxPaneId: string,
 ): Promise<{ text: string; choices?: string[] }> {
-  const fallback = `入力待ち: ${ws.id}`;
+  const fallback = `Waiting for input: ${ws.id}`;
   if (!ws.instanceId || !/^%\d+$/.test(tmuxPaneId)) return { text: fallback };
   const herdrPaneId = toHerdrPaneId(ws.instanceId, tmuxPaneId);
   const raw = await glassesRelayDeps.readPaneText(herdrPaneId);
@@ -382,7 +382,7 @@ export function postHookRelay(input: {
   const reachesAWearer = deviceSubscribers.size > 0;
 
   // An unanswered question already outranks anything a hook can say, and it is
-  // on screen with its choices. "応答が完了しました" underneath it would only
+  // on screen with its choices. "Response complete" underneath it would only
   // describe the same moment a second time, less usefully.
   const existing = store.get(input.sessionId);
   if (existing?.waiting && !existing.waiting.dismissed) return reachesAWearer;

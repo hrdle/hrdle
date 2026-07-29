@@ -174,14 +174,14 @@ async function getLatestRelease(tokenInfo: GitHubTokenInfo | null): Promise<GitH
       return null;
     }
     if (response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
-      console.error(`❌ ${t(tokenInfo ? 'update.rateLimitedAuth' : 'update.rateLimitedAnon')}`);
+      console.error(`${t(tokenInfo ? 'update.rateLimitedAuth' : 'update.rateLimitedAnon')}`);
       const resetHeader = response.headers.get('x-ratelimit-reset');
       if (resetHeader) {
         const resetDate = new Date(parseInt(resetHeader, 10) * 1000);
         console.error(`   ${t('update.rateLimitResetAt', { time: resetDate.toLocaleString() })}`);
       }
       if (!tokenInfo) {
-        console.error(`💡 ${t('update.rateLimitHintAnon')}`);
+        console.error(`${t('update.rateLimitHintAnon')}`);
         console.error('   - export GITHUB_TOKEN=<token>');
         console.error('   - gh auth login');
       }
@@ -189,7 +189,7 @@ async function getLatestRelease(tokenInfo: GitHubTokenInfo | null): Promise<GitH
     }
     throw new Error(`GitHub API error: ${response.status}`);
   } catch (_error) {
-    console.error(`❌ ${t('update.githubConnectionFailed')}`);
+    console.error(`${t('update.githubConnectionFailed')}`);
     return null;
   }
 }
@@ -243,7 +243,7 @@ async function downloadBinary(
   binaryName: string,
 ): Promise<boolean> {
   try {
-    console.log('📥 ダウンロード中...');
+    console.log('Downloading...');
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -279,7 +279,7 @@ async function downloadBinary(
 
     return true;
   } catch (error) {
-    console.error('❌ ダウンロードに失敗しました:', error);
+    console.error('Download failed:', error);
     try {
       await unlink(destPath);
     } catch {
@@ -293,19 +293,19 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   const currentVersion = VERSION;
 
   if (!autoMode) {
-    console.log(`🔍 更新を確認中... (現在: v${currentVersion})`);
+    console.log(`Checking for updates... (current: v${currentVersion})`);
   }
 
   const tokenInfo = getGitHubToken();
   if (tokenInfo && !autoMode) {
-    console.log(`🔑 ${t('update.authUsing', { source: tokenInfo.source })}`);
+    console.log(`${t('update.authUsing', { source: tokenInfo.source })}`);
   }
 
   const release = await getLatestRelease(tokenInfo);
 
   if (!release) {
     if (!autoMode) {
-      console.log('ℹ️  リリース情報を取得できませんでした');
+      console.log('Could not fetch the release information');
     }
     return;
   }
@@ -314,18 +314,18 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
 
   if (!isNewerVersion(latestVersion, currentVersion)) {
     if (!autoMode) {
-      console.log(`✅ 最新版です (v${currentVersion})`);
+      console.log(`Already up to date (v${currentVersion})`);
     }
     return;
   }
 
-  console.log(`⬆️  新しいバージョンがあります: ${latestVersion}`);
+  console.log(`A new version is available: ${latestVersion}`);
 
   if (checkOnly) {
     console.log('');
     // The one line here that tells the reader what to type. Spelled out, a
     // renamed build hands them a command that does not exist (#459).
-    console.log(`更新するには: ${IDENTITY.binaryName} update`);
+    console.log(`To update: ${IDENTITY.binaryName} update`);
     return;
   }
 
@@ -333,8 +333,8 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   const binaryName = getBinaryName();
   const asset = release.assets.find(a => a.name === binaryName);
   if (!asset) {
-    console.error(`❌ バイナリがリリースに見つかりません: ${binaryName}`);
-    console.log('利用可能なアセット:', release.assets.map(a => a.name).join(', '));
+    console.error(`error: binary not found in the release: ${binaryName}`);
+    console.log('Available assets:', release.assets.map(a => a.name).join(', '));
     return;
   }
 
@@ -342,7 +342,7 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   const servicePath = await getServiceBinaryPath();
   const currentPath = servicePath || process.execPath;
   if (servicePath && servicePath !== process.execPath) {
-    console.log(`📋 サービス登録パス: ${servicePath}`);
+    console.log(`Service path: ${servicePath}`);
   }
 
   // Verify the release publishes a SHA256SUMS file and that it contains an
@@ -352,7 +352,7 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   const expectedSha256 = await fetchExpectedSha256(release, binaryName);
   if (!expectedSha256) {
     console.error(
-      `❌ SHA256SUMS が見つかりません (${binaryName}) — 整合性検証に失敗するため更新を中止します`,
+      `error: SHA256SUMS not found (${binaryName}) - aborting the update because integrity cannot be verified`,
     );
     return;
   }
@@ -374,9 +374,9 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   // Backup current binary
   try {
     await copyFile(currentPath, backupPath);
-    console.log(`📦 バックアップ: ${backupPath}`);
+    console.log(`Backup: ${backupPath}`);
   } catch {
-    console.log('⚠️  バックアップをスキップしました');
+    console.log('warning: skipped the backup');
   }
 
   // Also update the CLI binary if it's at a different path
@@ -395,30 +395,30 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   // Stop service before replacing binary (macOS launchd holds the binary open)
   if (isDarwin) {
     Bun.spawnSync(['launchctl', 'bootout', `gui/${uid}`, plistPath]);
-    console.log('⏸️  サービスを停止しました');
+    console.log('Stopped the service');
   }
 
   // Replace binary
   try {
     await rename(tempPath, currentPath);
-    console.log(`✅ バイナリを更新しました: ${currentPath}`);
+    console.log(`Updated the binary: ${currentPath}`);
     // Also copy to CLI binary path if different from service path
     if (updateCliBinary) {
       try {
         await copyFile(currentPath, cliPath);
-        console.log(`✅ CLIバイナリも更新しました: ${cliPath}`);
+        console.log(`Updated the CLI binary as well: ${cliPath}`);
       } catch {
-        console.log(`⚠️  CLIバイナリの更新をスキップ: ${cliPath}`);
+        console.log(`warning: skipped the CLI binary update: ${cliPath}`);
       }
     }
   } catch (error) {
-    console.error('❌ バイナリの置き換えに失敗しました:', error);
+    console.error('error: failed to replace the binary:', error);
     if (isDarwin) {
       console.log(
-        `💡 ヒント: launchctl bootout gui/$(id -u)/${SERVICE.launchdServerLabel}`,
+        `Hint: launchctl bootout gui/$(id -u)/${SERVICE.launchdServerLabel}`,
       );
     } else {
-      console.log(`💡 ヒント: systemctl --user stop ${SERVICE.systemctl}`);
+      console.log(`Hint: systemctl --user stop ${SERVICE.systemctl}`);
     }
     // Try to restart service even if replace failed
     if (isDarwin) {
@@ -431,14 +431,14 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   if (isDarwin) {
     const result = Bun.spawnSync(['launchctl', 'bootstrap', `gui/${uid}`, plistPath]);
     if (result.exitCode === 0) {
-      console.log(`🔄 ${t('update.serviceRestarted')}`);
+      console.log(`${t('update.serviceRestarted')}`);
     } else {
       // Fallback to legacy load
       const legacyResult = Bun.spawnSync(['launchctl', 'load', plistPath]);
       if (legacyResult.exitCode === 0) {
-        console.log(`🔄 ${t('update.serviceRestarted')}`);
+        console.log(`${t('update.serviceRestarted')}`);
       } else {
-        console.log(`ℹ️  手動で再起動してください: launchctl bootstrap gui/$(id -u) ${plistPath}`);
+        console.log(`Restart manually: launchctl bootstrap gui/$(id -u) ${plistPath}`);
       }
     }
   } else {
@@ -449,12 +449,12 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
       SERVICE.systemctl,
     ]);
     if (restartResult.exitCode === 0) {
-      console.log(`🔄 ${t('update.serviceRestarted')}`);
+      console.log(`${t('update.serviceRestarted')}`);
     } else {
-      console.log(`ℹ️  ${t('update.manualRestartRequired')}`);
+      console.log(`${t('update.manualRestartRequired')}`);
     }
   }
 
   console.log('');
-  console.log(`✨ v${currentVersion} → ${latestVersion} に更新完了`);
+  console.log(`Updated v${currentVersion} -> ${latestVersion}`);
 }

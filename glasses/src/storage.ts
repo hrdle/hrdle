@@ -44,7 +44,7 @@ export async function readStored(
  * Clear `suffix` everywhere this app has ever written it.
  *
  * The fallback above is what makes this necessary: clearing only the current
- * key leaves an old one behind for `readStored` to find, and "切断" would
+ * key leaves an old one behind for `readStored` to find, and a disconnect would
  * reconnect to the same server on the next launch.
  */
 export async function clearStored(

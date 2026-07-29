@@ -152,7 +152,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         const kind = args[i];
         if (kind !== 'waiting' && kind !== 'info') {
-          console.error('❌ --kind は waiting か info を指定してください');
+          console.error('--kind takes either waiting or info');
           process.exit(1);
         }
         options.glassesKind = kind;
@@ -161,7 +161,7 @@ export function parseArgs(args: string[]): CliOptions {
       case '--choices':
         i++;
         if (!args[i]) {
-          console.error('❌ --choices にはカンマ区切りの選択肢を指定してください');
+          console.error('--choices takes a comma-separated list of choices');
           process.exit(1);
         }
         options.glassesChoices = args[i].split(',').map((c) => c.trim()).filter((c) => c.length > 0);
@@ -169,7 +169,7 @@ export function parseArgs(args: string[]): CliOptions {
       case '--session':
         i++;
         if (!args[i]) {
-          console.error('❌ --session にはセッション id を指定してください');
+          console.error('--session takes a session id');
           process.exit(1);
         }
         options.glassesSession = args[i];
@@ -216,7 +216,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         options.sendWaitMs = parseInt(args[i], 10);
         if (Number.isNaN(options.sendWaitMs) || options.sendWaitMs < 0) {
-          console.error('❌ --wait-ms must be a non-negative integer');
+          console.error('--wait-ms must be a non-negative integer');
           process.exit(1);
         }
         break;
@@ -224,7 +224,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         options.sendLines = parseInt(args[i], 10);
         if (Number.isNaN(options.sendLines) || options.sendLines < 0) {
-          console.error('❌ --lines must be a non-negative integer');
+          console.error('--lines must be a non-negative integer');
           process.exit(1);
         }
         break;
@@ -244,7 +244,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         options.debugSeconds = parseInt(args[i], 10);
         if (Number.isNaN(options.debugSeconds) || options.debugSeconds < 1) {
-          console.error('❌ --seconds must be a positive integer');
+          console.error('--seconds must be a positive integer');
           process.exit(1);
         }
         break;
@@ -261,7 +261,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         options.port = parseInt(args[i], 10);
         if (Number.isNaN(options.port) || options.port < 1 || options.port > 65535) {
-          console.error(`❌ ${t('cli.errorInvalidPort')}`);
+          console.error(`${t('cli.errorInvalidPort')}`);
           process.exit(1);
         }
         break;
@@ -270,7 +270,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         options.host = args[i];
         if (!options.host) {
-          console.error(`❌ ${t('cli.errorNoHost')}`);
+          console.error(`${t('cli.errorNoHost')}`);
           process.exit(1);
         }
         break;
@@ -279,7 +279,7 @@ export function parseArgs(args: string[]): CliOptions {
         i++;
         options.password = args[i];
         if (!options.password) {
-          console.error(`❌ ${t('cli.errorNoPassword')}`);
+          console.error(`${t('cli.errorNoPassword')}`);
           process.exit(1);
         }
         break;
@@ -291,7 +291,7 @@ export function parseArgs(args: string[]): CliOptions {
         break;
       default:
         if (arg.startsWith('-')) {
-          console.error(`❌ ${t('cli.errorUnknownOption', { option: arg })}`);
+          console.error(`${t('cli.errorUnknownOption', { option: arg })}`);
           console.error(`Help: ${IDENTITY.binaryName} --help`);
           process.exit(1);
         }
@@ -387,7 +387,7 @@ async function runGlasses(options: CliOptions): Promise<void> {
 async function runSend(options: CliOptions): Promise<void> {
   if (!options.sendTarget) {
     console.error(
-      `❌ target is required: ${IDENTITY.binaryName} send <peer>:<session>:<paneId> [text]`,
+      `target is required: ${IDENTITY.binaryName} send <peer>:<session>:<paneId> [text]`,
     );
     process.exit(1);
   }
@@ -406,7 +406,7 @@ async function runSend(options: CliOptions): Promise<void> {
       lines: options.sendLines ?? 20,
     });
   } catch (err) {
-    console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 }
@@ -414,7 +414,7 @@ async function runSend(options: CliOptions): Promise<void> {
 async function runPeek(options: CliOptions): Promise<void> {
   if (!options.peekTarget) {
     console.error(
-      `❌ target is required: ${IDENTITY.binaryName} peek <peer>:<session>:<paneId>`,
+      `target is required: ${IDENTITY.binaryName} peek <peer>:<session>:<paneId>`,
     );
     process.exit(1);
   }
@@ -426,7 +426,7 @@ async function runPeek(options: CliOptions): Promise<void> {
       localPort: options.port,
     });
   } catch (err) {
-    console.error(`❌ ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
   }
 }

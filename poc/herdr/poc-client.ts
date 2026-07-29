@@ -1,12 +1,12 @@
-// PoC: CC Hub backend (Bun) から herdr socket API を直接叩けるかの検証
+// PoC: can the hrdle backend (Bun) drive the herdr socket API directly?
 //
-// 検証項目:
-//   1. Unix socket への NDJSON リクエスト (pane.get / pane.read / pane.send_text)
-//   2. events.subscribe による push イベント受信 (接続維持)
-//   3. PaneViewport 相当のオブジェクト組み立て (lines + scroll metrics)
+// What it checks:
+//   1. NDJSON requests over the Unix socket (pane.get / pane.read / pane.send_text)
+//   2. Push events via events.subscribe (connection held open)
+//   3. Assembling a PaneViewport-shaped object (lines + scroll metrics)
 //
-// 実行: bun run poc/herdr/poc-client.ts <pane_id>
-//   (herdr server が起動済みで、対象 pane が存在すること)
+// Run: bun run poc/herdr/poc-client.ts <pane_id>
+//   (herdr server must be running and the pane must exist)
 
 import { connect } from "node:net";
 import { homedir } from "node:os";
@@ -20,7 +20,7 @@ interface HerdrResponse {
   error?: { code: string; message: string };
 }
 
-// herdr は 1リクエスト=1接続 (subscribe 以外は応答後に切断される)
+// herdr uses one connection per request (everything but subscribe disconnects after the reply)
 function rpc(method: string, params: Record<string, unknown>): Promise<HerdrResponse> {
   return new Promise((resolve, reject) => {
     const sock = connect(SOCKET_PATH);
@@ -40,7 +40,7 @@ function rpc(method: string, params: Record<string, unknown>): Promise<HerdrResp
   });
 }
 
-// events.subscribe は接続を維持して push イベントが流れてくる
+// events.subscribe holds the connection open and streams push events
 function subscribe(
   subscriptions: Array<Record<string, unknown>>,
   onEvent: (ev: Record<string, unknown>) => void,
@@ -73,16 +73,16 @@ function subscribe(
   });
 }
 
-// ---- PaneViewport 相当の組み立て (shared/types.ts の PaneViewport を模倣) ----
+// ---- Assembling a PaneViewport equivalent (mirrors PaneViewport in shared/types.ts) ----
 interface PocViewport {
   paneId: string;
   cols: number;
   rows: number;
-  lines: string[]; // ANSI 付き
+  lines: string[]; // with ANSI
   historySize: number; // max_offset_from_bottom
   offset: number;
   atTail: boolean;
-  cursor: null; // ← herdr pane.read はカーソル情報を返さない (既知のギャップ)
+  cursor: null; // herdr pane.read returns no cursor info (a known gap)
 }
 
 async function captureViewport(pane: string, offset: number, rows: number): Promise<PocViewport> {
@@ -94,8 +94,8 @@ async function captureViewport(pane: string, offset: number, rows: number): Prom
     viewport_rows: number;
   };
 
-  // offset ページング: 末尾 (offset + rows) 行を取って先頭 rows 行を切り出す
-  // 制約: pane.read は 1000 行キャップ → offset + rows <= 1000 が上限
+  // Offset paging: read the trailing (offset + rows) lines and slice the first rows out
+  // Constraint: pane.read caps at 1000 lines, so offset + rows <= 1000
   const want = Math.min(offset + rows, 1000);
   const read = await rpc("pane.read", {
     pane_id: pane,
@@ -111,7 +111,7 @@ async function captureViewport(pane: string, offset: number, rows: number): Prom
 
   return {
     paneId: pane,
-    cols: 0, // layout API から取得可能 (pane.layout の rect.width)
+    cols: 0, // available from the layout API (rect.width of pane.layout)
     rows,
     lines,
     historySize: scroll.max_offset_from_bottom,
@@ -148,11 +148,11 @@ const back = await captureViewport(paneId, 100, 5);
 for (const l of back.lines) console.log(`  | ${JSON.stringify(l.slice(0, 60))}`);
 
 console.log("\n=== 5. input round-trip (send_text + enter) ===");
-await rpc("pane.send_text", { pane_id: paneId, text: 'echo "PoC完了🎉"' });
+await rpc("pane.send_text", { pane_id: paneId, text: 'echo "PoC done"' });
 await rpc("pane.send_keys", { pane_id: paneId, keys: ["enter"] });
 await new Promise((r) => setTimeout(r, 800));
 const after = await captureViewport(paneId, 0, 5);
-const found = after.lines.some((l) => l.includes("PoC完了🎉"));
+const found = after.lines.some((l) => l.includes("PoC done"));
 console.log(`echo round-trip: ${found ? "OK" : "NG"}`);
 
 unsub();

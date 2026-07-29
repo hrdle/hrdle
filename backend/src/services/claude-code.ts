@@ -342,7 +342,7 @@ export class ClaudeCodeService {
               if (typeof content !== 'string' || content.length === 0) return;
               if (content.startsWith('[Request interrupted')) return;
               if (content.startsWith('Implement the following plan:')) {
-                done('(継続セッション)');
+                done('(resumed session)');
                 return;
               }
               // Skip system-generated messages

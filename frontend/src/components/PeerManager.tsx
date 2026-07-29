@@ -58,7 +58,7 @@ function ColorSwatch({ color, selected, onClick }: { color: string; selected: bo
 				selected ? "border-th-text scale-110" : "border-transparent hover:scale-105"
 			}`}
 			style={{ backgroundColor: color }}
-			aria-label={`色 ${color}`}
+			aria-label={`Color ${color}`}
 		/>
 	);
 }
@@ -85,7 +85,7 @@ function AddPeerForm({ onSubmit, onCancel, initialNickname, initialUrl }: AddFor
 		try {
 			await onSubmit({ nickname, url, password, color });
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "登録に失敗しました");
+			setError(err instanceof Error ? err.message : "Failed to register the server");
 		} finally {
 			setSubmitting(false);
 		}
@@ -94,13 +94,13 @@ function AddPeerForm({ onSubmit, onCancel, initialNickname, initialUrl }: AddFor
 	return (
 		<form onSubmit={handleSubmit} className="bg-th-surface-hover border border-th-border rounded-md p-4 space-y-3">
 			<div className="flex items-center justify-between mb-2">
-				<h3 className="font-semibold text-th-text">サーバーを追加</h3>
+				<h3 className="font-semibold text-th-text">Add a server</h3>
 				<button type="button" onClick={onCancel} className="text-th-text-muted hover:text-th-text">
 					<X className="w-4 h-4" />
 				</button>
 			</div>
 			<div>
-				<label htmlFor="peer-nickname" className="block text-xs text-th-text-secondary mb-1">ニックネーム (絵文字OK)</label>
+				<label htmlFor="peer-nickname" className="block text-xs text-th-text-secondary mb-1">Nickname (emoji allowed)</label>
 				<input
 					id="peer-nickname"
 					type="text"
@@ -125,8 +125,8 @@ function AddPeerForm({ onSubmit, onCancel, initialNickname, initialUrl }: AddFor
 			</div>
 			<div>
 				<label htmlFor="peer-password" className="block text-xs text-th-text-secondary mb-1">
-					そのサーバーのパスワード
-					<span className="ml-1 text-th-text-muted">(peer 側が認証無効なら空でOK)</span>
+					Password for that server
+					<span className="ml-1 text-th-text-muted">(leave empty if the peer has auth disabled)</span>
 				</label>
 				<input
 					id="peer-password"
@@ -137,7 +137,7 @@ function AddPeerForm({ onSubmit, onCancel, initialNickname, initialUrl }: AddFor
 				/>
 			</div>
 			<div>
-				<div className="block text-xs text-th-text-secondary mb-1">識別色 (省略可: 自動割当)</div>
+				<div className="block text-xs text-th-text-secondary mb-1">Badge color (optional: assigned automatically)</div>
 				<div className="flex flex-wrap gap-2">
 					{COLOR_OPTIONS.map((c) => (
 						<ColorSwatch key={c} color={c} selected={color === c} onClick={() => setColor(c === color ? undefined : c)} />
@@ -151,14 +151,14 @@ function AddPeerForm({ onSubmit, onCancel, initialNickname, initialUrl }: AddFor
 					disabled={submitting}
 					className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-medium rounded-md transition-colors"
 				>
-					{submitting ? "確認中…" : "追加"}
+					{submitting ? "Checking..." : "Add"}
 				</button>
 				<button
 					type="button"
 					onClick={onCancel}
 					className="py-2 px-4 bg-th-surface hover:bg-th-surface-hover border border-th-border text-th-text rounded-md"
 				>
-					キャンセル
+					Cancel
 				</button>
 			</div>
 		</form>
@@ -189,7 +189,7 @@ function EditPeerForm({ peer, onSubmit, onCancel }: EditFormProps) {
 			if (password) input.password = password;
 			await onSubmit(input);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "更新に失敗しました");
+			setError(err instanceof Error ? err.message : "Failed to update the server");
 		} finally {
 			setSubmitting(false);
 		}
@@ -200,13 +200,13 @@ function EditPeerForm({ peer, onSubmit, onCancel }: EditFormProps) {
 	return (
 		<form onSubmit={handleSubmit} className="bg-th-surface-hover border border-th-border rounded-md p-4 space-y-3">
 			<div className="flex items-center justify-between mb-2">
-				<h3 className="font-semibold text-th-text">サーバー編集</h3>
+				<h3 className="font-semibold text-th-text">Edit server</h3>
 				<button type="button" onClick={onCancel} className="text-th-text-muted hover:text-th-text">
 					<X className="w-4 h-4" />
 				</button>
 			</div>
 			<div>
-				<label htmlFor="edit-nickname" className="block text-xs text-th-text-secondary mb-1">ニックネーム</label>
+				<label htmlFor="edit-nickname" className="block text-xs text-th-text-secondary mb-1">Nickname</label>
 				<input
 					id="edit-nickname"
 					type="text"
@@ -217,7 +217,7 @@ function EditPeerForm({ peer, onSubmit, onCancel }: EditFormProps) {
 				/>
 			</div>
 			<div>
-				<div className="block text-xs text-th-text-secondary mb-1">識別色</div>
+				<div className="block text-xs text-th-text-secondary mb-1">Badge color</div>
 				<div className="flex flex-wrap gap-2">
 					{COLOR_OPTIONS.map((c) => (
 						<ColorSwatch key={c} color={c} selected={color === c} onClick={() => setColor(c)} />
@@ -227,7 +227,7 @@ function EditPeerForm({ peer, onSubmit, onCancel }: EditFormProps) {
 			{!isLocal && (
 				<div>
 					<label htmlFor="edit-password" className="block text-xs text-th-text-secondary mb-1">
-						パスワード (再認証する場合のみ)
+						Password (only when re-authenticating)
 					</label>
 					<input
 						id="edit-password"
@@ -245,14 +245,14 @@ function EditPeerForm({ peer, onSubmit, onCancel }: EditFormProps) {
 					disabled={submitting}
 					className="flex-1 py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-medium rounded-md transition-colors"
 				>
-					{submitting ? "保存中…" : "保存"}
+					{submitting ? "Saving..." : "Save"}
 				</button>
 				<button
 					type="button"
 					onClick={onCancel}
 					className="py-2 px-4 bg-th-surface hover:bg-th-surface-hover border border-th-border text-th-text rounded-md"
 				>
-					キャンセル
+					Cancel
 				</button>
 			</div>
 		</form>
@@ -276,11 +276,11 @@ export function PeerManager() {
 	};
 
 	const handleDiscover = async () => {
-		// 社内ネットワークなど Tailscale 以外の環境で意図せずポートスキャンに
-		// 見えてしまうのを避けるため、毎回ユーザーに確認を取る。
+		// Ask every time, so this never looks like an unannounced port scan on a
+		// network that is not the tailnet.
 		const ok = confirm(
-			"Tailscale tailnet 内の各ホストの :5923 (cchub の既定ポート) に HTTP リクエストを送信して、cchub の有無を確認します。\n\n" +
-				"Tailscale 外のホストには送信しません。実行しますか？",
+			"This sends an HTTP request to :5923 (hrdle's default port) on every host in the Tailscale tailnet to see which of them run hrdle.\n\n" +
+				"Nothing is sent to hosts outside Tailscale. Continue?",
 		);
 		if (!ok) return;
 
@@ -292,7 +292,7 @@ export function PeerManager() {
 			const data = (await res.json()) as PeerDiscoverResponse;
 			setDiscovered(data.discovered);
 		} catch (err) {
-			setDiscoverError(err instanceof Error ? err.message : "検索に失敗しました");
+			setDiscoverError(err instanceof Error ? err.message : "Discovery failed");
 		} finally {
 			setDiscovering(false);
 		}
@@ -312,7 +312,7 @@ export function PeerManager() {
 
 	const handleDelete = async (peer: PeerClientView) => {
 		if (peer.id === LOCAL_PEER_ID) return;
-		if (!confirm(`${peer.nickname} を削除しますか？`)) return;
+		if (!confirm(`Remove ${peer.nickname}?`)) return;
 		await deletePeer(peer.id);
 	};
 
@@ -321,7 +321,7 @@ export function PeerManager() {
 		try {
 			await verifyPeer(peer.id);
 		} catch {
-			/* error 表示は peer.status に反映される */
+			/* the error surfaces through peer.status */
 		} finally {
 			setVerifyingId(null);
 		}
@@ -330,13 +330,13 @@ export function PeerManager() {
 	return (
 		<div className="space-y-4 p-4">
 			<div className="flex items-center justify-between flex-wrap gap-2">
-				<h2 className="text-lg font-semibold text-th-text">サーバー (Peers)</h2>
+				<h2 className="text-lg font-semibold text-th-text">Servers (peers)</h2>
 				<div className="flex gap-2">
 					<button
 						type="button"
 						onClick={() => void refresh()}
 						className="p-2 rounded-md bg-th-surface-hover hover:bg-th-surface text-th-text-secondary"
-						title="再読み込み"
+						title="Reload"
 					>
 						<RefreshCw className="w-4 h-4" />
 					</button>
@@ -345,10 +345,10 @@ export function PeerManager() {
 						onClick={() => void handleDiscover()}
 						disabled={discovering}
 						className="px-3 py-2 rounded-md bg-th-surface-hover hover:bg-th-surface text-th-text text-sm font-medium inline-flex items-center gap-1 disabled:opacity-50"
-						title="Tailscale ネットワーク内を検索"
+						title="Search the Tailscale network"
 					>
 						<Search className={`w-4 h-4 ${discovering ? "animate-pulse" : ""}`} />
-						{discovering ? "検索中…" : "検索"}
+						{discovering ? "Searching..." : "Discover"}
 					</button>
 					<button
 						type="button"
@@ -356,7 +356,7 @@ export function PeerManager() {
 						disabled={adding}
 						className="px-3 py-2 rounded-md bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white text-sm font-medium inline-flex items-center gap-1"
 					>
-						<Plus className="w-4 h-4" /> サーバー追加
+						<Plus className="w-4 h-4" /> Add server
 					</button>
 				</div>
 			</div>
@@ -364,7 +364,7 @@ export function PeerManager() {
 			{error && <div className="text-red-400 text-sm bg-red-900/20 p-3 rounded">{error}</div>}
 			{discoverError && (
 				<div className="text-red-400 text-sm bg-red-900/20 p-3 rounded">
-					検索エラー: {discoverError}
+					Discovery error: {discoverError}
 				</div>
 			)}
 
@@ -372,7 +372,7 @@ export function PeerManager() {
 				<div className="bg-th-surface-hover border border-th-border rounded-md p-3 space-y-2">
 					<div className="flex items-center justify-between mb-2">
 						<h3 className="font-semibold text-th-text inline-flex items-center gap-1">
-							<Search className="w-4 h-4" /> ネットワーク内の cchub ({discovered.length})
+							<Search className="w-4 h-4" /> hrdle on the network ({discovered.length})
 						</h3>
 						<button
 							type="button"
@@ -384,8 +384,8 @@ export function PeerManager() {
 					</div>
 					{discovered.length === 0 ? (
 						<p className="text-sm text-th-text-muted py-2">
-							未登録の cchub は見つかりませんでした。<br />
-							<span className="text-xs">tailscale で online な peer のみ対象、ポート 5923 を確認します。</span>
+							No unregistered hrdle instance was found.<br />
+							<span className="text-xs">Only peers Tailscale reports as online are probed, on port 5923.</span>
 						</p>
 					) : (
 						<ul className="space-y-1">
@@ -413,7 +413,7 @@ export function PeerManager() {
 											)}
 											{d.alreadyRegistered && (
 												<span className="text-xs px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300 inline-flex items-center gap-1">
-													<CheckCircle2 className="w-3 h-3" /> 登録済み
+													<CheckCircle2 className="w-3 h-3" /> Registered
 												</span>
 											)}
 										</div>
@@ -429,7 +429,7 @@ export function PeerManager() {
 											type="button"
 											className="shrink-0 px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium inline-flex items-center gap-1"
 										>
-											<Plus className="w-3 h-3" /> 追加
+											<Plus className="w-3 h-3" /> Add
 										</button>
 									)}
 								</li>
@@ -449,7 +449,7 @@ export function PeerManager() {
 			)}
 
 			{isLoading ? (
-				<div className="text-th-text-muted text-sm">読み込み中…</div>
+				<div className="text-th-text-muted text-sm">Loading...</div>
 			) : (
 				<ul className="space-y-2">
 					{peers.map((peer) => (
@@ -485,7 +485,7 @@ export function PeerManager() {
 												onClick={() => handleVerify(peer)}
 												disabled={verifyingId === peer.id}
 												className="p-2 rounded hover:bg-th-surface-hover text-th-text-muted"
-												title="疎通確認"
+												title="Check connectivity"
 											>
 												<RefreshCw className={`w-4 h-4 ${verifyingId === peer.id ? "animate-spin" : ""}`} />
 											</button>
@@ -494,7 +494,7 @@ export function PeerManager() {
 											type="button"
 											onClick={() => setEditingId(peer.id)}
 											className="p-2 rounded hover:bg-th-surface-hover text-th-text-muted"
-											title="編集"
+											title="Edit"
 										>
 											<Pencil className="w-4 h-4" />
 										</button>
@@ -503,7 +503,7 @@ export function PeerManager() {
 												type="button"
 												onClick={() => handleDelete(peer)}
 												className="p-2 rounded hover:bg-red-900/30 text-red-400"
-												title="削除"
+												title="Remove"
 											>
 												<Trash2 className="w-4 h-4" />
 											</button>
@@ -517,8 +517,8 @@ export function PeerManager() {
 			)}
 
 			<p className="text-xs text-th-text-muted">
-				※ 追加した peer は Hub から代理ログインしてトークンを保存します。<br />
-				※ peer 側のサーバーは変更不要です。
+				Note: the hub logs in to each peer it adds and stores the token.<br />
+				Note: nothing has to change on the peer's own server.
 			</p>
 		</div>
 	);

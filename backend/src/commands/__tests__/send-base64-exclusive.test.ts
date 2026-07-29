@@ -28,13 +28,13 @@ function opts(over: Partial<SendOptions>): SendOptions {
 describe('runSend --base64 exclusivity', () => {
   test('rejects --base64 with --submit', async () => {
     await expect(runSend(opts({ base64: true, submit: true }))).rejects.toThrow(
-      '--base64 は --submit / --newline と併用できません',
+      '--base64 cannot be combined with --submit / --newline',
     );
   });
 
   test('rejects --base64 with --newline', async () => {
     await expect(runSend(opts({ base64: true, newline: true }))).rejects.toThrow(
-      '--base64 は --submit / --newline と併用できません',
+      '--base64 cannot be combined with --submit / --newline',
     );
   });
 });

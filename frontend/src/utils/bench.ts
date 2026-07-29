@@ -9,26 +9,26 @@ import { storageKey } from "./app-storage";
  * summary report when it is seen.
  *
  * Recommended usage:
- *   1. PC で dev backend (identity.json の devPort) を開いて DevTools コンソールを開く
- *   2. `__cchub_bench.start()` を実行
- *   3. 任意のセッションで:
+ *   1. Open the dev backend (devPort from identity.json) on a PC and open the DevTools console
+ *   2. Run `__cchub_bench.start()`
+ *   3. In any session:
  *        cat /tmp/bench-color.txt; echo __BENCH_END__
- *   4. コンソールに集計が出る
+ *   4. The summary prints to the console
  */
 
 interface FrameSample {
-	/** WebSocket onmessage 受信時刻 (performance.now) */
+	/** When the WebSocket onmessage arrived (performance.now) */
 	recvT: number;
-	/** バイト数 (ペイロードのみ) */
+	/** Byte count (payload only) */
 	bytes: number;
 }
 
 interface WriteSample {
-	/** term.write 呼び出し直前の時刻 */
+	/** Time right before term.write is called */
 	startT: number;
-	/** xterm の write callback (parse 完了) 時刻 */
+	/** Time of xterm's write callback (parsing done) */
 	endT: number;
-	/** 書き込んだバイト数 */
+	/** Bytes written */
 	bytes: number;
 }
 

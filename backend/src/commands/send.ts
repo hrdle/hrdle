@@ -1,10 +1,10 @@
 /**
- * cchub send - send raw input to a specific pane on a peer or local cchub server.
+ * hrdle send - send raw input to a specific pane on a peer or local hrdle server.
  *
  * Usage:
- *   cchub send <peer>:<session>:<paneId> "text"
- *   echo "text" | cchub send <peer>:<session>:<paneId> --stdin
- *   cchub send <peer>:<session>:<paneId> "ls -la" --newline
+ *   hrdle send <peer>:<session>:<paneId> "text"
+ *   echo "text" | hrdle send <peer>:<session>:<paneId> --stdin
+ *   hrdle send <peer>:<session>:<paneId> "ls -la" --newline
  *
  * <peer> can be a peer nickname, peer id, or "local" for self.
  */
@@ -42,10 +42,10 @@ interface ViewportResponse {
 
 function printViewport(target: ParsedTarget, vp: ViewportResponse): void {
   const stateLabel: Record<ViewportResponse['detectedState'], string> = {
-    permission_prompt: '⚠️  permission_prompt (peer is waiting for Yes/No)',
-    ask_user_question: '❓ ask_user_question (peer is waiting for a numbered choice)',
+    permission_prompt: 'permission_prompt (peer is waiting for Yes/No)',
+    ask_user_question: 'ask_user_question (peer is waiting for a numbered choice)',
     processing: '⏳ processing (peer is running a tool)',
-    idle: '✳  idle (peer is at the prompt)',
+    idle: 'idle (peer is at the prompt)',
     unknown: '?  unknown',
   };
   console.error(`\n── ${target.peer}:${target.sessionId}:${target.paneId} (${vp.cols}x${vp.rows}) — ${stateLabel[vp.detectedState]}`);
@@ -65,7 +65,7 @@ interface ParsedTarget {
 function parseTarget(target: string): ParsedTarget {
   const parts = target.split(':');
   if (parts.length !== 3 || parts.some(p => !p)) {
-    throw new Error(`target は <peer>:<session>:<paneId> 形式で指定してください (got: ${target})`);
+    throw new Error(`target must look like <peer>:<session>:<paneId> (got: ${target})`);
   }
   return { peer: parts[0], sessionId: parts[1], paneId: parts[2] };
 }
@@ -89,7 +89,7 @@ async function resolvePeer(name: string, localPort: number): Promise<{ url: stri
   );
   if (!match) {
     const known = peers.map(p => `${p.id} (${p.nickname})`).join(', ');
-    throw new Error(`peer "${name}" が見つかりません。登録済み peer: ${known || '(none)'}`);
+    throw new Error(`peer "${name}" not found. Registered peers: ${known || '(none)'}`);
   }
   if (match.url === 'self') {
     return { url: `http://localhost:${localPort}`, token: undefined };
@@ -106,7 +106,7 @@ export async function runSend(options: SendOptions): Promise<void> {
   // non-base64 bytes and break decoding. Reject the combination up front
   // rather than send a corrupt payload (#351).
   if (options.base64 && (options.submit || options.newline)) {
-    throw new Error('--base64 は --submit / --newline と併用できません');
+    throw new Error('--base64 cannot be combined with --submit / --newline');
   }
 
   let payload: string;
@@ -115,7 +115,7 @@ export async function runSend(options: SendOptions): Promise<void> {
   } else if (options.text !== undefined) {
     payload = options.text;
   } else {
-    throw new Error('text 引数か --stdin のいずれかを指定してください');
+    throw new Error('Pass either a text argument or --stdin');
   }
 
   if (options.newline) {
@@ -145,7 +145,7 @@ export async function runSend(options: SendOptions): Promise<void> {
 
   const peer = await resolvePeer(target.peer, options.localPort);
 
-  // base64 指定時は payload は既に base64 文字列のはず。utf-8 のときはそのまま渡す
+  // With --base64 the payload is already a base64 string; utf-8 goes through as is
   const body: Record<string, unknown> = {
     paneId: target.paneId,
     data: payload,
@@ -157,7 +157,7 @@ export async function runSend(options: SendOptions): Promise<void> {
     body.lines = options.lines;
   }
 
-  // Tailscale 証明書は localhost 名と一致しないので TLS 検証を切る (notify.ts と同じ運用)
+  // The Tailscale certificate does not match the localhost name, so TLS verification is off (same as notify.ts)
   if (peer.url.startsWith('https://')) {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
@@ -176,11 +176,11 @@ export async function runSend(options: SendOptions): Promise<void> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(`send 失敗: HTTP ${res.status} ${errText}`);
+    throw new Error(`send failed: HTTP ${res.status} ${errText}`);
   }
 
   const json = (await res.json().catch(() => ({}))) as { bytes?: number; viewport?: ViewportResponse };
-  console.error(`✅ sent ${json.bytes ?? payload.length} bytes to ${target.peer}:${target.sessionId}:${target.paneId}`);
+  console.error(`sent ${json.bytes ?? payload.length} bytes to ${target.peer}:${target.sessionId}:${target.paneId}`);
   if (json.viewport) {
     printViewport(target, json.viewport);
   }
@@ -210,7 +210,7 @@ export async function runPeek(options: PeekOptions): Promise<void> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(`peek 失敗: HTTP ${res.status} ${errText}`);
+    throw new Error(`peek failed: HTTP ${res.status} ${errText}`);
   }
 
   const vp = (await res.json()) as ViewportResponse;

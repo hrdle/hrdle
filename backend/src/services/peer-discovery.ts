@@ -1,10 +1,10 @@
 /**
- * peer-discovery: Tailscale tailnet をスキャンして cchub が動いてる peer を検出する。
+ * peer-discovery: scans the Tailscale tailnet for peers running hrdle.
  *
- * - `tailscale status --json` で online な peer 一覧を取得
- * - 各 peer の :5923/health に並列 fetch（タイムアウト 3秒）
- * - 200 が返れば cchub あり、version を読む
- * - 自分自身は除外（DNSName マッチで判定）
+ * - Lists the online peers via `tailscale status --json`
+ * - Fetches every peer's :5923/health in parallel (3s timeout)
+ * - A 200 means hrdle is there, and its version is read from the response
+ * - Skips this machine itself (matched by DNSName)
  */
 
 import { listPeers } from './peer-registry';
@@ -25,7 +25,7 @@ interface TailscaleStatus {
 
 function normalizeDns(dns: string | undefined): string {
   if (!dns) return '';
-  // 末尾の "." を取り除く
+  // Strip the trailing "."
   return dns.replace(/\.$/, '');
 }
 
@@ -66,7 +66,7 @@ export async function discoverPeers(): Promise<DiscoveredPeer[]> {
   const selfDns = normalizeDns(status.Self?.DNSName);
   const existingPeers = await listPeers();
 
-  // 既存 peer の URL を hostname:port キーで引けるようにする
+  // Index the registered peers' URLs by hostname:port
   const existingByHost = new Map<string, { nickname: string }>();
   for (const p of existingPeers) {
     if (p.url === SELF_PEER_URL) continue;
@@ -89,7 +89,7 @@ export async function discoverPeers(): Promise<DiscoveredPeer[]> {
     });
   }
 
-  // 並列 probe
+  // Probe in parallel
   const results = await Promise.all(candidates.map(async (c) => {
     const url = `https://${c.hostname}:${DEFAULT_PORT}`;
     const probe = await probeCchub(url);

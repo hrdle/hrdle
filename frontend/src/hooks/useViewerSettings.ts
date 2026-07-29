@@ -13,12 +13,12 @@ function getWordWrapSetting(fileName: string): boolean {
 		const stored = localStorage.getItem(WORDWRAP_STORAGE_KEY);
 		if (stored) {
 			const settings = JSON.parse(stored);
-			return settings[fileName] ?? true; // デフォルトはtrue
+			return settings[fileName] ?? true; // Defaults to true
 		}
 	} catch {
 		// ignore
 	}
-	return true; // デフォルトはtrue
+	return true; // Defaults to true
 }
 
 function persistWordWrapSetting(fileName: string, value: boolean) {

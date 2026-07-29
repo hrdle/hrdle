@@ -47,10 +47,10 @@
     <!-- Fallback UI: if React fails to mount within 4s, show cache clear button -->
     <div id="fallback" style="display:none;position:fixed;inset:0;z-index:99999;background:#1a1a1a;color:#fff;font-family:'JetBrains Mono',monospace;padding:40px 20px;text-align:center;">
       <h2 style="margin-bottom:12px;">%PRODUCT_NAME%</h2>
-      <p style="color:#999;margin-bottom:24px;">アプリの読み込みに問題が発生しています</p>
-      <button onclick="clearCacheAndReload()" style="padding:14px 28px;font-size:16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:8px;min-width:200px;">キャッシュクリア &amp; リロード</button>
+      <p style="color:#999;margin-bottom:24px;">Something went wrong while loading the app</p>
+      <button onclick="clearCacheAndReload()" style="padding:14px 28px;font-size:16px;background:#3b82f6;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:8px;min-width:200px;">Clear cache &amp; reload</button>
       <br>
-      <button onclick="location.reload()" style="padding:14px 28px;font-size:16px;background:#4b5563;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:8px;min-width:200px;">リロードのみ</button>
+      <button onclick="location.reload()" style="padding:14px 28px;font-size:16px;background:#4b5563;color:#fff;border:none;border-radius:8px;cursor:pointer;margin:8px;min-width:200px;">Reload only</button>
       <p id="fallback-log" style="color:#666;font-size:12px;margin-top:24px;"></p>
     </div>
     <script>
@@ -81,7 +81,7 @@
 
       function clearCacheAndReload() {
         var log = document.getElementById('fallback-log');
-        log.textContent = 'クリア中...';
+        log.textContent = 'Clearing...';
         Promise.all([
           navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(function(regs) {
             return Promise.all(regs.map(function(r) { return r.unregister(); }));
@@ -90,10 +90,10 @@
             return Promise.all(keys.map(function(k) { return caches.delete(k); }));
           }) : Promise.resolve()
         ]).then(function() {
-          log.textContent = 'クリア完了、リロード中...';
+          log.textContent = 'Cleared, reloading...';
           setTimeout(function() { location.reload(); }, 500);
         }).catch(function(e) {
-          log.textContent = 'エラー: ' + e;
+          log.textContent = 'Error: ' + e;
           setTimeout(function() { location.reload(); }, 2000);
         });
       }

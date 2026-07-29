@@ -33,7 +33,7 @@ export function applyLocalSessionReorder(ordered: ExtendedSessionResponse[]) {
 	window.dispatchEvent(new CustomEvent("cchub-sessions-reorder"));
 }
 
-/** hookイベントで Hub local セッションの indicatorState を即座に更新する */
+/** Updates the indicatorState of a hub-local session as soon as a hook event arrives */
 export function updateCachedSessionsByHookEvent(
 	event: string,
 	ccSessionId?: string,
@@ -69,8 +69,8 @@ interface UseWorkspacesReturn {
 		name?: string,
 		workingDir?: string,
 		agent?: AgentProvider,
-		// Multi-server: 指定した peer (remote cchub) にセッションを作る。
-		// 省略時 or local 指定で Hub に作る。
+		// Multi-server: creates the session on the given peer (a remote hrdle).
+		// Omitted, or 'local', creates it on the hub.
 		peerId?: string,
 	) => Promise<ExtendedSessionResponse | null>;
 	// peerId: session ids (workspace labels) can collide across peers — pass the
@@ -156,8 +156,8 @@ export function useWorkspaces(): UseWorkspacesReturn {
 			peerId?: string,
 		): Promise<SessionResponse | null> => {
 			setError(null);
-			// peerId が指定されてれば peer に対して POST する。
-			// `sessionFetch` は session オブジェクトを取るので、ダミーで peerId だけ渡す。
+			// With a peerId the POST goes to that peer. `sessionFetch` takes a session
+			// object, so a stub carrying only peerId is passed in.
 			const response = await sessionFetch(
 				peerId ? { peerId } : undefined,
 				peers,
@@ -177,7 +177,7 @@ export function useWorkspaces(): UseWorkspacesReturn {
 			}
 
 			const session = (await response.json()) as ExtendedSessionResponse;
-			// peer に作ったなら peerId を埋め込む (UIで識別できるように)
+			// Stamp the peerId when it was created on a peer, so the UI can tell
 			const enriched: ExtendedSessionResponse = peerId
 				? { ...session, peerId }
 				: session;

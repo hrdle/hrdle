@@ -29,7 +29,7 @@ describe('herdrStatusToIndicator', () => {
 
 describe('paneIndicatorState', () => {
   it('never lets a stale hook override outrank a live herdr status', () => {
-    // Repro of the false 許可待ち badge: PostToolUse/AskUserQuestion set a
+    // Repro of the false permission-pending badge: PostToolUse/AskUserQuestion set a
     // waiting_input override (24h TTL), the user answered, and Claude kept
     // working — nothing fires to clear the override until Stop, but herdr
     // already reports `working`.
@@ -56,7 +56,7 @@ describe('paneIndicatorState', () => {
 
   it('does not remap a completed Claude pane to waiting_input', () => {
     // The tmux-era pane list showed idle-at-prompt as waiting_input; today
-    // that state pulses yellow and derives the card's 許可待ち badge, so a
+    // that state pulses yellow and derives the card's permission-pending badge, so a
     // finished turn must stay `completed` even while a stale override lives.
     expect(
       paneIndicatorState({

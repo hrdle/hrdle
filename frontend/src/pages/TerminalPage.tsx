@@ -119,7 +119,7 @@ export const TerminalPage = forwardRef<TerminalRef, TerminalPageProps>(
 		// stale viewport) from the first assignment.
 		const prevActivePaneIdRef = useRef<string | null>(null);
 
-		// Multi-server: sessionId が remote peer のものなら、その peer の WS に接続する
+		// Multi-server: when the sessionId belongs to a remote peer, connect to that peer's WS
 		const { peers } = usePeers();
 		const { sessions: apiSessions } = useWorkspaces();
 		const peerConn = usePeerConnection(sessionId, apiSessions, peers, peerId);

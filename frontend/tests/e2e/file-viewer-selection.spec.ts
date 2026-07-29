@@ -5,7 +5,7 @@ import { IDENTITY } from '../../../shared/identity';
 //   (a) keep the file-list scroll position
 //   (b) visually highlight the currently selected file
 // Bug repro before fix: clicking a file toggled the shared isLoading flag
-// in useFileViewer, which unmounted the file tree (replaced with a "読み込み中…"
+// in useFileViewer, which unmounted the file tree (replaced with a "Loading..."
 // placeholder) and reset scroll to the top on next mount.
 
 const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
@@ -48,7 +48,7 @@ test('FileBrowser keeps scroll and shows selection when switching files (desktop
   // Open the file viewer (FilesIcon button — used in the mobile + desktop bars).
   // The path bar at the bottom of the FileBrowser shows the current path; once
   // it appears we know the directory listing has finished.
-  await page.locator('[aria-label="Switch to Files"], [title*="ファイル"], button:has-text("Files")').first().click({ timeout: 15000 });
+  await page.locator('[aria-label="Switch to Files"], [title*="Files"], button:has-text("Files")').first().click({ timeout: 15000 });
 
   const fileTree = page.locator('.flex-1.overflow-y-auto').first();
   await fileTree.waitFor({ timeout: 15000 });
@@ -97,7 +97,7 @@ test('FileBrowser scroll survives switching to file view and back (mobile flow)'
   await page.setViewportSize({ width: 393, height: 851 });
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-  await page.locator('[aria-label="Switch to Files"], [title*="ファイル"], button:has-text("Files")').first().click({ timeout: 15000 });
+  await page.locator('[aria-label="Switch to Files"], [title*="Files"], button:has-text("Files")').first().click({ timeout: 15000 });
 
   const fileTree = page.locator('.flex-1.overflow-y-auto').first();
   await fileTree.waitFor({ timeout: 15000 });

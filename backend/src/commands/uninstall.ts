@@ -23,38 +23,38 @@ async function uninstallLaunchd(): Promise<void> {
   const updatePlistPath = join(launchAgentsDir, SERVICE.launchdUpdatePlist);
   const uid = process.getuid?.() ?? 501;
 
-  console.log(`🗑️  ${t('uninstall.title')}`);
+  console.log(`${t('uninstall.title')}`);
   console.log('');
 
   // Stop services
   if (existsSync(plistPath)) {
     Bun.spawnSync(['launchctl', 'bootout', `gui/${uid}`, plistPath]);
     await unlink(plistPath);
-    console.log(`✅ ${t('uninstall.removedService')}: ${plistPath}`);
+    console.log(`${t('uninstall.removedService')}: ${plistPath}`);
   } else {
-    console.log(`⏭️  ${t('uninstall.notFound')}: ${plistPath}`);
+    console.log(`${t('uninstall.notFound')}: ${plistPath}`);
   }
 
   if (existsSync(updatePlistPath)) {
     Bun.spawnSync(['launchctl', 'bootout', `gui/${uid}`, updatePlistPath]);
     await unlink(updatePlistPath);
-    console.log(`✅ ${t('uninstall.removedUpdate')}: ${updatePlistPath}`);
+    console.log(`${t('uninstall.removedUpdate')}: ${updatePlistPath}`);
   } else {
-    console.log(`⏭️  ${t('uninstall.notFound')}: ${updatePlistPath}`);
+    console.log(`${t('uninstall.notFound')}: ${updatePlistPath}`);
   }
 
   // Remove password from Keychain (no-op if not stored)
   if (deletePasswordFromKeychain()) {
-    console.log('🔐 Keychain からパスワードを削除しました');
+    console.log('Removed the password from the Keychain');
   }
 
   console.log('');
-  console.log(`✅ ${t('uninstall.done')}`);
+  console.log(`${t('uninstall.done')}`);
 
   const logDir = join(home, IDENTITY.dataDirName);
   if (existsSync(logDir)) {
     console.log('');
-    console.log(`💡 ${t('uninstall.logsHint')}: rm -rf ${logDir}`);
+    console.log(`Hint: ${t('uninstall.logsHint')}: rm -rf ${logDir}`);
   }
 }
 
@@ -65,7 +65,7 @@ async function uninstallSystemd(): Promise<void> {
   const updateServicePath = join(systemdDir, SERVICE.updateUnitFile);
   const updateTimerPath = join(systemdDir, SERVICE.updateTimerFile);
 
-  console.log(`🗑️  ${t('uninstall.title')}`);
+  console.log(`${t('uninstall.title')}`);
   console.log('');
 
   // Stop and disable services
@@ -81,20 +81,20 @@ async function uninstallSystemd(): Promise<void> {
   ] as const) {
     if (existsSync(path)) {
       await unlink(path);
-      console.log(`✅ ${label}: ${path}`);
+      console.log(`${label}: ${path}`);
     } else {
-      console.log(`⏭️  ${t('uninstall.notFound')}: ${path}`);
+      console.log(`${t('uninstall.notFound')}: ${path}`);
     }
   }
 
   Bun.spawnSync(['systemctl', '--user', 'daemon-reload']);
 
   console.log('');
-  console.log(`✅ ${t('uninstall.done')}`);
+  console.log(`${t('uninstall.done')}`);
 
   const configDir = join(home, '.config', IDENTITY.configDirName);
   if (existsSync(configDir)) {
     console.log('');
-    console.log(`💡 ${t('uninstall.configHint')}: rm -rf ${configDir}`);
+    console.log(`Hint: ${t('uninstall.configHint')}: rm -rf ${configDir}`);
   }
 }

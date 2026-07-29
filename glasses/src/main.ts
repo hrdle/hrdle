@@ -24,8 +24,8 @@ const RESUME_SUFFIX = 'glasses-resume'
 // ── Crash reporting ──
 //
 // A WebView with no reachable console means an uncaught exception kills the
-// app leaving nothing behind — "起動して一瞬で落ちる" and no way to see why.
-// Everything is buffered until the hub URL is known (the handlers are
+// app leaving nothing behind - it starts, dies in an instant, and there is no
+// way to see why. Everything is buffered until the hub URL is known (the handlers are
 // installed before that, since the earliest failures are the interesting
 // ones), then shipped to /api/logs. `trace` also marks each startup milestone
 // so a silent death localises to the last line that made it out.

@@ -1,8 +1,7 @@
 /**
- * hook イベントを受信した際にOS通知を発火する。
- * PWAではServiceWorkerRegistration.showNotification()を使用。
- * 複数のインスタンスから同時に呼ばれても
- * デバウンスで1回だけ通知する。
+ * Fires an OS notification when a hook event arrives.
+ * In a PWA this goes through ServiceWorkerRegistration.showNotification().
+ * Debounced, so several instances calling at once still produce one notification.
  */
 
 import { toHomeShortPath } from "./path";
@@ -10,14 +9,14 @@ import { dispatchNotificationNavigation } from "./notificationNavigation";
 import { IDENTITY } from "../../../shared/identity";
 
 const EVENT_MESSAGES: Record<string, string> = {
-	Stop: "応答が完了しました",
-	Notification: "ユーザー入力を待っています",
-	SubagentStop: "サブエージェントが完了しました",
-	TaskCompleted: "タスクが完了しました",
-	PostToolUse: "ユーザー入力を待っています",
+	Stop: "Response complete",
+	Notification: "Waiting for your input",
+	SubagentStop: "Subagent finished",
+	TaskCompleted: "Task complete",
+	PostToolUse: "Waiting for your input",
 };
 
-// デバウンス: 同じイベント+cwdの組み合わせを500ms以内に重複発火しない
+// Debounce: the same event + cwd pair does not fire twice within 500ms
 let lastNotification = { key: "", time: 0 };
 const DEBOUNCE_MS = 500;
 
@@ -58,7 +57,7 @@ async function showNotification(title: string, options: NotificationOptions) {
 }
 
 /**
- * hookイベントからOS通知を生成する。
+ * Builds an OS notification from a hook event.
  */
 export function fireHookNotification(
 	event: string,
@@ -72,7 +71,7 @@ export function fireHookNotification(
 		return;
 	}
 
-	// デバウンス
+	// Debounce
 	const key = `${peerId || "local"}:${_sessionId || ""}:${event}:${cwd || ""}`;
 	const now = Date.now();
 	if (

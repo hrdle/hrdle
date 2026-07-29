@@ -28,7 +28,7 @@ interface DebugOptions {
 
 export async function runDebug(opts: DebugOptions): Promise<void> {
   if (platform() !== 'linux') {
-    console.error('❌ `cchub debug` currently supports Linux systemd-user only.');
+    console.error('`hrdle debug` currently supports Linux systemd-user only.');
     process.exit(1);
   }
 
@@ -58,10 +58,10 @@ async function enableInspector(): Promise<void> {
   await mkdir(DROP_IN_DIR, { recursive: true });
   await writeFile(DROP_IN_FILE, conf);
   await runSystemctl(['daemon-reload']);
-  console.log(`🔧 Reloading systemd, restarting ${SERVICE.unitFile}…`);
+  console.log(`Reloading systemd, restarting ${SERVICE.unitFile}…`);
   await runSystemctl(['restart', SERVICE.unitFile]);
   console.log('');
-  console.log(`✅ Inspector enabled on 0.0.0.0:${port}`);
+  console.log(`Inspector enabled on 0.0.0.0:${port}`);
   console.log('');
   console.log('Connect with Chrome DevTools:');
   console.log('  1. Open chrome://inspect');
@@ -82,19 +82,19 @@ async function disableInspector(): Promise<void> {
     // drop-in didn't exist
   }
   if (!removed) {
-    console.log('ℹ️  Inspector was not enabled (no drop-in present).');
+    console.log('Inspector was not enabled (no drop-in present).');
     return;
   }
   await runSystemctl(['daemon-reload']);
-  console.log(`🔧 Reloading systemd, restarting ${SERVICE.unitFile}…`);
+  console.log(`Reloading systemd, restarting ${SERVICE.unitFile}…`);
   await runSystemctl(['restart', SERVICE.unitFile]);
-  console.log(`✅ Inspector disabled, ${SERVICE.unitFile} back to normal.`);
+  console.log(`Inspector disabled, ${SERVICE.unitFile} back to normal.`);
 }
 
 async function profileInspector(seconds: number): Promise<void> {
   await enableInspector();
   console.log('');
-  console.log(`⏱️  Profiling window: ${seconds}s. Inspector will be torn down automatically.`);
+  console.log(`Profiling window: ${seconds}s. Inspector will be torn down automatically.`);
   console.log('   Press Ctrl-C to keep it open longer — disable later with `cchub debug disable`.');
   await sleep(seconds * 1000);
   console.log('');
@@ -111,10 +111,10 @@ async function showInspectorStatus(): Promise<void> {
     // not present
   }
   if (enabled) {
-    console.log(`🟢 Inspector enabled (drop-in: ${DROP_IN_FILE})`);
+    console.log(`Inspector enabled (drop-in: ${DROP_IN_FILE})`);
     console.log(`   Port: ${DEFAULT_INSPECT_PORT}`);
   } else {
-    console.log('⚪ Inspector disabled.');
+    console.log('Inspector disabled.');
   }
 }
 

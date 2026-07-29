@@ -114,7 +114,7 @@ import { storageKey } from "../utils/app-storage";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 // Directory browser API functions
-// peerId が指定された場合は /api/peers/:peerId/files/* に振り分け。
+// When peerId is given, the call is routed to /api/peers/:peerId/files/*.
 async function browseDirectory(
 	path?: string,
 	peerId?: string,
@@ -400,7 +400,7 @@ function CreateSessionModal({
 		[],
 	);
 
-	// Initial load + peer 切替時のリロード
+	// Initial load, plus a reload whenever the peer changes
 	useEffect(() => {
 		loadDirectory(undefined, selectedPeerId);
 	}, [loadDirectory, selectedPeerId]);
@@ -499,10 +499,10 @@ function CreateSessionModal({
 					</div>
 				</div>
 
-				{/* Server (peer) selector — 1 件しか無ければ非表示 */}
+				{/* Server (peer) selector - hidden when there is only one */}
 				{peers.length > 1 && (
 					<div className="mb-3">
-						<div className="text-xs text-th-text-secondary mb-1">サーバー</div>
+						<div className="text-xs text-th-text-secondary mb-1">Server</div>
 						<div className="grid grid-cols-2 gap-2">
 							{peers.map((peer) => (
 								<button
@@ -527,7 +527,7 @@ function CreateSessionModal({
 					</div>
 				)}
 
-				{/* Directory picker — local / remote 共通 (remote は peer 側の filesystem を browse) */}
+				{/* Directory picker - same for local and remote (remote browses the peer's filesystem) */}
 				<div className="flex-1 min-h-0 flex flex-col">
 					<div className="flex items-center justify-between mb-2">
 						<span className="text-xs text-th-text-secondary">
@@ -1224,8 +1224,8 @@ function SessionItem({
 	const isLive =
 		!isLost &&
 		(cardIndicator === "processing" || cardIndicator === "waiting_input");
-	// peer 色は theme より優先度が低い。peer はマルチサーバー時の所属表示なので、
-	// ユーザーが明示的に theme をつけていればそちらを尊重する。
+	// The peer color ranks below the theme: a peer color only says which server a
+	// session lives on, so an explicit theme from the user wins.
 	const peerAccentColor =
 		extSession.peerId && extSession.peerId !== "local"
 			? extSession.peerColor
@@ -2054,7 +2054,7 @@ export function WorkspaceList({
 			<div className="shrink-0 px-4 pt-3 pb-2 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
 				<div className="max-w-lg">
 					{/* Top row: tabs + actions. No separate "Sessions" title — the
-					    active segmented tab (ワークスペース / 履歴) already labels the
+					    active segmented tab (Workspaces / History) already labels the
 					    view, and dropping the title row widens the list area. */}
 					<div className="flex items-center justify-between gap-2 mb-2">
 						<div className="flex items-center gap-2 min-w-0">
@@ -2365,7 +2365,7 @@ export function WorkspaceList({
 							<span className="font-medium text-th-text">
 								{paneToClose.name}
 							</span>{" "}
-							を閉じますか？
+							will be closed. Continue?
 						</p>
 						<div className="flex gap-3 justify-end">
 							<button
@@ -2373,7 +2373,7 @@ export function WorkspaceList({
 								onClick={() => setPaneToClose(null)}
 								className="px-4 py-2 bg-th-surface-active hover:bg-th-surface-hover rounded font-medium transition-colors text-th-text"
 							>
-								キャンセル
+								Cancel
 							</button>
 							<button
 								type="button"
@@ -2401,7 +2401,7 @@ export function WorkspaceList({
 								}}
 								className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-medium transition-colors text-white"
 							>
-								閉じる
+								Close
 							</button>
 						</div>
 					</div>

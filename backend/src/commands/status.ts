@@ -27,18 +27,18 @@ function showStatusSystemd(): void {
   );
 
   if (serviceResult.exitCode === 0) {
-    console.log('📦 Service status:');
+    console.log('Service status:');
     console.log(serviceResult.stdout.toString());
   } else if (serviceResult.exitCode === 3) {
-    console.log('📦 Service status: Stopped');
+    console.log('Service status: Stopped');
     console.log('');
     console.log(t('status.startCommand'));
   } else if (serviceResult.exitCode === 4) {
-    console.log('📦 Service status: Not registered');
+    console.log('Service status: Not registered');
     console.log('');
     console.log('To setup: cchub setup');
   } else {
-    console.log('📦 Service status: Unknown');
+    console.log('Service status: Unknown');
     console.log(serviceResult.stderr.toString());
   }
 
@@ -51,7 +51,7 @@ function showStatusSystemd(): void {
   );
 
   const timerActive = timerResult.stdout.toString().trim() === 'active';
-  console.log(`🔄 Auto-update: ${timerActive ? 'Enabled' : 'Disabled'}`);
+  console.log(`Auto-update: ${timerActive ? 'Enabled' : 'Disabled'}`);
 
   if (timerActive) {
     const nextResult = Bun.spawnSync(
@@ -88,9 +88,9 @@ function showStatusLaunchd(): void {
     const pidMatch = out.match(/"PID"\s*=\s*(\d+)/);
     const exitMatch = out.match(/"LastExitStatus"\s*=\s*(-?\d+)/);
     if (pidMatch) {
-      console.log(`📦 Service status: Running (PID ${pidMatch[1]})`);
+      console.log(`Service status: Running (PID ${pidMatch[1]})`);
     } else {
-      console.log('📦 Service status: Stopped');
+      console.log('Service status: Stopped');
       if (exitMatch) console.log(`   Last exit status: ${exitMatch[1]}`);
       console.log('');
       console.log(
@@ -98,7 +98,7 @@ function showStatusLaunchd(): void {
       );
     }
   } else {
-    console.log('📦 Service status: Not registered');
+    console.log('Service status: Not registered');
     console.log('');
     console.log('   To setup: cchub setup');
   }
@@ -111,7 +111,7 @@ function showStatusLaunchd(): void {
     { stdout: 'pipe', stderr: 'pipe' },
   );
   const updateActive = updateResult.exitCode === 0;
-  console.log(`🔄 Auto-update: ${updateActive ? 'Enabled (daily 4:00)' : 'Disabled'}`);
+  console.log(`Auto-update: ${updateActive ? 'Enabled (daily 4:00)' : 'Disabled'}`);
 }
 
 function showTailscaleStatus(): void {
@@ -124,12 +124,12 @@ function showTailscaleStatus(): void {
     try {
       const status = JSON.parse(tailscaleResult.stdout.toString());
       const hostname = status.Self?.DNSName?.replace(/\.$/, '') || 'unknown';
-      console.log(`🔗 ${t('status.tailscaleConnected')}`);
+      console.log(`${t('status.tailscaleConnected')}`);
       console.log(`   Hostname: ${hostname}`);
     } catch {
-      console.log('🔗 Tailscale: Unknown');
+      console.log('Tailscale: Unknown');
     }
   } else {
-    console.log(`🔗 ${t('status.tailscaleDisconnected')}`);
+    console.log(`${t('status.tailscaleDisconnected')}`);
   }
 }

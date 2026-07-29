@@ -76,7 +76,7 @@ export function ChatComposer({
 					value={value}
 					onChange={(e) => setValue(e.target.value)}
 					onKeyDown={onKeyDown}
-					placeholder={placeholder ?? "メッセージ..."}
+					placeholder={placeholder ?? "Message..."}
 					disabled={disabled || !paneId}
 					rows={1}
 					className="flex-1 min-h-[40px] max-h-[200px] resize-none rounded-md bg-white/[0.04] border border-white/[0.06] px-3 py-2 text-[14px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/40 disabled:opacity-50"
