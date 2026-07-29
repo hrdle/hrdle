@@ -43,8 +43,8 @@ A companion app for the G2 (`glasses/`, built with the EvenHub SDK) turns the gl
 into a read-and-answer surface for your sessions — useful when the agent needs a decision
 and you are not at a screen.
 
-- **Three modes** — session list with status indicators, conversation view, and a choice
-  mode that answers `AskUserQuestion` prompts
+- **Read and answer** — session list with status indicators, conversation view, and a
+  choice mode that answers `AskUserQuestion` prompts without touching a keyboard
 - **Notifications go to the lenses, not the browser** — while the app is connected, hook
   events become 90-second relay items on the G2 display. If the glasses are absent or the
   session cannot be resolved, the browser notification fires as before, so nothing is lost

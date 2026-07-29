@@ -6,7 +6,9 @@ Codex and other coding agents should use this file as the single source of repos
 
 ## Project Overview
 
-CC Hub is a web-based terminal session manager for Claude Code. It runs Claude Code instances in herdr workspaces and provides a web UI for remote access from tablets/mobile devices.
+Hrdle is a web-based terminal session manager for coding agents — Claude Code, Codex, Grok and Kimi. It runs them in herdr workspaces and provides a web UI for remote access from tablets/mobile devices.
+
+Formerly CC Hub, renamed in #459: the old name said Claude Code, which stopped being the whole story once the other agents arrived. `m0a/cc-hub` is archived at v0.2.98 and this repository carries development forward. The rename lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
 
 ## Commands
 
@@ -45,11 +47,11 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 ### Backend Services
 
 - **HerdrClient** (`services/herdr-client.ts`) - Low-level herdr socket API client: NDJSON RPC over `~/.config/herdr/herdr.sock` (one connection per request; `events.subscribe` held open), streaming-safe UTF-8 line reader, pane id mapping (`%N ↔ wK:pN`), and `PaneController` — a persistent `herdr terminal session control` subprocess per pane carrying raw PTY input (base64, no sanitization), absolute PTY resizes, and `terminal.frame` output records
-- **HerdrControlSession** (`services/herdr-control.ts`) - One instance per CC Hub session (= one herdr workspace). Owns the pane split tree, tracks the focused pane, spawns lazy per-pane controllers (WS subscribe / first input only — read-only REST never takes over a pane), scans frames for cursor position and alt-screen state, client lifecycle with 30s grace period. **Renders a single tab**: a herdr workspace is `workspace > tab > pane`, so it filters to the active tab (`workspace.get`'s `active_tab_id`), follows tab switches via `tab.*` events (`switchActiveTab` re-hydrates the tree), and never merges tabs into one flat chain. `selectTab`/`createTab`/`closeTab` drive the tab set. Also `captureViewportHerdr`: viewport composition from `pane.read` (visible at offset 0, `recent` slice for scrollback, capped at herdr's 1000-line read limit)
-- **HerdrLayout** (`services/herdr-layout.ts`) - CC Hub-owned split tree (herdr's own grid can't be resized headlessly): split/close/zoom/ratio adjust/absolute pane sizing, rendered to tmux-convention `TmuxLayoutNode` rects for the frontend
-- **HerdrService** (`services/herdr.ts`) - Session-level operations mapping CC Hub sessions onto herdr workspaces: list (with agent detection from `pane.process_info`, native agent session ids from `agent.list`, `blocked` status), create/kill, previews, and `moveSession` — herdr's workspace order **is** the session display order, so a reorder is a `workspace.move` and nothing is stored on the cchub side
-- **HerdrUpdateService** (`services/herdr-update.ts`) - Detects herdr binary-vs-server version skew (`herdr update` swaps the binary but leaves the running server old) by parsing `herdr status --json`, cached 30s and refreshed off the dashboard poll. Reports only — applying (`herdr update` + supervised restart) is an explicit user action via `POST /api/herdr/apply-update`; never the `cchub update --auto` timer, never `--handoff`. Unreadable status degrades to no warning
-- **PaneState** (`services/pane-state.ts`) - Backend-agnostic `stripAnsi` / `detectPaneState` heuristics for peer-dialog tooling (`cchub send --wait`, `cchub peek`)
+- **HerdrControlSession** (`services/herdr-control.ts`) - One instance per Hrdle session (= one herdr workspace). Owns the pane split tree, tracks the focused pane, spawns lazy per-pane controllers (WS subscribe / first input only — read-only REST never takes over a pane), scans frames for cursor position and alt-screen state, client lifecycle with 30s grace period. **Renders a single tab**: a herdr workspace is `workspace > tab > pane`, so it filters to the active tab (`workspace.get`'s `active_tab_id`), follows tab switches via `tab.*` events (`switchActiveTab` re-hydrates the tree), and never merges tabs into one flat chain. `selectTab`/`createTab`/`closeTab` drive the tab set. Also `captureViewportHerdr`: viewport composition from `pane.read` (visible at offset 0, `recent` slice for scrollback, capped at herdr's 1000-line read limit)
+- **HerdrLayout** (`services/herdr-layout.ts`) - Hrdle-owned split tree (herdr's own grid can't be resized headlessly): split/close/zoom/ratio adjust/absolute pane sizing, rendered to tmux-convention `TmuxLayoutNode` rects for the frontend
+- **HerdrService** (`services/herdr.ts`) - Session-level operations mapping Hrdle sessions onto herdr workspaces: list (with agent detection from `pane.process_info`, native agent session ids from `agent.list`, `blocked` status), create/kill, previews, and `moveSession` — herdr's workspace order **is** the session display order, so a reorder is a `workspace.move` and nothing is stored on the hrdle side
+- **HerdrUpdateService** (`services/herdr-update.ts`) - Detects herdr binary-vs-server version skew (`herdr update` swaps the binary but leaves the running server old) by parsing `herdr status --json`, cached 30s and refreshed off the dashboard poll. Reports only — applying (`herdr update` + supervised restart) is an explicit user action via `POST /api/herdr/apply-update`; never the `hrdle update --auto` timer, never `--handoff`. Unreadable status degrades to no warning
+- **PaneState** (`services/pane-state.ts`) - Backend-agnostic `stripAnsi` / `detectPaneState` heuristics for peer-dialog tooling (`hrdle send --wait`, `hrdle peek`)
 - **ClaudeCodeService** (`services/claude-code.ts`) - Monitors Claude Code state from `.jsonl` files; active-session matching uses only herdr's native agent session id
 - **SessionHistoryService** (`services/session-history.ts`) - Reads past Claude Code session history and conversations
 - **SessionMetadataService** (`services/session-metadata.ts`) - Persists session metadata (theme, title, last known sessions for recovery after reboot). Deliberately *not* session order — that lives in herdr
@@ -60,7 +62,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **AnthropicUsageService** (`services/anthropic-usage.ts`) - Fetches usage limits from Anthropic API with 60s cache, 5min backoff on 429, in-flight request coalescing
 - **AnthropicModels** (`services/anthropic-models.ts`) - Static metadata for Anthropic models (context size, pricing) used by cost/usage calculations
 - **StatsService** (`services/stats-service.ts`) - Reads cached statistics from `~/.claude/stats-cache.json`
-- **UsageHistoryService** (`services/usage-history.ts`) - Records usage snapshots to `/tmp/cchub-usage-history.json` with 30s throttling
+- **UsageHistoryService** (`services/usage-history.ts`) - Records usage snapshots to `/tmp/hrdle-usage-history.json` with 30s throttling
 - **SystemMetricsService** (`services/system-metrics.ts`) - Collects CPU, memory, swap, and load metrics with history tracking (60 snapshots max)
 - **SessionMetricsService** (`services/session-metrics.ts`) - Per-session token / cost metrics aggregated from `.jsonl` logs
 - **CodexService** (`services/codex.ts`) - Codex CLI integration: spawns/attaches Codex sessions, watches state files
@@ -77,12 +79,12 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **KimiConfigService** (`services/kimi-config.ts`) - Parses `~/.kimi-code/config.toml` (via `Bun.TOML`) to map a `usage.record` model alias (`k3`) to its provider-side id (`moonshotai/kimi-k3`) and to supply the OpenRouter API key. Only OpenRouter-backed aliases are priceable
 - **OpenRouterPricingService / OpenRouterAccountService** (`services/openrouter.ts`) - Pay-as-you-go cost reporting: list prices from the public `/api/v1/models` (no auth, 24h cache) drive *estimated* per-window costs, while `/api/v1/key` + `/api/v1/credits` (keyed, 60s cache, 5min failure backoff) report OpenRouter's *billed* daily/weekly/monthly spend and credit balance. Estimates use rolling windows, OpenRouter's are calendar windows, so the two never match exactly
 - **ConversationWatcher** (`services/conversation-watcher.ts`) - Watches Claude Code / Codex `.jsonl` files and emits conversation updates to subscribed WebSocket clients
-- **HookStatusService** (`services/hook-status.ts`) - Reports whether the hooks CC Hub still needs are installed (`Stop` for notification text, `PostToolUse`/`AskUserQuestion` for the question's tool name). Indicator transitions come from herdr, not hooks
+- **HookStatusService** (`services/hook-status.ts`) - Reports whether the hooks Hrdle still needs are installed (`Stop` for notification text, `PostToolUse`/`AskUserQuestion` for the question's tool name). Indicator transitions come from herdr, not hooks
 - **HerdrAgentStatusWatcher** (`services/herdr-agent-status.ts`) - Subscribes to herdr's per-pane `pane.agent_status_changed` (plus pane lifecycle events, which re-subscribe the pane set) and triggers an immediate sessions push. Decides *when* to rebuild the list, never what's in it — a dropped event costs latency, not correctness
 - **AuthService** (`services/auth.ts`) - Password-based authentication with session tokens
 - **PeerRegistry** (`services/peer-registry.ts`) - Persists peer server metadata to `peers.json` (with mutation locking), records per-peer success/failure state
 - **PeerAuth** (`services/peer-auth.ts`) - Proxy login to peer servers (`POST /api/auth/login`), stores JWT tokens for subsequent API/WS calls, marks peers `unauthorized` on 401
-- **PeerDiscovery** (`services/peer-discovery.ts`) - Scans the Tailscale tailnet (`tailscale status --json`) and probes each peer's `:5923/health` in parallel to find running CC Hub instances
+- **PeerDiscovery** (`services/peer-discovery.ts`) - Scans the Tailscale tailnet (`tailscale status --json`) and probes each peer's `:5923/health` in parallel to find running Hrdle instances. **The probe port is still a literal 5923** — it is the port of whatever we are looking for, not ours, so after the rename it finds nothing on a tailnet of Hrdle installs (#459). The fix is a list of probe ports rather than `IDENTITY.defaultPort`
 - **PeerUrl** (`services/peer-url.ts`) - SSRF guard for peer URLs (#235): only allows Tailscale hosts (`*.ts.net`, CGNAT `100.64.0.0/10`, ULA `fd7a:115c:a1e0::/48`)
 
 ### Key API Routes
@@ -96,15 +98,15 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/panes/focus` - Focus a pane (`{ paneId }`)
 - `POST /:id/panes/close` - Close a pane (`{ paneId }`, rejects last pane)
 - `POST /:id/panes/split` - Split a pane (`{ paneId, direction: 'h'|'v' }`)
-- `POST /:id/panes/input` - Send input to a pane over REST (used by `cchub send` / peers)
-- `GET /:id/panes/:paneId/viewport` - Capture a pane viewport over REST (used by `cchub peek` / `--wait`)
+- `POST /:id/panes/input` - Send input to a pane over REST (used by `hrdle send` / peers)
+- `GET /:id/panes/:paneId/viewport` - Capture a pane viewport over REST (used by `hrdle peek` / `--wait`)
 - `POST /:id/tabs/select` - Switch the workspace's active tab (`{ tabId }`)
 - `POST /:id/tabs/create` - Create and switch to a new tab
 - `POST /:id/tabs/close` - Close a tab and all its panes (`{ tabId }`)
 - `POST /:id/prompt` - Send a prompt to the session's agent
 - `PUT /:id/theme` - Set session color theme
 - `PUT /:id/title` - Set session custom title
-- `POST /:id/move` - Move a session to `{ index }` in the display order (writes straight through to herdr's workspace order — cchub stores no order of its own)
+- `POST /:id/move` - Move a session to `{ index }` in the display order (writes straight through to herdr's workspace order — hrdle stores no order of its own)
 - `GET /prompts/search` - Search prompt history
 
 **Session History** (`/api/sessions/history`):
@@ -133,7 +135,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 
 **Peers** (`/api/peers`) — multi-server federation over Tailscale:
 - `GET /` - List registered peers
-- `GET /discover` - Discover CC Hub instances on the Tailscale tailnet
+- `GET /discover` - Discover Hrdle instances on the Tailscale tailnet
 - `POST /` - Register a peer / `DELETE /:id` - Remove a peer
 - `POST /:id/verify` - Re-verify connectivity and auth for a peer
 - `PUT /order` - Set peer display order
@@ -180,7 +182,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **SessionHistory.tsx** - Past session browser with project grouping
 - **ConversationViewer.tsx** - Markdown-rendered conversation display with image support
 
-**History V2** (`components/history/`, opt-in via `cchub-history-v2` localStorage flag):
+**History V2** (`components/history/`, opt-in via `hrdle-history-v2` localStorage flag):
 - **SessionHistoryV2.tsx** - Flat searchable history list with facet filtering
 - **HistoryRowV2.tsx** - Single history row item
 - **HistoryFacetSidebar.tsx** / **HistoryFacetDrawer.tsx** - Facet filters (desktop sidebar / mobile drawer)
@@ -250,7 +252,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **usePeerServerMetrics.ts** - Fetches a peer's dashboard metrics for `PeerServerCard`
 - **useHistoryActions.ts** - History operations (resume, delete, metadata updates)
 - **useFlatHistoryItems.ts** - Flattens project-grouped history into a filterable list for History V2
-- **useHistoryV2Flag.ts** - History V2 opt-in flag (`cchub-history-v2` localStorage)
+- **useHistoryV2Flag.ts** - History V2 opt-in flag (`hrdle-history-v2` localStorage)
 - **useViewHistory.ts** - File viewer back/forward navigation history (browser/file/changes/diff view modes)
 - **useViewerSettings.ts** - File viewer preferences (word wrap, font size) persisted to localStorage
 - **useAuthBlobUrl.ts** - Fetches protected resources with auth headers and exposes them as blob URLs
@@ -286,12 +288,12 @@ The frontend is **render-only**: xterm.js has `scrollback: 0`, and history is he
 
 Key behaviors:
 - **Session push**: Server pushes `sessions-updated` every 5s with full session list (replaces polling)
-- **Layout**: CC Hub owns the split tree (`herdr-layout.ts`) because the herdr grid can't be resized headlessly; pane PTYs are sized individually via each pane's control stream, and layout updates go to all connected clients
+- **Layout**: Hrdle owns the split tree (`herdr-layout.ts`) because the herdr grid can't be resized headlessly; pane PTYs are sized individually via each pane's control stream, and layout updates go to all connected clients
 - **Size management**: Client sends container size, the split tree computes pane rects, xterm.js uses `setExactSize()` from layout. `setClientSize` absorbs ±1-row mobile noise so viewports don't re-emit on minor resize
 - **Viewport protocol**: Client sends `request-viewport { paneId, offset }`. Server replies (and live-mode subscribers also receive unsolicited pushes on frame arrival) with `viewport { paneId, cols, rows, lines, cursor, modes, historySize, offset, atTail }`. `offset=0` = live edge (pane.read visible); `offset>0` = `recent` slice N rows above — capped at herdr's 1000-line read limit
 - **Initial viewport**: Sent immediately on `subscribe` so mobile doesn't show a gray canvas while waiting for the first resize round-trip
 - **Cursor / alt-screen**: Scanned from control-stream frames (trailing CUP + `?25h/l`, `1049h/l` transitions; initial alt state guessed from a non-shell foreground process with zero host scrollback)
-- **Lazy controllers**: Read-only REST access (`cchub peek`, viewport snapshots, previews) is pure RPC and never takes over a pane; control streams spawn on WS subscribe or first input
+- **Lazy controllers**: Read-only REST access (`hrdle peek`, viewport snapshots, previews) is pure RPC and never takes over a pane; control streams spawn on WS subscribe or first input
 - **Scroll to live**: Tapping the terminal or showing the soft keyboard forces the client back to `offset=0`
 - **Input**: Raw bytes (base64) over the pane's control stream — mouse SGR, bracketed paste, and escape sequences pass through intact; ordering guaranteed by the single stdin pipe
 
@@ -299,45 +301,45 @@ Key behaviors:
 
 ```bash
 # Server
-cchub                    # Start server (port 5923)
-cchub -p 8080           # Custom port
-cchub -P password       # With password auth
+hrdle                    # Start server (port 5924)
+hrdle -p 8080           # Custom port
+hrdle -P password       # With password auth
 
 # Management
-cchub setup -P pass     # Register systemd/launchd service
-cchub uninstall         # Remove service registration
-cchub update            # Update from GitHub Releases
-cchub update --check    # Check only (no update)
-cchub update --auto     # Auto-update mode (for timer)
-cchub status            # Show service status
+hrdle setup -P pass     # Register systemd/launchd service
+hrdle uninstall         # Remove service registration
+hrdle update            # Update from GitHub Releases
+hrdle update --check    # Check only (no update)
+hrdle update --auto     # Auto-update mode (for timer)
+hrdle status            # Show service status
 
 # Hook notification
-cchub notify            # Send hook event (reads JSON from stdin)
+hrdle notify            # Send hook event (reads JSON from stdin)
 
 # Remote pane control (target: <peer>:<session>:<paneId>, peer = 'local' | peer id | nickname)
-cchub send local:dev:%1 "ls"        # Send text to a pane
-cchub send local:dev:%1 --submit "fix the bug"  # Bracketed-paste + Enter (Claude/Codex TUI submit)
-cchub send local:dev:%1 --stdin     # Read payload from stdin (--base64 for binary-safe)
-cchub send local:dev:%1 --wait "y"  # Send, then snapshot viewport with detected state
+hrdle send local:dev:%1 "ls"        # Send text to a pane
+hrdle send local:dev:%1 --submit "fix the bug"  # Bracketed-paste + Enter (Claude/Codex TUI submit)
+hrdle send local:dev:%1 --stdin     # Read payload from stdin (--base64 for binary-safe)
+hrdle send local:dev:%1 --wait "y"  # Send, then snapshot viewport with detected state
                                     # (--wait-ms <n> delay, --lines <n> rows)
-cchub peek local:dev:%1             # Snapshot a pane viewport (--lines <n>, default 20)
+hrdle peek local:dev:%1             # Snapshot a pane viewport (--lines <n>, default 20)
 
 # Debugging (Bun inspector on the running service)
-cchub debug status      # Show inspector state
-cchub debug enable      # Enable inspector (port 9229)
-cchub debug disable     # Disable inspector
-cchub debug profile --seconds 30   # Enable for N seconds then auto-disable
+hrdle debug status      # Show inspector state
+hrdle debug enable      # Enable inspector (port 9229)
+hrdle debug disable     # Disable inspector
+hrdle debug profile --seconds 30   # Enable for N seconds then auto-disable
 
 # Help
-cchub --help
-cchub --version
+hrdle --help
+hrdle --version
 ```
 
 ### CLI Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-p, --port` | Port number | 5923 |
+| `-p, --port` | Port number | 5924 |
 | `-H, --host` | Bind address | 0.0.0.0 |
 | `-P, --password` | Auth password | none |
 
@@ -346,27 +348,27 @@ cchub --version
 - Tailscale must be running (used for HTTPS certificates)
 - Run `sudo tailscale set --operator=$USER` once to allow cert generation
 - macOS: Install Tailscale via `brew install tailscale` (App Store version lacks CLI)
-- herdr must be installed (`curl -fsSL https://herdr.dev/install.sh | sh` or `brew install herdr`); cchub auto-starts `herdr server` if it isn't running, but a supervised setup (systemd user unit with `Restart=always` + `~/.config/herdr/config.toml` with `resume_agents_on_restore = true`) is strongly recommended so agent sessions survive server restarts
-- For native session identity/restore, install the herdr integrations once: `herdr integration install claude` / `codex` / `kimi` (`cchub setup` installs all initialized ones)
+- herdr must be installed (`curl -fsSL https://herdr.dev/install.sh | sh` or `brew install herdr`); hrdle auto-starts `herdr server` if it isn't running, but a supervised setup (systemd user unit with `Restart=always` + `~/.config/herdr/config.toml` with `resume_agents_on_restore = true`) is strongly recommended so agent sessions survive server restarts
+- For native session identity/restore, install the herdr integrations once: `herdr integration install claude` / `codex` / `kimi` (`hrdle setup` installs all initialized ones)
 
 ## Claude Code / Codex / Grok / Kimi Hook通知連携
 
-Claude Code・Codex・Grok Build・Kimi Code のhookイベント（応答完了、ユーザー入力待ち等）をCC Hub経由でブラウザのOS通知として受け取れる。
+Claude Code・Codex・Grok Build・Kimi Code のhookイベント（応答完了、ユーザー入力待ち等）をHrdle経由でブラウザのOS通知として受け取れる。
 
-Grok Build は `~/.claude/settings.json` の hooks を互換レイヤでデフォルト読み込みするため、Claude 用の `cchub notify` 設定がそのまま発火する（追加設定不要）。ただし stdin JSON は camelCase 独自形式（`hookEventName: "stop"`, `sessionId`, `transcriptPath`）なので、`/api/notify` 側で Claude 形式に正規化している（`routes/notify.ts` の `normalizeHookBody`）。
+Grok Build は `~/.claude/settings.json` の hooks を互換レイヤでデフォルト読み込みするため、Claude 用の `hrdle notify` 設定がそのまま発火する（追加設定不要）。ただし stdin JSON は camelCase 独自形式（`hookEventName: "stop"`, `sessionId`, `transcriptPath`）なので、`/api/notify` 側で Claude 形式に正規化している（`routes/notify.ts` の `normalizeHookBody`）。
 
-Kimi Code は `~/.kimi-code/config.toml` の `[[hooks]]` に設定する（例: `event = "Stop"`, `command = "cchub notify"`）。stdin JSON は Claude 互換の snake_case（`hook_event_name`, `session_id`, ...）なので正規化は不要。
+Kimi Code は `~/.kimi-code/config.toml` の `[[hooks]]` に設定する（例: `event = "Stop"`, `command = "hrdle notify"`）。stdin JSON は Claude 互換の snake_case（`hook_event_name`, `session_id`, ...）なので正規化は不要。
 
 ### 仕組み
 
 ```
-Hook → cchub notify (stdin JSON) → POST /api/notify → WebSocket broadcast → ブラウザ Notification API
+Hook → hrdle notify (stdin JSON) → POST /api/notify → WebSocket broadcast → ブラウザ Notification API
                                                     ↘ グラス起動中は relay info アイテム → G2 画面
 ```
 
 グラスアプリ（`subscribe-glasses-relay` の購読者）が居る間は、通知はブラウザではなく G2 に出す。`/api/notify` が hook の `session_id`（agent セッションid）または `cwd` から herdr の workspace/pane を解決し（`resolveHookTarget`）、90 秒 TTL の `info` リレーアイテムを作る（`postHookRelay`）。実際にアイテムが載ったときだけ `hook-event` に `deliveredToGlasses: true` を付け、フロント側はこのフラグが立っている時だけ `fireHookNotification` を呼ばない。グラスが居ない・セッションが解決できない・レート制限に当たった場合はフラグが立たず従来どおりブラウザ通知が出る（通知が消えるより二重に出るほうがマシ）。インジケータ更新はフラグに関係なく常に走る。
 
-herdr が `blocked` を報告して waiting アイテムがある間は、hook 由来の info は作らない（同じ状況を二重に言うだけなので）。逆に hook が先に届いていた場合、waiting 成立時に hook 由来の info（`source: 'auto'`）は消される。エージェント自身の `cchub glasses` メモ（`source: 'agent'`）は無関係なので残る。
+herdr が `blocked` を報告して waiting アイテムがある間は、hook 由来の info は作らない（同じ状況を二重に言うだけなので）。逆に hook が先に届いていた場合、waiting 成立時に hook 由来の info（`source: 'auto'`）は消される。エージェント自身の `hrdle glasses` メモ（`source: 'agent'`）は無関係なので残る。
 
 ### グラスの音声入力（STT）
 
@@ -378,15 +380,15 @@ G2 の SDK は生の PCM しか出さないため、書き起こしは `POST /ap
 
 ### セットアップ手順
 
-1. Claude Code は `~/.claude/settings.json` の `hooks` に `cchub notify` を追加する。Codex は `~/.codex/hooks.json` に追加する（`config.toml` と併用するとCodexが警告するため、`cchub setup` が既存のCC Hub hookをJSONへ移行する）:
+1. Claude Code は `~/.claude/settings.json` の `hooks` に `hrdle notify` を追加する。Codex は `~/.codex/hooks.json` に追加する（`config.toml` と併用するとCodexが警告するため、`hrdle setup` が既存のHrdle hookをJSONへ移行する）:
 
 ```json
 {
   "hooks": {
-    "Stop": [{ "hooks": [{ "type": "command", "command": "cchub notify" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "hrdle notify" }] }],
     "PostToolUse": [{
       "matcher": "AskUserQuestion",
-      "hooks": [{ "type": "command", "command": "cchub notify" }]
+      "hooks": [{ "type": "command", "command": "hrdle notify" }]
     }]
   }
 }
@@ -394,9 +396,9 @@ G2 の SDK は生の PCM しか出さないため、書き起こしは `POST /ap
 
 `PreToolUse` / `UserPromptSubmit` はもう不要（v0.2.2〜）。インジケータの状態遷移は herdr の `pane.agent_status_changed` から取るようになったため、hook は herdr が持たない情報（通知本文・質問のツール名）だけを運ぶ。既に登録済みでも害はない。
 
-2. `cchub` バイナリにPATHが通っていることを確認（hookはClaude Code / Codex のプロセスから実行される）。hook は**非対話シェル**で走るため `.zshrc` は読まれない。`~/bin` / `~/.local/bin` への PATH 追加を `.zshrc` に書いている構成ではベア名が解決できず `command not found` になる（#538）。その場合は絶対パス（`/home/you/bin/cchub notify`）を書く。cchub 自身が書き込む側（`migrateCodexHooksToJson` / UI の hook 設定プロンプト）は `resolveNotifyCommand()`（`services/notify-command.ts`）で解決済みパスを使う
+2. `hrdle` バイナリにPATHが通っていることを確認（hookはClaude Code / Codex のプロセスから実行される）。hook は**非対話シェル**で走るため `.zshrc` は読まれない。`~/bin` / `~/.local/bin` への PATH 追加を `.zshrc` に書いている構成ではベア名が解決できず `command not found` になる（#538）。その場合は絶対パス（`/home/you/bin/hrdle notify`）を書く。hrdle 自身が書き込む側（`migrateCodexHooksToJson` / UI の hook 設定プロンプト）は `resolveNotifyCommand()`（`services/notify-command.ts`）で解決済みパスを使う
 
-3. CC Hubサーバーがデフォルトポート（5923）で起動していること。カスタムポートの場合は `cchub notify -p <port>` を指定
+3. Hrdleサーバーがデフォルトポート（5924）で起動していること。カスタムポートの場合は `hrdle notify -p <port>` を指定
 
 4. ブラウザで初回アクセス時に通知権限を許可する
 
@@ -412,22 +414,22 @@ G2 の SDK は生の PCM しか出さないため、書き起こしは `POST /ap
 
 ### 注意事項
 
-- `cchub notify` はstdinからClaude Code / Codex のhook JSON入力を読み取る
+- `hrdle notify` はstdinからClaude Code / Codex のhook JSON入力を読み取る
 - `/api/notify` エンドポイントは認証不要（ローカルhookから呼ばれるため）
 - 既存のhookスクリプト（smart-notify.py等）と併用可能（同じイベントに複数hook登録）
 - 複数のWebSocket接続がある場合でもデバウンスにより通知は1回のみ
-- グラスは接続している1台のCC Hubの通知しか表示しないので、`deliveredToGlasses` はイベントを起こしたサーバーだけが立てる。peer の通知は peer 側にグラスが繋がっていない限り従来どおりブラウザに出る
+- グラスは接続している1台のHrdleの通知しか表示しないので、`deliveredToGlasses` はイベントを起こしたサーバーだけが立てる。peer の通知は peer 側にグラスが繋がっていない限り従来どおりブラウザに出る
 
 ## Internationalization (i18n)
 
-CC Hub supports English and Japanese. Language is automatically detected.
+Hrdle supports English and Japanese. Language is automatically detected.
 
 ### Frontend (Web UI)
 
 Uses `react-i18next` with browser language detection:
 - Translation files: `frontend/src/i18n/locales/{en,ja}.json`
 - Language switcher in UI (EN/JA button)
-- Preference saved to `localStorage` (`cchub-language`)
+- Preference saved to `localStorage` (`hrdle-language`)
 
 ### Backend (CLI)
 
@@ -478,9 +480,9 @@ Uses [Biome](https://biomejs.dev/) for linting. Configuration in `biome.json` at
 
 ### Remote Logging
 
-Frontend `console.log/warn/error/info` calls are automatically sent to the backend via `/api/logs`. Logs are written to `/tmp/cc-hub-browser.log`.
+Frontend `console.log/warn/error/info` calls are automatically sent to the backend via `/api/logs`. Logs are written to `/tmp/hrdle-browser.log`.
 
-This enables debugging on mobile/tablet devices without access to browser DevTools. Use `tail -f /tmp/cc-hub-browser.log` to monitor frontend logs in real-time (also exposed via `GET /api/logs`).
+This enables debugging on mobile/tablet devices without access to browser DevTools. Use `tail -f /tmp/hrdle-browser.log` to monitor frontend logs in real-time (also exposed via `GET /api/logs`).
 
 ### herdr Server State
 
@@ -491,4 +493,4 @@ herdr status server                 # running? protocol version?
 systemctl --user status herdr      # if supervised via systemd
 ```
 
-cchub auto-starts `herdr server` at boot when the socket (`~/.config/herdr/herdr.sock`, or `$HERDR_SOCKET_PATH`) is unreachable. herdr's own log lives at `~/.config/herdr/herdr-server.log`. Sessions (workspaces) live in the herdr server process — restarting cchub never kills them; restarting herdr restores workspaces from `session.json` and, with `resume_agents_on_restore`, resumes agent conversations natively.
+hrdle auto-starts `herdr server` at boot when the socket (`~/.config/herdr/herdr.sock`, or `$HERDR_SOCKET_PATH`) is unreachable. herdr's own log lives at `~/.config/herdr/herdr-server.log`. Sessions (workspaces) live in the herdr server process — restarting hrdle never kills them; restarting herdr restores workspaces from `session.json` and, with `resume_agents_on_restore`, resumes agent conversations natively.
