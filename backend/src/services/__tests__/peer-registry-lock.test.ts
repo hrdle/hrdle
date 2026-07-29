@@ -2,27 +2,34 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { IDENTITY } from '../../../../shared/identity';
 
 // Force the data directory before the module loads so peers.json lands in our
-// scratch dir. ensureDataDir reads CC_HUB_DATA_DIR. #251
+// scratch dir. ensureDataDir reads this variable. #251
+//
+// Taken from identity rather than written out: renaming the variable (#459)
+// does not fail a test that spells it — it stops redirecting it, and the test
+// then writes peers.json into the real data directory and still passes.
+const DATA_DIR_ENV = IDENTITY.dataDirEnv;
+
 let tempDir: string;
 let originalDataDir: string | undefined;
 
 beforeEach(async () => {
-  tempDir = await mkdtemp(join(tmpdir(), 'cchub-peers-'));
-  originalDataDir = process.env.CC_HUB_DATA_DIR;
-  process.env.CC_HUB_DATA_DIR = tempDir;
+  tempDir = await mkdtemp(join(tmpdir(), `${IDENTITY.tmpPrefix}-peers-`));
+  originalDataDir = process.env[DATA_DIR_ENV];
+  process.env[DATA_DIR_ENV] = tempDir;
 });
 
 afterEach(async () => {
-  if (originalDataDir === undefined) delete process.env.CC_HUB_DATA_DIR;
-  else process.env.CC_HUB_DATA_DIR = originalDataDir;
+  if (originalDataDir === undefined) delete process.env[DATA_DIR_ENV];
+  else process.env[DATA_DIR_ENV] = originalDataDir;
   await rm(tempDir, { recursive: true, force: true });
 });
 
 describe('peer-registry mutation lock', () => {
   test('concurrent recordPeer* calls do not overwrite each other', async () => {
-    // Re-import after we set CC_HUB_DATA_DIR so the module picks up our temp.
+    // Re-import after we set the data dir so the module picks up our temp.
     const peerRegistry = await import('../peer-registry');
     const { createPeer, recordPeerSuccess, recordPeerFailure, getPeer } = peerRegistry;
 

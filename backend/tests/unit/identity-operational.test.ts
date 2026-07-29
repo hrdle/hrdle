@@ -93,23 +93,53 @@ describe('hook detection pattern', () => {
  * say the name for the reader's benefit and nothing breaks when they are stale.
  */
 describe('no operational identity left as a literal', () => {
+  // Composed from identity.json rather than written out, because a scan that
+  // names one product keeps passing after that product is renamed — it just
+  // stops looking for anything that exists. Renaming the file has to rename
+  // what this looks for, or the guard quietly retires (#459).
+  const esc = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   const OPERATIONAL = [
-    { pattern: /['"`][^'"`]*cchub\.service/, what: 'a systemd unit name' },
-    { pattern: /['"`][^'"`]*com\.cchub/, what: 'a launchd label' },
-    { pattern: /['"`]\/tmp\/cc-?hub/, what: 'a scratch path' },
-    { pattern: /['"`][^'"`]*\.cc-hub['"`/]/, what: 'the data directory' },
-    { pattern: /CC_HUB_DATA_DIR/, what: 'the data directory env var' },
+    {
+      pattern: new RegExp(`['"\`][^'"\`]*${esc(SERVICE.unitFile)}`),
+      what: 'a systemd unit name',
+    },
+    {
+      pattern: new RegExp(`['"\`][^'"\`]*${esc(IDENTITY.launchdPrefix)}`),
+      what: 'a launchd label',
+    },
+    {
+      pattern: new RegExp(`['"\`]/tmp/${esc(IDENTITY.tmpPrefix)}`),
+      what: 'a scratch path',
+    },
+    {
+      pattern: new RegExp(`['"\`][^'"\`]*${esc(IDENTITY.dataDirName)}['"\`/]`),
+      what: 'the data directory',
+    },
+    { pattern: new RegExp(esc(IDENTITY.dataDirEnv)), what: 'the data directory env var' },
   ];
 
-  // Where the literals are the point: identity.ts defines them, and the tests
-  // assert against them on purpose.
-  const ALLOWED = /shared\/identity\.ts$|\/tests\/|__tests__\//;
+  /**
+   * Only the files whose whole job is to hold these names: identity.ts defines
+   * them, and three tests assert against them on purpose — the golden systemd
+   * units, the scratch paths, and this scan's own patterns.
+   *
+   * Exempting every test directory instead is what let #668's four tests keep
+   * `CC_HUB_DATA_DIR` written out. That is not a harmless place for it: a
+   * spelled-out variable stops redirecting the data directory when it is
+   * renamed, so the tests write their fixtures into the real one and still
+   * pass. Nothing was red; a data directory just filled up with fake sessions.
+   */
+  const ALLOWED =
+    /shared\/identity\.ts$|identity-consistency\.test\.ts$|identity-operational\.test\.ts$|setup-units\.test\.ts$/;
 
-  test('backend and shared sources go through identity', async () => {
+  test('sources and tests alike go through identity', async () => {
+    // backend/tests is in the list because that is where the misses were.
     const proc = Bun.spawnSync([
       'git',
       'ls-files',
       'backend/src',
+      'backend/tests',
       'shared',
       'frontend/src',
     ], { cwd: join(import.meta.dir, '..', '..', '..') });
