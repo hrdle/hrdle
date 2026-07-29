@@ -4,10 +4,30 @@ set -e
 cd "$(dirname "$0")/.."
 
 # What the binary is called is identity.json's to say (#459). install.sh and
-# release.yml keep their own copies because neither can read the file; this
-# script runs from a checkout, so it reads it and cannot drift.
-PRODUCT_NAME=$(bun -e 'console.log((await Bun.file("identity.json").json()).productName)')
-BINARY_NAME=$(bun -e 'console.log((await Bun.file("identity.json").json()).binaryName)')
+# release.yml keep their own copies because neither can read the file at the
+# moment it needs the name; this script runs from a checkout and can, so it
+# reads rather than holding a third copy that nothing checks. release.yml
+# renames `dist/<binaryName>` — the two disagreeing breaks CI builds only.
+#
+# Read in one pass, and checked: a missing key prints "undefined" and exits 0,
+# so `set -e` lets it through and the build produces dist/undefined. That only
+# fails later, in the CI step that renames dist/<binaryName> — the same
+# build-time-only breakage this stopped being a third copy to avoid.
+# One line per field, because productName has a space in it and word
+# splitting would put "Hub" in the binary name.
+IDENTITY_FIELDS=$(bun -e 'const id = await Bun.file("identity.json").json();
+  const need = (k) => {
+    const v = id[k];
+    if (typeof v !== "string" || v.trim() === "") {
+      console.error(`identity.json: ${k} is missing or not a non-empty string`);
+      process.exit(1);
+    }
+    return v;
+  };
+  console.log(need("productName"));
+  console.log(need("binaryName"));')
+
+{ read -r PRODUCT_NAME; read -r BINARY_NAME; } <<< "$IDENTITY_FIELDS"
 
 echo "🏗️  Building $PRODUCT_NAME..."
 

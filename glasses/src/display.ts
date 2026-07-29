@@ -294,10 +294,14 @@ function spinnerFrame(state: AppState): string {
  * five or six rows, crowding out the conversation it was meant to introduce.
  */
 function recapBlock(recap: string | undefined, maxLines = 2): string[] {
-  // Every line, not the first two: the strip shows `NOTICE_LINES` of them at a
-  // time and the clock walks the rest. Cutting here would throw away what the
-  // walking is for.
-  return recapBlockLines(recap, maxLines).flatMap(splitDisplayLines)
+  // Every line, not the first two: the strip shows `NOTICE_MAX_LINES` of them
+  // at a time and the clock walks the rest. Cutting here would throw away what
+  // the walking is for.
+  //
+  // Unwrapped, too. The strip scrolls by character and re-wraps what is left,
+  // so wrapping here would freeze the line breaks at the offsets they had on
+  // the first step and the text would reflow against a stale grid.
+  return recapBlockLines(recap, maxLines)
 }
 
 /** Display label for a relay item's session (live session name, else the id). */
@@ -315,8 +319,10 @@ function relayBannerLines(state: AppState): string[] {
     const choiceHint = top.choices?.length ? `(選択${top.choices.length})` : ''
     const more = state.relayWaiting.length > 1 ? ` 他${state.relayWaiting.length - 1}件` : ''
     const head = splitDisplayLines(`[!]${relayLabel(state, top)}${choiceHint}${more}`)[0] || ''
-    // All of it; the strip windows what fits and the clock walks the rest.
-    return [head, ...splitDisplayLines(top.text)]
+    // All of it, unwrapped; the strip windows what fits and the clock walks the
+    // rest, re-wrapping at every step. Only the head is clamped — it is a
+    // label, and a label that takes two lines is not one.
+    return [head, top.text]
   }
   // Notifications get no body space here. The dialog already presented each
   // one full-screen, and the list keeps them in full afterwards; a third
@@ -538,12 +544,12 @@ export const NOTICE_BORDER = 1
  *  that it does not compete with the text it is separating. */
 export const NOTICE_BORDER_COLOR = 6
 /**
- * Everything the notice strip has to say, before it is windowed.
+ * Everything the notice strip has to say, before it is windowed — unwrapped.
  *
  * Shared with the auto-advance clock, which has to know how much is waiting
  * behind the strip without rendering it.
  */
-function conversationNoticeLines(state: AppState): string[] {
+function conversationNoticeText(state: AppState): string {
   const session = state.sessions[state.sessionIndex]
   const pane = state.selectedPaneId
     ? (session?.panes ?? []).find((p) => p.paneId === state.selectedPaneId)
@@ -555,30 +561,95 @@ function conversationNoticeLines(state: AppState): string[] {
   const recapText = pane ? pane.recap : session?.ccRecap
   const recapAt = pane ? pane.recapAt : session?.ccRecapAt
   const recap = onLatest && recapIsCurrent(recapAt, state.conversation) ? recapBlock(recapText) : []
-  return [...banner, ...recap]
+  return [...banner, ...recap].join('\n')
 }
 
 /** A notice longer than the conversation it introduces has stopped helping —
  *  so a long one is shown this many lines at a time instead of all at once. */
-const NOTICE_MAX_LINES = 3
+const NOTICE_MAX_LINES = 2
 
 /**
- * The notice, scrolled down by `offset` lines.
+ * Characters the strip gives up from its front on each step.
  *
- * A line at a time, not a page at a time: paging replaces the whole strip and
- * the reader has to find their place again in text they were mid-sentence
- * through. Scrolling keeps two of the three lines they were just reading, so
- * the new one arrives with its context already on screen.
+ * The unit of the scroll is the character, not the line: a line at a time
+ * moved the text in 27px jumps and read as three separate screens rather than
+ * one moving one. Taking a few characters off the front and re-wrapping what
+ * is left slides the whole block instead, which is what it looks like to read
+ * along a line rather than be shown another one.
+ *
+ * Ten and not one: every step is a redraw over BLE, and one character per
+ * redraw would spend a hundred and fifty of them on a recap. Ten is about a
+ * third of a Japanese line — coarse enough to keep the redraws near what line
+ * scrolling cost, fine enough that the block still reads as sliding rather
+ * than being replaced.
+ *
+ * Paired with `AUTO_SCROLL_STEP_MS`: the two move together, so changing this
+ * without changing that changes the reading speed as well as the granularity.
  */
-function noticeScrollOf(lines: string[], offset: number): string[] {
-  if (lines.length <= NOTICE_MAX_LINES) return lines
-  const last = noticeScrollStepsOf(lines.length) - 1
-  const o = Math.max(0, Math.min(offset, last))
-  return lines.slice(o, o + NOTICE_MAX_LINES)
+export const NOTICE_SCROLL_CHARS = 10
+
+/**
+ * What is left of the notice once `from` characters have gone past.
+ *
+ * Leading whitespace goes with them: a step can land on a line break or on the
+ * space a wrap fell on, and a strip that starts with a blank row reads as the
+ * notice having ended rather than having moved.
+ */
+function noticeFrom(chars: string[], from: number): string {
+  return chars.slice(from).join('').replace(/^\s+/, '')
 }
 
-function noticeScrollStepsOf(total: number): number {
-  return Math.max(1, total - NOTICE_MAX_LINES + 1)
+/** True once everything left of `from` fits the strip — i.e. the last
+ *  character of the notice is on screen. */
+function noticeFitsFrom(chars: string[], from: number): boolean {
+  return splitDisplayLines(noticeFrom(chars, from)).length <= NOTICE_MAX_LINES
+}
+
+/**
+ * Every offset the strip stops at, from the notice's first character to its
+ * last.
+ *
+ * Walked rather than multiplied out. A step is capped at what the reader can
+ * actually see, so it can never advance past the bottom of the strip: a notice
+ * of short lines — a banner over a bulleted recap, say — shows barely more
+ * than a step's worth at a time, and a fixed stride would carry lines off the
+ * top that were never on screen. Silently skipping part of the recap is the
+ * failure this scrolling exists to fix.
+ *
+ * Prose steps the full `NOTICE_SCROLL_CHARS` every time, which is the case
+ * this runs in almost always; the cap only bites on the shapes that need it.
+ */
+function noticeStops(text: string): number[] {
+  const chars = Array.from(text)
+  const stops = [0]
+  let from = 0
+  while (!noticeFitsFrom(chars, from)) {
+    const shown = splitDisplayLines(noticeFrom(chars, from)).slice(0, NOTICE_MAX_LINES).join('').length
+    // At least one character, so a strip that somehow shows nothing still
+    // terminates rather than walking the same offset forever.
+    from += Math.max(1, Math.min(NOTICE_SCROLL_CHARS, shown))
+    stops.push(from)
+  }
+  return stops
+}
+
+/** How many steps the strip takes to walk a notice from end to end. */
+function noticeScrollStepsOf(text: string): number {
+  return noticeStops(text).length
+}
+
+/**
+ * The notice with `window` steps' worth of characters taken off its front.
+ *
+ * Held at the last step rather than wrapped around: the clock decides when to
+ * go back to the beginning, and it waits at the end first so the last line is
+ * read rather than glimpsed.
+ */
+function noticeScrollOf(text: string, window: number): string[] {
+  if (!text) return []
+  const stops = noticeStops(text)
+  const from = stops[Math.max(0, Math.min(window, stops.length - 1))]
+  return splitDisplayLines(noticeFrom(Array.from(text), from)).slice(0, NOTICE_MAX_LINES)
 }
 
 /**
@@ -590,7 +661,7 @@ function noticeScrollStepsOf(total: number): number {
  */
 export function noticeScrollSteps(state: AppState): number {
   if (state.mode !== 'conversation') return 1
-  return noticeScrollStepsOf(conversationNoticeLines(state).length)
+  return noticeScrollStepsOf(conversationNoticeText(state))
 }
 
 export function noticeHeight(lines: number): number {
@@ -626,7 +697,7 @@ function conversationContent(state: AppState): {
     ? Math.max(0, msgs.length - 1 - state.conversationOffset)
     : -1
   const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage)
-  const allNotice = conversationNoticeLines(state)
+  const allNotice = conversationNoticeText(state)
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
   // Everything is measured in display lines — counting the conversation in
@@ -1098,6 +1169,15 @@ export function buildSetupGuide(): RebuildPageContainer {
 
 // ─── Display controller ───
 
+/** `StartUpPageCreateResult`, spelled out rather than read off the enum: it is
+ *  declared in the SDK's .d.ts and its runtime shape is not ours to rely on. */
+const CREATE_RESULT_NAMES: Record<number, string> = {
+  0: 'success',
+  1: 'invalid',
+  2: 'oversize',
+  3: 'outOfMemory',
+}
+
 let currentMode: Mode | null = null
 /** Notice-strip height last sent, so a change in it triggers the rebuild the
  *  new geometry needs. */
@@ -1134,10 +1214,18 @@ export async function initDisplay(): Promise<Bridge | null> {
       ],
     })
 
-    await Promise.race([
+    const created = await Promise.race([
       bridge.createStartUpPageContainer(initial),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('createStartUp timeout')), 3000)),
     ])
+    // The host answers this one with a reason, and `outOfMemory` is the answer
+    // that would explain a run dying sooner than the one before it. It was
+    // being discarded, so every theory about why the app stops had to be built
+    // from symptoms instead of from what the host actually said.
+    traceSink?.(
+      `page container created: ${CREATE_RESULT_NAMES[created as number] ?? `unknown(${created})`}`,
+      created === 0 ? 'info' : 'error',
+    )
     return bridge
   } catch (e) {
     console.log('[display] Even Hub SDK not available — debug mode', e)
@@ -1152,22 +1240,136 @@ export async function initDisplay(): Promise<Bridge | null> {
  * where one will do — three times the traffic, every tick, for the whole time
  * a session is working.
  */
+/**
+ * What each container was last told to show, so an upgrade that would change
+ * nothing is not sent at all.
+ *
+ * The screen was redrawn on every `sessions-updated` push — every five
+ * seconds, whether or not anything on it had changed. Measured on the device
+ * that is 0.2 full draws a second, indefinitely, over BLE, for a panel showing
+ * exactly what it showed five seconds ago. What actually changes on an idle
+ * list is the clock in the footer, once a minute.
+ *
+ * Recorded only after the device has taken the write, so an upgrade that fails
+ * is retried on the next render rather than assumed applied.
+ */
+const drawn = new Map<number, string>()
+
+/**
+ * Container writes actually sent to the panel.
+ *
+ * Reported on the heartbeat next to the frame count, because they are no
+ * longer the same number and the difference is the whole point: a frame that
+ * changes nothing now costs nothing, and only this counter says so from the
+ * device rather than from reasoning about the code.
+ */
+let writes = 0
+export function panelWrites(): number {
+  return writes
+}
+
+/**
+ * What the host said about the writes we sent it.
+ *
+ * Every draw call in the SDK returns a boolean, and every one of them was
+ * being thrown away. That cost more than a missing log line: `drawn` cached
+ * refused content as if it were on screen, so the retry the record above
+ * promises never happened — a dropped write became a permanently stale
+ * container. Only an explicit `false` counts as a refusal; the SDK's stubs
+ * resolve with nothing, and reading that as a drop would stop the panel
+ * updating at all.
+ */
+let drops = 0
+export function panelDrops(): number {
+  return drops
+}
+
+/**
+ * Where display-layer traces go.
+ *
+ * `trace` lives in main.ts and importing it here would close an import cycle,
+ * so main injects it instead. Unset in the simulator and in tests, where the
+ * counters above are read directly.
+ */
+let traceSink: ((message: string, level?: string) => void) | null = null
+export function setPanelTrace(fn: (message: string, level?: string) => void): void {
+  traceSink = fn
+}
+
+/** First few drops are reported as they happen; after that the heartbeat's
+ *  running count is enough, and a refusing host would otherwise fill the log. */
+const TRACED_DROPS_MAX = 5
+let tracedDrops = 0
+
+function noteDrop(what: string): void {
+  drops++
+  if (tracedDrops >= TRACED_DROPS_MAX) return
+  tracedDrops++
+  traceSink?.(`host refused ${what} (drop #${drops})`, 'error')
+}
+
+/** Send a container's new content, or nothing if that is what it already
+ *  shows. Returns null when there was nothing to send. */
+function upgrade(
+  bridge: Bridge,
+  containerID: number,
+  containerName: string,
+  content: string,
+): Promise<void> | null {
+  if (drawn.get(containerID) === content) return null
+  return Promise.resolve(
+    bridge.textContainerUpgrade(new TextContainerUpgrade({ containerID, containerName, content })),
+  ).then((ok) => {
+    if (ok === false) {
+      noteDrop(`upgrade ${containerName}`)
+      return
+    }
+    writes++
+    drawn.set(containerID, content)
+  })
+}
+
+/**
+ * Take note of what a rebuild just put on screen.
+ *
+ * Container ids mean different things in different modes — id 1 is the list on
+ * one screen and the header on another — so the record is only ever read
+ * between rebuilds, and every rebuild replaces it wholesale.
+ */
+function recordRebuild(container: RebuildPageContainer): void {
+  drawn.clear()
+  const objects = (container.textObject ?? []) as Array<{ containerID?: number; content?: string }>
+  writes += objects.length
+  for (const t of objects) {
+    if (typeof t.containerID === 'number') drawn.set(t.containerID, t.content ?? '')
+  }
+}
+
+/**
+ * Forget what the panel is showing, so the next render builds it from nothing.
+ *
+ * The skip-if-unchanged record is only worth trusting while this app is the
+ * only thing writing to the panel. Across a suspend the host may have taken
+ * the page down, and a stale record would then skip exactly the writes needed
+ * to put it back — a blank screen that no amount of waiting fixes, which is a
+ * far worse failure than the one rebuild this costs on every resume.
+ */
+export function invalidatePanel(): void {
+  drawn.clear()
+  currentMode = null
+  currentNoticeLines = 0
+}
+
 export async function updateHeader(bridge: Bridge | null, state: AppState): Promise<void> {
   if (!bridge || state.mode !== currentMode) return
   // Whichever container the spinner lives in — the conversation's header, or
   // the list's rows. One container either way; a full update sends three.
   if (state.mode === 'session_list') {
-    await bridge.textContainerUpgrade(new TextContainerUpgrade({
-      containerID: 1, containerName: 'list',
-      content: sessionListBody(state),
-    }))
+    await upgrade(bridge, 1, 'list', sessionListBody(state))
     return
   }
   const { headerText } = conversationContent(state)
-  await bridge.textContainerUpgrade(new TextContainerUpgrade({
-    containerID: 1, containerName: 'header',
-    content: headerText,
-  }))
+  await upgrade(bridge, 1, 'header', headerText)
 }
 
 export async function updateDisplay(bridge: Bridge | null, state: AppState): Promise<void> {
@@ -1190,23 +1392,27 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       case 'voice': container = buildVoice(state); break
       case 'overlay': container = buildOverlay(state); break
     }
-    await bridge.rebuildPageContainer(container)
+    const ok = await bridge.rebuildPageContainer(container)
+    if (ok === false) {
+      noteDrop('rebuild')
+      // The mode was recorded above on the assumption this would land. Undo
+      // that, or the next render sees the geometry as already sent and skips
+      // the rebuild — leaving the panel showing the previous screen for good.
+      invalidatePanel()
+      return
+    }
+    recordRebuild(container)
     return
   }
 
-  // In-place text updates
+  // In-place text updates. Each one is sent only if it would change what the
+  // container is already showing; `Promise.all` over the ones that survive.
   switch (state.mode) {
     case 'session_list': {
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'list',
-          content: sessionListBody(state),
-        })),
+        upgrade(bridge, 1, 'list', sessionListBody(state)),
         // The footer moves now — it holds the clock and the position.
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'footer',
-          content: sessionListFooter(state),
-        })),
+        upgrade(bridge, 2, 'footer', sessionListFooter(state)),
       ])
       break
     }
@@ -1214,71 +1420,35 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       const { headerText, noticeText, bodyText, footerText } = conversationContent(state)
       const hasNotice = notice > 0
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: headerText,
-        })),
-        ...(hasNotice ? [bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'notice',
-          content: noticeText,
-        }))] : []),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: hasNotice ? 3 : 2, containerName: 'body',
-          content: bodyText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: hasNotice ? 4 : 3, containerName: 'footer',
-          content: footerText,
-        })),
+        upgrade(bridge, 1, 'header', headerText),
+        ...(hasNotice ? [upgrade(bridge, 2, 'notice', noticeText)] : []),
+        upgrade(bridge, hasNotice ? 3 : 2, 'body', bodyText),
+        upgrade(bridge, hasNotice ? 4 : 3, 'footer', footerText),
       ])
       break
     }
     case 'choice': {
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: choiceHeader(state),
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
-          content: choiceBody(state),
-        })),
+        upgrade(bridge, 1, 'header', choiceHeader(state)),
+        upgrade(bridge, 2, 'body', choiceBody(state)),
       ])
       break
     }
     case 'voice': {
       const { headerText, bodyText, footerText } = voiceContent(state)
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: headerText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
-          content: bodyText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 3, containerName: 'footer',
-          content: footerText,
-        })),
+        upgrade(bridge, 1, 'header', headerText),
+        upgrade(bridge, 2, 'body', bodyText),
+        upgrade(bridge, 3, 'footer', footerText),
       ])
       break
     }
     case 'overlay': {
       const { headerText, bodyText, footerText } = overlayContent(state)
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: headerText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
-          content: bodyText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 3, containerName: 'footer',
-          content: footerText,
-        })),
+        upgrade(bridge, 1, 'header', headerText),
+        upgrade(bridge, 2, 'body', bodyText),
+        upgrade(bridge, 3, 'footer', footerText),
       ])
       break
     }

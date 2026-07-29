@@ -16,8 +16,8 @@ let getJwtSecret: () => string;
 
 beforeAll(async () => {
   delete process.env.JWT_SECRET;
-  // From identity: a hardcoded variable stops redirecting the data directory
-  // after a rename, and the secret then lands in the real one. #459
+  // From identity: a spelled-out variable stops redirecting the data directory
+  // when it is renamed (#459), and the generated secret lands in the real one.
   process.env[IDENTITY.dataDirEnv] = TEST_DATA_DIR;
   await rm(TEST_DATA_DIR, { recursive: true, force: true });
   // Import after env setup so the module's secret starts uninitialized.

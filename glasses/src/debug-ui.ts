@@ -350,7 +350,10 @@ export function startDebugUI(): void {
   const mirrorToggle = document.getElementById('g2-mirror') as HTMLInputElement
   const mirrorStatus = el('g2-mirror-status')
 
-  let lastScreen: { header: string; body: string; footer: string; headerless?: boolean } = {
+  // `notice` belongs here as much as the other three: the copy button is how a
+  // screen gets reported, and one that silently drops the recap reports a
+  // panel nobody is looking at.
+  let lastScreen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean } = {
     header: '', body: '', footer: '',
   }
   let lastMode = 'session_list'
@@ -557,6 +560,12 @@ export function startDebugUI(): void {
     renderHeader(state) {
       platform.render(state)
     },
+    // There is no host here to show an exit dialogue and no app to be exited
+    // from, so this reports rather than acts — the simulator's job is to make
+    // the gesture's new meaning visible while it is being designed.
+    requestExit() {
+      setVoiceStatus('終了ダイアログを要求（実機ではホストの確認が出ます）')
+    },
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
     saveState(json) {
@@ -614,6 +623,10 @@ export function startDebugUI(): void {
       rule,
       lastScreen.header,
       rule,
+      // The panel draws this rule as a container border rather than a row of
+      // text; here it is a row like the others, so the copy reads the way the
+      // screen looks.
+      ...(lastScreen.notice ? [lastScreen.notice, rule] : []),
       lastScreen.body,
       rule,
       lastScreen.footer,

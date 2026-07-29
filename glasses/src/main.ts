@@ -6,7 +6,7 @@
 // Groq STT) and the LocalStorage URL setup flow.
 
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
-import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, startMic, stopMic } from './display.ts'
+import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, panelDrops, setPanelTrace, invalidatePanel, startMic, stopMic } from './display.ts'
 import type { AppState } from './display.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
@@ -172,6 +172,19 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
     transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
+    requestExit() {
+      // Mode 1 — the host's own confirmation, which the user can cancel. Only
+      // if they confirm does `SYSTEM_EXIT_EVENT` arrive, and the cleanup goes
+      // there rather than here.
+      trace('exit dialogue requested (root double-tap)')
+      try {
+        void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {
+          if (ok === false) trace('shutDownPageContainer refused by host', 'error')
+        })
+      } catch (err) {
+        trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
+      }
+    },
   }
   const controller = new GlassesController(platform)
   trace('controller constructed')
@@ -179,20 +192,48 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   trace('ws connect issued')
   platform.render(controller.state)
 
+  /**
+   * Front or back, as far as the host has told us.
+   *
+   * The transitions were already traced, but only as events — so a death with
+   * no transition before it was unreadable: it could have been the foreground
+   * dying, or the background dying long after the last logged transition, and
+   * pairing them up after the fact turned out to depend entirely on how the
+   * pairing was written. Carried on the heartbeat and on the exit line
+   * instead, every death states which one it was.
+   *
+   * Starts true: the host launches the app into the foreground.
+   */
+  let foreground = true
+
   setupEvents(bridge, {
     onForegroundEnter() {
+      foreground = true
       trace('foreground: entered — reconnecting after suspend')
+      // The panel may not be ours any more; draw the next frame in full rather
+      // than trusting a record of what it showed before the suspend.
+      invalidatePanel()
       controller.onForegroundEnter()
     },
     onForegroundExit() {
+      foreground = false
       trace('foreground: exited — saving resume point')
       controller.onForegroundExit()
     },
     onExit(kind) {
-      // The host says why it is stopping us. Worth its own line: it is the
-      // difference between "backgrounded" and "killed", which no amount of
-      // guessing from inside the page could settle.
-      trace(`host exit: ${kind}`, 'error')
+      // The host says why it is stopping us, and the two kinds mean opposite
+      // things: `abnormal` is an unexpected disconnect, `system` is the user
+      // confirming the host's exit dialogue. Only ever having seen `system` is
+      // the finding — this app was being left, not crashing.
+      //
+      // So the gesture goes out with it. A double-tap moments before says the
+      // wearer walked out through the dialogue; silence says something else
+      // closed us, and that is a different problem entirely.
+      const g = controller.lastGesture()
+      trace(
+        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}`,
+        'error',
+      )
       controller.onHostExit(kind)
     },
     onSwipeDown: () => controller.swipeDown(),
@@ -231,7 +272,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   const bootAt = Date.now()
   setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} ws=${controller.ws.getState()}${heapNote()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}`,
     )
   }, HEARTBEAT_MS)
 }
@@ -240,6 +281,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
 async function main(): Promise<void> {
   installCrashReporting()
+  // Before initDisplay, so the host's answer to the very first page-container
+  // create reaches the log — that call is the one most likely to report a
+  // host that has run out of room.
+  setPanelTrace((message, level) => trace(`display: ${message}`, level ?? 'info'))
   // The SDK's window.EvenAppBridge stub can exist in a plain desktop browser,
   // so waitForEvenAppBridge() resolving is not proof of the Even Hub WebView.
   // The real Flutter WebView injects `flutter_inappwebview` (its absence is

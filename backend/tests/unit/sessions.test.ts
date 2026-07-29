@@ -13,9 +13,9 @@ import { IDENTITY } from '../../../shared/identity';
 
 const TEST_DATA_DIR = join(tmpdir(), `${IDENTITY.tmpPrefix}-test-sessions-` + Date.now());
 
-// Read from identity rather than written out: a rename that changes the
-// variable leaves a hardcoded one setting something nothing reads, and these
-// tests then create their fixture sessions in the real data directory. #459
+// Taken from identity rather than written out: renaming the variable (#459)
+// does not fail a test that spells it — it stops redirecting it, and these
+// tests then create their fixture sessions in the real data directory.
 const DATA_DIR_ENV = IDENTITY.dataDirEnv;
 
 describe('Sessions Service', () => {

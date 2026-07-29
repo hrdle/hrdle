@@ -7,9 +7,9 @@ import { IDENTITY } from '../../../../shared/identity';
 // Force the data directory before the module loads so peers.json lands in our
 // scratch dir. ensureDataDir reads this variable. #251
 //
-// Taken from identity rather than written out: a rename that changes the
-// variable leaves a hardcoded one setting something nothing reads, and this
-// test then writes peers.json into the real data directory. #459
+// Taken from identity rather than written out: renaming the variable (#459)
+// does not fail a test that spells it — it stops redirecting it, and the test
+// then writes peers.json into the real data directory and still passes.
 const DATA_DIR_ENV = IDENTITY.dataDirEnv;
 
 let tempDir: string;
