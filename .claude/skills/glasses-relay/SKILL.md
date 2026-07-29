@@ -1,6 +1,6 @@
 ---
 name: glasses-relay
-description: CC Hub の `cchub glasses` で G2 グラス relay チャンネルへ自筆の連絡を送る。「判断に必要な一点だけ伝える。無ければ沈黙」が原則。「グラスに伝えて」「cchub glasses」「主人に確認したい」「グラス通知」などで起動する。
+description: Hrdle の `hrdle glasses` で G2 グラス relay チャンネルへ自筆の連絡を送る。「判断に必要な一点だけ伝える。無ければ沈黙」が原則。「グラスに伝えて」「hrdle glasses」「主人に確認したい」「グラス通知」などで起動する。
 ---
 
 # glasses-relay
@@ -27,10 +27,10 @@ G2 グラスは「要約を映す画面」ではなく、**エージェントが
 
 ```bash
 # 承認・選択を求める（回答があるまでグラスに残る）
-cchub glasses "テスト全緑。デプロイしていい?" --kind waiting --choices "デプロイ,中止"
+hrdle glasses "テスト全緑。デプロイしていい?" --kind waiting --choices "デプロイ,中止"
 
 # 判断不要の完了報告（最新1件のみ保持・TTLで自動消滅）
-cchub glasses "ステージングへのデプロイ完了" --kind info
+hrdle glasses "ステージングへのデプロイ完了" --kind info
 ```
 
 - `--kind waiting` + `--choices`: 承認/選択。グラスでリング選択（swipe=選択 / tap=決定）できる。
@@ -45,12 +45,12 @@ cchub glasses "ステージングへのデプロイ完了" --kind info
 その時だけ `--session <id>` を明示する:
 
 ```bash
-cchub glasses "..." --kind waiting --session my-session
+hrdle glasses "..." --kind waiting --session my-session
 ```
 
 ## 注意
 
-- 送信は本番(5923)/dev(3456) 両叩き・**静黙失敗**（`cchub notify` と同じ。Bash ターンをブロックしない）。
-- 無改造ワーカーの入力待ち（AskUserQuestion / permission）は cchub が自動検知してグラスへ届ける。
+- 送信は本番(5924)/dev(3457) 両叩き・**静黙失敗**（`hrdle notify` と同じ。Bash ターンをブロックしない）。
+- 無改造ワーカーの入力待ち（AskUserQuestion / permission）は hrdle が自動検知してグラスへ届ける。
   このスキルで自筆するのは、自動検知では伝わらない**文脈ある判断依頼や完了報告**だけ。
 - 返信はグラス側が行う（選択=リング / 自由文=声）。こちらは送ったら待つだけでよい。

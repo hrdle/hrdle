@@ -1,9 +1,9 @@
 ---
 name: release
-description: CC Hub のリリース手順を実行する。バージョンバンプ、release PR、tag push、GitHub Release確認、CI完了待ち、cchub update を自動化する。「/release」「リリースして」「リリース」「バージョンアップ」「release」などのコマンドで起動する。
+description: Hrdle のリリース手順を実行する。バージョンバンプ、release PR、tag push、GitHub Release確認、CI完了待ち、hrdle update を自動化する。「/release」「リリースして」「リリース」「バージョンアップ」「release」などのコマンドで起動する。
 ---
 
-# CC Hub Release
+# Hrdle Release
 
 ## Release Workflow
 
@@ -42,7 +42,7 @@ description: CC Hub のリリース手順を実行する。バージョンバン
    gh release create vX.X.X --title "vX.X.X" --notes "リリースノート"
    ```
 10. **CI 完了待ち**: `gh run list --limit 3` でワークフロー状況を確認。バイナリビルドは CI が自動で行うため、ローカルでの `bun run build:binary` は **絶対に不要**
-11. **本番更新**: `cchub update` を実行
+11. **本番更新**: `hrdle update` を実行
 12. **ブランチクリーンアップ**: 現在の worktree 用ブランチ（例: `work-2`）へ戻し、`git merge --ff-only origin/main` で最新化する。`work-1` など別 worktree のブランチ名を固定しない。
 
 ## Important Rules
