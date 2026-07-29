@@ -23,6 +23,7 @@ import {
 import { agentBadge } from "../utils/agentDisplay";
 import { getTerminalThemes } from "./terminal-themes";
 import { storageKey } from "../utils/app-storage";
+import { TMP_PATHS } from "../../../shared/identity";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -60,10 +61,22 @@ function getPinchDistance(touches: TouchList): number {
 	return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Convert [Image: source: /tmp/cchub-images/xxx.png] to actual image
+// Convert [Image: source: <imagesDir>/xxx.png] into an actual image.
+//
+// The directory is identity's (#459) — spelled out, it stops matching the
+// moment the name changes and every screenshot in the conversation degrades
+// into its own raw path. Transcripts written under the old name keep the old
+// path forever, but the files they point at live in the previous install's
+// /tmp and this server does not serve them, so matching those too would
+// trade raw text for a broken image.
+const IMAGE_REF_PATTERN = new RegExp(
+	`\\[Image: source: ${TMP_PATHS.imagesDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\/([^\\]]+)\\]`,
+	"g",
+);
+
 function processImageReferences(content: string): string {
 	return content.replace(
-		/\[Image: source: \/tmp\/cchub-images\/([^\]]+)\]/g,
+		IMAGE_REF_PATTERN,
 		(_, filename) => `![Screenshot](${API_BASE}/api/images/${filename})`,
 	);
 }

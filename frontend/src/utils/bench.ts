@@ -9,7 +9,7 @@ import { storageKey } from "./app-storage";
  * summary report when it is seen.
  *
  * Recommended usage:
- *   1. PC で https://localhost:3456 を開いて DevTools コンソールを開く
+ *   1. PC で dev backend (identity.json の devPort) を開いて DevTools コンソールを開く
  *   2. `__cchub_bench.start()` を実行
  *   3. 任意のセッションで:
  *        cat /tmp/bench-color.txt; echo __BENCH_END__

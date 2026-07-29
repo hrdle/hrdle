@@ -18,7 +18,11 @@
  * - `CHANGELOG.md` and `specs/`. Those record what was true at the time and are
  *   deliberately left alone by a rename.
  */
-import raw from '../identity.json';
+// The attribute is required by Node's ESM loader and ignored by Bun and Vite.
+// Without it this module is unreadable from anything Node runs — which is how
+// playwright.config.ts, the first consumer outside the Bun/Vite toolchain,
+// found it: ERR_IMPORT_ATTRIBUTE_MISSING before a single test started.
+import raw from '../identity.json' with { type: 'json' };
 
 export const IDENTITY = {
   productName: raw.productName,
@@ -28,6 +32,7 @@ export const IDENTITY = {
   assetPrefix: raw.assetPrefix,
   defaultPort: raw.defaultPort,
   devPort: raw.devPort,
+  frontendDevPort: raw.frontendDevPort,
   dataDirName: raw.dataDirName,
   dataDirEnv: raw.dataDirEnv,
   configDirName: raw.configDirName,
@@ -86,7 +91,7 @@ export const SERVICE = {
   launchdUpdateLabel: `${IDENTITY.launchdPrefix}.update`,
   launchdServerPlist: `${IDENTITY.launchdPrefix}.server.plist`,
   launchdUpdatePlist: `${IDENTITY.launchdPrefix}.update.plist`,
-  /** `cchub.service.d` — where systemd looks for drop-in overrides. */
+  /** `hrdle.service.d` — where systemd looks for drop-in overrides. */
   dropInDir: `${IDENTITY.serviceName}.service.d`,
 } as const;
 

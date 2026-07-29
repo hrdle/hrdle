@@ -1,14 +1,15 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { IDENTITY } from '../../../shared/identity';
 
 // Regression test for the v0.1.106 / v0.1.107 "会話を表示できません" bug.
 // ChatView must not render the missing-agent error when /api/sessions
 // returns a session with `agent` set.
 //
-// Requires the dev server (frontend 5173 + backend 3456) running with at
+// Requires the dev server (frontend + backend, ports per identity.json) with at
 // least one tmux session that has a claude (or codex) process attached.
 
-const FRONTEND_URL = 'https://localhost:5173';
-const BACKEND_URL = 'https://localhost:3456';
+const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
+const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
 
 test.use({
   ignoreHTTPSErrors: true,

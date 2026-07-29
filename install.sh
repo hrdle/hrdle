@@ -1,6 +1,6 @@
 #!/bin/bash
-# CC Hub インストールスクリプト
-# Usage: curl -fsSL https://raw.githubusercontent.com/m0a/cc-hub/main/install.sh | bash
+# Hrdle インストールスクリプト
+# Usage: curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 
 set -e
 
@@ -34,9 +34,9 @@ detect_platform() {
 
   # 現在サポートしているプラットフォーム
   if [[ "$os" == "linux" && "$arch" == "x64" ]]; then
-    echo "cchub-linux-x64"
+    echo "hrdle-linux-x64"
   elif [[ "$os" == "macos" && "$arch" == "arm64" ]]; then
-    echo "cchub-macos-arm64"
+    echo "hrdle-macos-arm64"
   else
     error "未サポートのプラットフォーム: $os-$arch (サポート: linux-x64, macos-arm64)"
   fi
@@ -46,7 +46,7 @@ detect_platform() {
 check_dependencies() {
   info "依存関係を確認中..."
 
-  # herdr — CC Hub runs every session in a herdr workspace, so this is required.
+  # herdr — Hrdle runs every session in a herdr workspace, so this is required.
   if ! command -v herdr &> /dev/null; then
     warn "herdrがインストールされていません"
     echo "  curl -fsSL https://herdr.dev/install.sh | sh"
@@ -74,11 +74,11 @@ check_dependencies() {
 # 最新リリースのダウンロード
 download_latest() {
   local binary_name="$1"
-  local install_dir="${CCHUB_INSTALL_DIR:-$HOME/bin}"
-  local install_path="$install_dir/cchub"
+  local install_dir="${HRDLE_INSTALL_DIR:-$HOME/bin}"
+  local install_path="$install_dir/hrdle"
 
   info "最新リリースを取得中..."
-  local latest_url="https://api.github.com/repos/m0a/cc-hub/releases/latest"
+  local latest_url="https://api.github.com/repos/hrdle/hrdle/releases/latest"
   local download_url
 
   download_url=$(curl -fsSL "$latest_url" | grep "browser_download_url.*$binary_name" | head -1 | sed 's/.*"browser_download_url": *"//' | sed 's/".*//')
@@ -111,7 +111,7 @@ download_latest() {
 
 # PATHに追加する案内
 show_path_instruction() {
-  local install_dir="${CCHUB_INSTALL_DIR:-$HOME/bin}"
+  local install_dir="${HRDLE_INSTALL_DIR:-$HOME/bin}"
 
   if [[ ":$PATH:" != *":$install_dir:"* ]]; then
     echo ""
@@ -131,22 +131,22 @@ show_setup_instruction() {
   echo "  1. Tailscale証明書生成を許可:"
   echo "     sudo tailscale set --operator=\$USER"
   echo ""
-  echo "  2. CC Hubを起動:"
-  echo "     cchub"
+  echo "  2. Hrdleを起動:"
+  echo "     hrdle"
   echo "     # または パスワード付き"
-  echo "     cchub -P mypassword"
+  echo "     hrdle -P mypassword"
   echo ""
   echo "  3. (オプション) systemdサービスとして登録:"
-  echo "     cchub setup -P mypassword"
+  echo "     hrdle setup -P mypassword"
   echo ""
-  echo "  ブラウザでアクセス: https://<hostname>:5923"
+  echo "  ブラウザでアクセス: https://<hostname>:5924"
   echo ""
 }
 
 main() {
   echo ""
   echo "======================================"
-  echo "  CC Hub インストーラー"
+  echo "  Hrdle インストーラー"
   echo "======================================"
   echo ""
 

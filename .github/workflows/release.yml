@@ -12,10 +12,10 @@ jobs:
         include:
           - os: ubuntu-latest
             target: linux
-            artifact: cchub-linux-x64
+            artifact: hrdle-linux-x64
           - os: macos-latest
             target: macos
-            artifact: cchub-macos-arm64
+            artifact: hrdle-macos-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -35,7 +35,7 @@ jobs:
         run: bun run build:binary
 
       - name: Rename binary
-        run: mv dist/cchub dist/${{ matrix.artifact }}
+        run: mv dist/hrdle dist/${{ matrix.artifact }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -56,26 +56,26 @@ jobs:
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: cchub-linux-x64
+          name: hrdle-linux-x64
           path: dist
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: cchub-macos-arm64
+          name: hrdle-macos-arm64
           path: dist
 
-      # Publish per-asset SHA-256 hashes so `cchub update` can verify the
+      # Publish per-asset SHA-256 hashes so `hrdle update` can verify the
       # downloaded binary's integrity before replacing the running service. #255
       - name: Generate SHA256SUMS
         working-directory: dist
-        run: sha256sum cchub-linux-x64 cchub-macos-arm64 > SHA256SUMS
+        run: sha256sum hrdle-linux-x64 hrdle-macos-arm64 > SHA256SUMS
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/cchub-linux-x64
-            dist/cchub-macos-arm64
+            dist/hrdle-linux-x64
+            dist/hrdle-macos-arm64
             dist/SHA256SUMS
           generate_release_notes: true

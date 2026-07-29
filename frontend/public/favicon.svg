@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="64" fill="#1a1a1a"/>
-  <text x="256" y="320" font-family="monospace" font-size="280" font-weight="bold" fill="#22c55e" text-anchor="middle">CC</text>
+  <text x="256" y="320" font-family="monospace" font-size="280" font-weight="bold" fill="#22c55e" text-anchor="middle">Hr</text>
   <rect x="80" y="380" width="352" height="8" rx="4" fill="#22c55e" opacity="0.5"/>
   <rect x="80" y="380" width="180" height="8" rx="4" fill="#22c55e">
     <animate attributeName="width" values="0;180;352;180;0" dur="3s" repeatCount="indefinite"/>

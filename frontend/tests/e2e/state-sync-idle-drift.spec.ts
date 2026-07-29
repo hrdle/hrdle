@@ -1,9 +1,10 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { IDENTITY } from '../../../shared/identity';
 // @ts-ignore - node builtin
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 
-const FRONTEND_URL = 'https://localhost:5173';
-const BACKEND_URL = 'https://localhost:3456';
+const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
+const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
 const DRIFT_LOG = '/tmp/cchub-drift.log';
 
 test.use({ ignoreHTTPSErrors: true, baseURL: FRONTEND_URL });

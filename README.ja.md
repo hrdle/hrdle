@@ -311,7 +311,7 @@ bun install
 bun run dev
 ```
 
-ブラウザで http://localhost:5173 を開きます（開発モード）。
+ブラウザで http://localhost:5174 を開きます（開発モード）。
 
 ### ソースからビルド
 

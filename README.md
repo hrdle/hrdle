@@ -313,7 +313,7 @@ bun install
 bun run dev
 ```
 
-Open http://localhost:5173 in browser (development mode).
+Open http://localhost:5174 in browser (development mode).
 
 ### Build from Source
 

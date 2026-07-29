@@ -25,7 +25,7 @@ import {
   herdrSocketPath,
 } from './services/herdr-client';
 import { t } from './i18n';
-import { TMP_PATHS } from '../../shared/identity';
+import { IDENTITY, TMP_PATHS } from '../../shared/identity';
 
 // Global error handlers to prevent silent crashes
 process.on('uncaughtException', (err) => {
@@ -442,7 +442,7 @@ const port = args.port;
 const host = args.host;
 process.env.CCHUB_PORT = String(port);
 
-console.log(`🚀 CC Hub v${VERSION}`);
+console.log(`🚀 ${IDENTITY.productName} v${VERSION}`);
 console.log(`   URL: https://${tailscaleHostname}:${port}`);
 console.log(`   Static: ${EMBEDDED_MODE ? '(embedded)' : staticRoot}`);
 

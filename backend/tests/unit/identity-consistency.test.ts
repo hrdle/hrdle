@@ -88,29 +88,36 @@ describe('derived service names', () => {
 });
 
 /**
- * These are the paths of files that already exist on running installs. A
- * refactor that moves one of them does not fail — it silently starts reading an
- * empty history, or serving uploads from a directory nothing writes to.
+ * These are the paths of files that exist on running installs. A refactor that
+ * moves one of them does not fail — it silently starts reading an empty
+ * history, or serving uploads from a directory nothing writes to. So they are
+ * spelled out here rather than derived, and moving one is a deliberate edit to
+ * this file.
+ *
+ * The rename (#459) is such an edit. It also has to keep these clear of the
+ * cchub install they replace, which keeps its own files under the same /tmp
+ * while the two run side by side.
  */
-describe('scratch paths keep the values installs already use', () => {
+describe('scratch paths only move when someone means to move them', () => {
   test('images dir is what the three consumers used to hardcode', () => {
-    expect(TMP_PATHS.imagesDir).toBe('/tmp/cchub-images');
+    expect(TMP_PATHS.imagesDir).toBe('/tmp/hrdle-images');
   });
 
-  test('usage history file is unchanged', () => {
-    expect(TMP_PATHS.usageHistoryFile).toBe('/tmp/cchub-usage-history.json');
+  test('usage history file is separate from the one cchub writes', () => {
+    expect(TMP_PATHS.usageHistoryFile).toBe('/tmp/hrdle-usage-history.json');
   });
 
-  test('browser log keeps its hyphenated spelling', () => {
-    // Not `cchub-browser.log`: CLAUDE.md tells people to `tail -f` this exact
-    // path, so the odd spelling is load-bearing until a rename fixes it on
-    // purpose.
-    expect(TMP_PATHS.browserLogFile).toBe('/tmp/cc-hub-browser.log');
+  test('browser log drops the spelling that never matched the prefix', () => {
+    // Was `/tmp/cc-hub-browser.log` while everything else used `cchub`. It was
+    // left alone because CLAUDE.md tells people to `tail -f` that exact path;
+    // the rename invalidates the instruction anyway, so it is normalised here.
+    expect(TMP_PATHS.browserLogFile).toBe('/tmp/hrdle-browser.log');
   });
 
-  test('keychain service name is unchanged', () => {
+  test('keychain service name is our own', () => {
     // The macOS password lives under this service name. Changing it does not
-    // fail — it just stops finding the password that is already stored.
-    expect(IDENTITY.keychainService).toBe('cchub');
+    // fail — it just stops finding the password already stored, which is what
+    // a separate product should do: cchub's password stays cchub's.
+    expect(IDENTITY.keychainService).toBe('hrdle');
   });
 });

@@ -10,8 +10,8 @@ CC Hub (`m0a/cc-hub`) を Hrdle に改名するプロジェクト（[#459](https
 
 ## 現在地
 
-上流（`m0a/cc-hub`）側の前提工事は**完了している**。以下は全て本番リリース済みで、
-fork は v0.2.93 時点の upstream と同期済み。
+**identity.json の書き換えは完了している**（ブランチ `feat/rename-to-hrdle`）。
+fork は upstream v0.2.94 と同期済み（`8c45396` でマージ、origin へ push 済み）。
 
 | リリース | PR | 内容 |
 |---|---|---|
@@ -19,87 +19,86 @@ fork は v0.2.93 時点の upstream と同期済み。
 | v0.2.85 | #637 | identity 一元化（実行時パス） |
 | v0.2.92 | #653 | localStorage キーの名前空間化 + legacy fallback |
 | v0.2.93 | #655 | herdr named session 対応（`HERDR_SESSION`） |
+| v0.2.94 | #658 | メッセージカタログの identity 経由化 |
 
-### `identity.json`
+### 済んだこと
 
-改名に必要な値は**全てこの1ファイル**にある。ここを書き換えるのが改名作業の中心。
+`identity.json` は以下の値になっている。`shared/identity.ts` がここから `SERVICE`（unit 名・
+launchd ラベル）、`TMP_PATHS`、`assetName()`、`HOOK_COMMAND` を合成する。**呼び出し側は無変更**。
 
 ```json
 {
-  "productName": "CC Hub",        → "Hrdle"
-  "tagline": "Claude Code Session Manager",
-  "binaryName": "cchub",          → "hrdle"
-  "repo": "m0a/cc-hub",           → "hrdle/hrdle"
-  "assetPrefix": "cchub",         → "hrdle"
-  "defaultPort": 5923,            → 5924（並走期。切替時に 5923 へ戻す）
-  "dataDirName": ".cc-hub",       → ".hrdle"
-  "dataDirEnv": "CC_HUB_DATA_DIR",→ "HRDLE_DATA_DIR"
-  "configDirName": "cchub",       → "hrdle"
-  "serviceName": "cchub",         → "hrdle"
-  "launchdPrefix": "com.cchub",   → "com.hrdle"
-  "storagePrefix": "cchub-",      → "hrdle-"
-  "legacyStoragePrefixes": ["cc-hub-"], → ["cchub-", "cc-hub-"]
-  "tmpPrefix": "cchub",           → "hrdle"
-  "browserLogName": "cc-hub-browser.log", → 正規化するなら "hrdle-browser.log"
-  "keychainService": "cchub"      → "hrdle"
+  "productName": "Hrdle",
+  "tagline": "Coding Agent Session Manager",
+  "binaryName": "hrdle",
+  "repo": "hrdle/hrdle",
+  "assetPrefix": "hrdle",
+  "defaultPort": 5924,
+  "dataDirName": ".hrdle",
+  "dataDirEnv": "HRDLE_DATA_DIR",
+  "configDirName": "hrdle",
+  "serviceName": "hrdle",
+  "launchdPrefix": "com.hrdle",
+  "storagePrefix": "hrdle-",
+  "legacyStoragePrefixes": ["cchub-", "cc-hub-"],
+  "tmpPrefix": "hrdle",
+  "browserLogName": "hrdle-browser.log",
+  "keychainService": "hrdle"
 }
 ```
 
-`shared/identity.ts` がここから `SERVICE`（unit 名・launchd ラベル）、`TMP_PATHS`、
-`assetName()`、`HOOK_COMMAND` を合成する。**呼び出し側を書き換える必要はない。**
+検証済み: 全テスト green（backend 535 / frontend 90 / glasses 120）、lint / typecheck green、
+`bun run build:binary` → `dist/hrdle`、`--help` が `hrdle` を名乗り default port 5924。
 
-### 例外（`identity.json` を読めない2箇所）
+**注意: `bun install` を先に走らせること。** 依存が無いと `hono` の解決に失敗して backend の
+テストが大量に落ち、改名由来の失敗と見分けがつかなくなる。
+
+### `identity.json` を読めない箇所 — 2つではなく3つ
 
 - `install.sh` — `curl | bash` で走るのでチェックアウトが存在しない
 - `.github/workflows/release.yml` — matrix はどのステップより先に評価される
+- `scripts/build.sh` — **読める位置にあるのに `dist/cchub` を自前で持っていた**。
+  release.yml 側は `mv dist/<binaryName>` を期待しているので、ズレると**CI ビルドだけが壊れる**。
+  テストは release.yml の文字列しか見ておらず、この2つの一致は誰も検査していなかった。
+  現在は `bun -e` で identity.json を読む形にしてあるので、コピーは2つに戻っている
 
-この2つは自前のコピーを持ち、`backend/tests/unit/identity-consistency.test.ts` がズレを検出する。
-**`identity.json` を書き換えたらこのテストが落ちるので、2ファイルも一緒に直すこと。**
-
-## 残っている作業
-
-### 1. 表示文字列・ログの IDENTITY 経由化（未着手・上流でやるべき）
-
-`backend/src` / `frontend/src` / `glasses/src` に 434箇所（文字列249・その他40・コメント145）。
-コメントは放置でよい（改名時に掃く。衝突しても解決は自明）。
-
-**これは upstream（`m0a/cc-hub`）でやってから取り込むほうが良い。**
-fork 側で全識別子を書き換えると、upstream 取り込みが毎回ほぼ全ファイルで衝突する。
-upstream は1日に数回リリースが走るくらい動いている。
-
-### 2. 並走の実地検証（このリポジトリの本題）
-
-```bash
-# hrdle 側
-HERDR_SESSION=hrdle  # 別 herdr セッション（別サーバー・別ワークスペース・別 session.json）
-port 5924
-~/.hrdle             # 別データディレクトリ
-```
-
-**検証すること**（ここまで机上で詰めたが、実地では未確認）:
-
-- 2つのサービスが同時に常駐して干渉しないか
-- hook がどちらに飛ぶか（`~/.claude/settings.json` の `cchub notify` をどう扱うか）
-- 両方の UI を同時に開いて #520（takeover 合戦）が起きないこと
-  — herdr セッションが分かれているので理論上は起きないはず
-- peer discovery が 5923/5924 をどう見るか
-
-### 3. 切替（promote）
-
-- `HERDR_SESSION` を**外して**再起動 → default セッション（＝既存の全ワークスペース）を引き継ぐ
-- port を 5924 → 5923 へ
-- cchub は uninstall せず disable で数週間残す（rollback 用）
-- 引き継ぎたい設定があれば `cp -r ~/.cc-hub ~/.hrdle` を1回。**コードの fallback は作らない**
-  （並走期に split-brain を作り、切替後は確実に死ぬコードになるため）
-
-### 4. リポジトリ
-
-- **`m0a/hrdle` はまだ空いている。** rename の選択肢を残すため、この名前は取らないこと
-- Issue は `gh issue transfer` で移せる
-- 更新経路は分離済み: cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から。
-  リダイレクト依存が無い
+前2つは `backend/tests/unit/identity-consistency.test.ts` がズレを検出する。
 
 ## 実測で分かっている落とし穴
+
+### `dataDirEnv` の改名はテストを実データディレクトリに向ける（最重要）
+
+4つのテストが `process.env.CC_HUB_DATA_DIR = tempDir` で書き込み先を一時ディレクトリに
+逃がしている。env 名を変えると、この行は**何も設定しない行**になり、テストは実データ
+ディレクトリに書く。
+
+```
+backend/tests/unit/sessions.test.ts
+backend/tests/unit/jwt-secret.test.ts
+backend/src/services/__tests__/peer-registry-lock.test.ts
+backend/src/services/__tests__/session-metadata-lock.test.ts
+```
+
+実際に `~/.hrdle` が作られ、偽セッション20件とテスト用メタデータ（`ses-a` / `ses-b` …）が
+残った。**失敗ではなく汚染として出る**ので、テストが赤くなければ気づけない。
+現在は4ファイルとも `IDENTITY.dataDirEnv` 経由。**同じ形の env 参照を新しく書かないこと。**
+
+### `identity-operational.test.ts` は改名しても落ちない
+
+v0.2.94 で入ったこのスキャンは `cchub.service` / `com.cchub` / `/tmp/cc-hub` /
+`.cc-hub` / `CC_HUB_DATA_DIR` を探す。改名後も **pass し続けるが、存在しない名前を
+探しているだけ**になる。現在はパターンを `IDENTITY` から合成しているので、次の改名でも
+追従する。
+
+### 改名で落ちるテストは「2ファイル」では済まない
+
+`identity.json` を書き換えると backend で21件落ちた。内訳と対処方針:
+
+- **golden text**（`setup-units.test.ts` の systemd unit / launchd plist、
+  `identity-consistency.test.ts` の scratch パスと keychain）→ **リテラルのまま手で更新する**。
+  identity から合成し直した golden はどんな出力とも一致するので、golden の意味が消える
+- **ロジックのテストがたまたま名前を使っているもの**（hook 検出、codex hook 移行、
+  notifyCommandFor、herdr-agent-indicator）→ `HOOK_COMMAND` / `IDENTITY` 経由にする
 
 ### herdr は全ペインに `HERDR_SOCKET_PATH` を注入する
 
@@ -140,6 +139,79 @@ nested herdr 判定で弾かれる。installer が必要なのは attach では�
 「また名前が実態と合わなくなる」実績がある。
 汎用性を上げるための改名で依存先の名前に寄せるのは方向が逆かもしれない、と一度提起したが、
 **ユーザーは Hrdle で進める判断を明示している**。蒸し返さないこと。
+
+## 残っている作業
+
+### 1. 表示文字列・ログの IDENTITY 経由化（上流でやるべき）
+
+`backend/src` / `frontend/src` / `glasses/src` に残っている。v0.2.94 (#658) で i18n
+カタログ分は上流が消化した。コメントは放置でよい（改名時に掃く。衝突しても解決は自明）。
+
+**これは upstream（`m0a/cc-hub`）でやってから取り込むほうが良い。**
+fork 側で全識別子を書き換えると、upstream 取り込みが毎回ほぼ全ファイルで衝突する。
+upstream は1日に数回リリースが走るくらい動いている。
+
+### 2. 上流に還元すべき修正（改名と無関係な cc-hub 側のバグ）
+
+改名の過程で見つかった以下は cchub のままでも有効な修正。fork に置いたままだと
+次の同期で毎回衝突する。
+
+- `scripts/build.sh` が `dist/cchub` を自前で持っている（release.yml とズレると CI が壊れる）
+- 4つのテストが `CC_HUB_DATA_DIR` をリテラルで持ち、env 名が変わると実データを汚す
+- `identity-operational.test.ts` のスキャンが改名で無効化される
+
+### 3. 並走の実地検証（このリポジトリの本題・次にやること）
+
+```bash
+# hrdle 側
+HERDR_SESSION=hrdle  # 別 herdr セッション（別サーバー・別ワークスペース・別 session.json）
+port 5924            # dev は 3457 / 5174（cchub の 3456 / 5173 から1つずらし）
+~/.hrdle             # 別データディレクトリ
+```
+
+**ポート番号を identity に通していない箇所が複数あった。**改名で最も静かに壊れる種類のもの:
+
+- `backend/src/cli.ts` の `DEFAULT_PORT = isDev ? 3456 : 5923` — `--help` は identity から
+  5924 と表示する一方、実際には **5923 を bind しに行く**。つまり改名ビルドが cchub の
+  ポートを奪いに行き、両方入っているマシンでは EADDRINUSE で落ちる。
+  `-p` を明示している限り顕在化しないので、検証中ずっと気づかなかった
+- `backend/src/commands/glasses.ts` の `PRODUCTION_PORT = 5923` / `DEV_PORT = 3456` —
+  `hrdle glasses` のメモが cchub へ飛ぶ
+- `frontend/playwright.config.ts` の `webServer.url` — vite の port と食い違うとテストは
+  失敗せず、120秒待って「サーバーが起動しなかった」と報告する
+
+`identity-operational` のスキャンは**ポート番号を見ていない**（数字なので誤検知しやすい）。
+この層は今のところ人力で探すしかない。
+
+**先に `rm -rf ~/.hrdle`**（上記の汚染で偽セッション20件が入っている場合）。
+
+**検証すること**（ここまで机上で詰めたが、実地では未確認）:
+
+- 2つのサービスが同時に常駐して干渉しないか
+- hook がどちらに飛ぶか（`~/.claude/settings.json` の `cchub notify` をどう扱うか）
+- 両方の UI を同時に開いて #520（takeover 合戦）が起きないこと
+  — herdr セッションが分かれているので理論上は起きないはず
+- peer discovery が 5923/5924 をどう見るか
+
+### 4. 切替（promote）
+
+- `HERDR_SESSION` を**外して**再起動 → default セッション（＝既存の全ワークスペース）を引き継ぐ
+- **port は 5924 のまま**。5923 を空けておけば、何かあったとき cchub を enable するだけで戻せる。
+  ポートが衝突しないので両方同時に起動でき、rollback が一段確実になる。
+  この判断のせいで `peer-discovery.ts` の `DEFAULT_PORT = 5923` は「移行期の小問題」ではなく
+  **恒久的な問題**になった（他マシンの hrdle を永久に発見できない）ので、identity 化が必須
+- cchub は uninstall せず disable で数週間残す（rollback 用）
+- 引き継ぎたい設定があれば `cp -r ~/.cc-hub ~/.hrdle` を1回。**コードの fallback は作らない**
+  （並走期に split-brain を作り、切替後は確実に死ぬコードになるため）
+- `hrdle update` は `hrdle/hrdle` の Releases を見る。まだ 0 リリースなので、
+  リリース整備までは自前ビルド（`bun run build:binary`）で回す
+
+### 5. リポジトリ
+
+- **`m0a/hrdle` はまだ空いている。** rename の選択肢を残すため、この名前は取らないこと
+- Issue は `gh issue transfer` で移せる
+- 更新経路は分離済み: cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から。
+  リダイレクト依存が無い
 
 ## 参照
 
