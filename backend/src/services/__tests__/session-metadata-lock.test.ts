@@ -2,21 +2,28 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { IDENTITY } from '../../../../shared/identity';
 
 // Force the data directory before the module loads so session-metadata.json
-// lands in our scratch dir. ensureDataDir reads CC_HUB_DATA_DIR. #333
+// lands in our scratch dir. ensureDataDir reads this variable. #333
+//
+// Taken from identity rather than written out: renaming the variable (#459)
+// does not fail a test that spells it — it stops redirecting it, and the test
+// then writes its fixtures into the real data directory and still passes.
+const DATA_DIR_ENV = IDENTITY.dataDirEnv;
+
 let tempDir: string;
 let originalDataDir: string | undefined;
 
 beforeEach(async () => {
-  tempDir = await mkdtemp(join(tmpdir(), 'cchub-meta-'));
-  originalDataDir = process.env.CC_HUB_DATA_DIR;
-  process.env.CC_HUB_DATA_DIR = tempDir;
+  tempDir = await mkdtemp(join(tmpdir(), `${IDENTITY.tmpPrefix}-meta-`));
+  originalDataDir = process.env[DATA_DIR_ENV];
+  process.env[DATA_DIR_ENV] = tempDir;
 });
 
 afterEach(async () => {
-  if (originalDataDir === undefined) delete process.env.CC_HUB_DATA_DIR;
-  else process.env.CC_HUB_DATA_DIR = originalDataDir;
+  if (originalDataDir === undefined) delete process.env[DATA_DIR_ENV];
+  else process.env[DATA_DIR_ENV] = originalDataDir;
   await rm(tempDir, { recursive: true, force: true });
 });
 

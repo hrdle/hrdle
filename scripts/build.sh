@@ -3,7 +3,15 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-echo "🏗️  Building CC Hub..."
+# What the binary is called is identity.json's to say (#459). install.sh and
+# release.yml keep their own copies because neither can read the file at the
+# moment it needs the name; this script runs from a checkout and can, so it
+# reads rather than holding a third copy that nothing checks. release.yml
+# renames `dist/<binaryName>` — the two disagreeing breaks CI builds only.
+PRODUCT_NAME=$(bun -e 'console.log((await Bun.file("identity.json").json()).productName)')
+BINARY_NAME=$(bun -e 'console.log((await Bun.file("identity.json").json()).binaryName)')
+
+echo "🏗️  Building $PRODUCT_NAME..."
 
 # Build frontend
 echo "📦 Building frontend..."
@@ -26,7 +34,7 @@ bun run scripts/generate-static-assets.ts
 # Build backend binary with embedded assets
 echo "🔧 Building backend binary (with embedded assets)..."
 cd backend
-bun build src/index.ts --compile --outfile ../dist/cchub
+bun build src/index.ts --compile --outfile "../dist/$BINARY_NAME"
 cd ..
 
 # Clean up generated file
@@ -36,7 +44,7 @@ echo ""
 echo "✅ Build complete!"
 echo ""
 echo "To run:"
-echo "  ./dist/cchub"
+echo "  ./dist/$BINARY_NAME"
 echo ""
 echo "Files:"
 ls -lh dist/

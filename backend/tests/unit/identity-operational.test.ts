@@ -93,12 +93,30 @@ describe('hook detection pattern', () => {
  * say the name for the reader's benefit and nothing breaks when they are stale.
  */
 describe('no operational identity left as a literal', () => {
+  // Composed from identity.json rather than written out, because a scan that
+  // names one product keeps passing after that product is renamed — it just
+  // stops looking for anything that exists. Renaming the file has to rename
+  // what this looks for, or the guard quietly retires (#459).
+  const esc = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   const OPERATIONAL = [
-    { pattern: /['"`][^'"`]*cchub\.service/, what: 'a systemd unit name' },
-    { pattern: /['"`][^'"`]*com\.cchub/, what: 'a launchd label' },
-    { pattern: /['"`]\/tmp\/cc-?hub/, what: 'a scratch path' },
-    { pattern: /['"`][^'"`]*\.cc-hub['"`/]/, what: 'the data directory' },
-    { pattern: /CC_HUB_DATA_DIR/, what: 'the data directory env var' },
+    {
+      pattern: new RegExp(`['"\`][^'"\`]*${esc(SERVICE.unitFile)}`),
+      what: 'a systemd unit name',
+    },
+    {
+      pattern: new RegExp(`['"\`][^'"\`]*${esc(IDENTITY.launchdPrefix)}`),
+      what: 'a launchd label',
+    },
+    {
+      pattern: new RegExp(`['"\`]/tmp/${esc(IDENTITY.tmpPrefix)}`),
+      what: 'a scratch path',
+    },
+    {
+      pattern: new RegExp(`['"\`][^'"\`]*${esc(IDENTITY.dataDirName)}['"\`/]`),
+      what: 'the data directory',
+    },
+    { pattern: new RegExp(esc(IDENTITY.dataDirEnv)), what: 'the data directory env var' },
   ];
 
   // Where the literals are the point: identity.ts defines them, and the tests
