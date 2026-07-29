@@ -185,6 +185,13 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
         trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
       }
     },
+    onForegroundRegained() {
+      foreground = true
+      trace('foreground: regained — a gesture arrived while we thought we were hidden')
+      // Same reasoning as a real ENTER: the panel may have been taken down and
+      // put back while we believed we were hidden, so trust nothing about it.
+      invalidatePanel()
+    },
   }
   const controller = new GlassesController(platform)
   trace('controller constructed')
