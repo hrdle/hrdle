@@ -1223,22 +1223,92 @@ export async function initDisplay(): Promise<Bridge | null> {
  * where one will do — three times the traffic, every tick, for the whole time
  * a session is working.
  */
+/**
+ * What each container was last told to show, so an upgrade that would change
+ * nothing is not sent at all.
+ *
+ * The screen was redrawn on every `sessions-updated` push — every five
+ * seconds, whether or not anything on it had changed. Measured on the device
+ * that is 0.2 full draws a second, indefinitely, over BLE, for a panel showing
+ * exactly what it showed five seconds ago. What actually changes on an idle
+ * list is the clock in the footer, once a minute.
+ *
+ * Recorded only after the device has taken the write, so an upgrade that fails
+ * is retried on the next render rather than assumed applied.
+ */
+const drawn = new Map<number, string>()
+
+/**
+ * Container writes actually sent to the panel.
+ *
+ * Reported on the heartbeat next to the frame count, because they are no
+ * longer the same number and the difference is the whole point: a frame that
+ * changes nothing now costs nothing, and only this counter says so from the
+ * device rather than from reasoning about the code.
+ */
+let writes = 0
+export function panelWrites(): number {
+  return writes
+}
+
+/** Send a container's new content, or nothing if that is what it already
+ *  shows. Returns null when there was nothing to send. */
+function upgrade(
+  bridge: Bridge,
+  containerID: number,
+  containerName: string,
+  content: string,
+): Promise<void> | null {
+  if (drawn.get(containerID) === content) return null
+  return Promise.resolve(
+    bridge.textContainerUpgrade(new TextContainerUpgrade({ containerID, containerName, content })),
+  ).then(() => {
+    writes++
+    drawn.set(containerID, content)
+  })
+}
+
+/**
+ * Take note of what a rebuild just put on screen.
+ *
+ * Container ids mean different things in different modes — id 1 is the list on
+ * one screen and the header on another — so the record is only ever read
+ * between rebuilds, and every rebuild replaces it wholesale.
+ */
+function recordRebuild(container: RebuildPageContainer): void {
+  drawn.clear()
+  const objects = (container.textObject ?? []) as Array<{ containerID?: number; content?: string }>
+  writes += objects.length
+  for (const t of objects) {
+    if (typeof t.containerID === 'number') drawn.set(t.containerID, t.content ?? '')
+  }
+}
+
+/**
+ * Forget what the panel is showing, so the next render builds it from nothing.
+ *
+ * The skip-if-unchanged record is only worth trusting while this app is the
+ * only thing writing to the panel. Across a suspend the host may have taken
+ * the page down, and a stale record would then skip exactly the writes needed
+ * to put it back — a blank screen that no amount of waiting fixes, which is a
+ * far worse failure than the one rebuild this costs on every resume.
+ */
+export function invalidatePanel(): void {
+  drawn.clear()
+  currentMode = null
+  currentNoticeLines = 0
+}
+
 export async function updateHeader(bridge: Bridge | null, state: AppState): Promise<void> {
   if (!bridge || state.mode !== currentMode) return
   // Whichever container the spinner lives in — the conversation's header, or
   // the list's rows. One container either way; a full update sends three.
   if (state.mode === 'session_list') {
-    await bridge.textContainerUpgrade(new TextContainerUpgrade({
-      containerID: 1, containerName: 'list',
-      content: sessionListBody(state),
-    }))
+    await upgrade(bridge, 1, 'list', sessionListBody(state))
     return
   }
   const { headerText } = conversationContent(state)
-  await bridge.textContainerUpgrade(new TextContainerUpgrade({
-    containerID: 1, containerName: 'header',
-    content: headerText,
-  }))
+  await upgrade(bridge, 1, 'header', headerText)
 }
 
 export async function updateDisplay(bridge: Bridge | null, state: AppState): Promise<void> {
@@ -1262,22 +1332,18 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       case 'overlay': container = buildOverlay(state); break
     }
     await bridge.rebuildPageContainer(container)
+    recordRebuild(container)
     return
   }
 
-  // In-place text updates
+  // In-place text updates. Each one is sent only if it would change what the
+  // container is already showing; `Promise.all` over the ones that survive.
   switch (state.mode) {
     case 'session_list': {
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'list',
-          content: sessionListBody(state),
-        })),
+        upgrade(bridge, 1, 'list', sessionListBody(state)),
         // The footer moves now — it holds the clock and the position.
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'footer',
-          content: sessionListFooter(state),
-        })),
+        upgrade(bridge, 2, 'footer', sessionListFooter(state)),
       ])
       break
     }
@@ -1285,71 +1351,35 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       const { headerText, noticeText, bodyText, footerText } = conversationContent(state)
       const hasNotice = notice > 0
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: headerText,
-        })),
-        ...(hasNotice ? [bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'notice',
-          content: noticeText,
-        }))] : []),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: hasNotice ? 3 : 2, containerName: 'body',
-          content: bodyText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: hasNotice ? 4 : 3, containerName: 'footer',
-          content: footerText,
-        })),
+        upgrade(bridge, 1, 'header', headerText),
+        ...(hasNotice ? [upgrade(bridge, 2, 'notice', noticeText)] : []),
+        upgrade(bridge, hasNotice ? 3 : 2, 'body', bodyText),
+        upgrade(bridge, hasNotice ? 4 : 3, 'footer', footerText),
       ])
       break
     }
     case 'choice': {
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: choiceHeader(state),
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
-          content: choiceBody(state),
-        })),
+        upgrade(bridge, 1, 'header', choiceHeader(state)),
+        upgrade(bridge, 2, 'body', choiceBody(state)),
       ])
       break
     }
     case 'voice': {
       const { headerText, bodyText, footerText } = voiceContent(state)
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: headerText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
-          content: bodyText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 3, containerName: 'footer',
-          content: footerText,
-        })),
+        upgrade(bridge, 1, 'header', headerText),
+        upgrade(bridge, 2, 'body', bodyText),
+        upgrade(bridge, 3, 'footer', footerText),
       ])
       break
     }
     case 'overlay': {
       const { headerText, bodyText, footerText } = overlayContent(state)
       await Promise.all([
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 1, containerName: 'header',
-          content: headerText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 2, containerName: 'body',
-          content: bodyText,
-        })),
-        bridge.textContainerUpgrade(new TextContainerUpgrade({
-          containerID: 3, containerName: 'footer',
-          content: footerText,
-        })),
+        upgrade(bridge, 1, 'header', headerText),
+        upgrade(bridge, 2, 'body', bodyText),
+        upgrade(bridge, 3, 'footer', footerText),
       ])
       break
     }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { sanitizeForG2, formatMessage } from '../types.ts'
-import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
+import { screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { NOTICE_DISMISS_MS } from '../controller.ts'
@@ -1412,5 +1412,72 @@ describe('the screen stops drawing once nobody is being shown anything new', () 
     // which is the whole point of the feature.
     const r = run(4, 3, 200)
     expect(r.draws).toBeGreaterThanOrEqual(3 + 2)
+  })
+})
+
+describe('a screen that has not changed is not sent again', () => {
+  // The panel was redrawn on every `sessions-updated` push — every five
+  // seconds, whether or not anything on it had changed. On the device that
+  // measured 0.2 full draws a second, indefinitely, over BLE, for a screen
+  // showing exactly what it showed five seconds ago.
+
+  function stubBridge() {
+    const calls: Array<{ id: number; content: string }> = []
+    let rebuilds = 0
+    const bridge = {
+      textContainerUpgrade: (u: { containerID: number; content: string }) => {
+        calls.push({ id: u.containerID, content: u.content })
+        return Promise.resolve()
+      },
+      rebuildPageContainer: () => {
+        rebuilds++
+        return Promise.resolve()
+      },
+    }
+    return { bridge: bridge as never, calls, rebuilds: () => rebuilds }
+  }
+
+  const listState = (name: string) =>
+    ({
+      mode: 'session_list' as const,
+      sessions: [{ id: 'a', name, state: 'idle' as const }],
+      sessionIndex: 0, selectedPaneId: null,
+      conversation: [], conversationOffset: 0, conversationPage: 0,
+      conversationHasMore: false, conversationLoading: false,
+      choiceIndex: 0, choiceOptions: [], relayWaiting: [], relayInfo: [],
+      overlayItemId: null, spinnerTick: 0,
+    }) as never
+
+  test('an identical frame sends no container at all', async () => {
+    const { bridge, calls } = stubBridge()
+    await updateDisplay(bridge, listState('alpha'))
+    calls.length = 0
+    await updateDisplay(bridge, listState('alpha'))
+    // Container 1 holds the rows. Asserted rather than the whole call list
+    // because container 2 is the footer, and the footer carries the clock —
+    // it legitimately changes once a minute, and a test that forbade it would
+    // fail whenever the two calls straddled a minute boundary.
+    expect(calls.filter((c) => c.id === 1)).toEqual([])
+  })
+
+  test('a frame that changes one container sends only that one', async () => {
+    const { bridge, calls } = stubBridge()
+    await updateDisplay(bridge, listState('alpha'))
+    calls.length = 0
+    await updateDisplay(bridge, listState('beta'))
+    const rows = calls.filter((c) => c.id === 1)
+    expect(rows.length).toBe(1)
+    expect(rows[0].content).toContain('beta')
+  })
+
+  test('the spinner tick is skipped too when the rows read the same', async () => {
+    // It fires every three seconds for as long as any agent is working, and
+    // the rows it redraws only move when the spinner glyph does.
+    const { bridge, calls } = stubBridge()
+    const s = listState('alpha')
+    await updateDisplay(bridge, s)
+    calls.length = 0
+    await updateHeader(bridge, s)
+    expect(calls).toEqual([])
   })
 })
