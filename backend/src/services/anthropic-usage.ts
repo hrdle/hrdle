@@ -1,5 +1,6 @@
 import { t } from '../i18n';
 import { VERSION } from '../cli';
+import { userAgent } from '../../../shared/identity';
 import { getClaudeAccessToken } from '../utils/claude-credentials';
 import type { UsageLimitsErrorReason, UsageLimitsStatus, UsageScopedLimit } from '../../../shared/types';
 
@@ -192,7 +193,7 @@ export class AnthropicUsageService {
         headers: {
           'Authorization': `Bearer ${token}`,
           'anthropic-beta': 'oauth-2025-04-20',
-          'User-Agent': `cchub/${VERSION}`,
+          'User-Agent': userAgent(VERSION),
           'Content-Type': 'application/json',
         },
       });

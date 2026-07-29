@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir, platform } from 'node:os';
-import { IDENTITY, SERVICE } from '../../../shared/identity';
+import { IDENTITY, PASSWORD_ENV, SERVICE } from '../../../shared/identity';
 import { t } from '../i18n';
 import { herdrBinaryPath } from '../services/herdr-client';
 import { migrateCodexHooksToJson } from '../services/codex-hook-config';
@@ -377,6 +377,21 @@ function isHerdrSystemdActive(): boolean {
 
 // ─── Setup entry point ───
 
+/**
+ * Contents of the systemd EnvironmentFile.
+ *
+ * The variable name has to be one the server reads. It wrote a bare `PASSWORD=`
+ * for a long time while startup looked at `CCHUB_PASSWORD`, so a password set
+ * through `setup -P` was configured, reported, and never used — the server came
+ * up unauthenticated. Nothing about that combination fails, which is why the
+ * name is composed here from the same constant startup reads.
+ */
+export function envFileContent(password?: string): string {
+  return password
+    ? `${PASSWORD_ENV}=${password}\n`
+    : `# ${PASSWORD_ENV}=yourpassword\n`;
+}
+
 export async function setupService(port: number, password?: string): Promise<void> {
   await provisionHerdr();
   if (platform() === 'darwin') {
@@ -471,7 +486,7 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
   await mkdir(systemdDir, { recursive: true });
 
   // Environment file
-  const envContent = password ? `PASSWORD=${password}\n` : '# PASSWORD=yourpassword\n';
+  const envContent = envFileContent(password);
   const envPath = join(configDir, 'env');
   await writeFile(envPath, envContent);
   await chmod(envPath, 0o600);

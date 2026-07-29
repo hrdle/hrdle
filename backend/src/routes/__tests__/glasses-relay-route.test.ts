@@ -3,10 +3,11 @@ import { Hono } from 'hono';
 import { conditionalAuthMiddleware } from '../../middleware/auth';
 import { resetGlassesRelayForTest } from '../../services/glasses-relay';
 import { glassesRelay } from '../glasses-relay';
+import { PASSWORD_ENV } from '../../../../shared/identity';
 
 /**
  * Mirrors index.ts: `/api/glasses/relay*` is reachable WITHOUT a token even
- * when password auth is on (local-trust POSTs from `cchub glasses`), while
+ * when password auth is on (local-trust POSTs from `<bin> glasses`), while
  * everything else under `/api/glasses/*` stays behind conditionalAuth.
  */
 function makeApp(): Hono {
@@ -125,13 +126,13 @@ describe('POST /api/glasses/relay/:id/dismiss', () => {
 });
 
 describe('auth placement (#504: relay is local-trust like /api/notify)', () => {
-  const prevPassword = process.env.CCHUB_PASSWORD;
+  const prevPassword = process.env[PASSWORD_ENV];
   beforeEach(() => {
-    process.env.CCHUB_PASSWORD = 'test-password';
+    process.env[PASSWORD_ENV] = 'test-password';
   });
   afterEach(() => {
-    if (prevPassword === undefined) delete process.env.CCHUB_PASSWORD;
-    else process.env.CCHUB_PASSWORD = prevPassword;
+    if (prevPassword === undefined) delete process.env[PASSWORD_ENV];
+    else process.env[PASSWORD_ENV] = prevPassword;
   });
 
   test('relay POST works WITHOUT a token even when auth is enabled', async () => {

@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.7] - 2026-07-30
+
+### Fixed
+- **The password the env file sets is the password the server reads**. On Linux,
+  `setup -P pass` writes into the service env file and startup reads it back -
+  except setup wrote a bare `PASSWORD=` while startup looked at
+  `CCHUB_PASSWORD`, and nothing reads a bare `PASSWORD`. So the password was
+  written, reported as configured, and never used: **the server came up
+  unauthenticated while setup said it had set one**. Neither half fails on its
+  own, which is how it survived. Both sides compose the name from identity now
+  (`HRDLE_PASSWORD`), with a test asserting the writer and the reader agree
+  - `CCHUB_PASSWORD` is still read, so an install from before the rename keeps
+    working. A bare `PASSWORD` deliberately is not: it is a name other things
+    use, and taking it from the ambient environment would switch auth on with a
+    password the user never chose for this server
+  - Existing installs lose nothing - their env-file password was already being
+    ignored. It starts working once `hrdle setup` is re-run, which rewrites the
+    file with the name the server reads
+  - macOS was never affected: its password lives in the Keychain, which both
+    sides already agreed on
+- **The rest of the rename's display leftovers**: `hrdle status` announced
+  itself as "CC Hub", the cache-clear page carried the old name in its title and
+  heading, `status` and `debug` printed `cchub` in their hints, both Anthropic
+  clients sent a `cchub/<version>` User-Agent while the `userAgent()` helper sat
+  unused beside them, the Codex hook writer named its temp file `.cchub-tmp-`,
+  and the STT glossary was still biasing toward the old spoken name
+- `.env.example` documented `CCHUB_PASSWORD` and `CC_HUB_DATA_DIR` (the data
+  directory has gone through identity for a while, so that one was simply
+  wrong), and listed neither `HRDLE_STT_PROMPT` nor `GROQ_API_KEY`
+
 ## [0.3.6] - 2026-07-30
 
 ### Changed

@@ -1,12 +1,12 @@
-// cchub status command - show service status (systemd on Linux, launchd on macOS)
+// `status` command - show service status (systemd on Linux, launchd on macOS)
 
 import { platform } from 'node:os';
 import { VERSION } from '../cli';
 import { t } from '../i18n';
-import { SERVICE } from '../../../shared/identity';
+import { IDENTITY, SERVICE } from '../../../shared/identity';
 
 export async function showStatus(): Promise<void> {
-  console.log(`CC Hub v${VERSION}`);
+  console.log(`${IDENTITY.productName} v${VERSION}`);
   console.log('');
 
   if (platform() === 'darwin') {
@@ -36,7 +36,7 @@ function showStatusSystemd(): void {
   } else if (serviceResult.exitCode === 4) {
     console.log('Service status: Not registered');
     console.log('');
-    console.log('To setup: cchub setup');
+    console.log(`To setup: ${IDENTITY.binaryName} setup`);
   } else {
     console.log('Service status: Unknown');
     console.log(serviceResult.stderr.toString());
@@ -100,7 +100,7 @@ function showStatusLaunchd(): void {
   } else {
     console.log('Service status: Not registered');
     console.log('');
-    console.log('   To setup: cchub setup');
+    console.log(`   To setup: ${IDENTITY.binaryName} setup`);
   }
 
   console.log('');

@@ -1,7 +1,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { resolveNotifyCommand } from './notify-command';
-import { HOOK_COMMAND_PATTERN } from '../../../shared/identity';
+import { HOOK_COMMAND_PATTERN, IDENTITY } from '../../../shared/identity';
 
 interface JsonHookCommand {
   type?: string;
@@ -136,7 +136,7 @@ export function findCchubNotifyCommandInToml(content: string): string | undefine
 }
 
 async function atomicWrite(path: string, content: string): Promise<void> {
-  const tempPath = `${path}.cchub-tmp-${process.pid}`;
+  const tempPath = `${path}.${IDENTITY.binaryName}-tmp-${process.pid}`;
   await writeFile(tempPath, content, { mode: 0o600 });
   await rename(tempPath, path);
 }

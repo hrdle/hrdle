@@ -5,6 +5,7 @@ import { createMiddleware } from 'hono/factory';
 import type { Context, Next } from 'hono';
 import { AuthService, type JwtPayload } from '../services/auth';
 import { getDataDir } from '../utils/storage';
+import { PASSWORD_ENV } from '../../../shared/identity';
 
 // Extend Hono context with auth info
 declare module 'hono' {
@@ -44,15 +45,15 @@ export async function initJwtSecret(): Promise<void> {
 
 // Check if password auth is enabled
 export function isAuthRequired(): boolean {
-  return !!process.env.CCHUB_PASSWORD;
+  return !!process.env[PASSWORD_ENV];
 }
 
 // Get the server password
 export function getServerPassword(): string | undefined {
-  return process.env.CCHUB_PASSWORD;
+  return process.env[PASSWORD_ENV];
 }
 
-// Middleware that requires auth only if CCHUB_PASSWORD is set
+// Middleware that requires auth only if a password is set
 export const conditionalAuthMiddleware = createMiddleware(async (c: Context, next: Next) => {
   // If no password is configured, allow all requests
   if (!isAuthRequired()) {
