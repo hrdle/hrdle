@@ -51,7 +51,7 @@ function stripAnsi(str: string): string {
     .replace(/[^\x20-\x7e\n\t]/g, '')
 }
 
-export class CcHubWsClient {
+export class WsClient {
   private ws: WebSocket | null = null
   private callbacks: WsCallbacks
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null

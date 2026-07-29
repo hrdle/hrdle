@@ -29,7 +29,7 @@ import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem } from './
 import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, noticeScrollSteps, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
-import { CcHubWsClient } from './ws-client.ts'
+import { WsClient } from './ws-client.ts'
 import type { Session, Pane, ConversationMessage, GlassesRelayItem, ClientFocus } from './types.ts'
 
 const INITIAL_LOAD_COUNT = 20
@@ -222,7 +222,7 @@ function initialState(): AppState {
 
 export class GlassesController {
   readonly state: AppState = initialState()
-  readonly ws: CcHubWsClient
+  readonly ws: WsClient
   private readonly platform: GlassesPlatform
   private readonly queue = new RelayQueue()
 
@@ -256,7 +256,7 @@ export class GlassesController {
 
   constructor(platform: GlassesPlatform) {
     this.platform = platform
-    this.ws = new CcHubWsClient({
+    this.ws = new WsClient({
       onSessionsUpdated: (sessions, focus) => this.onSessionsUpdated(sessions, focus),
       onTerminalOutput: () => this.maybeRefreshConversation(),
       onReady: () => this.onWsReady(),

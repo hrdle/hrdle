@@ -15,3 +15,22 @@ declare const __DEFAULT_PORT__: number
  *  ask. The version says which number a build claims; this says which code it
  *  contains, which is the question a log line actually has to answer. */
 declare const __BUILD_COMMIT__: string
+
+/** The product's name, from identity.json. Every screen that says it says it
+ *  through this — the previous rename found it written out in six of them. */
+declare const __PRODUCT_NAME__: string
+
+/** The server binary's name, from identity.json. The phone UI tells the user
+ *  to run it, so it is an instruction that has to work, not a label. */
+declare const __BINARY_NAME__: string
+
+/** `owner/repo` on GitHub, from identity.json. Source of the install command
+ *  and the links beside it. */
+declare const __REPO__: string
+
+/** Prefix for this app's localStorage keys, from identity.json. */
+declare const __STORAGE_PREFIX__: string
+
+/** Prefixes this app stored under before the current one. Read-only fallbacks:
+ *  renaming a key does not fail, it forgets. */
+declare const __LEGACY_STORAGE_PREFIXES__: readonly string[]

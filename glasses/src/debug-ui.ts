@@ -1,6 +1,6 @@
 // Browser simulator — runs when the Even Hub SDK is absent, so the glasses UI
 // can be driven from a browser with no G2 on your face (vite dev on 8391, or
-// served by CC Hub itself at /glasses).
+// served by the server itself at /glasses).
 //
 // It consumes the SAME GlassesController as the real G2 path AND renders
 // through the same `screenText()` the device renders through, so what you see
@@ -14,6 +14,7 @@ import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { NOTICE_BORDER, NOTICE_BORDER_COLOR, NOTICE_PAD, noticeHeight, screenText, wrapForPanel } from './display.ts'
 import { BAR_H, LINE_H, PANEL_H, PANEL_W, advance } from './metrics.ts'
+import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
 
 /** Japanese screen names — the shared vocabulary used when reporting issues. */
@@ -180,7 +181,7 @@ const STYLE = `
 `
 
 export function startDebugUI(): void {
-  // `?hub=` points the simulator at another CC Hub; default is same-origin,
+  // `?hub=` points the simulator at another server; default is same-origin,
   // which is what /glasses and the vite proxy both want.
   const params = new URLSearchParams(location.search)
   const hubUrl = params.get('hub')
@@ -193,13 +194,11 @@ export function startDebugUI(): void {
   // with the page. The device build omits the photo and the drawn scene
   // stays as the fallback, so neither case ends up with a blank backdrop.
   const DEFAULT_BG = `${import.meta.env.BASE_URL}scene-meeting.jpg`
-  const BG_KEY = 'cchub-glasses-bg'
-  const savedBg = (() => {
-    try { return localStorage.getItem(BG_KEY) } catch { return null }
-  })()
+  const BG_SUFFIX = 'glasses-bg'
+  const savedBg = readStoredSync(BG_SUFFIX)
   const bgUrl = params.get('bg') ?? savedBg ?? DEFAULT_BG
 
-  document.title = 'CC Hub Glasses — シミュレータ'
+  document.title = `${__PRODUCT_NAME__} — シミュレータ`
   const style = document.createElement('style')
   style.textContent = STYLE
   document.head.appendChild(style)
@@ -208,7 +207,7 @@ export function startDebugUI(): void {
   app.innerHTML = `
     <div class="sim-wrap">
       <div class="sim-title">
-        <h1>CC Hub Glasses シミュレータ</h1>
+        <h1>${__PRODUCT_NAME__} シミュレータ</h1>
         <span class="sub">実機と同じ描画（576×288 / 7行・幅は実測px）</span>
       </div>
       <div class="sim-main">
@@ -331,7 +330,7 @@ export function startDebugUI(): void {
         ;(drawn as HTMLElement).style.display = 'none'
       }
       if (remember) {
-        try { localStorage.setItem(BG_KEY, url) } catch { /* private mode */ }
+        writeStoredSync(BG_SUFFIX, url)
       }
       setBgStatus('')
     })
@@ -575,10 +574,10 @@ export function startDebugUI(): void {
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
     saveState(json) {
-      try { localStorage.setItem('cchub-glasses-resume', json) } catch { /* private mode */ }
+      writeStoredSync('glasses-resume', json)
     },
     async loadState() {
-      try { return localStorage.getItem('cchub-glasses-resume') } catch { return null }
+      return readStoredSync('glasses-resume')
     },
     startMicCapture: () => startMic(),
     stopMicCapture: () => stopMic(),
@@ -680,7 +679,7 @@ export function startDebugUI(): void {
   })
 
   el('bg-reset').addEventListener('click', () => {
-    try { localStorage.removeItem(BG_KEY) } catch { /* private mode */ }
+    clearStoredSync(BG_SUFFIX)
     bgUrlInput.value = ''
     stopCam()
     applyBackdrop(DEFAULT_BG, false)
@@ -916,18 +915,16 @@ export function startDebugUI(): void {
   // Presentation only, and separable on purpose: reading the panel for
   // fidelity wants the bare canvas, showing it to people wants the glass.
 
-  const GLASS_KEY = 'cchub-glasses-glassy'
+  const GLASS_SUFFIX = 'glasses-glassy'
   const glassyToggle = document.getElementById('g2-glassy') as HTMLInputElement
-  try {
-    if (localStorage.getItem(GLASS_KEY) === 'off') glassyToggle.checked = false
-  } catch { /* private mode */ }
+  if (readStoredSync(GLASS_SUFFIX) === 'off') glassyToggle.checked = false
 
   function applyGlassy(): void {
     lensEl.classList.toggle('glassy', glassyToggle.checked)
   }
   glassyToggle.addEventListener('change', () => {
     applyGlassy()
-    try { localStorage.setItem(GLASS_KEY, glassyToggle.checked ? 'on' : 'off') } catch { /* private mode */ }
+    writeStoredSync(GLASS_SUFFIX, glassyToggle.checked ? 'on' : 'off')
   })
   applyGlassy()
 

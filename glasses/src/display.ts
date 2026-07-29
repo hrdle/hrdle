@@ -1137,7 +1137,7 @@ export function buildSetupGuide(): RebuildPageContainer {
     paddingLength: 4,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
-    content: 'CC Hub Glasses',
+    content: __PRODUCT_NAME__,
   })
 
   const body = new TextContainerProperty({
@@ -1149,7 +1149,7 @@ export function buildSetupGuide(): RebuildPageContainer {
     paddingLength: 6,
     containerID: 2, containerName: 'body',
     isEventCapture: 0,
-    content: 'CC Hub未接続\n\nスマホのEven Hubアプリからこのアプリを開いてCC HubのURLを設定してください\n\n1. PCでCC Hubを起動\n2. スマホのアプリ画面でURL入力\n3. メガネから再度起動',
+    content: `${__PRODUCT_NAME__}未接続\n\nスマホのEven Hubアプリからこのアプリを開いて${__PRODUCT_NAME__}のURLを設定してください\n\n1. PCで${__PRODUCT_NAME__}を起動\n2. スマホのアプリ画面でURL入力\n3. メガネから再度起動`,
   })
 
   const footer = new TextContainerProperty({
@@ -1202,7 +1202,7 @@ export async function initDisplay(): Promise<Bridge | null> {
           paddingLength: 12,
           containerID: 1, containerName: 'loading',
           isEventCapture: 0,
-          content: 'CC Hub Glasses\nConnecting...',
+          content: `${__PRODUCT_NAME__}\nConnecting...`,
         }),
         new TextContainerProperty({
           xPosition: 0, yPosition: H - 28,
