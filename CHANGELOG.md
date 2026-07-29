@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-07-29
+
+### Fixed
+- **グラスの会話表示が kimi セッションで空になる**
+  ([#5](https://github.com/hrdle/hrdle/issues/5))。履歴 API は既定で Claude の jsonl を読み、
+  thread 系エージェント（kimi/codex/grok）の transcript には `?agent=` で名指しされたときだけ
+  届く。名指しなしの問い合わせはエラーではなく**空の答え**なので、G2 には `(no messages)` と
+  出て、何も言っていないエージェントに見えていた。音声プロンプトの送信は動いていたぶん、
+  返事だけが読めない状態だった。グラスも Web UI と同じく agent を名指しし、thread 系が
+  `ccSessionId` の代わりに持つ `agentSessionId` を取る。サーバはどちらか一方しか返さないので、
+  後者しか見ないと kimi ワークスペースには開く会話がそもそも無かった。ページバックが pane を
+  無視して workspace の Claude transcript を読み直していた既存バグも併せて直っている
+  （pane の会話を遡ると別の会話にすり替わっていた）
+- **STT の上書き変数がこの製品の名前になっていなかった**
+  ([#14](https://github.com/hrdle/hrdle/pull/14))。`CCHUB_STT_PROMPT` は呼び出し側に
+  ベタ書きされていたため改名を1日生き延びた — `shared/identity.ts` が防ぐために在る失敗そのもの。
+  `envVar()` が `binaryName` から組み立てる `HRDLE_STT_PROMPT` になった。v0.3.1 が初出で
+  誰も設定していないため、フォールバックは残していない
+
+### Notes
+- **グラスはシミュレータだけで完了としない**
+  ([#16](https://github.com/hrdle/hrdle/pull/16))。`debug-ui.ts` は実機と同じ
+  `GlassesController` / `screenText()` を通るが、文字幅・ページング・グリフで実機とズレた例が
+  2日で4件あった。シミュレータで確認 → リリース → 実機で確認、の順を CLAUDE.md に明記した
+- `glasses/src` に変更が入っているので、**G2 実機に反映するには ehpk の再ビルドと
+  アップロードが要る**（`/glasses-upload`）。`https://<host>:5924/glasses` が配信する
+  シミュレータはこのリリースで更新される
+
 ## [0.3.1] - 2026-07-29
 
 ### Added
