@@ -294,10 +294,14 @@ function spinnerFrame(state: AppState): string {
  * five or six rows, crowding out the conversation it was meant to introduce.
  */
 function recapBlock(recap: string | undefined, maxLines = 2): string[] {
-  // Every line, not the first two: the strip shows `NOTICE_LINES` of them at a
-  // time and the clock walks the rest. Cutting here would throw away what the
-  // walking is for.
-  return recapBlockLines(recap, maxLines).flatMap(splitDisplayLines)
+  // Every line, not the first two: the strip shows `NOTICE_MAX_LINES` of them
+  // at a time and the clock walks the rest. Cutting here would throw away what
+  // the walking is for.
+  //
+  // Unwrapped, too. The strip scrolls by character and re-wraps what is left,
+  // so wrapping here would freeze the line breaks at the offsets they had on
+  // the first step and the text would reflow against a stale grid.
+  return recapBlockLines(recap, maxLines)
 }
 
 /** Display label for a relay item's session (live session name, else the id). */
@@ -315,8 +319,10 @@ function relayBannerLines(state: AppState): string[] {
     const choiceHint = top.choices?.length ? `(選択${top.choices.length})` : ''
     const more = state.relayWaiting.length > 1 ? ` 他${state.relayWaiting.length - 1}件` : ''
     const head = splitDisplayLines(`[!]${relayLabel(state, top)}${choiceHint}${more}`)[0] || ''
-    // All of it; the strip windows what fits and the clock walks the rest.
-    return [head, ...splitDisplayLines(top.text)]
+    // All of it, unwrapped; the strip windows what fits and the clock walks the
+    // rest, re-wrapping at every step. Only the head is clamped — it is a
+    // label, and a label that takes two lines is not one.
+    return [head, top.text]
   }
   // Notifications get no body space here. The dialog already presented each
   // one full-screen, and the list keeps them in full afterwards; a third
@@ -538,12 +544,12 @@ export const NOTICE_BORDER = 1
  *  that it does not compete with the text it is separating. */
 export const NOTICE_BORDER_COLOR = 6
 /**
- * Everything the notice strip has to say, before it is windowed.
+ * Everything the notice strip has to say, before it is windowed — unwrapped.
  *
  * Shared with the auto-advance clock, which has to know how much is waiting
  * behind the strip without rendering it.
  */
-function conversationNoticeLines(state: AppState): string[] {
+function conversationNoticeText(state: AppState): string {
   const session = state.sessions[state.sessionIndex]
   const pane = state.selectedPaneId
     ? (session?.panes ?? []).find((p) => p.paneId === state.selectedPaneId)
@@ -555,30 +561,95 @@ function conversationNoticeLines(state: AppState): string[] {
   const recapText = pane ? pane.recap : session?.ccRecap
   const recapAt = pane ? pane.recapAt : session?.ccRecapAt
   const recap = onLatest && recapIsCurrent(recapAt, state.conversation) ? recapBlock(recapText) : []
-  return [...banner, ...recap]
+  return [...banner, ...recap].join('\n')
 }
 
 /** A notice longer than the conversation it introduces has stopped helping —
  *  so a long one is shown this many lines at a time instead of all at once. */
-const NOTICE_MAX_LINES = 3
+const NOTICE_MAX_LINES = 2
 
 /**
- * The notice, scrolled down by `offset` lines.
+ * Characters the strip gives up from its front on each step.
  *
- * A line at a time, not a page at a time: paging replaces the whole strip and
- * the reader has to find their place again in text they were mid-sentence
- * through. Scrolling keeps two of the three lines they were just reading, so
- * the new one arrives with its context already on screen.
+ * The unit of the scroll is the character, not the line: a line at a time
+ * moved the text in 27px jumps and read as three separate screens rather than
+ * one moving one. Taking a few characters off the front and re-wrapping what
+ * is left slides the whole block instead, which is what it looks like to read
+ * along a line rather than be shown another one.
+ *
+ * Ten and not one: every step is a redraw over BLE, and one character per
+ * redraw would spend a hundred and fifty of them on a recap. Ten is about a
+ * third of a Japanese line — coarse enough to keep the redraws near what line
+ * scrolling cost, fine enough that the block still reads as sliding rather
+ * than being replaced.
+ *
+ * Paired with `AUTO_SCROLL_STEP_MS`: the two move together, so changing this
+ * without changing that changes the reading speed as well as the granularity.
  */
-function noticeScrollOf(lines: string[], offset: number): string[] {
-  if (lines.length <= NOTICE_MAX_LINES) return lines
-  const last = noticeScrollStepsOf(lines.length) - 1
-  const o = Math.max(0, Math.min(offset, last))
-  return lines.slice(o, o + NOTICE_MAX_LINES)
+export const NOTICE_SCROLL_CHARS = 10
+
+/**
+ * What is left of the notice once `from` characters have gone past.
+ *
+ * Leading whitespace goes with them: a step can land on a line break or on the
+ * space a wrap fell on, and a strip that starts with a blank row reads as the
+ * notice having ended rather than having moved.
+ */
+function noticeFrom(chars: string[], from: number): string {
+  return chars.slice(from).join('').replace(/^\s+/, '')
 }
 
-function noticeScrollStepsOf(total: number): number {
-  return Math.max(1, total - NOTICE_MAX_LINES + 1)
+/** True once everything left of `from` fits the strip — i.e. the last
+ *  character of the notice is on screen. */
+function noticeFitsFrom(chars: string[], from: number): boolean {
+  return splitDisplayLines(noticeFrom(chars, from)).length <= NOTICE_MAX_LINES
+}
+
+/**
+ * Every offset the strip stops at, from the notice's first character to its
+ * last.
+ *
+ * Walked rather than multiplied out. A step is capped at what the reader can
+ * actually see, so it can never advance past the bottom of the strip: a notice
+ * of short lines — a banner over a bulleted recap, say — shows barely more
+ * than a step's worth at a time, and a fixed stride would carry lines off the
+ * top that were never on screen. Silently skipping part of the recap is the
+ * failure this scrolling exists to fix.
+ *
+ * Prose steps the full `NOTICE_SCROLL_CHARS` every time, which is the case
+ * this runs in almost always; the cap only bites on the shapes that need it.
+ */
+function noticeStops(text: string): number[] {
+  const chars = Array.from(text)
+  const stops = [0]
+  let from = 0
+  while (!noticeFitsFrom(chars, from)) {
+    const shown = splitDisplayLines(noticeFrom(chars, from)).slice(0, NOTICE_MAX_LINES).join('').length
+    // At least one character, so a strip that somehow shows nothing still
+    // terminates rather than walking the same offset forever.
+    from += Math.max(1, Math.min(NOTICE_SCROLL_CHARS, shown))
+    stops.push(from)
+  }
+  return stops
+}
+
+/** How many steps the strip takes to walk a notice from end to end. */
+function noticeScrollStepsOf(text: string): number {
+  return noticeStops(text).length
+}
+
+/**
+ * The notice with `window` steps' worth of characters taken off its front.
+ *
+ * Held at the last step rather than wrapped around: the clock decides when to
+ * go back to the beginning, and it waits at the end first so the last line is
+ * read rather than glimpsed.
+ */
+function noticeScrollOf(text: string, window: number): string[] {
+  if (!text) return []
+  const stops = noticeStops(text)
+  const from = stops[Math.max(0, Math.min(window, stops.length - 1))]
+  return splitDisplayLines(noticeFrom(Array.from(text), from)).slice(0, NOTICE_MAX_LINES)
 }
 
 /**
@@ -590,7 +661,7 @@ function noticeScrollStepsOf(total: number): number {
  */
 export function noticeScrollSteps(state: AppState): number {
   if (state.mode !== 'conversation') return 1
-  return noticeScrollStepsOf(conversationNoticeLines(state).length)
+  return noticeScrollStepsOf(conversationNoticeText(state))
 }
 
 export function noticeHeight(lines: number): number {
@@ -626,7 +697,7 @@ function conversationContent(state: AppState): {
     ? Math.max(0, msgs.length - 1 - state.conversationOffset)
     : -1
   const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage)
-  const allNotice = conversationNoticeLines(state)
+  const allNotice = conversationNoticeText(state)
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
   // Everything is measured in display lines — counting the conversation in

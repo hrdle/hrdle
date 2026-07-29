@@ -5,7 +5,7 @@ import { screenText, wrapForPanel, wrapHeader } from '../display.ts'
 import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { NOTICE_DISMISS_MS } from '../controller.ts'
-import { noticeHeight, noticeScrollSteps } from '../display.ts'
+import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
 import { MAX_LINES } from '../metrics.ts'
 
@@ -195,7 +195,7 @@ describe('conversation body', () => {
     // way to reach it. The strip windows it and the clock walks the rest.
     const first = (screenText(state(longRecap)).notice ?? '').split('\n')
     expect(first[0].startsWith('要約: ')).toBe(true)
-    expect(first.length).toBeLessThanOrEqual(3)
+    expect(first.length).toBeLessThanOrEqual(2)
     expect(first.join('')).not.toEndWith('…')
     expect(noticeScrollSteps(state(longRecap) as never)).toBeGreaterThan(1)
   })
@@ -1234,28 +1234,50 @@ describe('waiting shows what did not fit', () => {
     expect(noticeScrollSteps(none as never)).toBe(1)
   })
 
-  test('it scrolls a line at a time, keeping the reader their place', () => {
-    // Paging replaces the whole strip and the reader has to find where they
-    // were in text they were mid-sentence through. Two of three lines carry
-    // over instead, so the new line arrives with its context already up.
-    const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
+  test('it scrolls by characters, sliding the text instead of turning pages', () => {
+    // A line at a time replaced the whole strip in 27px jumps, and the reader
+    // had to find their place in a sentence they were mid-way through. Taking
+    // a few characters off the front and re-wrapping what is left slides the
+    // block instead, which is what reading along a line looks like.
+    const prose =
+      '認証まわりの実装を一通り終えてテストも通ったので次はエラー処理の見直しに入る予定です' +
+      'あわせてログ出力の粒度も揃えておきたいところですが優先度は低いので後回しにします'
     const state = st({
       sessions: [{
         id: 'a', name: 'g', state: 'idle' as const,
-        ccRecap: numbered, ccRecapAt: '2030-01-01T00:00:00Z',
+        ccRecap: prose, ccRecapAt: '2030-01-01T00:00:00Z',
       }],
     })
     const at = (o: number) => (screenText({ ...state, noticeWindow: o }).notice ?? '').split('\n')
+    const src = Array.from(`要約: ${prose}`)
     const first = at(0)
     const second = at(1)
-    expect(second[0]).toBe(first[1])
-    expect(second[1]).toBe(first[2])
-    // One line is new each step, and the last line is reached by the last one.
+
+    // Two lines at a time, and the first of them opens the recap.
+    expect(first.length).toBe(2)
+    expect(first[0].startsWith('要約: ')).toBe(true)
+
+    // One step on, the top line begins a few characters into the one before it
+    // — not at the line below it, which is what paging looked like.
+    expect(second[0]).not.toBe(first[1])
+    const dropped = src.slice(NOTICE_SCROLL_CHARS).join('').replace(/^\s+/, '')
+    expect(dropped.startsWith(second[0])).toBe(true)
+
+    // The walk ends with the recap's last characters on screen — the whole
+    // point of walking it — and holds there rather than wrapping round on its
+    // own. Going back to the top is the clock's decision, made after a rest.
     const steps = noticeScrollSteps(state as never)
-    expect(at(steps - 1)).toContain('行8')
+    expect(at(steps - 1).join('')).toContain(prose.slice(-10))
+    expect(at(steps + 5)).toEqual(at(steps - 1))
   })
 
   test('every line is on screen at some point', () => {
+    // Short lines are the shape that catches a stride longer than the strip:
+    // two display lines of `行N` hold barely six characters, so a step that
+    // always advanced `NOTICE_SCROLL_CHARS` would carry lines off the top that
+    // were never shown. Silently skipping part of the recap is the failure the
+    // scrolling exists to fix, so it is guarded here rather than in prose,
+    // which never steps far enough to notice.
     const numbered = Array.from({ length: 9 }, (_, i) => `行${i}`).join('\n')
     const state = st({
       sessions: [{

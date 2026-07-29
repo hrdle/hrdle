@@ -63,9 +63,22 @@ const AUTO_ADVANCE_IDLE_MS = 10_000
 const SECONDS_PER_LINE_MS = 5000
 
 /**
- * The notice scrolls a line at a time, so one line of reading buys one step.
+ * How often the notice gives up another `NOTICE_SCROLL_CHARS` from its front.
+ *
+ * The strip scrolls by character now, so a step is a fraction of a line rather
+ * than a whole one and has to come round proportionally sooner. Ten characters
+ * every two and a half seconds is four a second — the same reading pace the
+ * five-second line was approved at, in thirds of a line instead of whole ones.
+ *
+ * Paced with `NOTICE_SCROLL_CHARS` rather than independently of it: the two
+ * set the reading speed together, and only their ratio to each other sets how
+ * often the glasses redraw. Halving both would read identically and cost twice
+ * as much over BLE.
+ *
+ * It is also the clock every other interval below is counted in, so those stay
+ * multiples of it.
  */
-const AUTO_SCROLL_STEP_MS = SECONDS_PER_LINE_MS
+const AUTO_SCROLL_STEP_MS = 2500
 
 /**
  * A page turn replaces the whole body, so it is priced as the strip was: three
@@ -285,13 +298,13 @@ export class GlassesController {
       this.render()
       return
     }
-    // Nothing further to page to. Back to the top of the recap and round
-    // again, rather than sitting on its last three lines forever — the reader
-    // who looks up a minute later should find it readable from the start.
+    // Nothing further to page to. Back to the first character of the recap and
+    // round again, rather than sitting on its tail forever — the reader who
+    // looks up a minute later should find it readable from the start.
     if (steps > 1 && (st.noticeWindow ?? 0) !== 0) {
       // Back to the top, then count the pass. Resting at the top rather than
-      // on the last three lines: whenever the reader does look up, the recap
-      // reads from its beginning.
+      // on the tail: whenever the reader does look up, the recap reads from
+      // its beginning.
       st.noticeWindow = 0
       this.render()
       if (++this.autoPasses >= AUTO_SCROLL_MAX_PASSES) this.autoResting = true

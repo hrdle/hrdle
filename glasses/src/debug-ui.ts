@@ -350,7 +350,10 @@ export function startDebugUI(): void {
   const mirrorToggle = document.getElementById('g2-mirror') as HTMLInputElement
   const mirrorStatus = el('g2-mirror-status')
 
-  let lastScreen: { header: string; body: string; footer: string; headerless?: boolean } = {
+  // `notice` belongs here as much as the other three: the copy button is how a
+  // screen gets reported, and one that silently drops the recap reports a
+  // panel nobody is looking at.
+  let lastScreen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean } = {
     header: '', body: '', footer: '',
   }
   let lastMode = 'session_list'
@@ -614,6 +617,10 @@ export function startDebugUI(): void {
       rule,
       lastScreen.header,
       rule,
+      // The panel draws this rule as a container border rather than a row of
+      // text; here it is a row like the others, so the copy reads the way the
+      // screen looks.
+      ...(lastScreen.notice ? [lastScreen.notice, rule] : []),
       lastScreen.body,
       rule,
       lastScreen.footer,
