@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { sttPrompt } from '../services/stt-prompt';
 
 const glasses = new Hono();
 
@@ -40,6 +41,9 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  * Query: `?sampleRate=<n>` (PCM only), `?lang=<code>` (default `ja`).
  * Response: `{ text }`.
  *
+ * Sends a vocabulary prompt built from live workspace names plus this
+ * product's own terms (see `stt-prompt.ts`); `CCHUB_STT_PROMPT=off` disables it.
+ *
  * Used by the G2 glasses voice-input flow (SDK gives raw mic PCM only, so STT
  * is done server-side; the key never leaves this host).
  */
@@ -76,6 +80,11 @@ glasses.post('/stt', async (c) => {
     form.append('response_format', 'json');
     // Greedy decoding keeps short commands fast and deterministic.
     form.append('temperature', '0');
+    // What the speech is about: product terms and the user's own workspace
+    // names. Without it the model has no reason to produce `herdr` or
+    // 「2脚ロボ開発」, and reaches for the ordinary Japanese word instead.
+    const prompt = await sttPrompt();
+    if (prompt) form.append('prompt', prompt);
 
     const res = await fetch(GROQ_STT_URL, {
       method: 'POST',

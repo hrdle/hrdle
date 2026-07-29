@@ -368,6 +368,14 @@ Hook → cchub notify (stdin JSON) → POST /api/notify → WebSocket broadcast 
 
 herdr が `blocked` を報告して waiting アイテムがある間は、hook 由来の info は作らない（同じ状況を二重に言うだけなので）。逆に hook が先に届いていた場合、waiting 成立時に hook 由来の info（`source: 'auto'`）は消される。エージェント自身の `cchub glasses` メモ（`source: 'agent'`）は無関係なので残る。
 
+### グラスの音声入力（STT）
+
+G2 の SDK は生の PCM しか出さないため、書き起こしは `POST /api/glasses/stt`（`routes/glasses.ts`）でサーバ側が行う（Groq `whisper-large-v3-turbo`、`GROQ_API_KEY` はこのホストから出ない）。
+
+語彙バイアスの `prompt` を `services/stt-prompt.ts` が組み立てて送る。中身は **ユーザーのカスタムタイトル → 用語集 → herdr のラベル** の順で、Whisper の 224 トークン上限に収まるところまで（190文字）。この順序が仕様の要で、ワークスペースが増えると名前だけで予算を食い潰し、`リリース`（日に何度も言う語）が落ちる。ラベルはラテン文字で元から化けにくいので最後。`CCHUB_STT_PROMPT=off` で無効化、任意の文字列を入れればそれを使う（A/B 用）。
+
+なお**無音や極端に短いクリップでは幻聴が出る**（「ご視聴ありがとうございました」等）。prompt では消えないので、長さ・音量での足切りは別途必要。
+
 ### セットアップ手順
 
 1. Claude Code は `~/.claude/settings.json` の `hooks` に `cchub notify` を追加する。Codex は `~/.codex/hooks.json` に追加する（`config.toml` と併用するとCodexが警告するため、`cchub setup` が既存のCC Hub hookをJSONへ移行する）:
