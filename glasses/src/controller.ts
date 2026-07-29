@@ -25,7 +25,7 @@
 //                 doubleTap=cancel (item stays queued)
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
-import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem } from './api.ts'
+import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, noticeScrollSteps, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
@@ -633,7 +633,16 @@ export class GlassesController {
         // No relay items — legacy indicator flow (scrape, else voice). Reading
         // one pane, the reply belongs to that pane: sending it to the
         // workspace would land wherever herdr happens to have focus.
-        const paneId = this.state.selectedPaneId
+        //
+        // Resolved against the open workspace rather than read raw: the cursor
+        // keeps `selectedPaneId` from wherever it last stood, and several paths
+        // move `sessionIndex` without it (a refresh reordering the list, a
+        // relay item opening a conversation). A pane id from the previous
+        // workspace is not a pane of this one, and the server — correctly —
+        // refuses to guess, so the reply used to 404 into a swallowed catch.
+        // Undefined here means "this workspace's active pane", which is the
+        // right fallback and the one the server already implements.
+        const paneId = this.currentPane()?.paneId
         if (cur && isSessionWaiting(cur)) {
           const scraped = await this.scrapeChoices(cur.id)
           if (scraped.length > 0) {
@@ -811,12 +820,29 @@ export class GlassesController {
     this.render()
   }
 
-  /** Free-text voice reply → POST prompt with the item's sessionId + paneId. */
+  /**
+   * Free-text voice reply → POST prompt with the item's sessionId + paneId.
+   *
+   * A send that failed used to be indistinguishable from one that worked: the
+   * error was swallowed, the item was marked answered anyway, and the screen
+   * went back to the conversation. Spoken words disappeared with nothing to
+   * say where — the only trace was a 404 in the server log, and only if someone
+   * thought to look. So a failure now keeps the confirm screen up (the text is
+   * still there, tap sends it again) and says so in the log.
+   */
   private async sendVoice(): Promise<void> {
     const t = this.voiceTarget
     const text = this.state.voiceText?.trim()
     if (t && text) {
-      try { await sendPrompt(t.sessionId, text, t.paneId) } catch { /* ignore */ }
+      try {
+        await sendPrompt(t.sessionId, text, t.paneId)
+      } catch (err) {
+        void reportLog(
+          'error',
+          `voice send failed (session=${t.sessionId} pane=${t.paneId ?? 'active'}): ${err}`,
+        )
+        return
+      }
       this.answeredItem(t.itemId)
     }
     this.state.mode = 'conversation'
