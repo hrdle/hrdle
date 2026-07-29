@@ -36,7 +36,7 @@ export function invalidateWorkspacesCache(): void {
 
 const claudeCodeService = new ClaudeCodeService();
 const codexConversationService = new CodexConversationService();
-// peers.ts からも参照するため export
+// Exported because peers.ts references it too
 export const sessionHistoryService = new SessionHistoryService();
 
 // Thread-based agents (everything except Claude). Adding an agent means adding
@@ -199,7 +199,7 @@ export function herdrStatusToIndicator(status?: string): IndicatorState | null {
  * see. A hook override can sit stale for most of a turn — nothing fires
  * between an answered AskUserQuestion and the turn's Stop — so it must never
  * outrank a live herdr status (a stale `waiting_input` here becomes a false
- * 許可待ち badge on the workspace card). Thread agents keep hooks first,
+ * permission-pending badge on the workspace card). Thread agents keep hooks first,
  * mirroring the session-level rule (#390: herdr's accuracy there is
  * unverified).
  */

@@ -289,7 +289,7 @@ export const InputBar = memo(
 					>
 						{(!isTablet || showPositionToggle) && (
 							<span className="text-xs text-th-text-muted">
-								{showHint && "スクロールで閉じる"}
+								{showHint && "Scroll to close"}
 							</span>
 						)}
 						{isTablet && inputMode === "shortcuts" && showPositionToggle && (
@@ -298,7 +298,7 @@ export const InputBar = memo(
 								onClick={handlePositionToggle}
 								className="px-2 py-0.5 bg-th-surface-hover text-th-text-secondary text-xs rounded"
 							>
-								{keyboardPosition === "right" ? "← 左へ" : "右へ →"}
+								{keyboardPosition === "right" ? "<- Left" : "Right ->"}
 							</button>
 						)}
 					</div>
@@ -381,7 +381,7 @@ export const InputBar = memo(
 										autoCorrect="off"
 										autoComplete="off"
 										spellCheck={false}
-										placeholder="日本語入力可 - Enterで送信"
+										placeholder="Enter to send"
 										className="flex-1 px-3 py-2 bg-th-surface border border-th-border rounded text-th-text placeholder-th-text-muted focus:outline-none focus:border-green-500"
 										style={{ fontSize: "16px" }}
 									/>
@@ -475,13 +475,13 @@ export const InputBar = memo(
 									}}
 									className="px-3 py-1 text-[11px] text-zinc-600 rounded font-medium transition-colors"
 								>
-									キーボード
+									Keyboard
 								</button>
 								<button
 									type="button"
 									className="px-3 py-1 text-[11px] bg-white/[0.08] text-zinc-300 rounded font-medium"
 								>
-									入力
+									Input
 								</button>
 							</div>
 							<button
@@ -530,7 +530,7 @@ export const InputBar = memo(
 								spellCheck={false}
 								// biome-ignore lint/a11y/noAutofocus: required to show OS keyboard on mode switch
 								autoFocus
-								placeholder="日本語入力 - Enter×2で送信"
+								placeholder="Enter twice to send"
 								rows={Math.min(Math.max(inputValue.split("\n").length, 1), 5)}
 								className="w-full px-3 py-2 bg-[#0a0a0a] border border-white/[0.08] rounded-md text-[13px] text-white placeholder:text-zinc-700 focus:outline-none focus:border-blue-500/50 resize-none mb-1.5"
 								style={{ fontSize: "16px" }}

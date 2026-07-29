@@ -24,8 +24,8 @@ function withMutationLock<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-// peer 追加時にラウンドロビンで割り当てる palette。
-// ユーザーが手動で色を選ばなければ、追加順に PALETTE から拾う。
+// Palette assigned round-robin as peers are added.
+// Unless the user picks a color, each new peer takes the next PALETTE entry.
 const COLOR_PALETTE = [
   '#10b981', // emerald
   '#3b82f6', // blue
@@ -37,12 +37,12 @@ const COLOR_PALETTE = [
   '#84cc16', // lime
 ];
 
-// peer のトークンは disk に平文保存（家庭内マシン前提）。
-// 必要なら将来 OS keychain 連携に差し替える。
+// Peer tokens are stored on disk in plain text (this assumes a home machine).
+// Swap in an OS keychain later if that ever stops being true.
 interface StoredPeer extends Peer {
-  // peer 自身のログインで得たトークン。selfには持たない
+  // Token obtained by logging in to the peer; self has none
   wsToken?: string;
-  // 最後の verify 時刻と結果
+  // Time and result of the last verify
   lastSeenAt?: string;
   lastErrorAt?: string;
   lastErrorMessage?: string;
@@ -80,9 +80,9 @@ async function save(store: PeersStore): Promise<void> {
   // can't truncate peers.json (which would lose every peer's wsToken). #251
   const tempPath = `${filePath}.tmp.${process.pid}.${randomBytes(4).toString('hex')}`;
   try {
-    // wsToken を含むので owner read/write のみに制限。writeFile の mode は新規
-    // 作成時のみ適用される ─ 既存ファイル上書き時は umask の名残で 0644 のまま
-    // になりうるので、毎回 chmod で強制する。
+    // Holds wsToken, so restrict it to owner read/write. writeFile's mode only
+    // applies when the file is created - overwriting an existing file can leave
+    // 0644 behind from an earlier umask, so chmod runs every time.
     await writeFile(tempPath, JSON.stringify(store, null, 2), { mode: 0o600 });
     try {
       await chmod(tempPath, 0o600);
@@ -109,14 +109,14 @@ function pickColor(existing: StoredPeer[]): string {
   for (const c of COLOR_PALETTE) {
     if (!used.has(c.toLowerCase())) return c;
   }
-  // 全部使い切ったらランダム
+  // Once the palette is exhausted, pick at random
   return COLOR_PALETTE[existing.length % COLOR_PALETTE.length] ?? '#64748b';
 }
 
 function localPeer(): StoredPeer {
   return {
     id: LOCAL_PEER_ID,
-    nickname: '🏠 Local',
+    nickname: 'Local',
     url: SELF_PEER_URL,
     color: COLOR_PALETTE[0] ?? '#10b981',
     order: 0,
@@ -124,8 +124,8 @@ function localPeer(): StoredPeer {
 }
 
 /**
- * 全 peer を取得（self を必ず先頭に含めて返す）。
- * order 昇順でソート済み。
+ * Returns every peer, always with self first.
+ * Sorted by ascending order.
  */
 export async function listPeers(): Promise<StoredPeer[]> {
   const store = await load();
@@ -178,7 +178,7 @@ export interface UpdatePeerArgs {
 export async function updatePeer(id: string, args: UpdatePeerArgs): Promise<StoredPeer | null> {
   return withMutationLock(async () => {
     if (id === LOCAL_PEER_ID) {
-      // local peer は nickname/color のみ編集可。 token は持たない
+      // The local peer only allows nickname/color edits; it holds no token
       const store = await load();
       let local = store.peers.find(p => p.id === LOCAL_PEER_ID);
       if (!local) {
@@ -211,7 +211,7 @@ export async function updatePeer(id: string, args: UpdatePeerArgs): Promise<Stor
 
 export async function deletePeer(id: string): Promise<boolean> {
   return withMutationLock(async () => {
-    if (id === LOCAL_PEER_ID) return false; // self は削除不可
+    if (id === LOCAL_PEER_ID) return false; // self cannot be removed
     const store = await load();
     const before = store.peers.length;
     store.peers = store.peers.filter(p => p.id !== id);
@@ -225,7 +225,7 @@ export async function setPeerOrder(orderedIds: string[]): Promise<void> {
   return withMutationLock(async () => {
     const store = await load();
     const indexById = new Map(orderedIds.map((id, i) => [id, i]));
-    // 配列に含まれない peer は末尾に追いやる
+    // Peers missing from the array fall to the end
     const maxIndex = orderedIds.length;
     for (const peer of store.peers) {
       const idx = indexById.get(peer.id);

@@ -1,8 +1,8 @@
 /**
  * CC Hub API Contract
  *
- * Hono RPCで使用する型定義。
- * このファイルはバックエンドのルート定義から自動推論される型の参考資料。
+ * Type definitions used by the Hono RPC client.
+ * This file is a reference for the types inferred from the backend route definitions.
  */
 
 import { z } from 'zod';

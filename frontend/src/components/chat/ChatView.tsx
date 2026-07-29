@@ -120,7 +120,7 @@ export function ChatView({
 					<span className="inline-block w-[8px] h-[14px] bg-zinc-300 ml-[1px] align-middle animate-pulse" />
 				</span>
 			) : (
-				<span className="text-zinc-700">入力待ち…</span>
+				<span className="text-zinc-700">Waiting for input...</span>
 			)}
 		</div>
 	) : null;

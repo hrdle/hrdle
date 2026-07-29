@@ -20,14 +20,14 @@ interface UsePeersReturn {
 	reorderPeers: (orderedIds: string[]) => Promise<void>;
 }
 
-// module-level cache: 全コンポーネントで共有
+// Module-level cache shared by every component
 let cachedPeers: PeerClientView[] | null = null;
 let lastError: string | null = null;
 const listeners = new Set<() => void>();
 
-// usePeers は複数コンポーネントから同時に呼ばれるが、ポーリングタイマーは
-// モジュールレベルで1本だけ管理する（参照カウント方式）。インスタンスごとに
-// setInterval を張ると /api/peers への 5 秒ポーリングが N 倍に多重化する (#336)
+// usePeers is called from several components at once, but the polling timer is
+// kept as a single module-level one (reference counted). An interval per instance
+// would multiply the 5s /api/peers polling by N (#336)
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let refreshInFlight: Promise<void> | null = null;
 
@@ -42,7 +42,7 @@ async function fetchPeers(): Promise<PeerClientView[]> {
 	return data.peers;
 }
 
-// 同時要求は1本の fetch に合流させる
+// Concurrent requests are coalesced into one fetch
 function refreshShared(): Promise<void> {
 	if (refreshInFlight) return refreshInFlight;
 	refreshInFlight = (async () => {
@@ -62,7 +62,7 @@ function refreshShared(): Promise<void> {
 function subscribePeers(listener: () => void): () => void {
 	listeners.add(listener);
 	if (!pollTimer) {
-		// 定期更新 (peer の status を最新化するため)。購読者がいる間だけ動かす
+		// Periodic refresh to keep peer status current; runs only while there are subscribers
 		pollTimer = setInterval(() => {
 			void refreshShared();
 		}, 5000);
@@ -88,7 +88,7 @@ export function usePeers(): UsePeersReturn {
 			setIsLoading(false);
 		};
 		const unsubscribe = subscribePeers(listener);
-		// 初回ロード。キャッシュ済みなら即確定し、裏のポーリングが最新化する
+		// Initial load: a cached value settles immediately and the background poll refreshes it
 		if (cachedPeers === null) {
 			void refreshShared();
 		} else {
@@ -147,7 +147,7 @@ export function usePeers(): UsePeersReturn {
 			throw new Error(err.error ?? `HTTP ${res.status}`);
 		}
 		const result = (await res.json()) as { status: string; latencyMs?: number; message?: string };
-		// verify は registry を更新するので peers も再取得
+		// verify updates the registry, so refetch the peers as well
 		await refresh();
 		return result;
 	}, [refresh]);

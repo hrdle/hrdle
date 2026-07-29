@@ -2,3054 +2,6140 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6] - 2026-07-30
+
+### Changed
+- **The code speaks English, and stops using emoji**. Comments, log lines, CLI
+  output, test names and this file were half Japanese and half English, so every
+  reader had to know both, and status was carried by glyphs - a checkmark, a
+  warning sign - that say nothing to a `grep` over a log. All of it is English
+  now, and status is a word: `warning:`, `error:`, `Hint:`
+- **Hardcoded UI strings that never went through i18n were translated too** -
+  PeerManager, the glasses simulator and its phone page, the G2 display footers
+  and the fallback page in `index.html`. The Japanese product surface is now
+  exactly the `ja` locale and nothing else, rather than the locale plus whatever
+  happened to be typed inline
+- **What stays Japanese is data rather than prose we wrote**: the `ja` i18n
+  catalogs, the STT glossary in `stt-prompt.ts`, and the fixtures whose Japanese
+  is the thing under test (CJK wrapping, kinsoku, UTF-8 splitting across chunks).
+  Two emoji tables stay because they are functional: the substitution map in
+  `glasses/src/metrics.ts` that turns emoji into glyphs the G2 firmware has, and
+  the file-picker and URL keys whose emoji *is* the label
+- **`CLAUDE.md` states the rule** under "Language and Style Rules", exceptions
+  listed, so the next change does not have to rediscover them. It covers commit
+  messages and PR bodies as well
+
+### Notes
+- Tests were updated where they asserted on a string that moved (the relay
+  fallbacks, the `--base64` error, the G2 footers, `Summary:` and
+  `[code N lines]`). 779 tests pass, lint and typecheck are clean, and the dev
+  server was checked against a real herdr: 14 workspaces listed, the dashboard
+  answering, `/glasses` served
+- The Japanese documentation is untouched on purpose - `README.ja.md`,
+  `architecture.json`, `specs/`, `HANDOFF.md` and the skill files are documents
+  rather than code, and `README.ja.md` exists to be Japanese
+
 ## [0.3.5] - 2026-07-30
 
 ### Added
-- **シミュレータに「PNGを保存」ボタン**。EVEN Hub の Store listing は Environment
-  （Home / Office / Store / Cafe）として**背景を自前で持っており**、そこにアプリの描画を
-  合成する。したがって提出用の画像は描画だけでなければならず、レンズ要素の
-  スクリーンショットではシミュレータ側の背景が焼き込まれて部屋が二重になる。
-  `#g2-canvas` は元から 576×288・背景 alpha 0・点灯ピクセルが緑 + alpha 16階調 という
-  Hub が求める形をしているので、このボタンは変換ではなく保存をしているだけ。
-  ファイル名にモードが入る（`hrdle-glasses-conversation-….png`）
+- **A "Save PNG" button in the simulator**. The EVEN Hub store listing supplies
+  its own background for each Environment (Home / Office / Store / Cafe) and
+  composites the app's own drawing onto it. A submitted image must therefore be
+  the drawing and nothing else, and a screenshot of the lens element bakes the
+  simulator's background in, so the room appears twice. `#g2-canvas` already has
+  the shape Hub asks for - 576x288, background alpha 0, lit pixels green with 16
+  alpha levels - so this button saves rather than converts. The file name carries
+  the mode (`hrdle-glasses-conversation-....png`)
 
 ### Changed
-- グラスの画面の取り方が3つになり、`CLAUDE.md` にどれが何のためかを書いた。
-  「画面をコピー」は折り返し・行数・文字の欠け、`screenshot "#lens"` は**明るい壁の前で
-  緑が生き残るか**（G2 は透過ディスプレイなので、テキストでは原理的に分からない）、
-  「PNGを保存」は提出するもの。昨日のルールは「issue にはスクリーンショットより
-  テキストを貼る」と書いていたが、実際に撮って初めてそれが誤りだと分かった
-- ヘッドレスでシミュレータの音声を試すときの `getUserMedia` 差し替えも記録した。
-  音声デバイスが無いと `startMicCapture` が失敗し、いきなり「(認識できませんでした)」に
-  飛ぶ — 書き起こしの不具合に見えて、そうではない
+- There are now three ways to capture the glasses screen, and `CLAUDE.md` says
+  which is for what. "Copy screen" is for wrapping, line counts and clipped
+  characters; `screenshot "#lens"` is for **whether the green survives in front
+  of a bright wall** (the G2 is a see-through display, so text can never answer
+  that); "Save PNG" is what gets submitted. Yesterday's rule said "paste text
+  into an issue rather than a screenshot" - actually taking the captures is what
+  showed that to be wrong
+- Also recorded the `getUserMedia` substitution for exercising the simulator's
+  audio headlessly. With no audio device `startMicCapture` fails and the screen
+  jumps straight to "(nothing was recognized)" - which looks like a transcription
+  bug and is not one
 
 ## [0.3.4] - 2026-07-30
 
 ### Changed
-- **アイコンをスキャナーにした** ([#23](https://github.com/hrdle/hrdle/pull/23))。
-  旧アイコンは cc-hub のマークの文字を差し替えただけの `Hr` で、**読ませる**造りだったため
-  32px を下回ると手掛かりが何も残らなかった。新しいものはスリットに 11 個のランプが並び、
-  数個だけが灯る。光は中央より左（0.33）に置いて、止まっているのではなく走査の途中に見せている。
-  帯は水平ではなく浅い V に折れる（`S×0.028`、約4度）——由来のノーズが中央で尖っているためで、
-  枠・ランプ一枚ずつ・奥の窪み・ガラス・光の高さまで、すべてこの折れに乗せてある。
-  水平版も単体では十分それらしいが、並べると違う
-- **PNG と SVG を別物として作った**。`icon-512.png` / `icon-192.png` は Canvas レンダリングで
-  ヘアライン・グレイン・ガラスの映り込みまで載せ、256色に量子化して 512px を **284KB → 40KB** に。
-  `favicon.svg` は同じ幾何から起こした簡略版で質感を載せない（16px では潰れて濁りにしかならず、
-  形だけで戦う必要があるため）。SVG 冒頭に幾何パラメータをコメントで残してある
-- **グラスアプリ（EVEN Hub）のアイコンも同じ意匠に差し替えた**。ただし向こうの仕様は
-  **24×24 モノクロ、しかも Hub のエディタはブラシが 2x2 固定**——実質 12×12 のドット絵で、
-  この解像度では V の折れは 1px にもならず段差ではなく欠けに見えるので水平にしてある。
-  残したのは「横長のスリットに、左寄りで数個だけ灯っている」という一点だけ
+- **The icon is a scanner now** ([#23](https://github.com/hrdle/hrdle/pull/23)).
+  The old one was `Hr`, cc-hub's mark with the letters swapped, built to be
+  **read** - which left nothing to go on below 32px. The new one lines up 11
+  lamps in a slit and lights only a few of them. The light sits left of center
+  (0.33) so the thing reads as mid-sweep rather than parked. The band folds into
+  a shallow V rather than running level (`S x 0.028`, about 4 degrees) - the nose
+  it descends from peaks at the center - and the frame, every single lamp, the
+  recess behind them, the glass and the height of the light all ride that fold.
+  A level version looks plausible enough alone; side by side it does not
+- **The PNG and the SVG are built as different things**. `icon-512.png` /
+  `icon-192.png` are Canvas renders carrying the hairline, the grain and the
+  glass reflection, quantized to 256 colors to take 512px from **284KB to 40KB**.
+  `favicon.svg` is a stripped-down version drawn from the same geometry with none
+  of the texture (at 16px it collapses into mud, so the shape has to carry it
+  alone). The geometry parameters are left as a comment at the top of the SVG
+- **The glasses app (EVEN Hub) icon follows the same design**. Their spec is
+  **24x24 monochrome, and the Hub editor's brush is fixed at 2x2** - effectively
+  a 12x12 pixel drawing, where the V's fold does not even reach 1px and reads as
+  a chip rather than a step, so that one is level. What survives is the single
+  idea: a wide slit with a few lamps lit, left of center
 
 ### Notes
-- `theme_color` は `#1a1a1a` のまま。あれはアイコンの色ではなく UI 自身の背景色で、
-  `index.css` / `terminal-themes.ts` / `useTheme` が同じ値を共有している
+- `theme_color` stays `#1a1a1a`. That is not the icon's color but the UI's own
+  background, shared by `index.css`, `terminal-themes.ts` and `useTheme`
 
 ## [0.3.3] - 2026-07-30
 
 ### Fixed
-- **音声の返信が、返信先とは別のワークスペースのペインに宛てられていた**。`selectedPaneId`
-  は一覧カーソルが最後に止まった場所で、`sessionIndex` だけを動かす経路が複数ある
-  （一覧の並び替え、relay item からの会話オープン、resume）。結果 `hrdle-work-1` に
-  `life` のペイン `%6` を送るような状態になり、サーバは正しく 404 を返し、グラス側は
-  それを握りつぶしていた — item は「答えた」ことにされ画面は会話に戻るので、**届かな
-  かった返信が届いた返信と同じ見た目**をしていた。返信先は開いているワークスペースに
-  対して解決するようにし（属さない id は落ちて「アクティブペイン」になる）、送信に
-  失敗したら確認画面に留まってタップで再送できるようにした。`%1` はどのワークスペースにも
-  あるため、複数ペインのワークスペースで2番目以降を選ぶまでは偶然動いていた
-- **Codex の会話がグラス／履歴から読めなかった**。transcript に至る2経路はどちらも herdr が
-  報告する id を経由するが、その id が `threads` テーブルにも rollout ファイル名にも
-  存在しなかった。herdr は Codex integration が渡す `SessionStart` hook の `session_id` を
-  そのまま報告し、**別の Codex プロセスが自分の `SessionStart` を出すと pane の保存 id を
-  奪う**（[ogulcancelik/herdr#1789](https://github.com/ogulcancelik/herdr/issues/1789)。
-  master で修正済み・preview 配布済みだが 0.7.4 には未収録）。正確な2経路が外れたときだけ
-  動く3番目として、herdr にその session の cwd を尋ね同じディレクトリの最新 rollout を
-  読む経路を足した。**herdr の修正が安定版に降りたら削除する前提**で、消すべきものを
-  コードの TODO に列挙してある
+- **A voice reply was addressed to a pane in a different workspace than the one
+  being replied to**. `selectedPaneId` is wherever the list cursor last stopped,
+  and several paths move `sessionIndex` alone (reordering the list, opening a
+  conversation from a relay item, resume). The result was a state that sent
+  `life`'s pane `%6` to `hrdle-work-1`; the server correctly answered 404 and the
+  glasses swallowed it - the item was marked answered and the screen returned to
+  the conversation, so **a reply that never arrived looked exactly like one that
+  did**. The reply target now resolves against the workspace that is open (an id
+  that does not belong to it drops out and becomes "the active pane"), and a
+  failed send keeps the confirmation screen up so a tap can retry. Every
+  workspace has a `%1`, which is why this happened to work until you picked
+  anything past the first pane of a multi-pane workspace
+- **Codex conversations could not be read from the glasses or the history**. Both
+  routes to a transcript go through the id herdr reports, and that id existed
+  neither in the `threads` table nor in a rollout file name. herdr reports the
+  `session_id` from the `SessionStart` hook the Codex integration hands it, and
+  **another Codex process emitting its own `SessionStart` steals the pane's
+  stored id** ([ogulcancelik/herdr#1789](https://github.com/ogulcancelik/herdr/issues/1789);
+  fixed on master and shipped in preview, but not in 0.7.4). A third route now
+  runs only when the two precise ones miss: ask herdr for that session's cwd and
+  read the newest rollout in the same directory. It exists **to be deleted once
+  the herdr fix reaches stable**, and the TODO in the code lists what to remove
 
 ### Changed
-- **グラスアプリを EVEN Hub に `Hrdle`（`com.hrdle.glasses`）として登録し直した**。Hub は
-  `package_id` を変更不可として扱うため、改名は新規プロジェクトの作成でしか行えない。
-  ビルド履歴・Testing group・Store listing は引き継がれず、バージョンは v0.0.1 から
-  やり直し（現在 v0.0.3 が Beta）。旧 `com.m0a.cchubglasses` は Private のまま退避先として残す
-- リポジトリのスキルを `hrdle-*` に改名し、コピーを1つに揃えた。`cchub-test` は
-  リネームで移動したはずの dev ポート（3456/5173）と旧作業ディレクトリを、
-  `cchub-profile` は停止済みの `cchub.service` を操作していた。`AGENTS.md` が禁じている
-  `.agents/skills/` の並行コピーは削除（`.Codex/` という存在しないパスを指していた）
-- STT の override 環境変数を `HRDLE_STT_PROMPT` に改名。`identity.json` の `binaryName` から
-  組み立てる `envVar()` を追加したので、次のリネームでは自動的に追従する
-- グラス実装時の決まりを `CLAUDE.md` に追加（シミュレータへの対応を実装に含め、
-  リリース前にシミュレータで確認する）。2日で4回シミュレータと実機が食い違っており、
-  いずれも「直った」と判断したあとに実機で見つかっている
+- **The glasses app was re-registered with EVEN Hub as `Hrdle`
+  (`com.hrdle.glasses`)**. Hub treats `package_id` as immutable, so a rename can
+  only happen by creating a new project. Build history, testing group and store
+  listing do not carry over, and the version starts again from v0.0.1 (v0.0.3 is
+  in Beta now). The old `com.m0a.cchubglasses` stays Private as a fallback
+- The repository's skills were renamed to `hrdle-*` and collapsed to one copy.
+  `cchub-test` was still driving the dev ports the rename moved (3456/5173) and
+  an old working directory; `cchub-profile` was operating a `cchub.service` that
+  no longer runs. The parallel copies under `.agents/skills/` that `AGENTS.md`
+  forbids are gone (they pointed at a `.Codex/` path that does not exist)
+- The STT override environment variable is now `HRDLE_STT_PROMPT`. An `envVar()`
+  helper composes it from `identity.json`'s `binaryName`, so the next rename
+  follows automatically
+- Added the rules for working on the glasses to `CLAUDE.md` (simulator support is
+  part of the implementation, and the simulator gets checked before a release).
+  The simulator and the device disagreed four times in two days, and every one of
+  those was found on the device after the work had been called done
 
 ## [0.3.2] - 2026-07-29
 
 ### Fixed
-- **グラスの会話表示が kimi セッションで空になる**
-  ([#5](https://github.com/hrdle/hrdle/issues/5))。履歴 API は既定で Claude の jsonl を読み、
-  thread 系エージェント（kimi/codex/grok）の transcript には `?agent=` で名指しされたときだけ
-  届く。名指しなしの問い合わせはエラーではなく**空の答え**なので、G2 には `(no messages)` と
-  出て、何も言っていないエージェントに見えていた。音声プロンプトの送信は動いていたぶん、
-  返事だけが読めない状態だった。グラスも Web UI と同じく agent を名指しし、thread 系が
-  `ccSessionId` の代わりに持つ `agentSessionId` を取る。サーバはどちらか一方しか返さないので、
-  後者しか見ないと kimi ワークスペースには開く会話がそもそも無かった。ページバックが pane を
-  無視して workspace の Claude transcript を読み直していた既存バグも併せて直っている
-  （pane の会話を遡ると別の会話にすり替わっていた）
-- **STT の上書き変数がこの製品の名前になっていなかった**
-  ([#14](https://github.com/hrdle/hrdle/pull/14))。`CCHUB_STT_PROMPT` は呼び出し側に
-  ベタ書きされていたため改名を1日生き延びた — `shared/identity.ts` が防ぐために在る失敗そのもの。
-  `envVar()` が `binaryName` から組み立てる `HRDLE_STT_PROMPT` になった。v0.3.1 が初出で
-  誰も設定していないため、フォールバックは残していない
+- **The glasses conversation view came up empty for kimi sessions**
+  ([#5](https://github.com/hrdle/hrdle/issues/5)). The history API reads Claude's
+  jsonl by default and only reaches a thread agent's transcript (kimi/codex/grok)
+  when `?agent=` names it. A query without the name is not an error but an
+  **empty answer**, so the G2 showed `(no messages)` and the agent looked like it
+  had said nothing. Sending a voice prompt worked the whole time; only the answer
+  was unreadable. The glasses now name the agent the way the web UI does, and
+  take the `agentSessionId` a thread agent carries in place of `ccSessionId`. The
+  server returns one or the other, so looking only at the latter left a kimi
+  workspace with no conversation to open at all. This also fixes an older bug
+  where paging back ignored the pane and re-read the workspace's Claude
+  transcript (scrolling back through a pane's conversation swapped in a different
+  one)
+- **The STT override variable did not carry this product's name**
+  ([#14](https://github.com/hrdle/hrdle/pull/14)). `CCHUB_STT_PROMPT` was
+  hardcoded at the call site and so survived the rename by a day - exactly the
+  failure `shared/identity.ts` exists to prevent. It is now `HRDLE_STT_PROMPT`,
+  composed by `envVar()` from `binaryName`. It first shipped in v0.3.1 and nobody
+  has it set, so there is no fallback
 
 ### Notes
-- **グラスはシミュレータだけで完了としない**
-  ([#16](https://github.com/hrdle/hrdle/pull/16))。`debug-ui.ts` は実機と同じ
-  `GlassesController` / `screenText()` を通るが、文字幅・ページング・グリフで実機とズレた例が
-  2日で4件あった。シミュレータで確認 → リリース → 実機で確認、の順を CLAUDE.md に明記した
-- `glasses/src` に変更が入っているので、**G2 実機に反映するには ehpk の再ビルドと
-  アップロードが要る**（`/glasses-upload`）。`https://<host>:5924/glasses` が配信する
-  シミュレータはこのリリースで更新される
+- **The glasses are never done on the simulator alone**
+  ([#16](https://github.com/hrdle/hrdle/pull/16)). `debug-ui.ts` goes through the
+  same `GlassesController` and `screenText()` the device does, and still drifted
+  from it four times in two days on character width, paging and glyphs. CLAUDE.md
+  now spells out the order: check on the simulator, release, check on the device
+- `glasses/src` changed, so **reaching the real G2 needs the ehpk rebuilt and
+  uploaded** (`/glasses-upload`). The simulator served at
+  `https://<host>:5924/glasses` updates with this release
 
 ## [0.3.1] - 2026-07-29
 
 ### Added
-- **音声認識に語彙プロンプトを渡す**。Whisper は初期プロンプトを「直前にあった書き起こし」
-  として扱う — 何の語が来るかを伝える、サポートされたやり方。空のままだと日本語一般から
-  推測するので、`herdr` は語彙になく、`ペイン` は `ペイント` になり、ユーザーが名付けた
-  `2脚ロボ開発` は `二脚ロボ開発` で返ってくる。最後のは表記の問題では済まない —
-  グラスはこのテキストをそのままエージェントへ渡すので、一致しない名前は解決できない名前。
-  `services/stt-prompt.ts` がリクエストごとにライブ状態から組み立てる: **カスタムタイトル →
-  用語集（34語）→ herdr のラベル**。この順序が仕様の要で、名前を先頭に置いた最初の実装では
-  ワークスペース13個が190文字の予算の2/3を食い、日に何度も言う `リリース` が一度も
-  入らなかった。ラベルを最後に回すのは、ラテン文字のディレクトリ的な名前がそもそも日本語の
-  語として読まれないため。`CCHUB_STT_PROMPT=off` で無効化、任意の文字列を入れれば A/B 可
+- **A vocabulary prompt is passed to speech recognition**. Whisper treats the
+  initial prompt as "the transcript that just came before" - the supported way to
+  tell it which words are coming. Left empty it guesses from Japanese at large,
+  so `herdr` is not in its vocabulary, `pane` comes back as `paint`, and the
+  user's own coinage `2-legged robot dev` comes back spelled another way. That
+  last one is more than a spelling problem: the glasses hand this text straight
+  to an agent, so a name that does not match is a name that cannot be resolved.
+  `services/stt-prompt.ts` composes the prompt per request from live state:
+  **custom titles -> glossary (34 terms) -> herdr labels**. That order is the
+  point of the design; the first cut put names first, 13 workspaces ate two
+  thirds of the 190-character budget, and `release` - a word said several times a
+  day - never made it in. Labels go last because Latin-script directory-ish names
+  are not read as Japanese words in the first place. `CCHUB_STT_PROMPT=off`
+  disables it, and any string can be substituted for A/B testing
   ([cc-hub#664](https://github.com/m0a/cc-hub/pull/664))
 
 ### Changed
-- **グラスアプリを Hrdle にリネームし、EVEN Hub 上は新規プロジェクトとして仕切り直した**
-  (`com.m0a.cchubglasses` → `com.hrdle.glasses`、v0.1.62 → **v0.0.1**)。Hub は
-  `package_id` を変更不可として扱う（Store listing には表示されるだけで Edit がない）ため、
-  ID を変えるには ehpk を新規プロジェクトとして上げ直すしかない。55件のビルド履歴・
-  Testing group・Store listing は引き継がれず、旧プロジェクトは Private のまま退避先として残す
-- グラスの表示名・バイナリ名・リポジトリ URL・ストレージ接頭辞は `identity.json` から
-  ビルド時に注入するようになった。`glasses/src` に製品名のリテラルは残っていない
-  （`app.json` だけは別 — `package_id` と `name` はバンドルが存在する前に読まれる）
-- グラスの localStorage キーが `hrdle-` 接頭辞に。旧キーは**読むときだけ**見る
-  (`glasses/src/storage.ts`)。そのぶん「切断」と「背景をリセット」は全世代のキーを消す —
-  旧キーが残っていると次回起動で同じサーバーに繋ぎ直してしまうため
+- **The glasses app was renamed to Hrdle and restarted as a new EVEN Hub
+  project** (`com.m0a.cchubglasses` -> `com.hrdle.glasses`, v0.1.62 ->
+  **v0.0.1**). Hub treats `package_id` as immutable (the store listing displays
+  it with no Edit), so changing the id means uploading the ehpk as a new project.
+  55 builds of history, the testing group and the store listing do not carry
+  over; the old project stays Private as a fallback
+- The glasses' display name, binary name, repository URL and storage prefix are
+  injected from `identity.json` at build time. No product-name literal is left in
+  `glasses/src` (`app.json` is the exception - `package_id` and `name` are read
+  before the bundle exists)
+- The glasses' localStorage keys moved to the `hrdle-` prefix. Old keys are read
+  **only when reading** (`glasses/src/storage.ts`). Because of that, "disconnect"
+  and "reset the background" clear every generation of the key - a leftover old
+  key would reconnect to the same server on the next start
 
 ### Fixed
-- ペインのインジケータで、古い hook override が live な herdr status に勝ってしまう問題
-- `hrdle update` の案内が、実際に入っているバイナリの名前を言うようになった
+- A stale hook override could beat live herdr status on the pane indicator
+- The `hrdle update` hint now names the binary you actually have
 
 ### Notes
-- 語彙プロンプトの A/B は **Gemini TTS の合成音声**で取ったもの（「二脚」→「2脚」で安定、
-  レイテンシ 350〜450ms で悪化なし）。**実マイク音声での効き目は未確認**なので、実機で
-  話してみて化けるようなら用語の追加や配分を調整する
-- **無音・極端に短いクリップの幻聴は直っていない**（「ご視聴ありがとうございました」等）。
-  プロンプトでは消えず、長さ・音量での足切りが別途要る
+- The vocabulary prompt's A/B was measured with **Gemini TTS synthetic speech**
+  (the coinage came back stably, latency 350-450ms with no regression). **Its
+  effect on real microphone audio is unverified**, so if speaking into the device
+  still garbles things, terms and budget will be adjusted
+- **Hallucinations on silence and very short clips are not fixed** (the usual
+  Japanese sign-off phrases). The prompt does not remove them; a length and
+  volume floor is needed separately
 
 ## [0.3.0] - 2026-07-29
 
-Hrdle としての最初のリリース。中身は cc-hub v0.2.98 と同一で、違うのは
-`identity.json` の値だけ（コードの差分はゼロ）。
+The first release as Hrdle. The contents are identical to cc-hub v0.2.98; only
+the values in `identity.json` differ (zero code diff).
 
 ### Changed
-- **CC Hub から Hrdle に改名** ([#459](https://github.com/m0a/cc-hub/issues/459))。
-  `identity.json` を書き換えると、そこから合成されるもの — systemd unit / launchd
-  ラベル / データディレクトリ / scratch パス / Keychain / localStorage キー /
-  hook コマンドと検出パターン / CLI ヘルプ / PWA manifest — が呼び出し側の変更なしで
-  追従する。上流 (`m0a/cc-hub`) 側の準備工事 (#635 / #637 / #653 / #655 / #658 /
-  #668 / #672) が揃ったことで、改名の本体が1ファイルの書き換えになった
-- **既定ポートは 5924**。移行期に cchub と並走するためだが、切替後も 5924 のまま
-  据え置く。5923 を空けておけば、何かあったとき cchub を起動するだけで戻れる —
-  ポートが衝突しないので両方同時に立ち上げられる。dev も 3457 / 5174 に1つずらし、
-  両製品の dev サーバーが同時に動くようにした
-- **tagline を `Coding Agent Session Manager` に**。Claude / Codex / Grok / Kimi を
-  扱うようになって久しく、最初に実態と合わなくなった名前がこれだった
-- アイコンは造り（角丸チャコール・緑モノスペース・下のプログレスバー）を保ったまま
-  `CC` → `Hr`
+- **Renamed from CC Hub to Hrdle**
+  ([#459](https://github.com/m0a/cc-hub/issues/459)). Rewriting `identity.json`
+  carries everything composed from it - systemd unit, launchd label, data
+  directory, scratch paths, Keychain, localStorage keys, hook command and
+  detection patterns, CLI help, PWA manifest - along without a call site
+  changing. The groundwork upstream (`m0a/cc-hub`: #635 / #637 / #653 / #655 /
+  #658 / #668 / #672) is what reduced the rename itself to editing one file
+- **The default port is 5924**. It was chosen to run alongside cchub during the
+  migration, and it stays 5924 afterwards. Leaving 5923 free means starting cchub
+  is all it takes to go back if something breaks - the ports do not collide, so
+  both can run at once. The dev ports moved one along too (3457 / 5174) so both
+  products' dev servers can run at the same time
+- **The tagline is now `Coding Agent Session Manager`**. It has handled Claude /
+  Codex / Grok / Kimi for a long time, and the name was the first thing to stop
+  matching that
+- The icon keeps its construction (rounded charcoal, green monospace, progress
+  bar underneath) with `CC` becoming `Hr`
 
 ### Notes
-- 更新経路は分離済み。cchub は `m0a/cc-hub` から、hrdle は `hrdle/hrdle` から。
-  cc-hub はアーカイブ後も読み取りは変わらないので、`cchub update` は v0.2.98 まで
-  解決し続ける。**旧環境へのフォールバックは維持される**
-- 並走期は hook が両方に飛ぶ。担当外のサーバーが受けた通知はタップしても該当
-  セッションが無く何も起きないので、実害は「通知が二重に出る」だけ
+- The update paths are separate: cchub from `m0a/cc-hub`, hrdle from
+  `hrdle/hrdle`. Reads from cc-hub do not change after archiving, so
+  `cchub update` keeps resolving up to v0.2.98. **The fallback to the old
+  environment is preserved**
+- While both run, hooks fire into both. A notification received by the server
+  that does not own the session has no matching session to open, so the only real
+  cost is a duplicate notification
 
 ## [0.2.98] - 2026-07-29
 
 ### Fixed
-- **ポートと表示名を identity 経由にする** (#672): fork で改名を実際に走らせて見つかった、identity を通っていない値をまとめて戻した。`identity.json` は今も cchub / 5923 / 3456 を返すので挙動は不変
-  - **`cli.ts` が `--help` と違うポートを bind していた**。ヘルプは #658 で identity からポートを読むようになった一方、実際に bind する `DEFAULT_PORT` はベタ書きのままだった。今の名前では偶然一致しているが、改名すると**ヘルプが言う番号と bind する番号が食い違い、置き換える側の製品が使っているポートを奪いに行く**
-  - **`index.html` の FOUC スクリプトが移動済みの localStorage キーを読んでいた**。#653 で名前空間化した際、素の `<script>` は取り残されていた。**アプリがもう書かないキーを、first paint 前のテーマ判定が読み続けていた**（改名とは無関係な既存バグ）。`transformIndexHtml` プラグイン（`enforce: 'pre'`）でビルド時にプレースホルダを差し込み、アプリ本体と同じ prefix リスト（legacy 込み）を辿るようにした
-  - **`glasses.ts` が `notify.ts` の隣で本番/dev ポートを自前に持っていた**。改名すると `cchub glasses` のメモが別製品のサーバーへ飛ぶ
-  - **会話ビューの画像パス正規表現**が `/tmp/cchub-images` をベタ書きしていた。`tmpPrefix` が変わると**何にもマッチせず**、会話中のスクリーンショットが全部生パス表示に劣化する
-  - 起動バナーと、cwd の無い hook 通知のタイトルも identity 経由に
-  - dev ポート（vite の `server.port` / proxy target / playwright の `webServer.url` / e2e 5本）も同様に。frontend の dev ポートは `identity.json` に居場所が無かったが、`playwright.config.ts` の値が vite とズレると**テスト失敗ではなく、120秒待って「dev サーバーが起動しなかった」と報告する**形で落ちるため `frontendDevPort` を追加した
-  - **`shared/identity.ts` が Node から import できなかった**。Bun と Vite は attribute 無しの JSON import を通すが Node は要求する。`playwright.config.ts` が Bun/Vite 以外で初めての利用者になった瞬間、テストが1件も走らないまま `ERR_IMPORT_ATTRIBUTE_MISSING` で落ちていた
-- **dev サーバーが本番ポートを掴む状態になりかけていた** (#672): 上の変更で backend の dev スクリプトから `-p 3456` が外れ、ポートの決定が「argv に `--watch` があるか」という判定に委ねられた。**bun は `--watch` を子プロセスの argv に渡さないのでこの判定は常に false** で、dev サーバーが本番ポートに bind する（インストール済みサービスがあれば EADDRINUSE、無ければ dev が 5923 を占有して vite の proxy が空振りする）。`bun run stop` が開けるのは 3456/5173 なので、**dev が掴むポートを stop が解放しない**組み合わせにもなっていた。`scripts/dev-backend.sh` が `devPort` を読んで `-p` を渡す形にし、判定自体は**修復ではなく削除**した — 同じ既定値が `cchub send` / `cchub peek` のローカル宛先でもあり、そちらはインストール済みサービスを向くべきなので、判定が効くようにすると dev 起動した CLI からの送信が黙って dev サーバーへ向く
-- **グラスのスマホ UI がポート無し URL を旧ポートで補完していた** (#672): `phone-ui.ts` が `:5923` をベタ書きで足していた。ラベルではなく**端末が実際に繋ぎに行く先**なので、改名後は旧製品のサーバーへ接続する。`define` による注入にした（`import` ではないのは glasses/src が意図的に shared/ に依存しておらず、ehpk が端末に載るため）
+- **Ports and display names go through identity** (#672): actually running the
+  rename on a fork surfaced a batch of values that never went through identity.
+  `identity.json` still returns cchub / 5923 / 3456, so behavior is unchanged
+  - **`cli.ts` bound a different port than `--help` printed**. Help started
+    reading the port from identity in #658, while the `DEFAULT_PORT` that
+    actually binds stayed hardcoded. Under the current name they happen to match;
+    after a rename **the number help prints and the number it binds diverge, and
+    it goes after the port the product being replaced is using**
+  - **`index.html`'s FOUC script read a localStorage key that had moved**.
+    Namespacing in #653 left the bare `<script>` behind, so **the pre-first-paint
+    theme check kept reading a key the app no longer writes** (a pre-existing bug
+    unrelated to the rename). A `transformIndexHtml` plugin (`enforce: 'pre'`)
+    now injects the placeholder at build time and walks the same prefix list
+    (legacy included) the app itself does
+  - **`glasses.ts` kept its own production/dev ports next to `notify.ts`'s**.
+    After a rename a `cchub glasses` note flies to another product's server
+  - **The conversation view's image path regex** hardcoded `/tmp/cchub-images`. A
+    changed `tmpPrefix` makes it **match nothing**, degrading every screenshot in
+    a conversation to a raw path
+  - The startup banner and the title of a hook notification with no cwd now go
+    through identity as well
+  - So do the dev ports (vite's `server.port` / proxy target / playwright's
+    `webServer.url` / five e2e specs). The frontend dev port had no home in
+    `identity.json`, and a `playwright.config.ts` value that drifts from vite's
+    fails **not as a test failure but as a 120-second wait ending in "the dev
+    server did not start"** - hence `frontendDevPort`
+  - **`shared/identity.ts` could not be imported from Node**. Bun and Vite accept
+    a JSON import with no attribute; Node requires one. The moment
+    `playwright.config.ts` became the first consumer outside Bun/Vite, the tests
+    died on `ERR_IMPORT_ATTRIBUTE_MISSING` without running a single case
+- **The dev server was one step from grabbing the production port** (#672): the
+  change above removed `-p 3456` from the backend dev script, leaving the port
+  decision to "does argv contain `--watch`". **bun does not pass `--watch` into
+  the child's argv, so that check is always false** and the dev server binds the
+  production port (EADDRINUSE with a service installed; without one, dev occupies
+  5923 and vite's proxy hits nothing). It also produced a combination where
+  **stop does not free the port dev grabbed**, since `bun run stop` only clears
+  3456/5173. `scripts/dev-backend.sh` now reads `devPort` and passes `-p`, and
+  the check itself was **deleted rather than repaired** - the same default is the
+  local target of `cchub send` / `cchub peek`, which should aim at the installed
+  service, so making the check work would silently point a CLI started in dev at
+  the dev server
+- **The glasses phone UI completed a port-less URL with the old port** (#672):
+  `phone-ui.ts` appended `:5923` as a literal. That is not a label but **where
+  the device actually connects**, so after the rename it reaches the old
+  product's server. It is injected through `define` now (not `import`, because
+  glasses/src deliberately does not depend on shared/ and the ehpk ships to the
+  device)
 
 ## [0.2.97] - 2026-07-29
 
 ### Fixed
-- **改名が素通りする3つの穴を塞ぐ** (#668): fork 側で `identity.json` を実際に Hrdle へ書き換えて動かしたところ、改名とは無関係に cc-hub 側にあった「誰も照合していない名前のコピー」が3つ出た。cchub 名のまま切り出したもので、挙動は不変（`build.sh` は今も `dist/cchub` を出し、テストは今も temp dir へ逃がす）
-  - **`scripts/build.sh` が `dist/cchub` を自前で持っていた**。`identity.json` を読める位置にある唯一の consumer なのに読んでいなかった。`release.yml` は `dist/<binaryName>` を rename する一方、`identity-consistency.test.ts` は `release.yml` としか突き合わせないため、**ズレてもリリースビルドが落ちるまで誰も気づかない**。`identity.json` を読む形にし、キーが欠けている場合は非ゼロ終了する（欠けたキーは `undefined` を出力して exit 0 で返るため、`set -e` が素通りして `dist/undefined` ができ、CI の rename ステップで初めて落ちていた）
-  - **4つのテストが `CC_HUB_DATA_DIR` をベタ書きしていた**（`sessions.test.ts` / `jwt-secret.test.ts` / `peer-registry-lock.test.ts` / `session-metadata-lock.test.ts`）。env 名を変えるとその行は失敗せず「何も設定しない行」になり、**テストは実データディレクトリに fixture を書いたまま pass する**。実際に fork 側で `~/.hrdle` が偽セッション20件で埋まった。失敗ではなく汚染として出るので、テストが赤くなければ気づけない
-  - **`identity-operational.test.ts` のスキャン自身がリテラルだった**。改名後も pass し続けるが、存在しない名前を探しているだけになる。パターンを `IDENTITY` から合成するようにした
-- **そのスキャンがテストディレクトリを丸ごと除外していた** (#668): v0.2.94 (#657) で入れたスキャンの除外が `/tests/|__tests__/` だったため、**上記の4ファイルは原理的に検出できなかった**。除外をリテラルを持つことに意味がある4ファイル（`shared/identity.ts` と golden を持つ3テスト）だけに絞り、`backend/tests` を走査対象に追加。現行ツリーで新規検出0件、かつ植え込んだ違反がファイル名と行番号付きで報告されることを両方向で確認済み
+- **Close three gaps a rename walks straight into** (#668): rewriting
+  `identity.json` to Hrdle on a fork and running it surfaced three copies of a
+  name that nothing checks, all of them pre-existing on the cc-hub side. They
+  were extracted under the cchub name, so behavior is unchanged (`build.sh` still
+  emits `dist/cchub`, and the tests still escape to a temp dir)
+  - **`scripts/build.sh` carried its own `dist/cchub`**. It is the one consumer
+    positioned to read `identity.json` and did not. `release.yml` renames
+    `dist/<binaryName>` while `identity-consistency.test.ts` only cross-checks
+    `release.yml`, so **a drift goes unnoticed until a release build fails**. It
+    reads `identity.json` now and exits non-zero on a missing key (a missing key
+    prints `undefined` and exits 0, which slips past `set -e`, produces
+    `dist/undefined`, and only fails at CI's rename step)
+  - **Four tests hardcoded `CC_HUB_DATA_DIR`** (`sessions.test.ts` /
+    `jwt-secret.test.ts` / `peer-registry-lock.test.ts` /
+    `session-metadata-lock.test.ts`). Renaming the env var does not make those
+    lines fail; it makes them lines that set nothing, and **the tests pass while
+    writing fixtures into the real data directory**. On the fork `~/.hrdle` duly
+    filled with 20 fake sessions. It shows up as contamination rather than
+    failure, so a green suite hides it
+  - **The scan in `identity-operational.test.ts` was itself a literal**. It keeps
+    passing after a rename while only looking for a name that no longer exists.
+    The patterns are composed from `IDENTITY` now
+- **That scan excluded the test directories wholesale** (#668): the exclusion
+  added with the scan in v0.2.94 (#657) was `/tests/|__tests__/`, so **the four
+  files above could not be detected in principle**. The exclusion is now limited
+  to the four files where holding a literal is the point (`shared/identity.ts`
+  and the three tests with goldens), and `backend/tests` was added to the scan.
+  Verified both ways: zero new detections on the current tree, and a planted
+  violation reported with file name and line number
 
 ### Changed
-- **グラス: ホストが描画について返す結果を読む** (#667): SDK が公開する描画呼び出しはすべて結果を返すのに、そのすべてが捨てられていた（`createStartUpPageContainer` は success/invalid/oversize/outOfMemory を、upgrade / rebuild / shutdown は boolean を返す）。ログの欠落だけでは済まず、**書き込みが不要なときにコンテナ書き込みを飛ばす記録 `drawn` が、拒否された内容を画面に出たものとしてキャッシュ**していたため、コメントが約束する再送が起きずコンテナが古いまま固定された。ホストが拒否した rebuild はさらに悪く、モードが送信済みとして記録されるため以降のフレームがすべて geometry を最新と見なして rebuild を飛ばしていた
+- **Glasses: read what the host returns about drawing** (#667): every drawing
+  call the SDK exposes returns a result, and every one of them was thrown away
+  (`createStartUpPageContainer` returns success/invalid/oversize/outOfMemory;
+  upgrade / rebuild / shutdown return booleans). It cost more than a log line:
+  **`drawn`, the record that skips a container write when no write is needed, was
+  caching rejected content as though it had reached the screen**, so the resend
+  the comment promises never happened and the container stayed stale. A rebuild
+  the host rejected was worse still - the mode was recorded as sent, so every
+  later frame considered the geometry current and skipped the rebuild
 
 ## [0.2.96] - 2026-07-29
 
 ### Fixed
-- **「クラッシュ」の正体は退出だった。ルート画面のダブルタップをホストに返す** (#665, グラス v0.1.60): 2日間 `host exit: system` をクラッシュとして追っていたが、[Even Realities の公式リファレンス](https://github.com/even-realities/everything-evenhub/blob/main/plugins/everything-evenhub/skills/handle-input/SKILL.md)に定義があった
-  - `SYSTEM_EXIT_EVENT` (7) = **System-level exit (e.g. user confirmed exit dialog)**。異常終了は `ABNORMAL_EXIT_EVENT` (6) の側で、**このアプリは一度も受け取っていない**。18件すべて `system` だった
-  - **なぜ意図せず終了するのか**: 審査要件に「Please ensure double tapping at the root page **on OS** can invoke exit dialogue」とあり、**ルート画面のダブルタップ＝終了は OS 側の約束事**。うちはそれを待機オーバーレイに使っていた。通知を見ようとした操作が終了ダイアログを呼び、確定すると落ちたようにしか見えない。死亡直前に心拍が30秒→最大60秒に伸びる現象（18件中12件）も、ダイアログ表示中に WebView が後ろへ回ったと読めば繋がる
-  - ルート画面で `shutDownPageContainer(1)` を呼ぶ。モード `1`（キャンセル可能）で、**後片付けはしない** — まだ終了は決まっておらず、先に unsubscribe すると「キャンセルされたのに反応しないアプリ」が残る
-  - **オーバーレイは失われない**。待機アイテムは到着時と再接続時に自分で開く。失われるのは「一度閉じたものを開き直す」操作だけで、件数はフッタに残る
-  - 公開申請すれば確実にリジェクトされる状態でもあった
-- **グラスが他のアプリを表示している間は描画しない** (#665, グラス v0.1.60): ログで `foreground: exited` の後も `writes` が増え続けていた。ホストは背面からの描画を**画面に届く前に捨てる**ため、誰も見ていないパネルへの BLE 送信だった。描画・スピナー・自動送りを停止し、復帰時に全画面を1回描く。要約も読みかけの位置のまま止まる
+- **The "crash" was an exit. Return the root screen's double tap to the host**
+  (#665, glasses v0.1.60): two days were spent chasing `host exit: system` as a
+  crash, and [Even Realities' official reference](https://github.com/even-realities/everything-evenhub/blob/main/plugins/everything-evenhub/skills/handle-input/SKILL.md)
+  had it defined all along
+  - `SYSTEM_EXIT_EVENT` (7) = **System-level exit (e.g. user confirmed exit
+    dialog)**. Abnormal termination is `ABNORMAL_EXIT_EVENT` (6), and **this app
+    has never received one**. All 18 were `system`
+  - **Why it exited unintentionally**: the review requirements say "Please ensure
+    double tapping at the root page **on OS** can invoke exit dialogue", so
+    **double tap on the root screen means exit as far as the OS is concerned**.
+    This app was using it for the waiting overlay. The gesture meant to look at a
+    notification summoned the exit dialog, and confirming it looked exactly like
+    a crash. The heartbeat stretching from 30s to as much as 60s just before
+    death (12 of 18) fits too, if you read it as the WebView going to the
+    background while the dialog was up
+  - The root screen calls `shutDownPageContainer(1)`. Mode `1` (cancelable), and
+    **it does not clean up** - nothing is decided yet, and unsubscribing early
+    would leave an app that does not respond after the dialog was cancelled
+  - **No overlay is lost**. Waiting items open themselves on arrival and on
+    reconnect. What is lost is only reopening one that was closed, and the count
+    remains in the footer
+  - It was also a guaranteed rejection had it been submitted for review
+- **The glasses do not draw while another app is on screen** (#665, glasses
+  v0.1.60): the log showed `writes` still climbing after `foreground: exited`.
+  The host **discards drawing from the background before it reaches the screen**,
+  so this was BLE traffic to a panel nobody was looking at. Drawing, the spinner
+  and auto-advance now stop, and one full screen is drawn on return. A recap also
+  holds its reading position
 
 ### Changed
-- **`host exit` 行に直前のジェスチャを載せる** (#665): `host exit: system fg=0 gesture=doubleTap@0.4s`。上の説明が議論ではなく検証可能になる — 直前にダブルタップがあれば退出、無ければ別の原因
+- **The `host exit` line carries the gesture that preceded it** (#665):
+  `host exit: system fg=0 gesture=doubleTap@0.4s`. That turns the explanation
+  above from an argument into something checkable - a double tap just before
+  means an exit, its absence means something else
 
 ## [0.2.95] - 2026-07-29
 
 ### Changed
-- **要約を2行にして、文字送りでスクロールする** (#660, グラス v0.1.59): 実機で「行単位のスクロールは別の画面に切り替わったように見える。1文字ずつ削って滑らせてほしい」との指摘。行送りは27pxの跳躍で、読み手は読みかけの文のどこに居たかを毎回探し直していた
-  - 毎ステップ**10文字を先頭から削り、残りを折り返し直す**。ブロック全体が左に滑る
-  - **10文字 / 2.5秒 = 4文字/秒**。承認済みの「5秒/行」と同じ読み速度を1/3行ずつで刻む。2つの定数は読み速度を一緒に決めており、**比だけが描画頻度を決める**ので、片方だけ動かすと速度が変わる
-  - 要約は3行→2行。空いた27pxは会話に戻る。末尾まで出したら15秒静止 → 先頭へ戻る → 2周で打ち切り、は従来どおり
-  - **短い行が並ぶ要約で内容が飛ぶバグを同時に修正**。1ステップが「2行に見えている量」を追い越すと、画面に出ないまま上へ流れる行ができる。散文では到達しないが、スクロール自体が「全部見えない」を直すための機能なので、可視量でステップ幅を頭打ちにした
-  - シミュレータの「画面をコピー」が要約を落としていたのも修正（`lastScreen` の型に `notice` が無かった）。以前ミラーで直したのと同じ経路違い
-- **前回と同じ内容はパネルに送らない** (#661, グラス v0.1.59): 実機ログで、セッション一覧に居るだけで**0.2回/秒の全画面描画が無限に続いていた**。5秒ごとの `sessions-updated` プッシュが、中身が変わったかを見ずに毎回描き直していたため。アイドル時に実際に変わるのはフッタの時計（1分に1回）だけ
-  - コンテナ単位で記録し、変化しない更新は送らない。記録は**デバイスが書き込みを受け取ってから**（失敗した更新を「送った」と見なすと再送されない）
-  - **復帰時は記録を破棄**。サスペンドを跨ぐとホストがページを落としている可能性があり、古い記録は「画面を戻すための書き込み」をちょうど飛ばす。空白画面はリビルド1回よりはるかに悪い
-  - **クラッシュ修正ではない**。v0.1.58 は985描画で死んだ回と217描画で死んだ回があり、レートでも累積でも死を説明できない。全件 `host exit: system`・JS例外なし・ヒープ平坦のまま
-  - 「クラッシュは背面移行の後にしか起きない」という当初の読みは**ログの突き合わせ方の副作用**だった。起動単位で取り直すと7件は背面移行の記録なしに落ちている
-  - 代わりにハートビートへ **`fg=1/0`**（ホスト自身の前面/背面イベント由来、`host exit` 行にも付く）と **`writes=`**（実際に送ったコンテナ書き込み数）を追加。次に落ちたときどちら側だったかが推測でなく分かり、`renders=` との差が本変更の効果を実機で測る唯一の指標になる
+- **The recap is two lines now, and scrolls by character** (#660, glasses
+  v0.1.59): from the device - "scrolling a line at a time looks like the screen
+  switched to something else; shave it a character at a time and let it slide".
+  A line step is a 27px jump, and the reader had to hunt for where in the
+  sentence they were, every time
+  - Each step **drops 10 characters from the front and re-wraps the rest**. The
+    whole block slides left
+  - **10 characters / 2.5 seconds = 4 characters per second**. The same reading
+    speed as the approved "5 seconds per line", cut into thirds of a line. The
+    two constants set the reading speed together, and **only their ratio sets the
+    drawing frequency**, so moving one alone changes the speed
+  - The recap went from three lines to two. The 27px it gives back goes to the
+    conversation. Reaching the end still means 15 seconds of stillness, a jump
+    back to the top, and a stop after two passes
+  - **This also fixes content skipping in a recap made of short lines**. When one
+    step overruns "the amount visible as two lines", a line scrolls past without
+    ever appearing. Prose never reaches that, but scrolling exists precisely to
+    fix "you cannot see all of it", so the step width is capped by what is
+    visible
+  - Fixed the simulator's "Copy screen" dropping the recap too (`lastScreen`'s
+    type had no `notice`). Same shape as the mirror fix earlier, on a different
+    path
+- **Do not send the panel content identical to last time** (#661, glasses
+  v0.1.59): the device log showed **a full-screen redraw 0.2 times a second,
+  forever**, just sitting in the session list. The 5-second `sessions-updated`
+  push redrew every time without checking whether anything had changed. Idle, the
+  only thing that actually changes is the footer clock, once a minute
+  - The record is per container, and an update that changes nothing is not sent.
+    The record is written **after the device accepts the write** (treating a
+    failed update as sent means it is never resent)
+  - **The record is dropped on resume**. Across a suspend the host may have torn
+    the page down, and a stale record skips exactly the write that would restore
+    the screen. A blank screen is far worse than one rebuild
+  - **This is not a crash fix**. v0.1.58 died once after 985 draws and once after
+    217, so neither rate nor total explains the deaths. Every one was
+    `host exit: system`, with no JS exception and a flat heap
+  - The original reading - "crashes only happen after going to the background" -
+    was **an artifact of how the logs were aligned**. Re-cut per startup, 7 of
+    them died with no background transition recorded
+  - Instead the heartbeat gained **`fg=1/0`** (from the host's own
+    foreground/background events, also stamped on the `host exit` line) and
+    **`writes=`** (container writes actually sent). The next death will say which
+    side it was on instead of inviting a guess, and the gap against `renders=` is
+    the only way to measure this change on the device
 
 ## [0.2.94] - 2026-07-29
 
 ### Changed
-- **黙って壊れる名前をあと3件 identity に寄せ、走査で守る** (#657): 表示文字列の一括置換に着手するため残りのリテラルを仕分けていたところ、3件が表示ではなく運用系だった。いずれも #635 / #637 と同じ形で、**改名すると壊れるのに何も壊れたように見えない**
-  - `debug.ts` の `cchub.service.d` — systemd は `<unit>.d/` しか読まない。存在しない unit 用の drop-in を書いてもエラーにならず、`cchub debug enable` が黙って inspector を有効にしない
-  - `notify-command.ts` の `basename(execPath).startsWith('cchub')` — ユーザーの Claude/Codex hook 設定に何を書き込むかを決める箇所。通知がどのログにも何も残さず止まる
-  - `codex-hook-config.ts` の hook 検出正規表現 — 既存エントリの認識に使う。マッチしなくなると同じ hook をもう1つ書き足す
-  - **見逃した原因のほうを修正**: 2回の点検はどちらも目視だった。追跡下のソースを歩いて、unit 名・launchd ラベル・`/tmp` パス・データディレクトリが `identity.ts` の外でリテラルになっていないかを検査するテストを追加（`backend/tests/unit/identity-operational.test.ts`）。無関係なファイルに違反を植えて、ファイル名と行番号付きで検出されることを確認済み。意図的に狭く、「何かと一致していないと動かない名前」だけを対象とし、コメントやログ行は見ない
-- **メッセージカタログが identity 経由で製品名を名乗るようにする** (#658): 「この製品が何と呼ばれているか」を言うユーザー向けテキストが、`identity.json` の外に残っていた最後の大きな塊だった（backend カタログ28箇所、frontend カタログ6箇所、CLI ヘルプ16箇所）
-  - **呼び出し側は1箇所も変えていない**。どちらのカタログにも既に `{{param}}` 補間があったので、注入する側だけを変えた。backend は `t()` が identity セット（`product` / `bin` / `port` / `service` / `configDir` / `keychain`）を呼び出し側の引数の下にマージし、frontend は i18next の `defaultVariables` に `product` / `bin` を渡す。呼び出し側が同じキーを明示的に渡せば勝つ
-  - **改名時の注意**: CLI ヘルプの桁揃えはリテラルの空白で行っているため、長さの違う名前にすると手で調整が要る（`cchub` と `hrdle` がどちらも5文字なのは偶然）。パラメータ定義箇所にコメントとして記載
-  - この仕組みは文字列が使われる場所からは見えず、`defaultVariables` が失われると `{{product}}` がそのままユーザーに出る。しかもその中には hook setup prompt（エージェントに渡され、エージェントがそれを見てユーザーの設定ファイルを編集するもの）が含まれるため、テストを2つ追加。アプリ自身の i18n モジュールを import して実際の init を検証し、両カタログを走査して `{{product}}` / `{{bin}}` の生き残りを探す。`defaultVariables` を削除すると3文字列がキー名付きで検出されることを確認済み
-  - ヘルプ出力は en / ja とも従来とバイト単位で同一
+- **Three more silently-breaking names moved into identity, and a scan to keep
+  them there** (#657): sorting the remaining literals ahead of a sweep over
+  display strings turned up three that were operational rather than display. All
+  have the shape of #635 / #637: **a rename breaks them and nothing looks broken**
+  - `cchub.service.d` in `debug.ts` - systemd only reads `<unit>.d/`. Writing a
+    drop-in for a unit that does not exist is not an error, and
+    `cchub debug enable` silently fails to enable the inspector
+  - `basename(execPath).startsWith('cchub')` in `notify-command.ts` - this
+    decides what gets written into the user's Claude/Codex hook configuration.
+    Notifications stop with nothing in any log
+  - The hook detection regex in `codex-hook-config.ts` - used to recognize an
+    existing entry. Once it stops matching, a second copy of the same hook is
+    appended
+  - **The real fix was for what let them through**: both prior audits were done
+    by eye. Added a test that walks the tracked sources and checks that unit
+    names, launchd labels, `/tmp` paths and the data directory are not literals
+    outside `identity.ts` (`backend/tests/unit/identity-operational.test.ts`).
+    Verified by planting a violation in an unrelated file and seeing it reported
+    with file and line. Deliberately narrow: only names that have to match
+    something to work, and never comments or log lines
+- **The message catalogs name the product through identity** (#658): text that
+  tells the user what this product is called was the last large block outside
+  `identity.json` (28 places in the backend catalog, 6 in the frontend one, 16 in
+  the CLI help)
+  - **Not one call site changed**. Both catalogs already interpolated
+    `{{param}}`, so only the injecting side moved. In the backend, `t()` merges
+    the identity set (`product` / `bin` / `port` / `service` / `configDir` /
+    `keychain`) underneath the caller's arguments; in the frontend, `product` /
+    `bin` go to i18next's `defaultVariables`. A caller passing the same key
+    explicitly wins
+  - **Note for a rename**: the CLI help aligns its columns with literal spaces,
+    so a name of a different length needs them adjusted by hand (`cchub` and
+    `hrdle` both being five characters is luck). Recorded as a comment where the
+    parameters are defined
+  - The mechanism is invisible from where the strings are used, and losing
+    `defaultVariables` puts a literal `{{product}}` in front of the user -
+    including in the hook setup prompt, which is handed to an agent that then
+    edits the user's configuration file. So two tests were added: one imports the
+    app's own i18n module and checks the real init, the other scans both catalogs
+    for surviving `{{product}}` / `{{bin}}`. Verified that deleting
+    `defaultVariables` reports three strings by key
+  - Help output is byte-identical to before in both en and ja
 
 ## [0.2.93] - 2026-07-28
 
 ### Added
-- **herdr の named session で動かせるようにする** (#655): #459 は cchub と hrdle を1台のマシンでしばらく並走させる。両者が同じ herdr サーバーを共有すると互いのワークスペースが一覧に出て同じペインを奪い合う（#520 を音量を上げてやるようなもの）。herdr には既に named session があり、サーバー・ソケット・ワークスペース・永続化がまるごと分かれるので、`HERDR_SESSION` でそれを選べるようにした。**未設定なら挙動は従来と完全に同じ**
-  - **`HERDR_SESSION` は `HERDR_SOCKET_PATH` に優先する**。herdr は自分が起動するすべてのペインに `HERDR_SOCKET_PATH` を注入する（`HERDR_ENV` / `HERDR_PANE_ID` / `HERDR_WORKSPACE_ID` と並んで）ため、この変数は意図的な指定ではなく環境由来。素直な優先順位（明示的なソケットが勝つ）にすると、「別インスタンスのターミナルから起動して試す」という一番自然な検証手順で、セッション指定が無視されて同じサーバーに繋がる — しかも動いているように見える
-  - **サーバーは `--session` で起動する**。`HERDR_SOCKET_PATH=… herdr server` はそのソケットに bind はするが `logs: ~/.config/herdr/herdr-server.log` を報告する。つまりソケットは動くがセッションディレクトリは動かず、そこにある `session.json`（ワークスペース復元情報）を2つのサーバーが同時に書いて互いの状態を失う。子プロセスに継承された `HERDR_SOCKET_PATH` は明示的に落として元に戻らないようにした
-  - **子プロセスにソケットを明示する**（`herdrChildEnv()`）。`PaneController` の `herdr terminal session control` と herdr-update の `herdr status` はどちらも env 継承だけだった。systemd 配下には継承元の値が存在しないため、`HERDR_SESSION` で指定したサーバーを見ているのに default セッションのペインを操作することになっていた
-  - 検証: `HERDR_SESSION` 設定・サーバー無しの状態から起動してサーバーが立ち、`herdr session list` に独自ソケットと独自 `herdr-server.log` を持つセッションが出現。同じホストの同時刻で named 側 live=0 / 本番 live=10 と、2つのインスタンスが別のことを言うところまで確認した
+- **Can run on a herdr named session** (#655): #459 has cchub and hrdle running
+  side by side on one machine for a while. Sharing one herdr server means each
+  one's workspaces appear in the other's list and they fight over the same panes
+  (#520 with the volume turned up). herdr already has named sessions, which
+  separate the server, the socket, the workspaces and the persistence wholesale,
+  so `HERDR_SESSION` selects one. **Unset, behavior is exactly as before**
+  - **`HERDR_SESSION` takes priority over `HERDR_SOCKET_PATH`**. herdr injects
+    `HERDR_SOCKET_PATH` into every pane it starts (alongside `HERDR_ENV` /
+    `HERDR_PANE_ID` / `HERDR_WORKSPACE_ID`), so that variable comes from the
+    environment rather than from intent. The obvious priority (an explicit socket
+    wins) would make the most natural way to test this - start it from a terminal
+    inside another instance - ignore the session and connect to the same server,
+    while looking like it worked
+  - **The server is started with `--session`**. `HERDR_SOCKET_PATH=... herdr server`
+    binds that socket but reports `logs: ~/.config/herdr/herdr-server.log`: the
+    socket moves and the session directory does not, so two servers write the
+    same `session.json` (the workspace restore data) and lose each other's state.
+    An inherited `HERDR_SOCKET_PATH` is explicitly dropped from children so it
+    cannot come back
+  - **The socket is stated explicitly to child processes** (`herdrChildEnv()`).
+    `PaneController`'s `herdr terminal session control` and herdr-update's
+    `herdr status` both relied on inheritance alone. Under systemd there is no
+    inherited value, so a `HERDR_SESSION` server was being watched while the
+    default session's panes were being driven
+  - Verified: from `HERDR_SESSION` set and no server running, startup brought a
+    server up and `herdr session list` showed a session with its own socket and
+    its own `herdr-server.log`. Confirmed down to the two instances disagreeing
+    at the same moment on the same host - live=0 on the named side, live=10 on
+    production
 
 ## [0.2.92] - 2026-07-28
 
 ### Changed
-- **localStorage キーを名前空間化し、旧キーを引き継ぐ** (#653): identity 集約の3本目（#635, #637 の続き）。**改名（#459）でユーザーが実際に失うものがあるのはここだけ**で、40個のキーにテーマ・UIスケール・言語・キーボード位置・入力履歴・認証トークンが入っている。localStorage のキー名は変えても失敗せず、忘れるだけ（テーマが初期化され、全員がサインアウトする）
-  - 呼び出し側がキーではなく設定名を書くようにし（`storageKey("theme")`）、`migrateLegacyStorage()` が旧プレフィックスの値を現行プレフィックスへ引き継ぐ（`frontend/src/utils/app-storage.ts`、24ファイル）
-  - **移動ではなくコピー**。改名中は新旧のビルドを並走させる前提で、旧ビルドが読んでいるキーを消すと、新ビルドが起動した瞬間に旧ビルドがサインアウトして設定が飛ぶ — この機構が防ごうとしている失敗そのものを、相手のビルドに向けて起こすことになる
-  - 移行は `main.tsx` からではなく `app-storage.ts` のモジュール読み込み時に走る。ES の import は importing module の本体より先に評価されるため、`import "./i18n"`（i18next が init 時に保存済み言語を読む）は main.tsx のどの文よりも前に終わっている。この順序を反転させ、名前空間化されたキーは旧キーを引き継ぐモジュールを読み込まずには読めないようにした
-  - **`cc-hub-token` の正規化**: このキーだけハイフン綴りで、他39個は `cchub-` だった。今回 `cchub-token` に正規化されるため、改名がこの移行コードの本番初回実行にはならない。既存のログイン状態は移行によって維持される
-  - CustomEvent 名（`cchub-image-zoom` / `cchub-conversation` / `cchub-input-echo`）は localStorage とは別の名前空間で、リスナーは変換対象外のファイルにあるため対象外とした。dispatch 側だけプレフィックス経由にすると、プレフィックスを変えた瞬間に対が黙って外れる
-  - 検証はブラウザで実施。`cc-hub-token` と別の legacy キーを仕込んでリロードし、両方が `cchub-` 側に値そのままで出現・元キーは残存・既存の `cchub-theme` は非上書き・無関係キーは不変、を確認
+- **Namespace the localStorage keys and carry the old ones over** (#653): the
+  third pass of the identity work (after #635, #637). **This is the only place a
+  rename (#459) actually costs the user something**, and 40 keys hold the theme,
+  UI scale, language, keyboard position, input history and auth token. Renaming a
+  localStorage key does not fail; it forgets (the theme resets and everyone is
+  signed out)
+  - Call sites write a setting name rather than a key (`storageKey("theme")`),
+    and `migrateLegacyStorage()` carries values from the old prefix to the
+    current one (`frontend/src/utils/app-storage.ts`, 24 files)
+  - **A copy, not a move**. The rename assumes old and new builds run alongside
+    each other, and deleting the key the old build reads signs it out the moment
+    the new one starts - inflicting the exact failure this machinery exists to
+    prevent, on the other build
+  - The migration runs when `app-storage.ts` is loaded rather than from
+    `main.tsx`. ES imports are evaluated before the importing module's own body,
+    so `import "./i18n"` (i18next reads the stored language at init) finishes
+    before any statement in main.tsx. Inverting that order makes a namespaced key
+    unreadable without loading the module that carries the old one over
+  - **Normalizing `cc-hub-token`**: that one key was spelled with hyphens while
+    the other 39 used `cchub-`. It becomes `cchub-token` here, so the rename is
+    not this migration code's first run in production. Existing logins survive it
+  - The CustomEvent names (`cchub-image-zoom` / `cchub-conversation` /
+    `cchub-input-echo`) are a different namespace from localStorage and their
+    listeners live in files outside this conversion, so they were left alone.
+    Prefixing only the dispatch side silently breaks the pair the moment the
+    prefix changes
+  - Verified in the browser: planted `cc-hub-token` and another legacy key,
+    reloaded, and confirmed both appear on the `cchub-` side with their values
+    intact, the originals remain, an existing `cchub-theme` is not overwritten,
+    and unrelated keys are untouched
 
 ## [0.2.91] - 2026-07-28
 
 ### Fixed
-- **グラス: 自動送りを2周で打ち切る（描画しすぎでホストに落とされていた疑い）** (#651): 自動送りが実機に載ったあと、ホストがアプリを落とす頻度が跳ね上がった（ehpk v0.1.58）
+- **Glasses: stop auto-advance after two passes (suspected of drawing enough to
+  get killed by the host)** (#651): after auto-advance reached the device, the
+  rate at which the host killed the app jumped (ehpk v0.1.58)
   ```
-                    host exit   継続時間の中央値   最長
-  自動送り 前(6h)    0.8 回/時      26.3分        114分
-  自動送り 後(0.8h)  6.7 回/時      12.3分         15.6分
+                      host exit   median lifetime   longest
+  before auto-advance  0.8 /h         26.3 min      114 min
+  after auto-advance   6.7 /h         12.3 min       15.6 min
   ```
-  - **JS 例外はゼロ、ヒープも不動**。落ちているのではなく `host exit: system` — スマホ側が終了させている。直前に変わったのは**このアプリがどれだけ描いているか**だけ
-  - ループさせたのは正しかったが**永久にループさせたのが間違い**だった。会話を開いている限り、装着していようがいまいが、5秒ごとに4コンテナ全部を BLE 越しに再描画し続けていた
-  - **2周して静止する**。1周では見逃しやすく、3周目はもうそこに居ない人のために描いている。5分間の描画は60回→8回、送るものが無い画面では60回→0回
-  - リング操作で周回数はリセットされる（読者が来たということなので）。静止先は要約の**先頭**（最後の3行ではなく）。ページ送りは静止前に全部終わる
-  - **因果は未確定**: 悪く見えた窓は48分しかなく、その間に ehpk を3回入れ替えている。5回の exit のうち3回は更新由来で、自発的なものは2回。2サンプルで語れる差ではない。ただし機構はこちらの持ち物で、直すコストは小さい
+  - **Zero JS exceptions, flat heap**. It is not crashing - it is
+    `host exit: system`, the phone ending it. The only thing that changed just
+    before is **how much this app draws**
+  - Looping was right; **looping forever was wrong**. As long as a conversation
+    was open, worn or not, all four containers were redrawn over BLE every five
+    seconds
+  - **Two passes, then it stops**. One pass is easy to miss, and a third is drawn
+    for someone who is no longer there. Five minutes of drawing goes from 60 to 8,
+    and to 0 on a screen with nothing to send
+  - A ring gesture resets the pass count (a reader has arrived). It settles at the
+    **top** of the recap, not its last three lines. Paging finishes before it
+    settles
+  - **Causation is unproven**: the bad-looking window is only 48 minutes long and
+    the ehpk was swapped three times inside it. Three of the five exits were
+    update-driven and two were spontaneous - not a difference two samples can
+    carry. But the mechanism is ours and it is cheap to fix
 
 ## [0.2.90] - 2026-07-28
 
 ### Fixed
-- **グラス: 要約のスクロールが巻き戻る / 末尾で一瞬しか映らない** (#649): 実機報告「スクロールし終わった直後に最初へ戻る」に**2つの原因**があった（ehpk v0.1.57）
-  - **巻き戻しは #644 で入れたバグ**。`conversationPage = 0` の**全箇所に機械的に** `noticeWindow = 0` を差し込んだが、うち2箇所は `loadConversation` の中で、これは**すでに開いている会話のリフレッシュのたびに走る**。エージェントが何か喋るたびに要約が1行目へ巻き戻っていた。呼び出し元を読まずに一括挿入したのが原因。リフレッシュ側の2箇所を削除し、別の会話を開く側のリセットは残した
-  - **末尾に着いた直後に戻っていた**ので、最後の1行だけが他のどの行より短い時間しか映らなかった。最後の1行こそ待った甲斐のある行なのに。ページ送り1回分（15秒）留まってから戻る
+- **Glasses: the recap scroll rewinds / the last line flashes past** (#649): the
+  report from the device - "it jumps back to the start right after it finishes
+  scrolling" - had **two causes** (ehpk v0.1.57)
+  - **The rewind was a bug introduced in #644**. `noticeWindow = 0` was inserted
+    **mechanically at every** `conversationPage = 0`, and two of those are inside
+    `loadConversation`, **which runs on every refresh of a conversation that is
+    already open**. Every time the agent said anything, the recap rewound to line
+    one. The cause was bulk insertion without reading the callers. The two
+    refresh-side inserts are gone; the reset when a different conversation opens
+    stays
+  - **It turned around the instant it reached the end**, so the last line was on
+    screen for less time than any other - and the last line is the one worth
+    waiting for. It now holds for one page interval (15 seconds) before going
+    back
     ```
-     0s  スクロール開始    5s  スクロール   10s  スクロール
-    15s  末尾に到達       30s  先頭へ戻る   35s  スクロール …
+     0s  scroll starts    5s  scrolling   10s  scrolling
+    15s  reaches the end  30s  back to the top  35s  scrolling ...
     ```
-  - **止まるのではなく戻る**のは、1分後に見上げた人が要約を頭から読めるべきだから。ページ送りは要約のループより先に順番が回るので、ループする要約が本文を画面外に締め出すことはない
+  - **It returns rather than stopping** because someone who looks up a minute
+    later should be able to read the recap from the beginning. Paging takes its
+    turn before the recap's loop, so a looping recap never pushes the body off
+    screen
 
 ## [0.2.89] - 2026-07-28
 
 ### Changed
-- **グラス: 要約を1行ずつゆっくりスクロールする** (#647): v0.2.88 の自動送りに対する実機フィードバック2件をまとめた（ehpk v0.1.56）
-  - **3行の帯が5秒で送られるのは急かされる**。実機から出た数字は **1行あたり5秒**（5秒で3行＝速い、15秒で3行＝ちょうどいい）
-  - **「ページ」ではなく「スクロール」**。3行ずつ切り替えると帯が丸ごと入れ替わり、**文の途中で読んでいた場所を見失う**。1行ずつ流し、3行のうち2行を持ち越す
+- **Glasses: the recap scrolls slowly, one line at a time** (#647): two pieces of
+  device feedback on v0.2.88's auto-advance, together (ehpk v0.1.56)
+  - **A three-line band advancing every five seconds rushes the reader**. The
+    number that came back from the device is **five seconds per line** (three
+    lines in 5s is fast, three lines in 15s is right)
+  - **Scroll, not page**. Switching three lines at a time replaces the whole band
+    and **loses the place mid-sentence**. It flows one line at a time, keeping
+    two of the three
     ```
-     0秒: 要約: LiPo と充電器の選定が残っています。優先度Bの中でこ
-         こが一番誤りやすい箇所です。
-         降圧・線材・工具は機械的に決まるので、充電器さえ決まれ
-     5秒: こが一番誤りやすい箇所です。          ← 2行が残る
-         降圧・線材・工具は機械的に決まるので、充電器さえ決まれ
-         ば残りは自動です。                    ← 新しいのは1行
+     0s: Summary: the LiPo and the charger are still to be chosen. Of the
+         priority-B items this is the easiest to get wrong.
+         The buck converter, wiring and tools follow mechanically, so once
+     5s: priority-B items this is the easiest to get wrong.   <- two lines stay
+         The buck converter, wiring and tools follow mechanically, so once
+         the charger is settled the rest is automatic.        <- one is new
     ```
-  - **値付けは「1歩で増える行数」に比例**。要約のスクロールは1行＝5秒、ページ送りは本文まるごと＝15秒。ページ送りを7行分（35秒）にしなかったのは、ページは頭から読み直すものではなく「どこまで読んだか」を拾うものだから
-  - クロックは1本のまま（短いほうで刻み、ページ送りは tick を数える）。2本目のタイマーを足すと2つのリズムが干渉する
+  - **The pricing is proportional to lines gained per step**. A recap scroll is
+    one line = 5 seconds; a page turn is the whole body = 15 seconds. It is not
+    seven lines' worth (35 seconds) because a page is not re-read from the top -
+    you pick up where you were
+  - There is still one clock (it ticks at the shorter interval and paging counts
+    ticks). A second timer would make two rhythms interfere
 
 ## [0.2.88] - 2026-07-28
 
 ### Added
-- **グラス: 待てば切れていた部分が見えるようになった** (#644): 7行しかない画面に要約と会話を同時に置けないので、要約は `…` で終わっていた。**「まだ続きがある」とだけ伝えて、たどり着く手段がない**状態。長い待機バナーも、メッセージの2ページ目以降も同じ（ehpk v0.1.55）
-  - **はみ出しをクロックが歩く**。通知帯を1窓ずつ、続いてメッセージのページを、5秒に1歩ずつ
+- **Glasses: what was cut off becomes visible if you wait** (#644): a 7-line
+  screen cannot hold the recap and the conversation at once, so the recap ended
+  in `...` - **saying there is more with no way to reach it**. Long waiting
+  banners and any message past its first page had the same problem (ehpk v0.1.55)
+  - **The clock walks the overflow**: the notice band one window at a time, then
+    the message's pages, one step every five seconds
     ```
-    ── 0秒後 ──                      ── 5秒後 ──
-    要約: LiPo と充電器の選定が残って…       ば残りは自動です。
-    こが一番誤りやすい箇所です。            明日の買い物で現物を見て決める方針…
-    降圧・線材・工具は機械的に決まるの…      5千円前後。
-    ────────────────────    ────────────────────
-    買い物相談の続きです。                買い物相談の続きです。
+    -- at 0s --                        -- at 5s --
+    Summary: the LiPo and the charg...   the rest is automatic.
+    this is the easiest to get wrong.    tomorrow's plan is to look at the...
+    The buck converter and wiring fo...   about 5,000 yen.
+    --------------------------------    --------------------------------
+    Continuing the shopping question.    Continuing the shopping question.
     ```
-  - **一度に動くのは1箇所だけ**。要約がスクロールしながら会話がページングする画面は一目で読めない。この画面は一目で読む以外の読み方をされない
-  - **終端で止まる。ループしない** — 最後まで来てそこに留まるのが「全部読んだ」の形
-  - **リング操作から10秒待ってから始まる**。操作している間は主導権を奪わない。操作の合間の一呼吸を「読み終わった」と誤認しない長さ
-  - **1歩5秒**。1歩ごとに BLE 越しの再描画が走るので遅くしてある。sessions push と同じ周期に合わせ、パネルが2つのリズムを持たないようにした
-  - ツール行（`[Bash] ...`）の切り詰めは対象外。あれは横方向のクリップなので、この縦の送りでは露出しない
+  - **Only one thing moves at a time**. A screen where the recap scrolls while
+    the conversation pages cannot be read at a glance, and this screen is never
+    read any other way
+  - **It stops at the end. It does not loop** - arriving and staying is what
+    "you have read all of it" looks like
+  - **It waits ten seconds after a ring gesture**. It never takes control while
+    someone is working the ring, and ten seconds is long enough not to mistake a
+    pause between gestures for finishing
+  - **Five seconds a step**. Each step redraws over BLE, so it is deliberately
+    slow, matched to the sessions push so the panel does not carry two rhythms
+  - Tool lines (`[Bash] ...`) are excluded: their truncation is horizontal, so
+    this vertical walk would never reveal it
 
 ## [0.2.87] - 2026-07-28
 
 ### Fixed
-- **グラス: 実機ミラーが要約の帯を落としていた** (#642): 実機では要約が出るのにミラーでは出ない。ミラーは受信した画面を**フィールドごとに組み直していた**ので、#639 で追加した `notice` が名指しされておらず消えていた
+- **Glasses: the device mirror dropped the recap band** (#642): the recap showed
+  on the device but not in the mirror. The mirror **rebuilt the received screen
+  field by field**, so the `notice` added in #639 was never named and vanished
   ```ts
   paint({ header: screen.header, body: wrapForPanel(screen.body), footer: screen.footer }, screen.mode)
-  //                                                                                  ↑ notice が無い
+  //                                                                              ^ no notice
   ```
-  - ローカル描画側は `{ ...raw }` と展開しているので通っていた。**2つある経路のうち片方だけが落とす**形だった
-  - フィールドを名指しして追加し、なぜ落ちたのかをコメントに残した。スプレッドに変えれば今回は直るが、次に増えるフィールドで同じことが起きたときに理由が読めなくなるため
-  - **ehpk は不要**。実機は publisher 側で `notice` を v0.1.54 から既に送っており、ミラーの受信側はサーバーバイナリ同梱のシミュレーター
+  - The local drawing path spreads `{ ...raw }` and was fine. **Of the two paths,
+    only one dropped it**
+  - The field is named explicitly now, with a comment recording why it was
+    dropped. Switching to a spread would fix today's case and leave no readable
+    reason when the next field is added
+  - **No ehpk needed**. The device has been sending `notice` from the publisher
+    side since v0.1.54; the receiving mirror is the simulator bundled with the
+    server binary
 
 ## [0.2.86] - 2026-07-28
 
 ### Changed
-- **グラス: 区切り線を描画にして会話を1行取り戻す** (#639): 要約や質問バナーと会話の間の区切りが `------------------------` という**テキスト行**だった。**27px、読者が持つ7行の1/7** を線1本に使っている（ehpk v0.1.54）
-  - パネル自身が線を引ける。`TextContainerProperty` は `borderWidth`（0-5）と `borderColor`（0-15階調）を持っていて、**このアプリの全コンテナで 0 にしていた**
-  - 通知を独立コンテナにして 1px の枠線を付けた。罫線は余白込みで **6px**、旧方式の 27px に対して 1/4 以下
+- **Glasses: draw the separator instead of typing it, and win a line back**
+  (#639): the divider between the recap or question banner and the conversation
+  was a **line of text**, `------------------------`. That is **27px, one of the
+  reader's seven lines**, spent on a rule (ehpk v0.1.54)
+  - The panel can draw a line itself. `TextContainerProperty` has `borderWidth`
+    (0-5) and `borderColor` (0-15 levels), and **every container in this app had
+    them at 0**
+  - The notice became its own container with a 1px border. The rule costs **6px**
+    including padding, under a quarter of the old 27px
     ```
-    状況        通知行  罫線   会話行  旧方式
-    通知なし        0      0px    7      7
-    要約1行        1      6px    6      5   ★+1
-    要約2行        2      6px    5      4   ★+1
-    質問バナー       2      6px    5      4   ★+1
+    situation        notice lines  rule   body lines   old
+    no notice             0         0px       7         7
+    1-line recap          1         6px       6         5   +1
+    2-line recap          2         6px       5         4   +1
+    question banner       2         6px       5         4   +1
     ```
-  - **再構築コストへの配慮**: このアプリは BLE 越しなのでページ再構築が高く、モード変更時にしか行っていない。`updateDisplay` が見るのは通知の**行数**であって本文ではないので、文面が変わるだけなら従来どおり部分更新。再構築は通知が出る/伸びる/消える時だけ
-  - シミュレーターとミラーも同じ定数から同じ枠線を描く。`body` に連結すると「実機と同じ描画」を名乗る窓が実機と違う画面を映すため、`GlassesScreen` にも `notice` を独立して載せている
+  - **On rebuild cost**: this app talks over BLE, where rebuilding a page is
+    expensive, so it only happens on a mode change. `updateDisplay` looks at the
+    notice's **line count**, not its text, so changing the wording is still a
+    partial update. A rebuild happens only when the notice appears, grows or goes
+  - The simulator and the mirror draw the same border from the same constants.
+    Concatenating it into `body` would let a window claiming to "draw what the
+    device draws" show a different screen, so `GlassesScreen` carries `notice`
+    separately too
 
 ## [0.2.85] - 2026-07-28
 
 ### Changed
-- **実行時パスも identity に寄せる** (#637): #635 はインストーラとサービスマネージャが使う名前を集約したが、**動いているサーバーが触るパス**が残っていた。しかもこちらのほうが性質が悪く、間違えても失敗しない
-  - **`/tmp/cchub-images` が3箇所に別々のリテラルで存在していた**（`index.ts` の静的ルート、`routes/upload.ts`、`routes/files.ts`）。3つが一致している限りだけ動き、一致を確かめるものが何も無かった。1箇所ズレるとアップロードは「何も配信していないディレクトリ」に着地し、症状は 404 だけになる
-  - `/tmp/cchub-usage-history.json` はパスがズレるとエラーではなく**空の履歴**を返す（「まだ使用量が無い」に見える）
-  - macOS Keychain のサービス名はサーバーのパスワードの保管先。変えても起動には失敗せず、**パスワード無しで起動する**
-  - `identity.json` に `tmpPrefix` / `browserLogName` / `keychainService` を追加し、`shared/identity.ts` の `TMP_PATHS` 経由に統一（`backend/src/index.ts`、`routes/logs.ts`、`routes/upload.ts`、`routes/files.ts`、`services/usage-history.ts`、`utils/keychain.ts`）
-  - `/tmp/cc-hub-browser.log` は `tmpPrefix` に合わせた正規化をせず、ハイフン入りの現行スペルのまま記録した。CLAUDE.md がこのパスを `tail -f` の対象として案内しているため、この不整合なスペルは load-bearing。改名時に意図して直すのは構わないが、リファクタの副作用で変えるべきではない
-  - **検証は動かして実施**: 8x8 PNG をアップロード → `/tmp/cchub-images` 着地 → `/api/files/images` からバイト一致で取得（三重化していた3つの消費者を1往復で通した）。`/api/logs` への POST が `/tmp/cc-hub-browser.log` に追記され、ダッシュボード取得が `/tmp/cchub-usage-history.json` にスナップショットを書くことも確認
-  - ユーザー向けの挙動変更は無い
+- **Runtime paths move into identity as well** (#637): #635 collected the names
+  the installer and the service manager use, and left **the paths the running
+  server touches**. Those are the worse half, because getting them wrong does not
+  fail
+  - **`/tmp/cchub-images` existed as three separate literals** (the static route
+    in `index.ts`, `routes/upload.ts`, `routes/files.ts`). It worked only while
+    all three agreed, and nothing checked that they did. One drifting means
+    uploads land in a directory nothing serves, and the only symptom is a 404
+  - A drifted `/tmp/cchub-usage-history.json` returns **an empty history** rather
+    than an error (it looks like "no usage yet")
+  - The macOS Keychain service name is where the server's password lives.
+    Changing it does not fail startup - **it starts without a password**
+  - Added `tmpPrefix` / `browserLogName` / `keychainService` to `identity.json`
+    and routed everything through `TMP_PATHS` in `shared/identity.ts`
+    (`backend/src/index.ts`, `routes/logs.ts`, `routes/upload.ts`,
+    `routes/files.ts`, `services/usage-history.ts`, `utils/keychain.ts`)
+  - `/tmp/cc-hub-browser.log` was recorded with its current hyphenated spelling
+    rather than normalized to `tmpPrefix`. CLAUDE.md points at that path as a
+    `tail -f` target, which makes the inconsistent spelling load-bearing. Fixing
+    it deliberately during a rename is fine; changing it as a side effect of a
+    refactor is not
+  - **Verified by running it**: uploaded an 8x8 PNG, watched it land in
+    `/tmp/cchub-images`, and fetched it back byte-identical from
+    `/api/files/images` (one round trip through all three of the triplicated
+    consumers). Also confirmed that a POST to `/api/logs` appends to
+    `/tmp/cc-hub-browser.log` and that a dashboard fetch writes a snapshot to
+    `/tmp/cchub-usage-history.json`
+  - No user-visible behavior changes
 
 ## [0.2.84] - 2026-07-28
 
 ### Changed
-- **製品名を1ファイルに集約する** (#635): 改名（#459）を今やると 169ファイル / 1241箇所の書き換えになり、1つ外したときの失敗が見ていない場所で出る（`update.ts` の asset 名を外すと**公開されていないリリースを取りに行く** — インストール時に他人のマシンで初めて分かる。`uninstall.ts` の unit 名を外すと存在しないサービスの timer が回り続ける）。しかも大半は誰かが選んだ名前ではなく、`cchub-update.timer` は `${serviceName}-update.timer`、`com.cchub.server.plist` は `${launchdPrefix}.server.plist` という合成物で、これを呼び出し側で綴っていることが1回の改名を1000回にしていた
-  - `identity.json` に値を、`shared/identity.ts` にそこから合成される名前（unit ファイル名・launchd ラベル・asset 名・hook コマンド・User-Agent）を置き、**間違えるとデータが飛ぶかサービスが壊れる8箇所**を配線した（`storage.ts` の data dir と上書き env、`setup.ts`、`uninstall.ts`、`status.ts`、`update.ts`、`notify.ts`、`hook-status.ts`）
-  - 表示文字列とログ、`CHANGELOG.md`（216箇所）、`specs/`（26箇所）は対象外。前者は一致に依存するものが無く、後者は当時の事実の記録で書き換えると履歴が嘘になる
-  - `install.sh` と `.github/workflows/release.yml` は JSON を読めない（インストーラは `curl | bash` で走るためチェックアウトが存在せず、clone すべきリポジトリ自体がそのファイル内の値。Actions の matrix は jq を走らせるより前に評価される）。自前のコピーを保持し、`backend/tests/unit/identity-consistency.test.ts` がズレを検出する
-  - **出力が動いていないことを確認済み**: このマシンに既にインストール済みの systemd unit 3本（改修前のコードが書いたもの）と合成後のテンプレートがバイト一致し、`backend/tests/unit/setup-units.test.ts` で golden として固定。`getServiceBinaryPath` の正規表現（`cchub update` がどのバイナリを差し替えるかを決める箇所）も実 unit に対して改修前後で同じパスを返す
-  - ユーザー向けの挙動変更は無い。#459 の前提工事であり、改名をやらなくても残る整理
+- **Collect the product name into one file** (#635): doing the rename (#459)
+  today would mean editing 169 files in 1241 places, and missing one fails
+  somewhere nobody is looking (miss the asset name in `update.ts` and it **goes
+  after a release that was never published** - which shows up on someone else's
+  machine at install time; miss a unit name in `uninstall.ts` and a timer for a
+  service that does not exist keeps running). Most of them are not names anybody
+  chose, either: `cchub-update.timer` is `${serviceName}-update.timer` and
+  `com.cchub.server.plist` is `${launchdPrefix}.server.plist`, and spelling those
+  compositions out at the call site is what turned one rename into a thousand
+  - `identity.json` holds the values, `shared/identity.ts` holds the names
+    composed from them (unit file names, launchd labels, asset names, the hook
+    command, the User-Agent), and the **eight places where a mistake loses data
+    or breaks the service** are wired to it (the data dir and its override env in
+    `storage.ts`, `setup.ts`, `uninstall.ts`, `status.ts`, `update.ts`,
+    `notify.ts`, `hook-status.ts`)
+  - Display strings and logs, `CHANGELOG.md` (216 places) and `specs/` (26) are
+    out of scope. Nothing depends on the former matching, and the latter records
+    what was true at the time - rewriting it would make the history lie
+  - `install.sh` and `.github/workflows/release.yml` cannot read the JSON (the
+    installer runs via `curl | bash` with no checkout, and the repository to
+    clone is itself a value in that file; the Actions matrix is evaluated before
+    jq could run). They keep their own copies, and
+    `backend/tests/unit/identity-consistency.test.ts` catches a drift
+  - **Confirmed the output did not move**: the three systemd units already
+    installed on this machine (written by the pre-change code) are byte-identical
+    to the composed templates, and `backend/tests/unit/setup-units.test.ts` pins
+    them as goldens. The `getServiceBinaryPath` regex (which decides which binary
+    `cchub update` replaces) returns the same path against the real unit before
+    and after
+  - No user-visible behavior changes. This is groundwork for #459, and a cleanup
+    that stands even if the rename never happens
 
 ## [0.2.83] - 2026-07-28
 
 ### Added
-- **ペインに付けた名前を表示する** (#631): herdr は以前からペインのリネームに対応していたが、cchub がクライアント層でフィールドを落としていたため、リネームしても何も起きないように見えていた。`%3` は「分割ツリー上のどこにあるか」を示すアドレスであって名前ではないので、ユーザーが付けた名前があればそちらを優先する（グラスのセッション一覧・会話ヘッダー、Web のワークスペース一覧。Web では「何が動いているか」を示す `agentName`/`claude` よりも優先）。未命名のペインは従来どおり id にフォールバックし、herdr が受け付ける空白のみのラベルも未命名として扱う
-- **グラス: 他セッションの通知をヘッダーのカウントで報告する** (#627): 会話を読んでいる最中に別セッションの通知が入ると、7行しかない画面のうち2行（本文＋区切り）を奪っていた。しかも同じ項目はダイアログで全画面表示され、その後も一覧に残るため、これで3回目の表示だった。読書中に必要なのは「何か届いた・一覧を見る価値がある」ことだけなので、ヘッダーのカウントに置き換えた。長いワークスペース名でカウント自体が右端で切り落とされないよう、タイトルと tail（ステータス・カウント）を分離し、詰めるのは名前側だけにしている（ehpk v0.1.52）
-- **グラス: ビルドにバージョンだけでなくコミットを刻む** (#629): バージョン番号はビルドが名乗る番号であって、中身のコードを示さない。起動行が `[glasses] main: v0.1.51 (cab2a76) isEvenHub=true` の形になった。ビルド時に未コミットのソースがあれば `+dirty` が付く（対象は `src/` と `shared/` のみ。`app.json` と `out.ehpk` はリリースのたびに変わる設計なので除外）。`pack` は dirty なバンドルを拒否する — 出荷すると端末が存在しないコードを名乗ることになり、Hub 側でも端末側でも後から実体を特定できなくなるため
+- **Show the name you gave a pane** (#631): herdr has supported renaming panes
+  for a while, but cchub dropped the field in its client layer, so renaming
+  appeared to do nothing. `%3` is an address saying where a pane sits in the
+  split tree, not a name, so a user-supplied name wins where there is one (the
+  glasses session list and conversation header, the web workspace list - where it
+  also outranks the `agentName`/`claude` that says what is running). An unnamed
+  pane still falls back to the id, and a whitespace-only label (which herdr
+  accepts) counts as unnamed
+- **Glasses: report other sessions' notifications as a count in the header**
+  (#627): a notification arriving from another session while a conversation was
+  open took two of the seven lines (the body plus the divider). The same item was
+  also shown full-screen in a dialog and stayed in the list afterwards, making
+  this its third appearance. All a reader needs mid-read is "something arrived,
+  the list is worth a look", so it became a count in the header. The title and
+  the tail (status, count) are measured separately so a long workspace name
+  cannot push the count off the right edge - only the name is squeezed (ehpk
+  v0.1.52)
+- **Glasses: stamp the commit into a build, not just the version** (#629): a
+  version number is what a build calls itself, not what code is inside it. The
+  startup line now reads `[glasses] main: v0.1.51 (cab2a76) isEvenHub=true`, with
+  `+dirty` appended when the source was uncommitted at build time (only `src/`
+  and `shared/` count; `app.json` and `out.ehpk` change on every release by
+  design). `pack` refuses a dirty bundle - shipping one means the device names
+  code that does not exist, and neither Hub nor the device can be traced back to
+  a real tree afterwards
 
 ### Fixed
-- **タブの閉じるボタンがタッチ端末で不可視のタップ領域になっていた** (#618): タブ行の ✕ は `group-hover` で表示する設計で、非ホバー時は `opacity-0`。ところが `opacity-0` の要素はヒットテストを受けるため、ホバーが発生しないスマホ・タブレットでは、タブ行の右端に見えないまま反応する26pxの「タブを閉じる」ボタンが残っていた。そこをタップするとタブ切り替えではなく閉じる確認ダイアログが出る。`[@media(hover:hover)]` で囲ってタッチ端末では描画しないようにした（タッチでの閉じる操作は従来どおり長押し）。あわせて `px-2` → `px-2.5` でデスクトップのヒット領域を 26px → 30px に。レスポンシブ e2e の `touch-targets.spec.ts` はこれを拾えなかった — 高さしか測っておらず、当該ボタンは `min-h-11` = 39px で基準を満たしていたため
-- **グラス: ヘッダーバーがどの時刻でも幅に収まるようにした** (#627): このフォントは数字ごとに幅が違う（`1` は 8px、`0` はより広い）ため、ある時刻で収まったバーが別の時刻では溢れる。1日の約5分の1の時間帯で1〜2px 超過していた。詰めループの下限は空白1個で、タイトル・tail・時刻を個別に測っても連結後に超えるため、下限を超えたらタイトルを1文字ずつ削る方式にした（tail は削らない。バーを広げてまで報告したい内容がそこにあるため）。全1440分 × 3種類の名前で掃引し、修正前331件の溢れがゼロになることを確認。時刻に依存するレイアウトは単一時刻では検証できないので、この掃引自体をテストにした
-- **生成物の static-assets バンドルを追跡対象から外した** (#632): #631 の作業中に `git add backend/src` が未追跡だったファイルを巻き込んで誤コミットしていた。`scripts/build.sh` が生成する 3.6MB の base64 で、バイナリビルドのたびに全量再生成されるため、追跡していると誰かがビルドするたびに巨大な差分が出る。Biome が数回前から出していた "exceeds the configured maximum of 1.0 MiB" の警告もこれだった。履歴に残った blob は main の書き換えコストに見合わないのでそのまま
+- **A tab's close button was an invisible tap target on touch devices** (#618):
+  the ✕ in the tab row is shown on `group-hover` and is `opacity-0` otherwise.
+  An `opacity-0` element still takes hit tests, so on a phone or tablet - where
+  hover never happens - a 26px "close tab" button sat invisible at the right edge
+  of the row. Tapping there brought up the close confirmation instead of
+  switching tabs. It is wrapped in `[@media(hover:hover)]` now so touch devices
+  never render it (closing by touch is still a long press). `px-2` also became
+  `px-2.5`, taking the desktop hit area from 26px to 30px. The responsive e2e in
+  `touch-targets.spec.ts` could not catch this - it only measures height, and the
+  button cleared the bar at `min-h-11` = 39px
+- **Glasses: the header bar now fits at every time of day** (#627): this font
+  gives digits different widths (`1` is 8px, `0` is wider), so a bar that fits at
+  one time overflows at another - it was 1-2px over for about a fifth of the day.
+  The squeeze loop bottoms out at one space, and measuring title, tail and clock
+  separately still overflows once concatenated, so past that floor the title is
+  shaved a character at a time (the tail is never shaved: what it reports is
+  worth widening the bar for). Swept all 1440 minutes against three kinds of
+  name and confirmed 331 overflows before the fix become zero. Layout that
+  depends on the time cannot be verified at a single time, so the sweep itself
+  became the test
+- **Untracked the generated static-assets bundle** (#632): work on #631 caught an
+  untracked file in a `git add backend/src` and committed it by mistake. It is
+  3.6MB of base64 generated by `scripts/build.sh` and regenerated wholesale on
+  every binary build, so tracking it produces an enormous diff every time anyone
+  builds. It was also behind the "exceeds the configured maximum of 1.0 MiB"
+  warning Biome had been printing for several revisions. The blob left in history
+  stays - rewriting main is not worth it
 
 ### Changed
-- **glasses を v0.1.52 に更新** (#630): `app.json` が v0.1.51 のまま main に2つのグラス変更（#627, #629）が入っていたため、その状態で pack すると中身の違う2つ目の "v0.1.51" ができてしまう。バージョンガードが防ごうとしている事象が、ガードが見ていない経路から入る形だった。リリース時ではなく先にバンプして塞いだ。**リポジトリ側のみの変更で、端末はこの ehpk をアップロード・昇格するまで v0.1.51 のまま**
+- **glasses bumped to v0.1.52** (#630): `app.json` still said v0.1.51 while two
+  glasses changes (#627, #629) had landed on main, so packing in that state would
+  produce a second "v0.1.51" with different contents. The exact event the version
+  guard exists to prevent, arriving through a path the guard does not watch. Bumped
+  ahead of the release rather than at release time to close it. **Repository-side
+  only - the device stays on v0.1.51 until this ehpk is uploaded and promoted**
 
 ## [0.2.82] - 2026-07-28
 
 ### Fixed
-- **グラス: 見ているセッション自身の通知は出さない** (#624): 会話画面で通知が消えないように見えた。TTL は正常で、原因は**読んでいるセッション自身**が通知を出していたこと。エージェントは1ターン終えるたびに `Stop` を撃つので、その会話を見ている間は毎ターン自分宛の通知が届き、90秒TTLが切れる前に次が入れ替わる（ehpk v0.1.51）
-  - 内容も無い。「この会話が終わりました」を会話そのものの上に出すのは、**7行のうち1行を使って残り6行が既に示していることを言っている**だけ
-  - 画面に出ているセッションの `info` はダイアログもバナーも出さない。キュー全体を黙らせるのではなく**そのアイテムだけ飛ばす**ので、別セッションの通知は今までどおり届く
-  - **質問(`waiting`)は対象外** — 選択肢を持っていて、それは会話本文に出ていない情報だから
-  - 一覧画面は変更なし。あそこの選択位置はカーソルであって「読んでいるもの」ではない
+- **Glasses: no notification for the session you are looking at** (#624): the
+  notification looked like it would not go away on the conversation screen. The
+  TTL was fine; the cause was that **the session being read** was the one
+  notifying. An agent fires `Stop` at the end of every turn, so while you watch
+  that conversation a notification about it arrives every turn and replaces the
+  last before its 90-second TTL expires (ehpk v0.1.51)
+  - It says nothing either. "This conversation is done" over the conversation
+    itself **spends one of seven lines saying what the other six already show**
+  - An `info` for the session on screen produces neither a dialog nor a banner.
+    It skips **that item** rather than muting the queue, so other sessions'
+    notifications arrive as before
+  - **Questions (`waiting`) are exempt** - they carry choices, and those are not
+    in the conversation body
+  - The list screen is unchanged. The selection there is a cursor, not "what is
+    being read"
 
 ## [0.2.81] - 2026-07-28
 
 ### Changed
-- **グラス: 通知をダイアログ表示にした** (#621): 一覧の先頭の1行は見落とせる。**見落とされる通知は通知ではない**ので、質問が既に使っている全画面 overlay に通知も載せた（ehpk v0.1.50）
+- **Glasses: notifications are shown as a dialog** (#621): one line at the top of
+  a list is easy to miss, and **a notification that gets missed is not a
+  notification**, so notifications now use the full-screen overlay that questions
+  already had (ehpk v0.1.50)
   ```
   cchub-work-2 [i]                08:53
-  応答が完了しました
-  tap:開く  dbl:閉じる
+  Response complete
+  tap:open  dbl:close
   ```
-  - **8秒で自分から引っ込む**。質問は答えるまで画面を占有していいが、通知はよくない — エージェントが終わるたびにリング操作で消すのでは作業になってしまう。戻り先は割り込んだ場所そのもの（一覧、または読んでいた会話の位置）
-  - バナーはアイテムの寿命の間そのまま残るので、ダイアログを見逃しても消えたことにはならない
-  - 割り込むのは一覧と会話のみ。**選択中・音声入力中は割り込まない** — あそこはパネル自体が入力で、途中で差し替えたら言いかけたものが消える
-  - overlay を任意のリレーアイテム対応に一般化。順序は waiting 先頭を維持（新しいだけの FYI に質問が埋もれない）。何も聞いていない方は「後で」ではなく「閉じる」
+  - **It withdraws itself after 8 seconds**. A question may own the screen until
+    it is answered; a notification may not - dismissing one with a ring gesture
+    every time an agent finishes would be work. It returns exactly where it
+    interrupted (the list, or the position in the conversation being read)
+  - The banner stays for the item's lifetime, so missing the dialog does not mean
+    it is gone
+  - It only interrupts the list and the conversation. **It does not interrupt a
+    choice or voice input** - there the panel is the input, and replacing it
+    mid-gesture loses what was being said
+  - The overlay was generalized to any relay item. Waiting still comes first (a
+    question is never buried under an FYI that is merely newer), and the side
+    that asked nothing says "close" rather than "later"
 
 ## [0.2.80] - 2026-07-28
 
 ### Fixed
-- **グラス: シミュレーターではブラウザ通知を止めない** (#619): v0.2.79 の抑制判定が「リレーを購読している誰かが居るか」だったが、シミュレーターは実機と同じ controller を使うので同じ購読をする。**プレビュー用のタブを開いておくだけで通知が止まり**、代わりに出るはずのグラスは誰もかけていない、という状態になっていた
-  - `subscribe-glasses-relay` に `onDevice` を追加。**リレーアイテムは今までどおり両方に配る**（パネルに出るものを出すのがシミュレーターの仕事）。変わるのは「購読が何を証明するか」だけで、装着者に伝わったと言えるのは実機だけなので、抑制するのも実機だけ
-  - 実機 (`startGlassesMode`) は `onDevice: true`、シミュレーター (`startDebugUI`) は `false`。この2つは元々分岐しているので `GlassesPlatform` の一項目として名乗らせている
-  - **省略時は実機**。フィールドを持たない旧 ehpk は顔の上で動いている一方、シミュレーターはこのフィールドを読むサーバーバイナリに同梱されて配られるので、サーバーより古くなりようがない
-  - ehpk の再リリースは不要（現行 v0.1.49 は省略扱いのまま正しく動く）
+- **Glasses: do not silence browser notifications for the simulator** (#619): the
+  suppression check added in v0.2.79 asked "is anyone subscribed to the relay",
+  and the simulator uses the same controller as the device, so it subscribes the
+  same way. **Leaving a preview tab open silenced notifications** while the
+  glasses that were supposed to show them were on nobody's face
+  - `subscribe-glasses-relay` gained `onDevice`. **Relay items still go to both**
+    (showing what appears on the panel is the simulator's job). What changes is
+    only what a subscription proves: reaching a wearer is something only the
+    device can claim, so only the device suppresses
+  - The device (`startGlassesMode`) passes `onDevice: true`, the simulator
+    (`startDebugUI`) `false`. Those two already diverge, so it is declared as one
+    more field of `GlassesPlatform`
+  - **Omitted means device**. An old ehpk without the field is running on
+    someone's face, while the simulator ships inside the server binary that reads
+    the field and so can never be older than the server
+  - No ehpk re-release needed (the current v0.1.49 behaves correctly as omitted)
 
 ## [0.2.79] - 2026-07-28
 
 ### Added
-- **グラス起動中は通知をG2で受け取り、ブラウザのプッシュを止める** (#615): グラスを掛けているのに同じ出来事でスマホが鳴っていた。hook イベントを既存のグラスリレー（`info` アイテム、TTL 90秒）に振り替える（ehpk v0.1.49）
-  - **通知はセッション一覧の先頭に出す**。一覧は何も起きていない時にグラスが留まる画面で、通知が届くのはまさにその時。これまで `info` は会話タブにしか描かれておらず、つまり「その通知の元セッションを既に見ている人」＝一番知らせる必要のない人にしか届いていなかった
+- **While the glasses are on, notifications go to the G2 and the browser push
+  stops** (#615): the phone was buzzing about the same event the glasses were
+  showing. Hook events are diverted into the existing glasses relay (an `info`
+  item, TTL 90 seconds) (ehpk v0.1.49)
+  - **A notification appears at the top of the session list**. The list is where
+    the glasses sit when nothing is happening, which is exactly when a
+    notification arrives. Until now `info` was only drawn on the conversation
+    tab - that is, it only reached someone already looking at the session it came
+    from, the one person who least needed telling
     ```
-    [i]cchub-work-2: 応答が完了しました
-    >▲ グラス開発
-     　 cchub-work-2
+    [i]cchub-work-2: Response complete
+    >▲ glasses dev
+        cchub-work-2
     ```
-  - **抑制するのは実際に届いた時だけ**。`hook-event` に `deliveredToGlasses` が付くのはアイテムがグラスに載った時に限られ、グラスが居ない・セッションが解決できない・レート制限に当たった場合は従来どおりブラウザ通知が出る。**通知が消えるほうが二重に出るより悪い**
-  - hook の `session_id`（agent セッションid）から herdr の pane を照合し、無ければ `cwd` にフォールバック。ただし複数のエージェントが同じディレクトリを名乗る場合は pane を捨てる（返信先を間違えるくらいなら workspace 止まりでよい）
-  - herdr が `blocked` を報告している間は hook 由来の info を作らない。逆に hook が先着していたら、本物の質問が来た時点で hook 由来のものだけ消す。エージェント自身の `cchub glasses` メモは無関係なので残る
-  - インジケータ更新はフラグに関係なく常に走る（あれは状態であって通知ではない）
-  - 注意: シミュレーターも同じ経路でリレーを購読するので、**タブを開きっぱなしにするとブラウザ通知が止まる**
+  - **Suppression happens only when delivery did**. `hook-event` carries
+    `deliveredToGlasses` only when the item actually landed on the glasses; with
+    no glasses, an unresolvable session or a rate limit, the browser notification
+    goes out as before. **A lost notification is worse than a duplicated one**
+  - The hook's `session_id` (the agent session id) is matched against a herdr
+    pane, falling back to `cwd`. If several agents claim the same directory the
+    pane is dropped (stopping at the workspace beats replying to the wrong pane)
+  - No hook-derived info is created while herdr reports `blocked`. Conversely, if
+    a hook arrived first, the moment a real question appears only the hook-derived
+    item is removed. An agent's own `cchub glasses` note is unrelated and stays
+  - Indicator updates always run regardless of the flag (that is state, not a
+    notification)
+  - Note: the simulator subscribes to the relay through the same path, so
+    **leaving a tab open stops browser notifications**
 
 ### Fixed
-- **通知hookに解決できるパスを渡す** (#614): `cchub notify` が PATH 依存で、hook を実行するプロセスから見つからないことがあった
-  - セットアップが書き込む hook コマンドを絶対パスにする
-  - 未設定セッションの案内文言も、CC Hub が実際に読む hook だけを求めるよう修正
+- **Give the notification hook a path it can resolve** (#614): `cchub notify`
+  depended on PATH and could be invisible to the process running the hook
+  - The hook command written by setup is an absolute path now
+  - The guidance for an unconfigured session was corrected to ask only for the
+    hooks CC Hub actually reads
 
 ## [0.2.78] - 2026-07-28
 
 ### Changed
-- **グラス: 版数がずれた ehpk をパックさせない** (#612): 版数は**バンドル**（ビルド時に注入）と **app.json**（Hub が読む）の2経路で伝わる。バンプしてビルドを忘れると両者が静かに別れる——Hub は新しい番号を表示し、実機は古い番号を名乗る。**番号が無いより悪い**（もっともらしく見えるため）。1コマンドで再現した
+- **Glasses: refuse to pack an ehpk whose versions disagree** (#612): the version
+  travels two ways - through the **bundle** (injected at build time) and through
+  **app.json** (which Hub reads). Bump one and forget to build and the two part
+  ways quietly: Hub shows the new number while the device calls itself the old
+  one. **Worse than having no number**, because it looks plausible. Reproduced in
+  one command
   ```
-  app.json=0.1.99  バンドル=0.1.48  ← 従来は止まらずパックできた
+  app.json=0.1.99  bundle=0.1.48  <- packing used to sail straight through
   ```
-  - `bun run pack` が先に突き合わせる。ずれていれば止まり、`dist/` が無くても止まる
-  - `/glasses-upload` スキルの手順も `bun run pack` に更新
-  - 今日 v0.1.45 を作り直したときに、この順序を実際に踏み外しかけた。注意力で守る種類のものではない
+  - `bun run pack` cross-checks first. A mismatch stops it, and so does a missing
+    `dist/`
+  - The `/glasses-upload` skill's steps were updated to `bun run pack`
+  - Rebuilding v0.1.45 today came close to getting this order wrong for real.
+    This is not the sort of thing attention protects
 
 ## [0.2.77] - 2026-07-28
 
 ### Changed
-- **グラス: 起動ログに版数を出す** (#610): 「実機で動いているのはどの版か」を、ログの時刻と Beta 昇格時刻の突き合わせで**推理する**しかなかった。今日それで 2 回詰まっている（1回目はヒープ計測が「出ていない」と見えたが、実際はその版が実機に入っていなかっただけ）。番号を着た推測であって事実ではない（ehpk v0.1.48）
+- **Glasses: print the version in the startup log** (#610): "which version is on
+  the device" had to be **inferred** by lining log timestamps up against Beta
+  promotion times. That cost two dead ends today alone (the first looked like the
+  heap measurement was missing, when that version simply was not on the device).
+  An inference wearing a number is not a fact (ehpk v0.1.48)
   ```
   [glasses] main: v0.1.48 isEvenHub=true
   ```
-  - 版数はビルド時に `app.json` から注入する。手で書くと必ずずれるので、**パックしたものと同じ出どころ**から取る
+  - The version is injected from `app.json` at build time. Typing it by hand
+    guarantees a drift, so it comes from **the same source the pack uses**
 
 ## [0.2.76] - 2026-07-27
 
 ### Added
-- **グラス: サスペンドから復帰できるようにした** (#605): スマホは Even アプリが背面に行くたび WebView をサスペンドする。装着者から見るとアプリが「落ちて」いた。**クラッシュではない** — 52回の起動で例外ゼロ、ヒープは上限3586MBに対し16MBのまま不動、そして公式ドキュメントが「WebView is suspended … that's how phone WebViews behave everywhere; it isn't an Even bug」と明記している（ehpk v0.1.47）
-  - **SDK は終了理由を通知していて、我々が捨てていた**。`FOREGROUND_ENTER`(4) / `FOREGROUND_EXIT`(5) / `ABNORMAL_EXIT`(6) / `SYSTEM_EXIT`(7) がイベントチャンネルに来るのに、ハンドラはリング操作の4つしか見ていなかった
-  - **終了理由を記録**。「背面に行っただけ」か「殺された」かが、ページ内からの推測ではなくホストの申告で確定する
-  - **復帰時に再接続・再描画**。死んだ画面のまま放置されない
-  - **中断位置を保存・復元**。実機は SDK の `setLocalStorage`（ホストアプリ側の保存領域で WebView より長生き）、シミュレータは localStorage
+- **Glasses: survive a suspend** (#605): the phone suspends the WebView every
+  time the Even app goes to the background. To the wearer the app had "crashed".
+  **It had not** - zero exceptions across 52 startups, the heap flat at 16MB
+  against a 3586MB ceiling, and the vendor documentation says outright that "the
+  WebView is suspended ... that's how phone WebViews behave everywhere; it isn't
+  an Even bug" (ehpk v0.1.47)
+  - **The SDK announces why it ended, and we were throwing it away**.
+    `FOREGROUND_ENTER`(4) / `FOREGROUND_EXIT`(5) / `ABNORMAL_EXIT`(6) /
+    `SYSTEM_EXIT`(7) all arrive on the event channel, and the handler only looked
+    at the four ring gestures
+  - **The exit reason is logged**. "Went to the background" versus "was killed"
+    is now settled by the host's own statement rather than guessed from inside
+    the page
+  - **Reconnect and redraw on resume**. No more sitting on a dead screen
+  - **The reading position is saved and restored**. On the device through the
+    SDK's `setLocalStorage` (host-app storage, which outlives the WebView); in
+    the simulator through localStorage
   ```
-  中断時:   life を2件遡って読書中（off=2）
-  再起動後: life の2件前に復帰（off=2）
+  on suspend: reading life, two messages back (off=2)
+  on restart: back to two messages back in life (off=2)
   ```
-  - **ページ番号は捨てる**。会話は伸びるので、古い本文の2ページ目と新しい本文の2ページ目は別物
-  - **30分より古い保存は無視**。そこはもう読者がいる場所ではない
-  - ライフサイクルはリング操作のデバウンスより**手前**で処理する。共有すると復帰が直後のタップを飲み込む
-  - 復元中は定期リフレッシュを止める。`loadConversation` は末尾で位置を0に戻すので、復元と競合して巻き戻していた
+  - **The page number is discarded**. A conversation grows, so page two of an old
+    body is not page two of a new one
+  - **Anything older than 30 minutes is ignored**. That is no longer where the
+    reader is
+  - The lifecycle is handled **ahead of** the ring gesture debounce. Sharing it
+    lets a resume swallow the tap right after it
+  - Periodic refresh is paused during a restore. `loadConversation` resets the
+    position to 0 at the end, which raced the restore and rewound it
 
 ### Fixed
-- **タップしたペインが開くようにした** (#604): 一覧は #593 から全タブのペインを載せるのに、ターミナルは1タブしか描画しない。別タブのペインをタップすると、レイアウトにそのペインが無いまま届き、クライアントが黙って現タブの先頭ペインに落ちていた。**一覧で見えていた別のエージェントに着地する**——見せた直後だから、一番まずい形の誤動作だった
+- **The pane you tapped is the pane that opens** (#604): the list has carried
+  panes from every tab since #593, while the terminal only draws one tab. Tapping
+  a pane on another tab arrived with that pane absent from the layout, and the
+  client silently fell back to the first pane of the current tab. **You land on a
+  different agent than the one the list just showed you** - the worst shape a
+  misfire can take, right after showing it
   ```
-  タブ 1              タップ → 着地
-   └ claude  30.6%    %1  →  %2（タブ2の先頭）
-  タブ 2
-   └ claude  5.6%
+  tab 1               tap -> landing
+   \- claude  30.6%    %1  ->  %2 (first pane of tab 2)
+  tab 2
+   \- claude  5.6%
   ```
-  - ペインを開く前に、そのペインのタブへ切り替えを待ってから開く
-  - `selectPane` が `ensurePaneReachable` を通る。herdr も `pane.focus` の副作用でタブを動かすが**非同期**で、直後の zoom/viewport 要求がツリー更新前に走り得る
-  - レイアウトに無いペインを黙って捨てず `select-pane` を投げる。サーバがタブを切り替え、次のレイアウトで入ってくる
-
-### Added
-- **グラス: サスペンドから復帰できるようにした** (#605): スマホがバックグラウンドで WebView を止めるので、装着側からはアプリが**一日中死んでいた**。クラッシュではない——52回の起動で例外ゼロ、ヒープは 3586MB 中 16MB で動かず、ベンダーのドキュメントも「WebView のサスペンドはどの端末でもそうで、Even の不具合ではない」と言っている
-  - こちらから止めることはできない。**欠けていたのは SDK が全部声に出して言っていたのを捨てていたこと**: `FOREGROUND_ENTER` / `FOREGROUND_EXIT` / `ABNORMAL_EXIT` / `SYSTEM_EXIT` はイベントチャンネルに届いていて、ハンドラは4つのリングジェスチャしか見ていなかった
-  - 終了理由をログに残す。「バックグラウンドに落ちた」と「殺された」の区別が、もう一日推測しなくても付く
-  - 復帰時に再接続して描き直す。離れる時に読んでいた位置を保存するので、再起動が**新しい一覧の先頭ではなく、読んでいた会話とメッセージ**に戻る
-  - オフセットは残すが**ページは残さない**。会話は伸びるので、古い本文のNページ目は新しい本文のNページ目ではない。30分より古いものは読者がもう居る場所ではないので無視する
-  - **ソースのみで `out.ehpk` は据え置き**。実機の挙動が変わるのは次の ehpk ビルドから
+  - Before opening a pane, wait for the switch to that pane's tab
+  - `selectPane` goes through `ensurePaneReachable`. herdr also moves the tab as
+    a side effect of `pane.focus`, but **asynchronously**, so a zoom or viewport
+    request right after can run before the tree updates
+  - A pane missing from the layout is no longer dropped silently; a `select-pane`
+    is sent, the server switches the tab, and it arrives in the next layout
 
 ### Changed
-- **タブ行を見出しに戻した** (#604): タップは**畳まれたタブを展開する**ためのものだった。#593 で畳まれるタブが無くなり、役割だけが消えてタップ判定が残っていた。ペインのタップがタブを連れてくる以上、ここに選ぶものはもう無い
-  - 開閉シェブロンを削除。閉じる操作（長押し / hover の ✕）だけ残す
-  - ペイン数バッジを全タブに表示。非アクティブ時だけ出ていたのは、畳まれていた頃の名残
-- **グラス: v0.1.46 ehpk** (#603): v0.1.45 は `別タブ` ラベルを含んだまま切られ、#600 がそれを外す前にマージされていた。未アップロードだったが、**同じ番号で違うバイトを配る**のは後から見て事故に見える
+- **The tab row is a heading again** (#604): tapping it existed to **expand a
+  collapsed tab**. #593 removed collapsed tabs, which removed the role and left
+  the tap target. Now that tapping a pane brings its tab along, there is nothing
+  left to choose here
+  - The expand/collapse chevron is gone. Only closing remains (long press, or the
+    hover ✕)
+  - The pane-count badge shows on every tab. Showing it only when inactive was a
+    leftover from when tabs collapsed
+- **Glasses: v0.1.46 ehpk** (#603): v0.1.45 was cut with the "other tab" label
+  still in it and merged before #600 removed it. It was never uploaded, but
+  **shipping different bytes under the same number** looks like an accident in
+  hindsight
 
 ## [0.2.75] - 2026-07-27
 
 ### Fixed
-- **別タブのペインに返信できるようにした** (#600): 一覧は全タブのペインを出すのに、分割ツリーはアクティブタブぶんしか持たない。会話は履歴 API から読めるので**開けてしまい**、返信・キー送信は 404 になっていた。**読めるが答えられない**——ペインが無いことより悪い状態だった（ehpk v0.1.45）
+- **You can reply to a pane on another tab** (#600): the list shows panes from
+  every tab while the split tree only holds the active one. The conversation is
+  readable through the history API, so it **opens**, and replies or key sends
+  came back 404. **Readable but unanswerable** - worse than the pane not being
+  there (ehpk v0.1.45)
   ```
-  %1（アクティブタブ）  peek → 取得できる
-  %4（別タブ）          peek → HTTP 404 Pane not found
+  %1 (active tab)  peek -> comes back
+  %4 (other tab)   peek -> HTTP 404 Pane not found
   ```
-  - `ensurePaneReachable` が操作の前にそのペインのタブへ切り替える。実機で `w4H:t1` → `w4H:t2` の切り替えと 200 応答を確認
-  - 返信した先に視界が付いていくのは、次に何かが起きる場所がそこだから
-  - **読み取り専用の経路は 404 のまま**。覗いただけで机が並び替わるのは誰も頼んでいない
-- **グラス: `別タブ` の表示を廃止** (#600): あれは「読めるが答えられない」ペインの警告だった。返信が届くようになった以上、タブは**行動につながらない事実**。`[!]` を外したのと同じ理由
+  - `ensurePaneReachable` switches to that pane's tab before the operation.
+    Verified on the device: `w4H:t1` -> `w4H:t2` and a 200
+  - The view follows the pane you replied to, because that is where the next
+    thing happens
+  - **Read-only paths still 404**. Nobody asked for the desk to rearrange itself
+    because they glanced at it
+- **Glasses: the "other tab" label is gone** (#600): it warned about a pane that
+  was readable but unanswerable. Now that a reply lands, the tab is **a fact that
+  leads to no action**. Same reason the `[!]` came off
 
 ## [0.2.74] - 2026-07-27
 
 ### Changed
-- **グラス: リストのバッジを処理中だけにした** (#596): 実機で **8行中7行が `[!]`** だった。ほとんど全部が持っている印は何も区別しない。待機はエージェントの平常状態で、**動いていることのほうが情報**（ehpk v0.1.45）
+- **Glasses: the list badge is for working only** (#596): on the device **seven
+  of eight lines carried `[!]`**. A mark almost everything has distinguishes
+  nothing. Waiting is an agent's normal state; **moving is the information**
+  (ehpk v0.1.45)
   ```
-  0秒                    3秒
-  >▲ グラス開発          >▶ グラス開発
-   　 2脚ロボ開発          　 2脚ロボ開発
-   ▲├ %1  31%            ▶├ %1  31%
-   　├ %3  15%            　├ %3  15%
-   　└ %4  6%  別タブ      　└ %4  6%  別タブ
+  0s                       3s
+  >▲ glasses dev           >▶ glasses dev
+      2-legged robot           2-legged robot
+   ▲|- %1  31%             ▶|- %1  31%
+     |- %3  15%               |- %3  15%
+     \- %4  6%  other tab     \- %4  6%  other tab
   ```
-  - 空欄は**全角スペース**。320幅でコマ1つぶんちょうど。半角（5幅）だと印の無い名前だけ4分の3桁ぶん左にずれる
-  - **リレー項目は印を残す**（`！`）。既に投げられて未回答の質問で、それを上げたインジケータより長生きする
-  - tick は**コマがある容器**を描き直す（会話ならヘッダー、一覧なら行）。条件も「読んでいるセッション」から「画面上で何か動いていれば」に拡大
-- **グラス: 複数ペインのワークスペース名を見出しにした** (#596): その行は**開くものがない**——タップすると `ccSessionId`（サーバが選んだ代表ペイン）にフォールバックし、どれかが恣意的に開く。ペイン行が解消したはずの曖昧さだった。カーソルもマーカーも乗らず、スワイプは飛び越える。フッターのカウントも開けるものだけを数える
-- **グラス: ペインを入れ子で描く** (#596): 罫線（`├` `└`）。空白1つのインデントでは「インデントされた別のワークスペース」に見えていた。実機は細罫線を**全部320幅**で持つ（二重線は欠けていて使えない）
+  - The blank is a **full-width space**, exactly one cell at width 320. A
+    half-width one (width 5) shifts an unmarked name left by three quarters of a
+    column
+  - **Relay items keep their mark** (`!`). Those are questions already asked and
+    unanswered, and they outlive the indicator that raised them
+  - A tick redraws **the container holding the cell** (the header in a
+    conversation, the row in the list). The condition also widened from "the
+    session being read" to "anything moving on screen"
+- **Glasses: a multi-pane workspace name is a heading** (#596): that row has
+  **nothing to open** - tapping it fell back to `ccSessionId` (the representative
+  pane the server picked) and opened one of them arbitrarily. That is the
+  ambiguity the pane rows were supposed to remove. It carries neither cursor nor
+  marker, and swipes jump over it. The footer count only counts things that open
+- **Glasses: panes are drawn nested** (#596): with rules (`|-`, `\-`). A
+  single-space indent read as "a different, indented workspace". The device
+  carries every thin rule at **width 320** (the double-line variants are missing
+  and unusable)
 
 ## [0.2.73] - 2026-07-27
 
 ### Added
-- **全タブのペインを一覧に出す** (#593): herdr はワークスペースのタブを積み重ねるが、CC Hub は一覧をアクティブタブで絞っていた。ターミナルが1タブしか描かないので一覧も合わせる、という判断だったが、**一覧と描画は別の問い**。別タブのペインも自分の会話を持つ動いている agent で、一覧から消すと「画面外」ではなく**到達不能**になる。実機で2つの Claude セッションが見えていなかった（herdr が3ペインと報告するワークスペースで API は2、2のところで1）
-  - `panes` が全タブぶんになり、各ペインが `tabId` を持つ
-  - **ターミナルを説明する側は絞り直す**: プレビュー、代表 agent、カードのペイン数、blocked バッジはアクティブタブのまま。画面のタブが idle なのにカードが blocked と言えば、読み手は無いものを探しに行く
-  - フロントの「ペインがちょうど1つ」の判定は `panes.length === 1` で、別タブにペインが1つあるだけで静かに壊れる。`soleVisiblePane`（ターミナルが見せている数を数える）に置き換え
-  - **ズーム/閉じるボタン**も同様に修正。とくに閉じるは、画面唯一のペインに「閉じる」を出し、バックエンドはワークスペース最後の1枚ではないので受理してしまう状態だった
-  - **タブツリーは `tabId` でタブごとに振り分け**。従来は `panes` をアクティブタブの下に並べる作りで、タブ2のペインがタブ1の子として描かれていた
-- **グラス: ワークスペース配下にペインを並べ、開けるようにする** (#593): ペインを開くとそのペインの agent session を読み、状態も要約もそのペインのもの。返信も `paneId` に届く（ehpk v0.1.44）
+- **Show panes from every tab in the list** (#593): herdr stacks a workspace's
+  tabs, and CC Hub filtered the list to the active one. The reasoning was that
+  the terminal only draws one tab so the list should match, but **the list and
+  the drawing are different questions**. A pane on another tab is a running agent
+  with its own conversation, and dropping it from the list makes it not
+  off-screen but **unreachable**. Two Claude sessions were invisible on the
+  device (the API said 2 where herdr reported a 3-pane workspace, and 1 where it
+  said 2)
+  - `panes` now covers every tab, and each pane carries a `tabId`
+  - **Anything describing the terminal filters again**: the preview, the
+    representative agent, the card's pane count and the blocked badge stay on the
+    active tab. A card saying blocked while the tab on screen is idle sends the
+    reader looking for something that is not there
+  - The frontend's "exactly one pane" check was `panes.length === 1`, which
+    breaks silently the moment another tab has one pane. Replaced with
+    `soleVisiblePane` (counting what the terminal shows)
+  - **The zoom and close buttons** were fixed the same way. Close especially: it
+    offered "close" on the only pane on screen, and the backend accepted because
+    it was not the workspace's last one
+  - **The tab tree splits by `tabId`**. It used to line `panes` up under the
+    active tab, drawing tab 2's panes as children of tab 1
+- **Glasses: panes are listed under their workspace and can be opened** (#593):
+  opening a pane reads that pane's agent session, and the state and recap are
+  that pane's. A reply reaches its `paneId` too (ehpk v0.1.44)
   ```
-  >    2脚ロボ開発
+  >    2-legged robot
    [!]  %1  31%
    [!]  %3  15%
-   [!]  %4  6%  別タブ
+   [!]  %4  6%  other tab
   ```
-  - **1ペインのワークスペースは展開しない**。`%1` は名前が既に持っている情報
-  - **コマンドは出さない**（全ペインが `claude` で桁を定数で埋めるだけ）。**ディレクトリもペイン同士で違うときだけ**。残るのは context% で、これは実際に違う
-  - スワイプが**ワークスペースとペインを1つのジェスチャで横断**する
-  - **リスト画面のヘッダーを廃止**。タイトルの一覧の上のタイトルバーは何も言わない。カウンタと時計はフッターに収まり、コンテナが36pxを取り戻して**8行目**になる
+  - **A single-pane workspace does not expand**. `%1` is information the name
+    already carries
+  - **The command is not shown** (every pane runs `claude` and it just fills
+    columns with a constant). **The directory only when panes differ**. What is
+    left is context%, which actually differs
+  - A swipe **crosses workspaces and panes in one gesture**
+  - **The list screen's header is gone**. A title bar above a list of titles says
+    nothing. The counter and the clock fit in the footer, and the container wins
+    back 36px - an **eighth line**
 
 ## [0.2.72] - 2026-07-27
 
 ### Changed
-- **グラス: 心拍にJSヒープを記録する** (#590): クラッシュ原因の推測を4回外しているので、理屈ではなく計測を足す（ehpk v0.1.43）
+- **Glasses: record the JS heap in the heartbeat** (#590): four guesses at the
+  crash cause have been wrong, so measurement replaces reasoning (ehpk v0.1.43)
   ```
-  変更前: alive 786.0s renders=438 ws=OPEN
-  変更後: alive 786.0s renders=438 ws=OPEN heap=42/64MB(limit 512)
+  before: alive 786.0s renders=438 ws=OPEN
+  after:  alive 786.0s renders=438 ws=OPEN heap=42/64MB(limit 512)
   ```
-  - 心拍はもともと30秒ごとに送っているので**送信量は増えない**
-  - `performance.memory` は **JS ヒープしか見ない**。WebViewの DOM・GPUテクスチャ・ネイティブ確保は含まれないので、Android がプロセス全体の使用量で殺しているならヒープは平常のまま落ちる。その場合も「JS メモリは無実」と分かるので容疑者は減る
-  - 心拍の**間隔そのもの**も証拠。20回の稼働のうち8回で死ぬ直前に 30秒 → 45〜65秒 に伸びていた。43回の起動すべてで JS 例外はゼロなので、アプリが失敗しているのではなくエンジンが絞られている
+  - The heartbeat already goes out every 30 seconds, so **nothing extra is sent**
+  - `performance.memory` **only sees the JS heap**. The WebView's DOM, GPU
+    textures and native allocations are excluded, so if Android is killing on
+    whole-process usage the heap stays normal right up to the death - which still
+    narrows the suspects by clearing JS memory
+  - The heartbeat **interval itself** is evidence. In 8 of 20 runs it stretched
+    from 30s to 45-65s just before dying. Zero JS exceptions across all 43
+    startups, so the app is not failing - the engine is being throttled
 
 ### Notes
-- 「CC Hub Web をスマホで開くとグラスアプリが落ちる」という相関は**否定された**。死亡46回中13回(28%)が Web 読み込み後10分以内だが、その窓はログ全体の27%を占めており偶然の期待値12.5回と差がない。分子だけ見て分母を見ていなかった
+- The claimed correlation "opening CC Hub Web on the phone kills the glasses app"
+  is **disproved**. 13 of 46 deaths (28%) fall within ten minutes of a web load,
+  but that window covers 27% of the log, and chance predicts 12.5. The numerator
+  was being read without the denominator
 
 ## [0.2.71] - 2026-07-27
 
 ### Fixed
-- **グラス: 収まるコードブロックは中身を出す** (#587): `[code]` は「ここにコードがあった」以外に何も伝えず中身を捨てていた。`[table]` と同じ形の問題（ehpk v0.1.42）
+- **Glasses: show the contents of a code block that fits** (#587): `[code]` threw
+  the contents away while conveying nothing beyond "there was code here". The
+  same shape of problem as `[table]` (ehpk v0.1.42)
   ```
-  変更前:  [code]
-  変更後:  最新（0,0）        dbl:back  p1/3
-          ページ2            dbl:top  p2/3
-          1件遡り            dbl:top
+  before:  [code]
+  after:   newest (0,0)      dbl:back  p1/3
+           page 2            dbl:top   p2/3
+           one back          dbl:top
   ```
-  - マーカーの根拠は「このサイズでソースは読めない」だったが、それが正しいのは深くインデントされた実ソースだけで、**エージェントの返答に出てくるフェンスの大半には当てはまらない**。コマンド1行、値がいくつか、短い一覧は収まる（実測で 265px / 117px / 386px、枠は 556px）
-  - **4行以内かつ全行が枠に収まる**なら中身を出す
-  - **共通インデントを落とす**。この幅では先頭4スペースが収まるかどうかの分かれ目で、共通の前置きを削っても行同士の相対関係は保たれる
-  - 出せないものは**どれだけ伏せたか**を言う（`[code 12行]`）
+  - The marker's justification was "source is unreadable at this size", which is
+    true of deeply indented real source and **not of most fences in an agent's
+    reply**. One command, a few values, a short list all fit (measured at 265px /
+    117px / 386px against a 556px frame)
+  - **Four lines or fewer, every line inside the frame** means the contents are
+    shown
+  - **Common indentation is stripped**. At this width four leading spaces decide
+    whether a line fits, and removing a shared prefix preserves the relative
+    structure
+  - What cannot be shown says **how much was hidden** (`[code 12 lines]`)
 
 ## [0.2.70] - 2026-07-27
 
 ### Added
-- **グラス: ページング中のダブルタップで先頭に戻る** (#584): **1段ずつ戻る**ようにした。履歴を読み進めた状態からの出口はまず「その先頭」で、抜けるためだけに下スワイプで全部戻るのは、ジェスチャが2つしかないリングには重すぎる操作。最新にいるときだけ同じダブルタップがセッションを抜ける（ehpk v0.1.41）
+- **Glasses: a double tap while paging returns to the top** (#584): it now goes
+  back **one level at a time**. The way out of a scrolled-back history is its own
+  top first, and swiping all the way down purely to leave is too much work for a
+  ring with two gestures. The same double tap leaves the session only when you
+  are already at the newest (ehpk v0.1.41)
   ```
-  最新（0,0）        dbl:back  p1/3
-  ページ2            dbl:top  p2/3
-  1件遡り            dbl:top
+  newest (0,0)      dbl:back  p1/3
+  page 2            dbl:top   p2/3
+  one back          dbl:top
   ```
-  - 戻るときに**再読み込み**もする。遡っている間に届いたものが待っている状態になり、ライブ更新は先頭にいるときだけ動くので自然に再開する
-  - フッターのラベルがどちらを行うか示す（`dbl:top` / `dbl:back`）
+  - Going back also **reloads**. Anything that arrived while you were scrolled
+    back is waiting, and live updates only run at the top, so they resume
+    naturally
+  - The footer label says which one it will do (`dbl:top` / `dbl:back`)
 
 ## [0.2.69] - 2026-07-27
 
 ### Added
-- **グラス: 作業中インジケータを動かす** (#581): 止まった印は「最後に描いたとき動いていた」としか言わない。動く印は「今動いている」と言う（ehpk v0.1.40）
+- **Glasses: animate the working indicator** (#581): a still mark only says "it
+  was moving when this was last drawn". A moving one says "it is moving now"
+  (ehpk v0.1.40)
   ```
-  0秒 グラス開発 ▲ / 3秒 ▶ / 6秒 ▼ / 9秒 ◀ / 12秒 ▲
+  0s glasses dev ▲ / 3s ▶ / 6s ▼ / 9s ◀ / 12s ▲
   ```
-  - コマは `▲▶▼◀`。**すべて320幅で揃っている**ことが重要で、不揃いだと回るたびに後ろの文字が動き回転ではなく震えに見える。それで ASCII の `|/-\`（64/128/160）が落ちた。CLI定番のブライユ点字はファームウェアにグリフが無い
-  - **3秒に1コマ**。1コマ = BLEの往復1回なので 20回/分。セッションプッシュが既に使っている 36回/分より少ない
-  - **ヘッダーだけ**再描画する（本文とフッターは触らない。3倍の無駄を避ける）
-  - **作業中のセッションを見ているときだけ**動く。他の状態では tick が表示に触れる前に return するので待機中のアプリは何も送らない
-  - タイマーは1本をアプリの生存期間ずっと回す。状態変化のたびに start/stop するより単純で止め忘れがない
-  - tick は SDK 描画を直列化する既存のキューに乗る。**フル描画は待機中の tick を追い越して置き換える** — フル描画はヘッダーも描くので、二度描くのはそのキューが防いでいる重なりそのもの
+  - The cells are `▲▶▼◀`, and **all four being width 320** is what matters -
+    uneven ones shift the text after them on every step, which reads as a shake
+    rather than a rotation. That is what disqualified ASCII `|/-\` (64/128/160).
+    The braille spinner the CLI world uses has no glyphs in the firmware
+  - **One cell every three seconds**. A cell is one BLE round trip, so 20/min -
+    fewer than the 36/min the sessions push already uses
+  - **Only the header** is redrawn (body and footer are untouched, avoiding three
+    times the waste)
+  - It animates **only while you are looking at a working session**. In any other
+    state the tick returns before touching the display, so an idle app sends
+    nothing
+  - One timer runs for the app's lifetime. Simpler than starting and stopping it
+    on every state change, and impossible to leave running
+  - Ticks ride the existing queue that serializes SDK drawing. **A full draw
+    overtakes and replaces a pending tick** - a full draw includes the header,
+    and drawing it twice is exactly the overlap that queue prevents
 
 ## [0.2.68] - 2026-07-27
 
 ### Changed
-- **グラス: フッターから発言者とメッセージ件数を外した** (#579): 表示できる情報量を増やすため（ehpk v0.1.40）
+- **Glasses: the speaker and the message count left the footer** (#579), to make
+  room for information (ehpk v0.1.40)
   ```
-  変更前:  dbl:back  AI 1/1 p1/3        変更後:  dbl:back  p1/3
-          dbl:back  2msgs 2/2                  dbl:back
+  before:  dbl:back  AI 1/1 p1/3        after:  dbl:back  p1/3
+           dbl:back  2msgs 2/2                  dbl:back
   ```
-  - 発言者は本文が示すようになった（`$` が付くのがユーザー、付かないのがエージェント）。フッターで繰り返すのは同じことを二度言うだけ
-  - 件数の**分母は読み込み済みの件数**で会話の長さではなかった。20件ずつ増えるので遡ると同じ位置なのに分数が変わり、何かを表しているように見えて何も表していなかった。`2msgs` も同じ枠にさらに別の意味（画面上の件数）で座っていて、それは画面を見れば分かること
-  - 残したのはページ番号だけ。これは書いてあるとおりの意味を持つ
+  - The body says who is speaking now (`$` marks the user, nothing marks the
+    agent). Repeating it in the footer says the same thing twice
+  - The count's **denominator was how many messages had loaded**, not the length
+    of the conversation. It grows twenty at a time, so scrolling back changed the
+    fraction at an unchanged position - it looked like it meant something and did
+    not. `2msgs` sat in the same strip with yet another meaning (how many are on
+    screen), which the screen itself answers
+  - Only the page number stayed. That one means what it says
 
 ## [0.2.67] - 2026-07-27
 
 ### Changed
-- **グラス: 発話者の表記を整理して情報量を増やした** (#576): `U>` → `$`（シェルがプロンプトを示すのと同じ）、`A>` は削除（ehpk v0.1.39）
+- **Glasses: tidy the speaker marks and gain information** (#576): `U>` became
+  `$` (the way a shell marks its prompt) and `A>` was removed (ehpk v0.1.39)
   ```
-  変更前:  U> 以下の表記を整理して…        変更後:  $ 以下の表記を整理して…
-          A> 実機ミラー、動いていますね。          実機ミラー、動いていますね。
+  before:  U> tidy the notation below...     after:  $ tidy the notation below...
+           A> the device mirror works.               the device mirror works.
   ```
-  - 7行しかない画面で返答のたびに `A>` を置くのは、読み手にすでに見えているものに桁を使うこと。**印のない方が印のある方への返答**であり、複数メッセージ表示では空行が境界を保つ
-  - 空いた桁はツール行の予算に回る（もう存在しない接頭辞のぶんを確保しなくなった）
+  - Putting `A>` in front of every reply on a seven-line screen spends columns on
+    what the reader can already see. **The unmarked side is the reply to the
+    marked one**, and in a multi-message view the blank lines keep the boundary
+  - The columns go into the tool lines' budget (no longer reserved for a prefix
+    that does not exist)
 
 ## [0.2.66] - 2026-07-27
 
 ### Fixed
-- **グラス: 追い越された要約を引っ込める** (#574): 要約は「離れている間に何があったか」を埋めるためのものだが、最新ビューの先頭に恒久的に貼り付き、**7行のうち3行**を「今画面にあるメッセージより前の話」の説明に使い続けていた。しかも古さが分からず、実際に8時間前の要約が今日の作業の上に現在のものと同じ顔で載っていた（ehpk v0.1.39）
-  - 画面に要約より新しいメッセージがある時点で読み手は追い越しているので、そこで引っ込めて3行を会話に返す
+- **Glasses: retire a recap the conversation has overtaken** (#574): a recap
+  exists to fill in what happened while you were away, and it was pinned
+  permanently to the top of the newest view, spending **three of seven lines**
+  explaining events older than the messages on screen. Its age was invisible too,
+  and an eight-hour-old recap really did sit above today's work wearing the same
+  face as a current one (ehpk v0.1.39)
+  - Once a message on screen is newer than the recap, the reader has overtaken
+    it, so it retires and gives the three lines back to the conversation
   ```
-  linux           要約 04:54 / 最新msg 04:51    → 表示（要約が最新）
-  wheel-leg-bot   要約 昨日15:27 / 最新msg 02:00 → 非表示
-  life            要約 01:48 / 最新msg 01:45    → 表示
+  linux           recap 04:54 / newest msg 04:51    -> shown (recap is newer)
+  wheel-leg-bot   recap 15:27 yesterday / msg 02:00 -> hidden
+  life            recap 01:48 / newest msg 01:45    -> shown
   ```
-  - サーバは `ccRecapAt` を、履歴APIはメッセージごとの `timestamp` を既に送っていた。グラス側が型に持っていなかっただけ
-  - **判断できないときは出したまま**。タイムスタンプが無い・壊れているのは「要約が古い」証拠ではない
+  - The server already sent `ccRecapAt` and the history API already sent a
+    per-message `timestamp`. The glasses simply did not have them in their types
+  - **When it cannot decide, it stays**. A missing or broken timestamp is not
+    evidence that a recap is stale
 
 ## [0.2.65] - 2026-07-27
 
 ### Fixed
-- **グラス: 実機で豆腐（□）になる文字を代替文字に置換** (#571): シミュレータではチェックボックスに見えるものが実機では白い箱だった。**実機は CJK の記号セットを持っている**（○ × △ ！ ※ ★ すべてに実 advance がある）ので、捨てるのではなく**同じ桁数で同じことを言う代替**に置き換える（ehpk v0.1.38）
+- **Glasses: substitute characters that render as tofu on the device** (#571):
+  what looked like a checkbox in the simulator was a white box on the device.
+  **The device carries the CJK symbol set** (the round, cross, triangle,
+  exclamation, reference and star marks all have real advances), so rather than
+  dropping a glyph it is replaced by **something that says the same thing in the
+  same number of columns** (ehpk v0.1.38)
   ```
-  - ✅ health-check.sh を修正   →   - ○ health-check.sh を修正
-  ❌ 失敗 ⚠️ 注意 🎉 完了       →   × 失敗 ！ 注意 完了
-  結果: ✓ OK / ✗ NG / ❓ 不明   →   結果: ○ OK / × NG / ？ 不明
-  ⭐ 重要 💡 ヒント ➡️ 次へ      →   ★ 重要 ※ ヒント → 次へ
+  emoji in the source        drawn on the device
+  check / tick / OK marks    ○
+  cross / NG marks           ×
+  warning / exclamation      ！
+  question marks             ？
+  star / sparkles            ★
+  bulb / memo / pin          ※
+  arrows                     → ← ↑ ↓
   ```
-  - **信号は三値を保つ**。🟢 と 🟡 が両方 ○ になっては区別するために存在している意味がなくなるので `○ / △ / ×` に割り当てる
-  - **装飾は落とす**。🎉 や 🚀 は状態を持たないのでなるべきものがない
-  - 判定は**2段構え**。`getAdvW` はフォントに無いコードポイントに 0 を返し ✓ ✗ ⚠ とほとんどの絵文字を捕まえるが、**✅ は捕まらない**（pretext 0.1.4 が追加した絵文字フォントの値 320px を返すが、実機はそのフォントを持っていない）。よって絵文字は測定値に関わらず対象にし、それ以外は実測に従う
-  - 置換は削除ではないので前後の空白は書かれたまま残す。削除が起きた行だけ空白を詰める
-  - `stripInline` で処理するのでパネルとシミュレータが同じ文字列を受け取る。シミュレータが実機より綺麗に描いてしまう余地がない
+  - **A signal keeps its three values**. Letting the green and the yellow circle
+    both become the round mark would defeat the distinction they exist for, so
+    they map to `○ / △ / ×`
+  - **Decoration is dropped**. Party poppers and rockets carry no state, so there
+    is nothing for them to become
+  - The test is **two-stage**. `getAdvW` returns 0 for a codepoint the font does
+    not carry, which catches the tick, the cross, the warning sign and most
+    emoji, but **not the green check** (pretext 0.1.4 added an emoji font that
+    measures it at 320px, and the device does not have that font). So emoji are
+    always in scope regardless of measurement, and everything else follows the
+    measurement
+  - Substitution is not deletion, so surrounding spaces are left as written. Only
+    lines where something was removed get their spaces collapsed
+  - It runs in `stripInline`, so the panel and the simulator receive the same
+    string. There is no room for the simulator to draw something prettier than
+    the device
 
 ## [0.2.64] - 2026-07-27
 
 ### Fixed
-- **シミュレータ: 縮小表示（PiP）でパネルの端が切れていた問題** (#569): 小窓には角丸があり、パネルの端まで伸びた行が端を落としていた。パネルをフレームの **92%** で中央に描くよう変更。部屋と映り込みはフレーム全体のまま（シミュレータのみの変更、ehpk 更新不要）
+- **Simulator: the panel's edges were clipped in picture-in-picture** (#569): the
+  small window has rounded corners, and a line reaching the panel's edge lost it.
+  The panel is drawn centered at **92%** of the frame now. The room and the
+  reflection still fill the frame (simulator only, no ehpk update needed)
 
 ## [0.2.63] - 2026-07-27
 
 ### Added
-- **シミュレータ: 縮小表示（PiP）にレンズ全体を映す** (#567): ターミナル操作とそれがグラスにどう出るかを並べて見せられる（シミュレータのみの変更、ehpk 更新不要）
-  - **PiP が運べるのは動画1本だけ**。Chrome がカメラの `<video>` を自動で PiP に出していたため小窓には部屋だけが映り、その上に重ねた canvas（緑の文字）も CSS のエフェクトも一緒には行かなかった
-  - CSS のレイヤーでやっている重ね合わせを **1枚の canvas 上の描画として組み直した**。同じ層を、積むかわりに描く。その canvas を `captureStream()` で動画にして PiP に出す
-  - カメラ要素に `disablePictureInPicture` を付与。もう自動で選ばれない
-  - 合成は **2x で描きスムージングを切る**。パネルは粗く見えるべきもので、PiP は渡されたものを勝手にリサンプルするため
-  - **ページが隠れるとタイマーは1秒に丸められる。まさに小窓を見ているとき**。5秒ごとに変わるパネルには十分だが生きた部屋には足りないので、カメラが動いている間は `requestVideoFrameCallback` を併走させメディアパイプライン側から駆動する
+- **Simulator: picture-in-picture shows the whole lens** (#567): so a terminal
+  session and how it looks on the glasses can be shown side by side (simulator
+  only, no ehpk update needed)
+  - **PiP can only carry one video**. Chrome was automatically putting the
+    camera's `<video>` into PiP, so the small window showed the room alone -
+    neither the canvas layered above it (the green text) nor the CSS effects came
+    along
+  - The compositing that CSS layers do was **rebuilt as drawing onto a single
+    canvas**. The same layers, drawn rather than stacked. That canvas becomes a
+    video through `captureStream()` and goes to PiP
+  - The camera element got `disablePictureInPicture` so it is no longer chosen
+    automatically
+  - Compositing **draws at 2x with smoothing off**. The panel is supposed to look
+    coarse, and PiP resamples whatever it is handed
+  - **A hidden page has its timers clamped to one second - which is exactly when
+    you are watching the small window**. That is enough for a panel that changes
+    every five seconds and not enough for a live room, so while the camera runs a
+    `requestVideoFrameCallback` runs alongside and drives it from the media
+    pipeline
 
 ## [0.2.62] - 2026-07-27
 
 ### Added
-- **シミュレータ: 全画面表示** (#565): 録画用。ページのUIが消え、**背景が視界全体・パネルが中央**という構図になる（シミュレータのみの変更、ehpk 更新不要）
-  - 実機を覗くと表示は視野の**中央部**にあって全体を埋めていないので、パネルは fit の **80%** で中央に置く。端から端まで描くのは絵として間違い
-  - **全画面では部屋の減光を軽くしている**（`.42/.52` → `.24/.32`）。あの減光は明るい部屋で緑を読ませるためのものだが、パネルがフレームのごく一部しか占めないなら競合がほとんど起きない。同じ強さで抑え込むと録画が夜みたいになる
+- **Simulator: fullscreen** (#565): for recording. The page UI disappears,
+  leaving **the background filling the view with the panel centered** (simulator
+  only, no ehpk update needed)
+  - Looking through the real device, the display sits in the **middle** of the
+    field of view rather than filling it, so the panel is centered at **80%** of
+    the fit. Drawing it edge to edge is wrong as a picture
+  - **Fullscreen dims the room less** (`.42/.52` -> `.24/.32`). That dimming
+    exists to keep the green readable in a bright room, and there is barely any
+    competition when the panel covers a small part of the frame. Holding it down
+    just as hard makes the recording look like night
 
 ### Changed
-- **シミュレータ: パネルの緑を強くした** (#565): `106,255,122` → `76,255,100`。G2 は単色グリーンの表示なので、淡いミントだと汎用の HUD に見えていた
+- **Simulator: a stronger green on the panel** (#565): `106,255,122` ->
+  `76,255,100`. The G2 is a monochrome green display, and the pale mint read as a
+  generic HUD
 
 ## [0.2.61] - 2026-07-27
 
 ### Added
-- **シミュレータ: カメラ背景** (#563): `背景` に **カメラ** ボタンを追加。背面カメラ（`facingMode: environment`）の映像を背景にする。静止画は板に見えるが、生きた部屋は自分が立っている場所に見える（シミュレータのみの変更、ehpk 更新不要）
-  - **ぼかしている**。目のピントは手前の表示に合っていて背景の部屋は緩む。描画フォールバック（`.room` / `.figure`）は最初から `blur` してあったのに写真とカメラだけ素通しで、写真が板に見えていた原因がこれだった。ぼかしが端でサンプルを失わないよう 106% でオーバースキャン
-  - `.scene` の中に置いたので既存の減光パスがそのまま掛かる
-  - 停止時は**トラックを stop する**。要素を空にするだけではカメラを掴んだままで、インジケータも点いたままになる
-- **シミュレータ: レンズの映り込み** (#563): 斜めの光の筋、コンバイナ上端からの光漏れ、周辺減光（導波路の輝度落ちとレンズ縁の陰）。canvas に `mix-blend-mode: screen` を掛け、実機の光学系と同じく**加算**にした（黒い矩形を部屋に貼るのではなく光を足す）
-  - **すべて canvas の外側で、トグルの裏**。canvas は実機に合わせた忠実な4bit描画なので、演出を焼き込むと台無しになる。忠実さを確認したいときは素の状態が要る。設定は localStorage に保存
+- **Simulator: camera background** (#563): a **Camera** button under
+  **Background** puts the rear camera (`facingMode: environment`) behind the
+  panel. A still image looks like a board; a live room looks like where you are
+  standing (simulator only, no ehpk update needed)
+  - **It is blurred**. The eye is focused on the near display and the room behind
+    goes soft. The drawn fallback (`.room` / `.figure`) was blurred from the
+    start while photos and the camera went through sharp, and that is why a photo
+    looked like a board. Overscanned to 106% so the blur does not run out of
+    pixels at the edge
+  - It sits inside `.scene`, so the existing dimming pass covers it
+  - Stopping **stops the tracks**. Emptying the element alone keeps the camera
+    held and its indicator lit
+- **Simulator: lens reflections** (#563): a diagonal streak of light, leakage
+  along the top of the combiner and vignetting (a waveguide's falloff plus the
+  lens rim's shadow). The canvas gets `mix-blend-mode: screen`, making it
+  **additive** like the real optics (adding light to the room rather than pasting
+  a black rectangle onto it)
+  - **All of it outside the canvas, behind a toggle**. The canvas is a faithful
+    4-bit render matched to the device, and baking effects into it would ruin
+    that. Checking the fidelity needs the plain version. The setting is saved in
+    localStorage
 
 ## [0.2.60] - 2026-07-27
 
 ### Added
-- **グラス: 実機の画面をシミュレータにミラーする** (#560): デモ用途。装着者が今見ている画面を、ブラウザで何台でも同時に見られる（ehpk v0.1.37）
+- **Glasses: mirror the device's screen into the simulator** (#560): for demos.
+  What the wearer is seeing right now, in as many browsers at once as you like
+  (ehpk v0.1.37)
   ```
-  実機（スマホの WebView）              CC Hub               ブラウザ（何台でも）
+  device (phone WebView)                CC Hub              browsers (any number)
     render(state)
-      ├→ updateDisplay(bridge)  →  G2 パネル
-      └→ publish screenText()   →  /ws/mux  →  broadcast  →  drawPanel()
+      |-> updateDisplay(bridge)  ->  G2 panel
+      \-> publish screenText()   ->  /ws/mux  ->  broadcast  ->  drawPanel()
   ```
-  - グラスアプリは `screenText()` で画面を**一度だけ**計算し、同じ3本の文字列をパネルとシミュレータの描画器の両方に渡している。したがってミラーは画面の再現ではなく**画面そのもの**
-  - publish は `GlassesPlatform.render` にぶら下げた。両プラットフォーム共通の唯一の描画口なので、全モード・全リング操作が列挙なしで乗る。直前と同一のフレームは送らない（描画は5秒ごとに走るため）
-  - サーバは**最後のフレームを保持**。途中から参加した viewer は空パネルではなく現在の画面を即座に見られる
-  - publisher のソケットが閉じたら **null を配信**し `実機が接続されていません` と表示。最後のフレームを出し続けるミラーは「静止している生きた画面」と見分けがつかず、聴衆の前で気づくには最悪の種類の曖昧さになる
-  - **読み取り専用**。viewer がリングを押すと装着者と画面を奪い合うため、ミラー中はリングのボタンを無効化する。ノートPCからグラスを操作するのは別の機能
-  - WS プロトコル: `glasses-screen`（publish / broadcast）、`subscribe-glasses-screen` / `unsubscribe-glasses-screen`。zod スキーマでペイロード上限も検証
+  - The glasses app computes the screen through `screenText()` **once** and hands
+    the same three strings to both the panel and the simulator's renderer. The
+    mirror is therefore not a reproduction of the screen but **the screen**
+  - Publishing hangs off `GlassesPlatform.render`, the one drawing entry point
+    both platforms share, so every mode and every ring gesture rides along
+    without being enumerated. A frame identical to the previous one is not sent
+    (drawing runs every five seconds)
+  - The server **holds the last frame**, so a viewer joining midway sees the
+    current screen immediately rather than an empty panel
+  - When the publisher's socket closes, **null is broadcast** and the mirror says
+    `No device is connected`. A mirror that keeps showing the last frame is
+    indistinguishable from a live screen holding still - the worst kind of
+    ambiguity to discover in front of an audience
+  - **Read-only**. A viewer pressing the ring would fight the wearer for the
+    screen, so the ring buttons are disabled while mirroring. Driving the glasses
+    from a laptop is a different feature
+  - WS protocol: `glasses-screen` (publish / broadcast), `subscribe-glasses-screen`
+    / `unsubscribe-glasses-screen`, with a zod schema validating the payload size
+    too
 
 ## [0.2.59] - 2026-07-27
 
 ### Fixed
-- **グラス: ページ送りで前ページの行が再登場していた問題** (#557): 6行進めて7行表示していたため、各ページの最終行が次ページの先頭に再登場していた。文脈の持ち越しのつもりだったが、実際は「ページが進んでいない」ように読め、7行のうちどれが既読かを読者が判断する羽目になる（ehpk v0.1.36）
+- **Glasses: the previous page's last line reappeared when paging** (#557): it
+  advanced six lines while showing seven, so every page's last line came back as
+  the next page's first. It was meant as carried context and instead read as "the
+  page did not advance", leaving the reader to work out which of the seven lines
+  they had already seen (ehpk v0.1.36)
   ```
-  変更前: p1 = 1-7, p2 = 7-13, p3 = 13-19   ← 7行目と13行目が二度出る
-  変更後: p1 = 1-7, p2 = 8-14, p3 = 15-21
+  before: p1 = 1-7, p2 = 7-13, p3 = 13-19   <- lines 7 and 13 appear twice
+  after:  p1 = 1-7, p2 = 8-14, p3 = 15-21
   ```
-- **グラス: 本文コンテナの padding が画面ごとにバラバラだった問題** (#557): `metrics.ts` の折り返し幅は1つの数字なのに、5画面で3種類の padding を宣言していた。一覧が4（内側560px・4px早く折る）、会話/音声/overlay が6（556px・正）、**選択が8（552px・4px遅く折るため実機側で再折り返しが起きる）**。選択画面だけ、折り返し規則が防ごうとしている断片行が出続けていた。全画面 padding 6 に統一
-- **シミュレータの行送りが 28px だった問題** (#557): LVGL の行高は **27px**。7行目で1行の1/4ぶんずれ、ブロック全体も1px下がっていた。座標をコンテナ定義と `metrics.ts` から導出するようにし、手写しの定数がずれる余地をなくした
-- **シミュレータが実機にない区切り線を描いていた問題** (#557): ヘッダー下とフッター上に罫線を引いていたが、コンテナは3つとも `borderWidth: 0` でパネルには何もない。3ゾーンを見やすくするための飾りだったが、「実機と同じ描画」を名乗る画面としては嘘だった
+- **Glasses: the body container's padding differed per screen** (#557): the wrap
+  width in `metrics.ts` is one number, and five screens declared three different
+  paddings. The list used 4 (560px inside, wrapping 4px early), conversation /
+  voice / overlay used 6 (556px, correct), and **the choice screen used 8 (552px,
+  wrapping 4px late, so the device re-wraps)**. On the choice screen alone, the
+  fragmented lines the wrap rules exist to prevent kept appearing. All screens
+  use padding 6 now
+- **The simulator's line advance was 28px** (#557): LVGL's line height is
+  **27px**. By the seventh line it was off by a quarter of a line, and the whole
+  block sat 1px low. The coordinates are derived from the container definitions
+  and `metrics.ts` now, leaving no hand-copied constant to drift
+- **The simulator drew separators the device does not have** (#557): rules under
+  the header and above the footer, while all three containers have
+  `borderWidth: 0` and the panel has nothing. They were decoration to separate
+  the three zones, and a lie on a screen claiming to draw what the device draws
 
 ## [0.2.58] - 2026-07-27
 
 ### Fixed
-- **グラス: 文字幅を実測ピクセルで測るようにした** (#554): **G2 のフォントは等幅ではなかった**。空白 5px、`i` 4px、`a` 12px、`W` 16px、CJK 20px、行高 27px。これまでの「52桁 / CJK 1.857倍」というモデルは平均的には近いが文字列ごとにずれる近似で、右詰めのパディング（＝空白）を実幅の2倍で数えていたため、ヘッダー時計は `linux` + 空白 + `10:25` で **293px / 568px** ——「右上隅に行っていない」のではなくパネルの真ん中で止まっていた。修正後は 563〜567px に到達する（ehpk v0.1.35）
-  - 公式の **[@evenrealities/pretext](https://www.npmjs.com/package/@evenrealities/pretext)**（MIT・依存なし・SDK と同じメンテナ）を採用。G2 ファームウェアの LVGL フォントメトリクスを埋め込んでおり、カーニング、3段のフォントフォールバック、LVGL と同じ per-glyph 丸め `(adv + kern + 8) >> 4` まで再現する
-  - `metrics.ts` を新設し `types.ts` / `display.ts` の共通計測層に。コンテナ寸法を LVGL の実数から導出（行高 27px なので **36px のヘッダーはちょうど1行**しか持てず、あふれた行は時計ごとパネル外に出る）
-  - `advance(prev, ch)` はペア単位のカーニング差分。1文字ずつ足すと `getTextWidth` の全体幅と**誤差 0px** で一致するため、行分割は1パスのまま。禁則処理・折り返し位置の空白除去・`…` を予算に含める切り詰めはすべて維持
-  - `charWidth` / `displayWidth` / `PANEL_WIDTH` / `LINE_WIDTH` / `CJK_RATIO` は削除
-  - コスト gzip +40KB（ehpk 約50KB → 約90KB）。実データ218ページ走査でパネル幅超過ゼロ・7行超過ゼロ・ヘッダー折り返しゼロ
-- **シミュレータの描画を実機フォントの性質に合わせた** (#554): 等幅フォントで描いていたため、実機の狭い advance（空白5px、`i` 4px）に対して ASCII をほぼ毎回横に押し潰していた。プロポーショナル sans に変更し、実機 advance との平均誤差 **4.22px → 1.07px**
+- **Glasses: character widths are measured in real pixels** (#554): **the G2's
+  font is not monospaced**. A space is 5px, `i` is 4px, `a` is 12px, `W` is 16px,
+  CJK is 20px, and the line height is 27px. The old model ("52 columns, CJK at
+  1.857x") was close on average and drifted per string, and right-aligned padding
+  (that is, spaces) was counted at twice its real width - so a header clock of
+  `linux` + spaces + `10:25` reached **293px of 568px**. It was not "failing to
+  reach the top right corner"; it was stopping in the middle of the panel. After
+  the fix it lands at 563-567px (ehpk v0.1.35)
+  - Adopted the official **[@evenrealities/pretext](https://www.npmjs.com/package/@evenrealities/pretext)**
+    (MIT, no dependencies, same maintainer as the SDK). It embeds the G2
+    firmware's LVGL font metrics and reproduces kerning, the three-level font
+    fallback and LVGL's own per-glyph rounding `(adv + kern + 8) >> 4`
+  - Added `metrics.ts` as the shared measurement layer for `types.ts` /
+    `display.ts`. Container sizes are derived from LVGL's real numbers (at a
+    27px line height a **36px header holds exactly one line**, and an overflowing
+    line takes the clock off the panel with it)
+  - `advance(prev, ch)` is the per-pair kerning delta. Summing character by
+    character matches `getTextWidth`'s whole-string width with **0px of error**,
+    so line breaking stays a single pass. Kinsoku, dropping the space at a wrap
+    point and counting `...` inside the truncation budget are all preserved
+  - `charWidth` / `displayWidth` / `PANEL_WIDTH` / `LINE_WIDTH` / `CJK_RATIO` are
+    gone
+  - Cost: +40KB gzipped (the ehpk goes from about 50KB to about 90KB). A sweep
+    over 218 pages of real data shows zero panel-width overflows, zero 7-line
+    overflows and zero header wraps
+- **The simulator's drawing matches the device font's character** (#554): it drew
+  in a monospaced font, which squeezed ASCII horizontally almost everywhere
+  against the device's narrow advances (space 5px, `i` 4px). Switched to a
+  proportional sans, taking the mean error against device advances from **4.22px
+  to 1.07px**
 
 ## [0.2.57] - 2026-07-27
 
 ### Added
-- **グラス: ヘッダー右端に時計を表示** (#551): 会話画面のタイトル行の右端に `HH:MM`。「時間はいつ見えても嬉しい」との要望なので、一覧・会話・選択・音声・オーバーレイの全画面に出す（`glasses/src/display.ts`、ehpk v0.1.34）
+- **Glasses: a clock at the right end of the header** (#551): `HH:MM` at the
+  right of the conversation screen's title row. The request was "the time is
+  welcome whenever it is visible", so it appears on every screen - list,
+  conversation, choice, voice and overlay (`glasses/src/display.ts`, ehpk
+  v0.1.34)
   ```
   linux                                          09:56
   ```
-  - 桁数は本文と同じ **52**。ヘッダー自身の padding では 53 桁入るが、あふれるとコンテナが折り返して 36px の箱から時計が消えるため 1 桁の余裕を残す
-  - 右詰めは**切り捨て**。CJK タイトルは 1.857 桁と端数を持つので、四捨五入だと 1/3 桁ぶん右端を越えた
-  - 長いタイトルは切る（時計を押し出さない）。ひと目で読めることが時計の存在理由なので、位置が動かないことを優先
-  - **タイマーなし**: `sessions-updated` が5秒ごとに再描画するので分は古くならない。選択画面だけは本文しか更新しておらず時計が固まるため、ヘッダーも更新するよう修正
+  - The column count is **52**, the same as the body. The header's own padding
+    fits 53, but an overflow makes the container wrap and the clock leaves the
+    36px box, so one column is held back
+  - Right alignment **truncates**. A CJK title is 1.857 columns with a fraction,
+    and rounding pushed a third of a column past the right edge
+  - A long title is cut rather than pushing the clock out. Being readable at a
+    glance is the clock's whole purpose, so a fixed position wins
+  - **No timer**: `sessions-updated` redraws every five seconds, so the minute
+    never goes stale. Only the choice screen updated the body alone and froze its
+    clock, so it updates the header too now
 
 ### Fixed
-- **シミュレータの文字配置が実機と数桁ずれていた問題** (#551): 文字列全体をブラウザのメトリクスで配置しており、1行で数桁ぶんずれていた（実機 ASCII 10.69px に対しブラウザ 9.5px、CJK は 19.85px に対し 19px）。右詰めした内容が右端から程遠い位置に出て初めて発覚。実機実測のカラムピッチで1文字ずつ進めるよう変更（`glasses/src/debug-ui.ts`）。あわせて、幅テーブルが読み違えるグリフ（絵文字、罫線）は隣に重ならないよう実機のセル幅に押し込める
+- **The simulator's character placement was several columns off** (#551): it
+  placed whole strings using the browser's metrics and drifted by several columns
+  per line (the device's ASCII advance is 10.69px against the browser's 9.5px;
+  CJK is 19.85px against 19px). It surfaced when right-aligned content appeared
+  nowhere near the right edge. It now advances character by character on the
+  device's measured column pitch (`glasses/src/debug-ui.ts`). Glyphs the width
+  table misreads (emoji, box drawing) are also squeezed into the device's cell
+  width so they cannot overlap their neighbor
 
 ## [0.2.56] - 2026-07-27
 
 ### Fixed
-- **グラス: テーブルが `[table]` に潰れて内容が消えていた問題** (#547): マーカー自体は「表があった」以外に何も伝えず、読みたかったセルの方を捨てていた。エージェントの返す表はほぼ短い key/value なので、52桁でも1行1レコードの `セル | セル` として読める。`|---|---|` の区切り行だけ落とす（`glasses/src/types.ts`、ehpk v0.1.33）
+- **Glasses: a table collapsed into `[table]` and lost its contents** (#547): the
+  marker conveyed nothing beyond "there was a table" while discarding the cells
+  you wanted to read. An agent's tables are nearly always short key/value pairs,
+  readable at 52 columns as one `cell | cell` record per line. Only the
+  `|---|---|` separator row is dropped (`glasses/src/types.ts`, ehpk v0.1.33)
   ```
-  変更前: [table]
-  変更後: 対象 | 版
-          CC Hub 本体 | v0.2.55（本番更新済み）
-          G2 グラスアプリ | v0.1.32（EVEN Hub の Beta）
+  before: [table]
+  after:  item | version
+          CC Hub | v0.2.55 (updated in production)
+          G2 glasses app | v0.1.32 (Beta on EVEN Hub)
   ```
-- **グラス: 行頭に句読点だけが落ちる / 単語が変な位置で割れる問題** (#547): 52桁の折り返しに禁則処理がなく、行末付近で文が終わると `。` だけが次の行の先頭に残っていた。行頭禁則（`。、）」…`）・行末禁則（開き括弧）・短い英単語を割らない規則を追加。3つとも**次行へ送り出す**方式で、はみ出させない — ここの桁幅は実機実測の近似値なので、あふれた行は G2 側のコンテナが再度折り返し、避けたはずの状態に戻ってしまうため。どう分割しても1行に収まらない語（URL、長いパス）は空けた桁が何も買わないのでそのまま割る
-- **グラス: 文中に説明のつかない空白が入る問題** (#547): 折り返し位置にちょうど単語間の空白が来ると、その空白が次の行の先頭に残っていた。空白は「そこで切った」印なので改行がすでにその役割を果たしている。本物の改行から来たインデントは維持する
-- **グラス: 切り詰めたツール行がさらに折り返して2文字の断片を作る問題** (#548): `clipToWidth` が幅チェックの**後**に `…` を足していたため結果が1桁オーバー。さらに detail の上限が `[Bash] ` ラベルや `A> ` 接頭辞と無関係の固定値44だった。`…` と接頭辞を予算に含めるよう修正
+- **Glasses: punctuation left alone at the start of a line / words split oddly**
+  (#547): the 52-column wrap had no kinsoku, so a sentence ending near the end of
+  a line left its full stop alone at the head of the next. Added line-start
+  kinsoku (closing punctuation and brackets), line-end kinsoku (opening
+  brackets), and a rule against splitting short English words. All three **push
+  to the next line** rather than overflowing - the column width here is an
+  approximation of measured hardware, and an overflowing line gets re-wrapped by
+  the G2's own container, returning to the state being avoided. A word no split
+  can fit on one line (a URL, a long path) is split anyway, since the reserved
+  columns would buy nothing
+- **Glasses: unexplained spaces inside a sentence** (#547): when a wrap landed
+  exactly on the space between words, that space stayed at the head of the next
+  line. A space marks "the break is here", and the newline already does that job.
+  Indentation coming from a real newline is preserved
+- **Glasses: a truncated tool line wrapped again into a two-character fragment**
+  (#548): `clipToWidth` appended `...` **after** the width check, so the result
+  was one column over. The detail cap was also a fixed 44, unrelated to the
+  `[Bash] ` label or the `A> ` prefix. Both `...` and the prefix are in the
+  budget now
   ```
-  変更前: A> [Bash] sed -i "s#^const LINE_WIDTH = 52 .*#cons
-          t …
-  変更後: A> [Bash] sed -i "s#^const LINE_WIDTH = 52 .*#c…
+  before: A> [Bash] sed -i "s#^const LINE_WIDTH = 52 .*#cons
+          t ...
+  after:  A> [Bash] sed -i "s#^const LINE_WIDTH = 52 .*#c...
   ```
-- **グラス: 複数行コマンドが7行のうち3行を食う問題** (#548): ヒアドキュメントが改行を保ったまま出ており、「1コール1行」という設計意図に反していた。クリップ前に1行へ畳む
-- **グラス: 要約が7行中6行を占める問題** (#548): `recapBlockLines` の上限が**論理行**で数えられていた。要約は改行のない1文で届くのが普通なので上限2行を素通りしてから5〜6行に折り返し、導入するはずの会話が1行しか残らなかった。会話本文の7行カットも同じく論理行で切っており、折り返した段落がコンテナ下端から静かに溢れる余地があった。両方とも表示行で数える
-- **グラス: セッション一覧の桁が揃っていなかった問題** (#548): `>[!] name` と `  name` が3桁ずれて始まり、目で追いにくかった。バッジ幅を固定して名前の開始位置を揃えた
+- **Glasses: a multi-line command ate three of the seven lines** (#548): a
+  heredoc came through with its newlines intact, against the design's "one call,
+  one line". It is folded to a single line before clipping
+- **Glasses: a recap took six of seven lines** (#548): `recapBlockLines` counted
+  its cap in **logical lines**. A recap normally arrives as one sentence with no
+  newlines, so it sailed past the two-line cap and then wrapped to five or six,
+  leaving one line for the conversation it was supposed to introduce. The body's
+  seven-line cut counted logical lines too, leaving room for a wrapped paragraph
+  to spill quietly past the bottom of the container. Both count display lines now
+- **Glasses: the session list's columns did not line up** (#548): `>[!] name` and
+  `  name` started three columns apart, which is hard to scan. The badge width is
+  fixed so names start at the same place
 
 ### Added
-- **glasses ワークスペースにテストを追加** (#547, #548): これまで `"test": "echo 'no tests'"` だった。禁則、桁幅超過なし、再折り返しで文字が消えないこと、テーブルの各パターン、クリップ後の行が接頭辞込みでパネルに収まること、要約と本文の行数上限を22件で固定（`bun test`）
+- **Tests for the glasses workspace** (#547, #548): it was `"test": "echo 'no tests'"`.
+  22 cases now pin kinsoku, the absence of column overflow, characters surviving
+  a re-wrap, each table pattern, clipped lines fitting the panel with their
+  prefixes, and the recap and body line caps (`bun test`)
 
 ## [0.2.55] - 2026-07-27
 
 ### Fixed
-- **グラス: 会話を遡って読んでいると数秒で最新に引き戻される問題** (#545): `maybeRefreshConversation` はターミナル出力とセッション push のたび（3秒スロットル）に `loadConversation` を呼ぶが、`loadConversation` は末尾で `conversationOffset` と `conversationPage` を 0 にリセットしていた。つまり更新は新着を取ってくるだけでなく、**読んでいる途中の人を3秒ごとに先頭へ戻していた**。遡り表示中は更新を保留するよう修正（`glasses/src/controller.ts`、ehpk v0.1.32）。最新まで戻せばライブ更新が再開するので、通常のケース（最新メッセージが流れてくるのを眺める）には影響しない
+- **Glasses: scrolling back through a conversation snapped to the newest within
+  seconds** (#545): `maybeRefreshConversation` calls `loadConversation` on every
+  terminal output and session push (throttled to 3s), and `loadConversation` reset
+  `conversationOffset` and `conversationPage` to 0 at the end. So a refresh did
+  not only fetch new messages - it **sent a reader back to the top every three
+  seconds**. Refreshes are held while scrolled back (`glasses/src/controller.ts`,
+  ehpk v0.1.32). Returning to the newest resumes live updates, so the normal case
+  (watching new messages arrive) is unaffected
 
 ## [0.2.54] - 2026-07-27
 
 ### Added
-- **シミュレータで実際にマイク録音できるようにした** (#542): これまで `startMicCapture` は `true` を返すだけ、`transcribeAudio` はテキスト欄の中身を返すだけで、**Groq と話す唯一の機能が唯一テストできない機能**になっていた。ブラウザのマイクから 16kHz mono で録音し、G2 の SDK が出すのと同じ 16bit PCM を同じ `/api/glasses/stt` に送る（`glasses/src/debug-ui.ts`）。サーバ側はどちらから来ても同一のコードを通るため、モックではなく実機の経路そのものを検証できる。テキスト欄に文字を入れれば従来どおり録音を飛ばせる（確認・送信フローだけ試す用）
-- **シミュレータの背景をクエリパラメータ無しで差し替えられるようにした** (#542): ファイル選択・URL 入力・画面のどこにでもドラッグ＆ドロップに対応。貼り付けた URL は localStorage に記憶し、開いたファイルは記憶しない（blob URL がページを閉じると無効になるため）。`?bg=` は指定時に優先
+- **The simulator can actually record from the microphone** (#542): until now
+  `startMicCapture` only returned `true` and `transcribeAudio` only returned the
+  text box's contents, making **the one feature that talks to Groq the one
+  feature that could not be tested**. It records from the browser microphone at
+  16kHz mono and sends the same 16-bit PCM the G2's SDK produces to the same
+  `/api/glasses/stt` (`glasses/src/debug-ui.ts`). The server runs identical code
+  either way, so this exercises the real path rather than a mock. Typing into the
+  text box still skips recording (for trying the confirm-and-send flow alone)
+- **The simulator's background can be replaced without a query parameter** (#542):
+  a file picker, a URL field, and drag and drop anywhere on the page. A pasted
+  URL is remembered in localStorage; an opened file is not (a blob URL dies with
+  the page). `?bg=` still wins when given
 
 ### Changed
-- **グラス: ツール実行の中身を表示する** (#543): 会話画面がツール実行を `[tools] Bash` としか表示せず、繰り返されると見分けがつかなかった（7行しかないページの4行を、何も言わないことに使っていた）。`toolUse` は `input` を持っているのに読んでいなかったのが原因。ツール別に意味のある引数を出すよう変更（`glasses/src/types.ts`、ehpk v0.1.31）
+- **Glasses: show what a tool call actually did** (#543): the conversation screen
+  showed a tool call as `[tools] Bash` and repeated calls were indistinguishable
+  (four lines of a seven-line page spent saying nothing). The cause was that
+  `toolUse` carries `input` and nothing read it. Each tool now shows a meaningful
+  argument (`glasses/src/types.ts`, ehpk v0.1.31)
   ```
-  変更前: A> [tools] Bash / A> [tools] Bash / A> [tools] Read
-  変更後: A> [Bash] toolUse に含まれる情報を確認
-          A> [Bash] 実データで toolUse.input の中身を確認
+  before: A> [tools] Bash / A> [tools] Bash / A> [tools] Read
+  after:  A> [Bash] check what toolUse carries
+          A> [Bash] check toolUse.input against real data
           A> [Edit] .../src/types.ts
   ```
-  - Bash は `description` → `command` の順（人が書いた意図の一文が、解読の要るシェルより読める）、ファイル系はパス、Grep/Glob は pattern、Task は description、WebFetch/WebSearch は URL か query、未知のツールは最初の文字列引数
-  - 各行は CJK を実幅（1.86桁）で測って 44 桁にクリップ。連続実行は4行＋残件数で打ち切り、アシスタント自身の発言を押し出さない
-  - **ツール結果**も生出力が改行込みで入り、1件でページ全体を占めることがあった。1行に畳んでからクリップするよう修正
+  - Bash takes `description` then `command` (a human-written sentence of intent
+    reads better than a shell line that needs decoding), file tools take the
+    path, Grep/Glob the pattern, Task the description, WebFetch/WebSearch the URL
+    or query, and an unknown tool its first string argument
+  - Each line is clipped to 44 columns with CJK measured at its real width
+    (1.86 columns). A run of calls stops at four lines plus a remainder count, so
+    the assistant's own words are not pushed out
+  - **Tool results** also arrived as raw output with newlines and could fill a
+    page on their own. They are folded to one line before clipping
 
 ### Fixed
-- **シミュレータがスマホ画面からはみ出していた問題** (#542): パネルは 576×288 固定（それがハードウェアなので）だが、狭い画面で右端が切れていた。利用可能な幅に合わせて縮小するよう変更（412px 幅で `scale(0.62)`、表示全体が見え画面外にはみ出さない）。canvas は実解像度のままなので文字の粗さは実機と変わらず、全体が縮むだけ
+- **The simulator overflowed a phone screen** (#542): the panel is a fixed
+  576x288 (that is the hardware) and its right edge was cut off on a narrow
+  screen. It scales to the available width now (`scale(0.62)` at 412px, so the
+  whole display is visible and nothing runs off screen). The canvas keeps its
+  real resolution, so the type is as coarse as the device's - the whole thing
+  simply gets smaller
 
 ## [0.2.53] - 2026-07-27
 
 ### Changed
-- **グラスシミュレータを「掛けている人の視界」として描く** (#539): シミュレータは黒い長方形を描いていたが、これは実機を掛けている人が見ているものではない。ディスプレイは透明なガラスに光を足すもので、前方の部屋はそのまま見えていて、その上に文字が乗る
-  - **背景に会議中の写真を敷き、その上に HUD を重ねる**（`glasses/public/scene-meeting.jpg`）。緑が負けない程度に室内を落としている。`?bg=<画像URL>` で任意の画像に差し替え可能。写真が取得できない場合は CSS で描いた室内シーンにフォールバックする
-  - **解像度感を実機に合わせた**: 文字を実寸 576×288 の canvas に描き、パネルの16階調へ量子化する（実測値: alpha 0, 17, 34, … 255）。ブラウザの文字描画はハードウェアよりはるかに繊細で、実際には出ない品質に見せてしまっていた
-  - **ビルドを2種類に分けた**: `bun run build`（`--mode device`）は `public/` を除外して ehpk 用の `dist` を、`bun run build:web` は写真を含む配信用の `dist-web` を出力する。実機にシミュレータは無く、79KB の写真を同梱すると ehpk が 46KB → 125KB に膨らむため
-  - 背景写真の出典: [Unsplash](https://unsplash.com/photos/a-group-of-people-sitting-around-a-conference-room-LJ8vdm37J7Y)（撮影: Walls.io、Unsplash License — 商用利用可・帰属不要）
-- **グラス: 画面上部の API 利用率表示を廃止** (#540): ヘッダのために5秒ごとに `/api/dashboard` を叩き、17KB をパースして数値ひとつだけ使っていた。サーバ側はその値を60秒キャッシュしているため、12回に11回は完全な無駄。利用率12%の表示は装着者に何のアクションも促さず、ヘッダ52桁のうち8桁を占めていた（`CC Hub API:12% 3/7` → `CC Hub 3/7`）
+- **Draw the glasses simulator as what the wearer sees** (#539): the simulator
+  drew a black rectangle, which is not what someone wearing the device sees. The
+  display adds light to clear glass; the room ahead stays visible and the text
+  sits on top of it
+  - **A photo of a meeting behind the HUD** (`glasses/public/scene-meeting.jpg`),
+    with the room dimmed just enough for the green to win. `?bg=<image URL>`
+    swaps in any image, and a CSS-drawn room is the fallback when the photo
+    cannot be fetched
+  - **The sense of resolution matches the device**: the type is drawn on a real
+    576x288 canvas and quantized to the panel's 16 levels (measured: alpha 0, 17,
+    34, ... 255). The browser's text rendering is far finer than the hardware and
+    was flattering the design into a quality the wearer never sees
+  - **Two builds**: `bun run build` (`--mode device`) excludes `public/` and
+    emits the `dist` for the ehpk, while `bun run build:web` emits `dist-web`
+    with the photo for serving. The device has no simulator, and bundling a 79KB
+    photo takes the ehpk from 46KB to 125KB
+  - Background photo:
+    [Unsplash](https://unsplash.com/photos/a-group-of-people-sitting-around-a-conference-room-LJ8vdm37J7Y)
+    (by Walls.io, Unsplash License - commercial use allowed, no attribution
+    required)
+- **Glasses: the API usage readout left the top of the screen** (#540): it hit
+  `/api/dashboard` every five seconds for the header, parsed 17KB and used one
+  number. The server caches that value for 60 seconds, so eleven times out of
+  twelve it was pure waste. "12% used" prompts the wearer to do nothing and took
+  8 of the header's 52 columns (`CC Hub API:12% 3/7` -> `CC Hub 3/7`)
 
 ### Fixed
-- **グラスが WebSocket の ping を送っていなかった問題** (#540): `glasses/src/ws-client.ts` に ping が一切実装されておらず、他のクライアントが全て送っている中でグラスだけが無言だった。サーバの60秒ゾンビ掃除に引っかかり、**グラスは生涯にわたって90秒周期で切断→再接続を繰り返していた**（その都度 relay のプッシュを取りこぼす）。15秒間隔で送るよう修正し、サーバログで周期が止まったことを確認
-- **グラスの描画が重なっていた問題** (#540): `render()` が `updateDisplay` を await せずに投げていたため、`sessions-updated` がまとめて届くと SDK のページ再構築が複数同時に走っていた。1つずつ順に描き、描画中に届いたフレームは最新状態に畳むよう修正（どうせ上書きされるので中間フレームを描く必要がない）
-- **グラスにクラッシュレポートを追加** (#536, #540): WebView にはこちらから読めるコンソールが無く、例外が出てもアプリが黙って死ぬだけだった。起動トレース・未捕捉例外/Promise拒否のハンドラ・30秒ハートビートを `/api/logs` へ送る。**「起動して数秒で落ちる」症状自体は未解明**（全バージョンで発生し、これらの変更以前から起きている）だが、次に起きたときに停止時刻と直前の状態が残る
+- **The glasses never sent a WebSocket ping** (#540): `glasses/src/ws-client.ts`
+  had no ping at all, leaving the glasses silent while every other client sent
+  one. The server's 60-second zombie sweep caught it, so **the glasses spent
+  their entire life disconnecting and reconnecting every 90 seconds**, dropping
+  relay pushes each time. Fixed to ping every 15 seconds, and the server log
+  confirms the cycle has stopped
+- **The glasses' drawing overlapped itself** (#540): `render()` fired
+  `updateDisplay` without awaiting it, so a batch of `sessions-updated` messages
+  ran several SDK page rebuilds concurrently. Drawing is serialized now, and
+  frames arriving mid-draw collapse into the latest state (an intermediate frame
+  would be overwritten anyway)
+- **Crash reporting for the glasses** (#536, #540): a WebView has no console we
+  can read, so an exception only made the app die quietly. Startup traces,
+  uncaught exception and promise rejection handlers, and a 30-second heartbeat
+  now go to `/api/logs`. **The "starts, dies seconds later" symptom itself is
+  unexplained** (it happens on every version and predates these changes), but the
+  next time it happens there will be a stop time and a last known state
 
 ## [0.2.52] - 2026-07-27
 
 ### Fixed
-- **Service Worker が `/glasses` を横取りしていた問題** (#536): CC Hub の Service Worker が既に入っているブラウザでは、`/glasses` を開くとグラスシミュレータではなく CC Hub 本体が表示されていた（タイトルが「CC Hub」でシミュレータの要素が1つも無い状態）。vite-plugin-pwa の `navigateFallback` はあらゆるナビゲーションを precache した `index.html` で応答するため、SPA のルートではなくバックエンドが配信している `/glasses` がフォールバックに横取りされていた。該当プレフィックスを `navigateFallbackDenylist` に入れて素通りさせる（`frontend/vite.config.ts`）
-  - 新規プロファイルのブラウザでは再現しない（SW 未登録の間だけリクエストがネットワークに到達するため）。v0.2.51 の検証がその状態で行われており、実際に使う側の環境で初めて出た
-  - **新しい Service Worker が有効化されて初めて効く**。`registerType` が `'prompt'` のため、既に開いているクライアントは更新を承認するまで古い worker を使い続ける
+- **The service worker intercepted `/glasses`** (#536): in a browser that already
+  had CC Hub's service worker, opening `/glasses` showed CC Hub itself rather
+  than the glasses simulator (the title said "CC Hub" and not one simulator
+  element was present). vite-plugin-pwa's `navigateFallback` answers every
+  navigation with the precached `index.html`, so `/glasses` - served by the
+  backend rather than being an SPA route - was taken by the fallback. The prefix
+  is in `navigateFallbackDenylist` now and passes through
+  (`frontend/vite.config.ts`)
+  - It does not reproduce in a fresh browser profile (requests reach the network
+    only while no SW is registered). v0.2.51 was verified in exactly that state,
+    so it first appeared in a real user's environment
+  - **It only takes effect once the new service worker activates**. With
+    `registerType` at `'prompt'`, already-open clients keep the old worker until
+    the update is approved
 
 ## [0.2.51] - 2026-07-26
 
 ### Added
-- **グラスのシミュレータを CC Hub から `/glasses` で配信する** (#534): グラスの表示を確認するには実機を掛けるしかなかった。ブラウザ用シミュレータ自体はあったが手動起動（vite 8391）が必要で、しかも描画がレイアウトの二重実装になっていて実機から乖離していた — 52桁の折り返しなし、7行制限なし、行ベースではなく300文字ごとのページ分割、独自の区切り線。そこから画面を引用しても、グラスが実際に表示していないものを引用することになる
-  - **実機自身の出力を通して描くようにした**: `screenText()` が G2 がこれから描く3枠（ヘッダ・ボディ・フッタ）の文字列を返し、実描画パスとシミュレータの両方がそこを通る（`glasses/src/display.ts`）。折り返し・行数制限・ページ分割が乖離しようがない。固定フッタ2種も同じ理由で定数化。手書きの描画関数113行は削除（`glasses/src/debug-ui.ts`）
-  - **常時アクセスできる**: `/glasses` にマウントし、フロントエンドと並べてバイナリに埋め込む（`scripts/generate-static-assets.ts`、`backend/src/index.ts`）。CC Hub が起動していれば実機なしで開ける。ehpk はルートベースパスを必要とするため別ビルド（`build:web`、`base=/glasses/` → `dist-web`）にしてあり、実機バンドルには影響しない
-  - **`paginateSingleMessage` は7行に収まるとき折り返さずに原文を返す**という前提が表に出た。G2 のコンテナが自前で折るため成立していたが、`white-space: pre` のパネルにはそのコンテナが無い。`wrapForPanel()` で同じ幅計算を通して折るようにした
-  - **CJK 幅の非対称**: G2 は CJK を 1.857 桁として測るが、ブラウザの等幅フォントはちょうど 2.0 で描くため、1つのフォントサイズで両方を正確にはできない。幅の広い側に合わせ、日本語のフル行がパネル内に収まるようにした（ASCII 行は右端が少し手前で止まる）
-  - 画面の呼び名を実装に入れた（**一覧** / **会話** / **割り込み** / **選択** / **音声**）。コピーボタンで枠付きテキストとして画面全体を取得でき、報告に貼るために打ち直す必要がない。矢印 / Enter / Backspace をリング操作に対応
+- **CC Hub serves the glasses simulator at `/glasses`** (#534): checking the
+  glasses display meant putting the device on. A browser simulator existed but
+  had to be started by hand (vite 8391), and its drawing was a second
+  implementation of the layout that had drifted from the device - no 52-column
+  wrap, no 7-line limit, pages split every 300 characters rather than by line,
+  its own separators. Quoting a screen from that quotes something the glasses
+  never showed
+  - **It draws through the device's own output**: `screenText()` returns the
+    strings for the three frames the G2 is about to draw (header, body, footer),
+    and both the real drawing path and the simulator go through it
+    (`glasses/src/display.ts`). Wrapping, the line limit and pagination cannot
+    drift. The two fixed footers are constants for the same reason. 113 lines of
+    hand-written drawing were deleted (`glasses/src/debug-ui.ts`)
+  - **Always reachable**: mounted at `/glasses` and embedded in the binary
+    alongside the frontend (`scripts/generate-static-assets.ts`,
+    `backend/src/index.ts`). Anyone running CC Hub can open it without the
+    device. The ehpk needs a root base path, so it is a separate build
+    (`build:web`, `base=/glasses/` -> `dist-web`) and the device bundle is
+    unaffected
+  - **`paginateSingleMessage` returns the original text unwrapped when it fits in
+    seven lines** - an assumption that surfaced here. It held because the G2's
+    container wraps on its own, and a `white-space: pre` panel has no such
+    container. It goes through `wrapForPanel()` and the same width math now
+  - **CJK width is asymmetric**: the G2 measures CJK at 1.857 columns while a
+    browser's monospaced font draws exactly 2.0, so one font size cannot be
+    accurate for both. It follows the wider one so a full line of Japanese fits
+    the panel (an ASCII line stops a little short of the right edge)
+  - The screen names went into the implementation (**list** / **conversation** /
+    **interrupt** / **choice** / **voice**). A copy button takes the whole screen
+    as framed text so a report does not have to be retyped. Arrow keys, Enter and
+    Backspace map to ring gestures
 
 ## [0.2.50] - 2026-07-26
 
 ### Added
-- **グラス: 未捕捉エラーと起動の通過点を CC Hub のログへ送る** (#532): グラスは WebView 内で動いており、こちらから読めるコンソールが存在しない。そのため未捕捉例外が出るとアプリが黙って死ぬだけで手掛かりが何も残らない。v0.1.25 で「一瞬起動して落ちる」との報告があったが、コンソールもクラッシュログもサーバ側の記録も無く、原因を追う手段が無かった。何よりも先に `error` / `unhandledrejection` ハンドラを登録し、SDK の描画呼び出しを個別に `.catch` し、起動の通過点を記録するようにした（`glasses/src/main.ts`、`glasses/src/api.ts` の `reportLog`、ehpk v0.1.26）。接続先 URL が判明するまではバッファに貯め、判明した時点で `/api/logs`（既存の認証不要なブラウザログ用エンドポイント、journalctl にも出る）へ送る。render のトレースは最初の5回のみ — 毎フレーム送れば、それ自体が新しい障害になるため
-  - **この診断はクラッシュを再現しなかった**: 報告のあったビルドと本ビルドの差は計測コードだけだが、`uncaught` も `unhandled rejection` も `updateDisplay failed` も記録されず `startup complete` まで到達した。したがって本変更は失敗の説明ではなく、修正でもない。次に起きたときの証拠を残すためのもの
-  - 描画経路の `.catch` は原因究明とは別に残す価値がある。そこでの未処理 rejection は、他の手段では黙ってアプリを落とすため
+- **Glasses: send uncaught errors and startup milestones to CC Hub's log**
+  (#532): the glasses run inside a WebView with no console we can read, so an
+  uncaught exception only made the app die quietly with nothing left behind.
+  v0.1.25 was reported as "starts for a moment, then dies", and there was no
+  console, no crash log and no server-side record to chase it with. Before
+  anything else the app now installs `error` / `unhandledrejection` handlers,
+  `.catch`es each SDK drawing call individually, and records startup milestones
+  (`glasses/src/main.ts`, `reportLog` in `glasses/src/api.ts`, ehpk v0.1.26).
+  Until the server URL is known everything is buffered, and then it is sent to
+  `/api/logs` (the existing unauthenticated browser-log endpoint, which also
+  reaches journalctl). Render traces stop after the first five - sending one per
+  frame would itself become a new failure
+  - **This instrumentation did not reproduce the crash**: the only difference
+    from the reported build is the measurement code, and no `uncaught`, no
+    `unhandled rejection` and no `updateDisplay failed` was recorded - it reached
+    `startup complete`. So this change is not an explanation and not a fix. It is
+    evidence for the next time
+  - The `.catch`es on the drawing path are worth keeping regardless. An
+    unhandled rejection there kills the app silently by any other means
 
 ## [0.2.49] - 2026-07-26
 
 ### Added
-- **スマホのワークスペース一覧からダッシュボードを開けるようにした** (#530): スマホでのダッシュボードの入口はターミナル画面の上部バーとファイルブラウザだけで、セッションを1つも開いていない状態からは到達手段が存在しなかった。`WorkspaceList` は以前から `onToggleDashboard` を受けてヘッダー（検索アイコンの左）にボタンを描画する実装を持っており、デスクトップの `Ctrl+B` モーダル（`SessionModal`）では表示されていた。モバイルの一覧オーバーレイから prop を渡していなかっただけなので、渡して揃えた（`frontend/src/App.tsx`）
-  - あわせてモバイルのダッシュボードオーバーレイの重なり順を `z-50` → `z-[70]` に変更。一覧オーバーレイが `z-[60]` のため、上げないと開いても一覧の裏に隠れたままだった。閉じると一覧に戻る
+- **The dashboard can be opened from the workspace list on a phone** (#530): on a
+  phone the only ways in were the terminal screen's top bar and the file browser,
+  so with no session open there was no route at all. `WorkspaceList` has long
+  accepted `onToggleDashboard` and drawn a button in its header (left of the
+  search icon), and the desktop `Ctrl+B` modal (`SessionModal`) showed it. The
+  mobile list overlay simply never passed the prop; now it does
+  (`frontend/src/App.tsx`)
+  - The mobile dashboard overlay's stacking also went from `z-50` to `z-[70]`.
+    The list overlay is `z-[60]`, so without that it opened behind the list.
+    Closing it returns to the list
 
 ## [0.2.48] - 2026-07-25
 
 ### Added
-- **グラスが手元のスマホで開いているセッションに追従する** (#528): これまでグラスは単独でセッションを選んでいたため、エージェントに返信するにはまずリングでセッションを探す必要があった。手に持っているスマホに既に同じセッションが開いていても、である。`sessions-updated` に `focus`（可視状態のクライアントが最後に開いたセッション）を載せ、グラスがそれに追従するようにした（`shared/types.ts` の `ClientFocus`、`backend/src/routes/terminal-mux.ts` の `computeClientFocus`、`glasses/src/controller.ts` の `followFocus`、ehpk v0.1.25）。セッション選択はスマホが担い、リングは返信に専念できる
-  - **フォーカスの取得契機は「セッションを開いた時」**であって「打った時」ではない。眺めているだけという使い方が主で、その間まったく入力が発生しないため
-  - **複数端末の競合は可視性で解く**: 固定の優先度は置かず、`client-info` が `document.visibilityState` を申告し `visibilitychange` のたびに再送する（`frontend/src/hooks/useMultiplexedTerminal.ts`）。ポケットの中のスマホやスリープ中のタブレットは候補から外れ、手に持っている端末が勝つ。可視な候補が複数なら last writer wins
-  - **全端末が hidden なら focus を配信しない**: 追従側は直前の表示を保つ（スマホをしまってグラスが真っ白になってはいけない）。グラス自身の接続は relay 購読で識別して選出から除外する（追従が選出に還流するため）
-  - **送信中・判断中は追従を保留**: voice / choice / overlay では追従しない。返信はヘッダに出ている宛先へ届かなければならず、スマホが先に進んだからといって宛先を書き換えてはならない。セッション一覧ではカーソルだけ動かし、会話を開くのは意図的なタップのまま
-  - フォーカス変更は5秒の定期 push を待たず即座に配信する（実測 26ms）。5秒遅れて追従するくらいなら追従しない方がましなため
-  - デスクトップ／タブレット経路（`DesktopLayout.tsx`）は `client-info` を送っていなかったため、追加した（モバイルの `TerminalPage.tsx` は送信済みだった）
+- **The glasses follow the session open on the phone in your hand** (#528): the
+  glasses used to pick a session on their own, so replying to an agent meant
+  hunting for the session with the ring first - even when the same session was
+  already open on the phone in your hand. `sessions-updated` now carries `focus`
+  (the session a visible client opened most recently) and the glasses follow it
+  (`ClientFocus` in `shared/types.ts`, `computeClientFocus` in
+  `backend/src/routes/terminal-mux.ts`, `followFocus` in
+  `glasses/src/controller.ts`, ehpk v0.1.25). The phone picks the session, and
+  the ring is left for replying
+  - **Focus is taken when a session is opened**, not when something is typed.
+    Watching is the primary use, and no input happens at all during it
+  - **Conflicts between devices are resolved by visibility**: rather than a fixed
+    priority, `client-info` reports `document.visibilityState` and resends it on
+    every `visibilitychange` (`frontend/src/hooks/useMultiplexedTerminal.ts`). A
+    phone in a pocket and a sleeping tablet drop out, and the device in your hand
+    wins. Among several visible candidates, last writer wins
+  - **With every device hidden, no focus is broadcast**: the follower keeps its
+    previous view (putting the phone away must not blank the glasses). The
+    glasses' own connection is identified by its relay subscription and excluded
+    from the election (otherwise following feeds back into electing)
+  - **Following pauses while sending or deciding**: not in voice, choice or
+    overlay. A reply has to reach the destination shown in the header, and the
+    phone moving on must not rewrite it. In the session list only the cursor
+    moves; opening a conversation stays a deliberate tap
+  - A focus change is broadcast immediately rather than waiting for the 5-second
+    push (measured at 26ms). Following five seconds late is worse than not
+    following
+  - The desktop/tablet path (`DesktopLayout.tsx`) never sent `client-info`, so it
+    does now (mobile's `TerminalPage.tsx` already did)
 
 ### Fixed
-- **glasses の SDK が 0.0.9 のまま取り残されていた問題**: `glasses/node_modules` の `@evenrealities/even_hub_sdk` が 0.0.9 のままで、`package.json` / `bun.lock` が指す 0.0.12 と食い違っていた。音声入力が使う `AudioInputSource` は 0.0.9 に存在しないため、この状態ではビルドが壊れる。`bun install` で解消
+- **The glasses SDK was stuck at 0.0.9**: `@evenrealities/even_hub_sdk` in
+  `glasses/node_modules` was still 0.0.9 while `package.json` / `bun.lock`
+  pointed at 0.0.12. `AudioInputSource`, which voice input uses, does not exist
+  in 0.0.9, so the build breaks in that state. `bun install` resolved it
 
 ## [0.2.47] - 2026-07-25
 
 ### Changed
-- **ワークスペースカード: ペインを所属タブの下にネスト表示する** (#526): 展開したワークスペースカードは、タブ一覧とペイン一覧を罫線で区切った兄弟セクションとして並べていた。herdr のモデルは `workspace > tab > pane` で、バックエンドは active タブのペインしか返さないため、表示中のペインがすぐ上のタブに属していることが読み取れず、タブを切り替えると無関係に見える下のリストが黙って入れ替わっていた。ペインを所属タブの下にインデントして階層をそのまま描くよう変更（`frontend/src/components/WorkspaceList.tsx`）。開閉シェブロンが active 標識を兼ねる（ペインを出せるのは active タブだけなので、折りたたみタブを選ぶ＝切り替わって展開する）ため、ステータスドットの意味が1リスト1つに揃った（従来はタブ行＝active か否か、ペイン行＝エージェント状態が隣接していた）。単一タブのワークスペースは従来どおりペインのフラット表示
-  - 「タブ」セクション見出しを廃止し、「＋ 新規タブ」をツリー末尾の全幅行へ。他の行と同じ `min-h-11`（旧実装は約20pxで、#513 で採用したタップ領域基準を下回っていた）
-  - **タブにホバー ✕ を追加**: 閉じる手段が長押しのみで `onContextMenu` は preventDefault されているため、マウスからは閉じる方法が存在しなかった
-  - `タブ レシピ` → `レシピ`: herdr はリネームするまでタブ番号をラベルにするので、「タブ」前置は数値ラベルのときだけ意味がある
-  - カウントバッジの i18n 漏れ（`{n} panes` のベタ書き英語 / `2 タブ` の英語語順）を修正
-  - ペインの `active` ピルを `フォーカス中` に（タブ側の active ピルが無くなり、残る1つは「フォーカス中のペイン」を指すため）。ペイン recap は amber → zinc（amber は2行上の「入力待ち」ステータス色と同じだった）
+- **Workspace card: panes nest under the tab they belong to** (#526): an expanded
+  workspace card listed tabs and panes as sibling sections separated by a rule.
+  herdr's model is `workspace > tab > pane` and the backend only returns the
+  active tab's panes, so there was no way to read that the panes on screen belong
+  to the tab just above them, and switching tabs silently swapped a list below
+  that looked unrelated. Panes are indented under their tab now, drawing the
+  hierarchy as it is (`frontend/src/components/WorkspaceList.tsx`). The
+  expand/collapse chevron doubles as the active marker (only the active tab can
+  show panes, so picking a collapsed tab switches and expands it), which leaves
+  one meaning per dot in a list (it used to be "active or not" on a tab row and
+  "agent state" on the pane row right beneath). A single-tab workspace still
+  shows a flat pane list
+  - The "Tabs" section heading is gone and "+ New tab" is a full-width row at the
+    end of the tree, at the same `min-h-11` as every other row (it was about 20px
+    before, under the tap-target standard adopted in #513)
+  - **Tabs gained a hover ✕**: closing was long-press only and `onContextMenu` is
+    preventDefault-ed, so there was no way to close one with a mouse
+  - `Tab recipes` -> `recipes`: herdr labels a tab with its number until it is
+    renamed, so the "Tab" prefix only means something for a numeric label
+  - Fixed missing i18n on the count badges (a hardcoded English `{n} panes`, and
+    English word order in the tab count)
+  - A pane's `active` pill became `focused` (the tab's active pill is gone, and
+    the remaining one means "the focused pane"). The pane recap went from amber
+    to zinc (amber was the same color as the "waiting for input" status two lines
+    above)
 
 ### Fixed
-- **長押しタイマーがセッション push で取り残される問題** (#526): タブ／ペイン行の長押しタイマーが `map` コールバックのローカル変数だったため毎レンダーで作り直されていた。セッション一覧は5秒ごとのサーバー push で再レンダリングされるので、押している最中に1回でも挟まると DOM 側のハンドラが新しいクロージャ（タイマーは null）に差し替わり、指を離してもキャンセルされずに閉じるダイアログが後から出ることがあった。`PaneRow` / `TabRow` を切り出して ref 化
+- **A long-press timer was stranded by a session push** (#526): the long-press
+  timer on tab and pane rows was a local variable in a `map` callback and so was
+  rebuilt on every render. The session list re-renders on the server's 5-second
+  push, and one landing mid-press replaced the DOM handler with a new closure
+  (whose timer is null), so lifting the finger did not cancel it and the close
+  dialog appeared afterwards. `PaneRow` / `TabRow` were extracted and use a ref
 
 ## [0.2.46] - 2026-07-25
 
 ### Fixed
-- **グラス連絡チャンネル: エージェント自筆 waiting item のライフサイクルを修正** (#504, #524): `cchub glasses --kind waiting` で投稿した自筆の判断依頼が、2つの経路で正しく扱われていなかった。(1) backend の `exitBlocked` が **paneId を持たない waiting item を、同一セッションの無関係な pane が blocked 解除しただけで削除**していた（`--session` 指定投稿は paneId が付かないため、未回答の「デプロイしていい?」が黙って消え得た）。auto 検知の item だけが herdr の blocked epoch に従うよう限定し、agent 自筆 item は独自ライフサイクル（answered→dismissed）に委ねるよう修正（`backend/src/services/glasses-relay.ts`）。(2) glasses アプリ側で、回答済みの自筆 item が banner に残り続けていた（auto item は pane の blocked 解除で自動消去されるが、自筆 item は blocked epoch を持たないため消去契機が無かった）。choice/voice 回答成功時に該当 item を明示削除（楽観的ローカル remove + サーバー dismiss で再接続時の復活も防止）するよう修正（`glasses/src/controller.ts`、ehpk v0.1.24）。回帰テスト追加
+- **Glasses relay channel: fix the lifecycle of an agent-written waiting item**
+  (#504, #524): a decision request posted by an agent with
+  `cchub glasses --kind waiting` was mishandled on two paths. (1) The backend's
+  `exitBlocked` **deleted a waiting item with no paneId as soon as any unrelated
+  pane in the same session left blocked** (a `--session` post carries no paneId,
+  so an unanswered "shall I deploy?" could vanish silently). Only
+  auto-detected items follow herdr's blocked epoch now; an agent-written item
+  follows its own lifecycle (answered -> dismissed)
+  (`backend/src/services/glasses-relay.ts`). (2) In the glasses app an answered
+  agent-written item stayed in the banner (an auto item is cleared when its pane
+  leaves blocked, and an agent-written one has no blocked epoch to clear it). A
+  successful choice or voice answer removes the item explicitly (an optimistic
+  local remove plus a server dismiss, so it does not come back on reconnect)
+  (`glasses/src/controller.ts`, ehpk v0.1.24). Regression tests added
 
 ## [0.2.45] - 2026-07-25
 
 ### Added
-- **グラス連絡チャンネル v1: 判断が必要なものだけを G2 グラスに届ける** (#504, #522): PC を見ていない間にエージェントが入力待ち（許可プロンプト / AskUserQuestion）で止まると、質問文と選択肢だけを G2 グラスに自動表示し、リング操作（swipe=選択 / tap=決定）や音声でその場で回答できるようにした。
-  - 最低保証層（auto）: herdr の per-pane `agent_status` 差分トラッカーが blocked 遷移を検出し、backend が `readPaneText` で質問行＋番号選択肢を組み立てる。要約はせず display-width clamp のみ（`backend/src/services/glasses-relay.ts`）
-  - 自筆（agent）: `cchub glasses "<text>" --kind waiting|info --choices "a,b"` CLI と glasses-relay スキルで、エージェント自身が判断用の短文を投稿できる（`backend/src/commands/glasses.ts` / `.claude/skills/glasses-relay/`）
-  - 在席ゲート: `subscribe-glasses-relay` 購読中のみ組み立て・送信し、不在時は状態追跡だけ（追加コストゼロ）。購読時 snapshot が現在の blocked を遅延組み立てする
-  - 返信: 選択キーは paneId 指定の `POST /api/sessions/:id/panes/input`、自由文は音声 STT → `POST /api/sessions/:id/prompt`（optional `paneId` 追加）。回答後の item 消去は blocked 解除で自動
-  - glasses アプリ: relay キューを中心モデルに据えた明示的状態機械（session_list / conversation / choice / voice / overlay）に再構成し、プロアクティブな waiting overlay とブラウザ debug シミュレータを追加（`glasses/src/controller.ts` / `relay-queue.ts` / `debug-ui.ts`）
-- **glasses 実機フィードバック反映** (glasses v0.1.20〜0.1.23 として Beta 検証済み): 質問文キャップを 120 桁に削減、AskUserQuestion の filler 選択肢（"Type something." / "Chat about this"）を除去、会話画面のツールコールを `[tools] Bash×2, Edit` の1行に畳み込み、会話テキストの Markdown 記号を除去（コードは `[code]`・表は `[table]` に畳み込み）、会話画面の先頭に recap 要約ブロックを表示（Claude away_summary / 他エージェントは最終発言。これにより履歴の取れない kimi セッションでも要点が出るようになった）
+- **Glasses relay channel v1: only what needs a decision reaches the G2** (#504,
+  #522): when an agent stops for input (a permission prompt or AskUserQuestion)
+  while you are away from the PC, the question and its choices appear on the G2
+  automatically and can be answered on the spot with the ring (swipe to select,
+  tap to confirm) or by voice.
+  - Baseline layer (auto): a per-pane `agent_status` diff tracker over herdr
+    detects the transition into blocked, and the backend assembles the question
+    line and numbered choices with `readPaneText`. No summarizing, only a
+    display-width clamp (`backend/src/services/glasses-relay.ts`)
+  - Agent-written: the `cchub glasses "<text>" --kind waiting|info --choices "a,b"`
+    CLI and the glasses-relay skill let an agent post a short note that needs a
+    decision (`backend/src/commands/glasses.ts`, `.claude/skills/glasses-relay/`)
+  - Presence gate: assembly and delivery happen only while something is
+    subscribed to `subscribe-glasses-relay`; otherwise only state is tracked (at
+    zero extra cost). The snapshot on subscribe assembles the current blocked set
+    lazily
+  - Replies: a choice key goes through `POST /api/sessions/:id/panes/input` with
+    a paneId, and free text goes voice -> STT ->
+    `POST /api/sessions/:id/prompt` (with an optional `paneId`). Clearing the
+    item after an answer happens automatically when blocked ends
+  - Glasses app: restructured into an explicit state machine around the relay
+    queue as the central model (session_list / conversation / choice / voice /
+    overlay), with a proactive waiting overlay and a browser debug simulator
+    (`glasses/src/controller.ts`, `relay-queue.ts`, `debug-ui.ts`)
+- **Device feedback folded in** (verified in Beta as glasses v0.1.20-0.1.23): the
+  question cap dropped to 120 columns, AskUserQuestion's filler choices ("Type
+  something." / "Chat about this") were removed, tool calls on the conversation
+  screen fold into one `[tools] Bash x2, Edit` line, Markdown markers are
+  stripped from conversation text (code folds to `[code]`, tables to `[table]`),
+  and a recap block heads the conversation screen (Claude's away_summary, or the
+  last message for other agents - which is what finally gave kimi sessions, whose
+  history cannot be read, a summary at all)
 
 ## [0.2.44] - 2026-07-25
 
 ### Fixed
-- **更新ダイアログのボタンがタップしづらかった問題を修正** (#513): 実機と同じスマホ幅（459x1019）で確認したところ、ボタンが 42x25 / 74x25 CSS px しかなく、タッチターゲットの目安 44px を大きく下回っていた。`px-3 py-1.5 text-xs` → `min-h-11 px-4 text-sm` に変更し、53x39 / 89x39 に拡大。rem 基準のままなので UI スケール設定に追従する（`frontend/src/components/UpdatePrompt.tsx`）
-- **時間経過だけで CI が恒久的に落ちるテストを修正** (#517): `UsageHistoryService` のテストが履歴のシードにリテラル日付 `2026-07-17T00:00:00.000Z` を使っていた。`recordSnapshot` は8日より古いスナップショットを剪定するため、2026-07-25 00:00 UTC を過ぎた時点でシードが append の前に消え、以後すべての PR で失敗するようになっていた（v0.2.43 のリリース CI は 7.86 日時点で通っており、その数時間後から発症）。diff を見ても原因が分からない類の故障なので、シードを現在時刻からの相対（1日前）に変更（`backend/src/services/__tests__/usage-history-legacy.test.ts`）
+- **The update dialog's buttons were hard to tap** (#513): checked at a real
+  phone width (459x1019), the buttons were 42x25 and 74x25 CSS px, far under the
+  44px touch-target guideline. `px-3 py-1.5 text-xs` became
+  `min-h-11 px-4 text-sm`, taking them to 53x39 and 89x39. Still rem-based, so
+  they follow the UI scale setting (`frontend/src/components/UpdatePrompt.tsx`)
+- **A test that would break CI permanently with the passage of time** (#517):
+  `UsageHistoryService`'s test seeded history with the literal date
+  `2026-07-17T00:00:00.000Z`. `recordSnapshot` prunes snapshots older than eight
+  days, so past 2026-07-25 00:00 UTC the seed was deleted before the append and
+  every PR from then on would fail (v0.2.43's release CI passed at day 7.86 and
+  it broke a few hours later). The kind of failure a diff cannot explain, so the
+  seed is relative to now (one day ago)
+  (`backend/src/services/__tests__/usage-history-legacy.test.ts`)
 
 ### Added
-- **モバイル/タブレット幅の e2e を CI で実行するようにした** (#518): スマホ・タブレット・デスクトップ間の対応漏れが繰り返し発生していた原因を調査したところ、(1) `App.tsx` の mobile 分岐が305行の独立 JSX ツリーで、ターミナル / セッション一覧 / ダッシュボード / キーボードすべて desktop と別コンポーネントであること、(2) `isTablet ?` の三項が PaneContainer に30箇所・DesktopLayout に18箇所あること、(3) 共有コンポーネントでもその幅で目視していないこと、の3種類に分類できた。加えて **CI が playwright を一度も実行しておらず**（`test.yml` は lint / typecheck / unit test / build のみ）、`playwright.config.ts` の projects も Desktop Chrome ひとつだけで、モバイル幅は一度も検証されていなかった。`responsive-desktop` / `responsive-tablet` / `responsive-mobile` の3 project と、`page.route` で `/api` を全スタブしてバックエンドも herdr も不要にした `tests/e2e/responsive/` を追加し、CI に `responsive` ジョブを新設。検証内容はアプリシェルの mount、**意図したレイアウトツリーが描画されていること**（新設 `data-layout` 属性。デバイス判定は `screen` の短辺とタッチ有無で決まりビューポート幅だけでは決まらないため、これが無いとマトリクスが同じレイアウトを3回踏みうる）、横スクロールが発生しないこと、タッチ幅でのタップ領域の最小高さ。既存 spec は実 herdr セッション前提のため `testIgnore` でデスクトップ・ローカル専用のまま据え置いた。タップ領域チェックは導入時点で既存3件を検出しており、DOM パス付きで `KNOWN_TOO_SMALL` に記録した上で #514 に分離している（`frontend/playwright.config.ts` / `tests/e2e/responsive/` / `.github/workflows/test.yml`）
+- **Mobile and tablet widths run in CI** (#518): investigating why phone / tablet
+  / desktop kept diverging turned up three categories: (1) `App.tsx`'s mobile
+  branch is a 305-line independent JSX tree where the terminal, session list,
+  dashboard and keyboard are all different components from desktop's, (2) there
+  are 30 `isTablet ?` ternaries in PaneContainer and 18 in DesktopLayout, and (3)
+  even shared components were never looked at at those widths. On top of that
+  **CI had never run playwright at all** (`test.yml` covered lint / typecheck /
+  unit tests / build), and `playwright.config.ts` had a single Desktop Chrome
+  project, so mobile width had never been checked once. Added three projects -
+  `responsive-desktop` / `responsive-tablet` / `responsive-mobile` - and
+  `tests/e2e/responsive/`, which stubs all of `/api` through `page.route` so
+  neither the backend nor herdr is needed, plus a `responsive` job in CI. It
+  checks that the app shell mounts, that **the intended layout tree is what
+  renders** (via a new `data-layout` attribute - the device decision depends on
+  `screen`'s shorter side and touch support rather than viewport width alone, so
+  without it the matrix could exercise the same layout three times), that no
+  horizontal scrolling appears, and the minimum tap-target height at touch
+  widths. The existing specs assume a real herdr session, so they stay
+  desktop-and-local-only through `testIgnore`. The tap-target check found three
+  existing violations on arrival; they are recorded with their DOM paths in
+  `KNOWN_TOO_SMALL` and split out into #514
+  (`frontend/playwright.config.ts`, `tests/e2e/responsive/`,
+  `.github/workflows/test.yml`)
 
 ## [0.2.43] - 2026-07-25
 
 ### Changed
-- **フロントエンド自動更新フローの本番検証用リリース**: コード変更は無くバージョンバンプのみ。0.2.40〜0.2.42 で入れた「新バージョンを検知して確認ダイアログを出し、承認時に待機中の Service Worker を activate してリロードする」一連の仕組みが、**バージョンバンプだけのリリースでも本番環境で発火するか**を実地確認するためのもの。0.2.41 でバンドルにバージョンを埋め込んだ効果で、コード無変更でもバンドルハッシュが変わり Service Worker の更新が走る
+- **A release to verify the frontend auto-update flow in production**: no code
+  changes, only a version bump. It exists to check in the field whether the
+  machinery added in 0.2.40-0.2.42 - detect a new version, show a confirmation
+  dialog, activate the waiting service worker on approval and reload - fires for
+  **a release that is nothing but a version bump**. Embedding the version in the
+  bundle in 0.2.41 means the bundle hash changes even with no code change, so the
+  service worker update runs
 
 ## [0.2.42] - 2026-07-25
 
 ### Fixed
-- **待機中の Service Worker が activate せず更新ダイアログが出なかった問題を修正** (#510): v0.2.41 を実際にリリースして本番で検証したところ、新しい worker は正常にインストールされ新ビルドを precache まで済ませていたのに、**タブが開いている限り `waiting` のまま activate しなかった**。`about:blank` へ移動してクライアントを消すと即座に activate したことから、`registerType: 'autoUpdate'` が worker に埋め込む `skipWaiting()` がクライアント制御下では効いていないと判明。0.2.40 の検知は `controllerchange` を待つ実装だったため、入れ替わりが起きない以上ダイアログは永久に出ない。worker を意図的に `waiting` に留めて `SKIP_WAITING` メッセージハンドラを持たせる `registerType: 'prompt'` に切り替え、vite-plugin-pwa 純正の `registerSW` を使う形へ置き換えた。`onNeedRefresh` が waiting 中の worker（前回訪問から残っているものも含む）を検知し、承認時に `updateServiceWorker(true)` が `SKIP_WAITING` を送って activate させリロードする。登録がアプリ側の責務になったため `injectRegister: null` とし、`index.html` の更新チェックスクリプトは冗長になったので削除（`register()` 自体が毎回 `sw.js` を取りに行くため）（`frontend/vite.config.ts` / `src/hooks/useServiceWorkerUpdate.ts` / `index.html`）
-- **Service Worker が一切登録されていなかった問題を修正** (#510): `virtual:pwa-register` は `workbox-window` を動的インポートするが依存に無く、bare specifier が解決できないまま残って登録が丸ごと失敗していた（`TypeError: Failed to resolve module specifier 'workbox-window'`）。しかも vite-plugin-pwa は `onRegisterError` を渡さない限りこのエラーを握り潰すため、コンソールに何も出ないまま「SW が1つも無い」状態に静かになっていた。`workbox-window` を依存に追加し、`onRegisterError` を配線して二度と無言で失敗しないようにした。従来の `autoUpdate` + 注入スクリプトは素の `navigator.serviceWorker.register` を使うため `workbox-window` を必要とせず、この問題は表面化していなかった（`frontend/package.json`）
+- **The waiting service worker never activated, so the update dialog never
+  appeared** (#510): releasing v0.2.41 and checking it in production showed the
+  new worker installing correctly and precaching the new build, and then
+  **staying `waiting` for as long as a tab was open**. Navigating to
+  `about:blank` to drop the clients activated it instantly, which identified
+  `skipWaiting()` - embedded in the worker by `registerType: 'autoUpdate'` - as
+  ineffective under client control. 0.2.40's detection waited on
+  `controllerchange`, so with no swap the dialog could never appear. Switched to
+  `registerType: 'prompt'`, which deliberately keeps the worker `waiting` and
+  gives it a `SKIP_WAITING` message handler, and replaced the custom code with
+  vite-plugin-pwa's own `registerSW`. `onNeedRefresh` detects a waiting worker
+  (including one left over from a previous visit), and on approval
+  `updateServiceWorker(true)` sends `SKIP_WAITING`, activates it and reloads.
+  Registration is the app's job now, so `injectRegister: null`, and the update
+  check script in `index.html` became redundant and was deleted (`register()`
+  itself fetches `sw.js` every time) (`frontend/vite.config.ts`,
+  `src/hooks/useServiceWorkerUpdate.ts`, `index.html`)
+- **No service worker was being registered at all** (#510):
+  `virtual:pwa-register` dynamically imports `workbox-window`, which was not a
+  dependency, so the bare specifier stayed unresolved and registration failed
+  wholesale (`TypeError: Failed to resolve module specifier 'workbox-window'`).
+  vite-plugin-pwa also swallows that error unless `onRegisterError` is passed, so
+  it went quiet with nothing in the console and no SW anywhere. Added
+  `workbox-window` as a dependency and wired `onRegisterError` so it can never
+  fail silently again. The previous `autoUpdate` plus injected script used plain
+  `navigator.serviceWorker.register` and needed no `workbox-window`, which is why
+  this never surfaced (`frontend/package.json`)
 
 ## [0.2.41] - 2026-07-25
 
 ### Changed
-- **リリースバージョンをフロントエンドバンドルに埋め込むようにした** (#508): バンドル内にバージョンを参照している箇所が無かったため、バックエンドのみのリリースではフロントエンドの成果物がバイト単位で同一になっていた。すると `sw.js` の precache manifest もインストール済みのものと一致し、Service Worker の入れ替えが起きず、クライアントは古いビルドのまま新しいサーバーと通信し続ける。CC Hub は WS プロトコルの型を `shared/types.ts` で frontend / backend 間で共有しているため、このズレは実害になりうる。ルート `package.json` の `version` を vite の `define` で注入し、バンドルハッシュがリリースに連動するよう変更。これにより毎リリースで新しいビルドが precache され、0.2.40 で入れた更新ダイアログが確実に発火する。あわせて起動ログにバージョンが載るようになり、モバイル/タブレットからのデバッグで唯一の手がかりである `/tmp/cc-hub-browser.log` からどのビルドが動いているか判別できる。トレードオフとして、バックエンドのみの修正リリースでも「新しいバージョンがあります」が出るようになるが、protocol skew を防ぐ方を優先している（`frontend/vite.config.ts` / `src/main.tsx`）
+- **The release version is embedded in the frontend bundle** (#508): nothing in
+  the bundle referenced the version, so a backend-only release produced a
+  byte-identical frontend artifact. `sw.js`'s precache manifest then matched the
+  installed one, no service worker swap happened, and clients kept talking to a
+  new server on an old build. CC Hub shares its WS protocol types between
+  frontend and backend through `shared/types.ts`, so that skew can do real harm.
+  The root `package.json`'s `version` is injected through vite's `define` so the
+  bundle hash tracks the release, which precaches a new build every time and
+  makes the dialog added in 0.2.40 fire reliably. The startup log carries the
+  version too, so `/tmp/cc-hub-browser.log` - the only handle when debugging from
+  a phone or tablet - says which build is running. The trade-off is that a
+  backend-only fix also shows "a new version is available"; preventing protocol
+  skew wins (`frontend/vite.config.ts`, `src/main.tsx`)
 
 ## [0.2.40] - 2026-07-25
 
 ### Fixed
-- **リリースのたびにブラウザで手動キャッシュクリアが必要だった問題を修正** (#506): 配布バイナリの埋め込み静的配信が `Content-Type` しか返しておらず `Cache-Control` が無かったため、ブラウザのヒューリスティックキャッシュが効いていた。詰まりは2段構えで、(1) `index.html` が古いまま残り前バージョンのハッシュ付きアセットを参照し続ける、(2) **`sw.js` 自体が HTTP キャッシュから返る** ため、`index.html` が毎ロード呼んでいる `registration.update()` が新しい precache manifest を検出できない。workbox は `NavigationRoute` で `index.html` を **precache から** 配信するので、SW が更新されない限り新版は永久に出てこなかった。`/assets/*`（Vite のコンテンツハッシュ付きで内容不変）は `public, max-age=31536000, immutable`、それ以外（`index.html` / `sw.js` / `registerSW.js` / アイコン / SPA フォールバック）は `no-cache, must-revalidate` を返すよう修正。SPA フォールバック（`/dashboard` などの未知ルートに `index.html` を返す経路）は実アセットヒットと区別し、リクエストされたパスとしてキャッシュされないようにしている。開発時（`bun run dev`）は `serveStatic` の別分岐なので影響なし（`backend/src/index.ts`）
+- **Every release required clearing the browser cache by hand** (#506): the
+  embedded static serving in the distributed binary returned only
+  `Content-Type` and no `Cache-Control`, so the browser's heuristic caching took
+  over. The blockage had two stages: (1) a stale `index.html` kept referencing
+  the previous version's hashed assets, and (2) **`sw.js` itself came from the
+  HTTP cache**, so the `registration.update()` that `index.html` calls on every
+  load could not see the new precache manifest. workbox serves `index.html`
+  **from the precache** through `NavigationRoute`, so a new version could never
+  appear unless the SW updated. Now `/assets/*` (Vite content-hashed and
+  immutable) returns `public, max-age=31536000, immutable`, and everything else
+  (`index.html` / `sw.js` / `registerSW.js` / icons / the SPA fallback) returns
+  `no-cache, must-revalidate`. The SPA fallback (returning `index.html` for an
+  unknown route such as `/dashboard`) is distinguished from a real asset hit so
+  it is not cached under the requested path. Development (`bun run dev`) goes
+  through a different `serveStatic` branch and is unaffected
+  (`backend/src/index.ts`)
 
 ### Added
-- **新バージョン検知時に確認ダイアログを出してから更新する** (#506): SW は `registerType: 'autoUpdate'`（`skipWaiting()` + `clientsClaim()`）なので新版が precache され次第 worker は勝手に入れ替わるが、開いているページは古いバンドルのまま動き続ける。ターミナルを勝手にリロードするのは乱暴なので、画面下部に「新しいバージョンがあります」を出し、**「再読み込み」を押したときだけ**リロードするようにした。「後で」で閉じれば古いバンドルのまま作業を継続でき、次のリリースでまた出る。検知は `controllerchange` の購読を**モジュール評価時**に行う（`index.html` がロード時に `registration.update()` を叩くうえバンドルが 2.3MB あるため、React マウント前に worker が claim してイベントを取りこぼしうる）。加えてタブが可視になったとき + 30分ごとに `sw.js` を再チェックし、タブレットを開きっぱなしにしても気づけるようにした。初回訪問時の「claim による1回目の `controllerchange`」だけは握り潰す（「新リリース」ではなく「これから SW 管理下になる」の意味のため）。`main.tsx` で `<App />` と並べてマウントしているので mobile / tablet / desktop の各レイアウトへ個別配線は不要。`z-10010` はオンボーディングと浮動キーボード（ともに `z-10000`+）にクリックを奪われないため（`frontend/src/components/UpdatePrompt.tsx` / `hooks/useServiceWorkerUpdate.ts`）
+- **Detect a new version and ask before updating** (#506): the SW uses
+  `registerType: 'autoUpdate'` (`skipWaiting()` + `clientsClaim()`), so the
+  worker swaps itself as soon as a new build is precached while the open page
+  keeps running the old bundle. Reloading a terminal unasked is rude, so a "new
+  version available" bar appears at the bottom of the screen and reloads **only
+  when "Reload" is pressed**. Dismissing with "Later" continues on the old bundle
+  and it reappears on the next release. Detection subscribes to
+  `controllerchange` **at module evaluation time** (`index.html` calls
+  `registration.update()` on load and the bundle is 2.3MB, so the worker can
+  claim before React mounts and the event would be missed). It also re-checks
+  `sw.js` when the tab becomes visible and every 30 minutes, so a tablet left
+  open still notices. The first `controllerchange` from claiming on a first visit
+  is swallowed (it means "an SW is taking over", not "a new release"). It mounts
+  next to `<App />` in `main.tsx`, so no per-layout wiring is needed for mobile /
+  tablet / desktop. `z-10010` keeps onboarding and the floating keyboard (both
+  `z-10000`+) from stealing the click
+  (`frontend/src/components/UpdatePrompt.tsx`,
+  `hooks/useServiceWorkerUpdate.ts`)
 
 ## [0.2.39] - 2026-07-23
 
 ### Fixed
-- **systemd user service の PATH 継承漏れで hook が `command not found` になる問題を修正** (#499): 監視サービスの unit は `zsh -lc`（login だが**非対話**）でサーバを起動しており、`zsh -lc` は `.zshenv`/`.zprofile` は読むが **`.zshrc` を読まない**。ユーザーが `.zshrc` で PATH に足す `~/.local/bin`（`rtk`/`herdr`/`claude`）と `~/bin`（`cchub`）が欠落し、herdr サーバが spawn する子プロセス（resume されたエージェントや Claude Code の hook）が `cchub`/`rtk` 等を解決できず `command not found` になっていた（`.cargo/bin` は `.zshenv` 経由で入るのに `.zshrc` 追加分だけ漏れるのが分かりにくかった）。`cchub setup` は対話ターミナルから実行されるため `process.env.PATH` は `.zshrc` 反映済み。これを新設 `buildServicePath()` で取得し、先頭に `~/.local/bin` / `~/bin` を保証した上で cchub / herdr 両 systemd unit の `Environment=PATH=` にベイクするよう修正（重複排除・PATH 空時フォールバック・`%`→`%%` エスケープ）。反映は `cchub setup` の再実行時（`backend/src/commands/setup.ts`、テスト `setup-service-path.test.ts` を追加）
+- **A systemd user service's missing PATH made hooks fail with `command not
+  found`** (#499): the watcher unit starts the server through `zsh -lc` (a login
+  but **non-interactive** shell), and `zsh -lc` reads `.zshenv`/`.zprofile` but
+  **not `.zshrc`**. The `~/.local/bin` (`rtk`/`herdr`/`claude`) and `~/bin`
+  (`cchub`) that the user's `.zshrc` adds to PATH were missing, so child
+  processes spawned by the herdr server (resumed agents, Claude Code hooks) could
+  not resolve `cchub`/`rtk` and hit `command not found`. It was hard to see
+  because `.cargo/bin` arrives through `.zshenv` and only the `.zshrc` additions
+  were absent. `cchub setup` runs from an interactive terminal, so its
+  `process.env.PATH` already reflects `.zshrc`; a new `buildServicePath()` takes
+  that, guarantees `~/.local/bin` and `~/bin` at the front, and bakes it into
+  `Environment=PATH=` in both the cchub and herdr systemd units (deduplicated,
+  with a fallback for an empty PATH and `%` escaped as `%%`). It applies when
+  `cchub setup` is re-run (`backend/src/commands/setup.ts`, with a new
+  `setup-service-path.test.ts`)
 
 ### Changed
-- **G2グラス ehpk を v0.1.19 にビルド** (#503): 0.2.38 の音声入力機能を含む EVEN G2 アプリを `out.ehpk` として再ビルド（`glasses/`）
+- **G2 glasses ehpk built as v0.1.19** (#503): the EVEN G2 app including
+  0.2.38's voice input, rebuilt as `out.ehpk` (`glasses/`)
 
 ## [0.2.38] - 2026-07-23
 
 ### Added
-- **G2グラスの音声入力** (#500): グラス内蔵マイクからハンズフリーで Claude Code セッションへ返信/プロンプト送信できる voice モードを追加。EvenHub SDK はマイクの生 PCM しか渡さないため STT はサーバ側で行う: 新エンドポイント `POST /api/glasses/stt` が 16kHz mono PCM を WAV 化して **Groq `whisper-large-v3-turbo`**（`language=ja`）に転送し、認識テキストを返す。API キーはサーバから出ない。グラス側は `audioControl(true, Glasses)` + `onEvenHubEvent` の PCM を蓄積し、会話画面の非 waiting セッションで tap → 録音 → 停止で認識 → 確認 → 送信（`/sessions/:id/prompt` のブラケットペースト + Enter で submit）。実測で日本語コマンドを ~0.35s で認識。EvenHub SDK を 0.0.9→0.0.12、evenhub-cli を 0.1.11→0.1.13 に更新（`backend/src/routes/glasses.ts` / `glasses/src/{api,display,main}.ts`）
+- **Voice input on the G2 glasses** (#500): a voice mode for replying or sending
+  a prompt to a Claude Code session hands-free through the glasses' microphone.
+  The EvenHub SDK only hands over raw PCM, so STT happens on the server: a new
+  `POST /api/glasses/stt` wraps 16kHz mono PCM into a WAV, forwards it to **Groq
+  `whisper-large-v3-turbo`** (`language=ja`) and returns the transcript. The API
+  key never leaves the server. On the glasses, `audioControl(true, Glasses)`
+  plus the PCM from `onEvenHubEvent` accumulate, and on a non-waiting session's
+  conversation screen a tap starts recording, another stops and transcribes, and
+  a confirmation sends it (bracketed paste plus Enter through
+  `/sessions/:id/prompt`). Measured at about 0.35s for a Japanese command. The
+  EvenHub SDK went 0.0.9 -> 0.0.12 and evenhub-cli 0.1.11 -> 0.1.13
+  (`backend/src/routes/glasses.ts`, `glasses/src/{api,display,main}.ts`)
 
 ## [0.2.37] - 2026-07-21
 
 ### Added
-- **ワークスペース一覧にダッシュボードトグルを追加** (#497): 全画面のワークスペース一覧（`SessionModal`）のヘッダーにダッシュボードボタンを追加。押すと `DashboardPanel` が右サイドパネルとして開き、ワークスペース一覧は `flex-1` で残り幅に縮んで左に寄り、ダッシュボードに隠れず横並びで表示される。再クリックでトグルオフし一覧が全幅に戻る。`WorkspaceList` に `onToggleDashboard` / `dashboardOpen` props を追加し、渡された時だけボタンを表示するため props 未指定のモバイル直接オーバーレイ経路は従来通り変化なし。zoom は各カラム独立適用でパネルの二重ズームを回避。dev で「ボタン表示 → 一覧が2カラムのまま左に寄る → トグルオフで全幅復帰」を検証済み（`frontend/src/components/SessionModal.tsx` / `WorkspaceList.tsx`）
+- **A dashboard toggle in the workspace list** (#497): a dashboard button in the
+  header of the full-screen workspace list (`SessionModal`). Pressing it opens
+  `DashboardPanel` as a right side panel while the workspace list shrinks to the
+  remaining width with `flex-1` and moves left, so the two sit side by side
+  rather than one hiding the other. Clicking again toggles it off and the list
+  returns to full width. `WorkspaceList` gained `onToggleDashboard` /
+  `dashboardOpen` props and only draws the button when they are passed, so the
+  mobile direct-overlay path (which passes neither) is unchanged. Zoom is applied
+  per column to avoid double-zooming the panel. Verified in dev: the button
+  appears, the list stays two columns and moves left, and toggling off restores
+  full width (`frontend/src/components/SessionModal.tsx`, `WorkspaceList.tsx`)
 
 ## [0.2.36] - 2026-07-21
 
 ### Added
-- **ダッシュボードの Kimi タブに OpenRouter の課金額を USD で表示** (#494): Kimi K3 は OpenRouter 経由の従量課金なのに、トークン数しか出ておらず実際の金額が分からなかった。2種類の金額を区別して表示する — **推定**（期間別 24h/7日・モデル別。ローカルの `usage.record` のトークン数 × OpenRouter 公開価格を、prompt / cache read / cache write / completion の種別ごとの単価で計算）と、**実績**（OpenRouter の `/api/v1/key` + `/api/v1/credits` から今日・今週・今月の課金額とクレジット残高）。価格付けに必要な alias→モデル解決（`usage.record` の `k3` → `moonshotai/kimi-k3`）は `~/.kimi-code/config.toml` から読む。OpenRouter 以外のプロバイダ・未知のエイリアス・価格取得失敗の場合は金額を出さない（`$0.00` は「無料」と読めるため）。推定はローリング期間、実績は OpenRouter 側のカレンダー区切りなので両者は一致せず、UI に注記を入れている
+- **The dashboard's Kimi tab shows OpenRouter spend in USD** (#494): Kimi K3 is
+  pay-as-you-go through OpenRouter and only token counts were shown, so the
+  actual amount was invisible. Two kinds of number are now distinguished -
+  **estimated** (per window 24h/7d and per model: local `usage.record` token
+  counts times OpenRouter's public prices, computed separately for prompt, cache
+  read, cache write and completion) and **billed** (today, this week and this
+  month plus the credit balance, from OpenRouter's `/api/v1/key` +
+  `/api/v1/credits`). The alias-to-model resolution pricing needs (`k3` in
+  `usage.record` -> `moonshotai/kimi-k3`) is read from `~/.kimi-code/config.toml`.
+  No amount is shown for a non-OpenRouter provider, an unknown alias or a failed
+  price fetch (`$0.00` reads as "free"). Estimates use rolling windows while
+  OpenRouter's are calendar-bounded, so the two never match, and the UI says so
 
 ### Fixed
-- **デスクトップの pane zoom がサーバーの `zoomedPaneId` を無視していた問題を修正** (#479): herdr 対応の WS プロトコルは zoom 状態を layout メッセージの `zoomedPaneId` として運んでおり、モバイルは尊重済みだったが、デスクトップだけ `onLayoutChange` でこれを捨ててローカル state のみで zoom を管理していた（tmux control-mode 時代の知識に基づくコメントが根拠）。再接続・リロードで zoom が復元された場合や別クライアントが zoom した場合に、表示（非 zoom）と PTY 実サイズ（zoom 幾何）が乖離していた。デスクトップもサーバーの `zoomedPaneId` を単一の真実源とし、zoom ボタンは explicit intent の送信のみ・state の切り替えはサーバーの layout push 確認時に行うよう変更。楽観的 set + インライン 300ms 遅延 resize/refetch のワークアラウンドは「サーバー確認済み zoom 変化」に反応する単一の effect（クライアントサイズ再報告 + unzoom 後の隠れていたペインの viewport refetch）に集約。dev で zoom 中リロードの zoom 維持・2クライアント間の双方向 zoom 同期・zoom 中の pane close フォールバックを検証済み（`frontend/src/components/DesktopLayout.tsx`）
+- **Desktop pane zoom ignored the server's `zoomedPaneId`** (#479): the
+  herdr-based WS protocol carries zoom state as `zoomedPaneId` on the layout
+  message, and mobile respected it while desktop alone discarded it in
+  `onLayoutChange` and managed zoom from local state (justified by a comment
+  written in the tmux control-mode era). When zoom was restored across a
+  reconnect or reload, or another client zoomed, the display (not zoomed) and the
+  real PTY size (zoom geometry) diverged. Desktop treats the server's
+  `zoomedPaneId` as the single source of truth now: the zoom button only sends an
+  explicit intent, and the state flips when the server's layout push confirms it.
+  The optimistic set plus an inline 300ms delayed resize/refetch workaround
+  collapsed into one effect reacting to a server-confirmed zoom change
+  (re-reporting the client size and refetching the viewport of panes revealed by
+  unzooming). Verified in dev: zoom survives a reload, zoom syncs both ways
+  between two clients, and closing a pane while zoomed falls back correctly
+  (`frontend/src/components/DesktopLayout.tsx`)
 
 ### Changed
-- **tmux 時代の respawn / break-pane UX と pane-dead イベントを撤去** (#478): herdr にはプロセス終了後も pane が残る概念（tmux の `remain-on-exit`）が無く（herdr 0.7.4 実測: プロセス exit で pane は `pane.list` から即消滅、最後の pane なら workspace ごと消える）、CLI/socket API に respawn 相当の操作も存在しない。にもかかわらず `respawnPane` / `breakPaneToNewSession` は無条件 throw のまま WS スキーマ・mux dispatch・REST(501)・dead-pane オーバーレイの全経路が配線済みで、`pane-dead` は意味が反転（正常な外部 close で発火し、駆動するはずのオーバーレイは pane が同時に layout から消えるため表示され得ない）していた。WS メッセージ型（client `respawn-pane` / server `pane-dead`）と zod スキーマ、mux dispatch、`POST /:id/panes/respawn`、`HerdrControlSession` のリスナー機構、フロントの `deadPanes` state / オーバーレイ / respawn 配線、未使用化した locale キーを end-to-end で撤去（-224 行）。エージェント復活は既存の resume 経路（`POST /:id/resume`・履歴 resume・herdr の `resume_agents_on_restore`）がカバー。glasses はこれらのメッセージを参照しておらず影響なし。dev で「シェル exit → pane がオーバーレイなしで自然に消える」ことを検証済み
+- **Removed the tmux-era respawn / break-pane UX and the pane-dead event**
+  (#478): herdr has no concept of a pane outliving its process (tmux's
+  `remain-on-exit`) - measured on herdr 0.7.4, a pane disappears from `pane.list`
+  the moment its process exits, taking the workspace with it if it was the last
+  one - and neither its CLI nor its socket API has anything like respawn. Even
+  so, `respawnPane` / `breakPaneToNewSession` threw unconditionally while the WS
+  schema, the mux dispatch, the REST endpoint (501) and the dead-pane overlay
+  were all wired up, and `pane-dead` had inverted meaning (it fired on a normal
+  external close, and the overlay it was supposed to drive could never appear
+  because the pane left the layout at the same moment). The WS message types
+  (client `respawn-pane`, server `pane-dead`) and their zod schemas, the mux
+  dispatch, `POST /:id/panes/respawn`, `HerdrControlSession`'s listener
+  machinery, the frontend's `deadPanes` state, overlay and respawn wiring, and
+  the locale keys left unused were removed end to end (-224 lines). Reviving an
+  agent is covered by the existing resume paths (`POST /:id/resume`, resume from
+  history, herdr's `resume_agents_on_restore`). The glasses never referenced
+  these messages and are unaffected. Verified in dev: exiting a shell makes the
+  pane disappear naturally with no overlay
 
 ## [0.2.34] - 2026-07-20
 
 ### Changed
-- **フロントのセッション識別を `peerId:id` 複合キーに全面移行** (#487): セッション id は herdr の workspace 名で peer 間で衝突するため、0.2.33 では「選択時の peer intent を記録して id 検索のたびに再解決する」応急処置になっていた。識別子自体を複合キー化し、pane ツリー (`PaneNode.sessionKey`)・アクティブセッション・開いているセッション一覧・localStorage 永続化をすべて `peerId:id` で持つように変更。WS subscribe / REST パスに乗せる直前に bare id へ分解するためサーバー側プロトコルは無変更。これにより同名の local / peer セッションを**同時に開ける**ようになり、`resolveSessionPeer` と intent 永続化 (`cchub-desktop-session-peer`) を削除。既存の localStorage は初回ロード時に一度だけ自動移行する
+- **The frontend identifies sessions by a `peerId:id` composite key throughout**
+  (#487): session ids are herdr workspace names and collide across peers, so
+  0.2.33 was a stopgap that recorded the peer intent at selection time and
+  re-resolved it on every id lookup. The identifier itself is a composite key
+  now, and the pane tree (`PaneNode.sessionKey`), the active session, the list of
+  open sessions and the localStorage persistence all hold `peerId:id`. It is
+  split back into a bare id just before it goes onto a WS subscribe or a REST
+  path, so the server protocol is unchanged. Same-named local and peer sessions
+  can now be **open at the same time**, and `resolveSessionPeer` and the intent
+  persistence (`cchub-desktop-session-peer`) are gone. Existing localStorage is
+  migrated automatically once, on first load
 
 ## [0.2.33] - 2026-07-20
 
 ### Fixed
-- **local に同名セッションがあると peer のターミナルを開けない問題を修正** (#486): セッション id は herdr の workspace 名で peer 間で衝突するため、bare id 検索がマージ済み一覧の先頭一致（= local セッション）に解決されていた。選択時の peer intent を記録して WS 接続・リモコンモードの REST 操作・画像アップロード先・ファイルビューアの解決を一本化（`resolveSessionPeer`: intent → 開いたセッション → マージ一覧）。モバイルも TerminalPage へ peerId を伝搬。削除・テーマ変更は明示的な peerId を取るようになり、同名の local workspace を誤って操作しない
+- **A peer's terminal would not open when a local session had the same name**
+  (#486): session ids are herdr workspace names and collide across peers, so a
+  bare id lookup resolved to the first match in the merged list (the local
+  session). The peer intent recorded at selection time now drives the WS
+  connection, the remote-control mode's REST operations, the image upload target
+  and the file viewer resolution through one path (`resolveSessionPeer`: intent
+  -> open session -> merged list). Mobile propagates peerId into TerminalPage
+  too. Deleting and changing the theme take an explicit peerId now, so they
+  cannot operate on a same-named local workspace by mistake
 
 ## [0.2.32] - 2026-07-20
 
 ### Added
-- **会話ビューで Todo リスト系ツールコールをチェックリスト表示** (#483): TodoWrite (Claude) / TodoList (Kimi) / update_plan (Codex) の入力を生 JSON ではなくグラフィカルなチェックリストとして描画。完了 = 緑チェック + 取り消し線、進行中 = 青ドット + 強調、待機 = グレー丸で、セクションタイトルに進捗 `(done/total)` を表示しデフォルト展開。todo 形状にパースできない入力や他ツールは従来の JSON 表示のまま
+- **Todo-list tool calls render as a checklist in the conversation view** (#483):
+  the input of TodoWrite (Claude) / TodoList (Kimi) / update_plan (Codex) is
+  drawn as a graphical checklist rather than raw JSON. Done is a green check with
+  a strikethrough, in progress is a blue dot with emphasis, pending is a gray
+  circle, and the section title carries progress as `(done/total)` and is
+  expanded by default. Input that does not parse as a todo shape, and every other
+  tool, keeps the JSON view
 
 ## [0.2.31] - 2026-07-20
 
 ### Changed
-- **履歴のファセットサイドバーで期間フィルタを最上部に移動し、他のファセットを期間でスコープ** (#474): プロジェクト／エージェント／ブランチ／peer の選択肢と件数を、選択中の期間（今日・7日間・30日間）で絞り込んだセッション集合から算出するように変更。「今日」を選ぶと期間内に実績のある値だけが表示され、件数も期間内カウントになる。選択中の値が期間外になった場合は 0 件でリストに残り、その場でチェック解除できる
+- **The history facet sidebar puts the period filter on top and scopes the other
+  facets by it** (#474): the options and counts for project / agent / branch /
+  peer are computed from the sessions inside the selected period (today, 7 days,
+  30 days). Choosing "today" shows only values with activity in that window, with
+  counts to match. A selected value that falls outside the period stays in the
+  list at zero so it can be unchecked in place
 
 ## [0.2.30] - 2026-07-19
 
 ### Added
-- **Kimi ワークスペースのカードに「最後の回答」を recap 枠で表示** (#473): Kimi には Claude の away_summary 相当がないため、セッションの wire.jsonl から最後の assistant テキスト（think パートは除外、500 文字で切り詰め）を抽出し `ccRecap` として返す。カードの recap 表示はエージェント非依存のためフロント変更不要で、表示中は title/firstPrompt 行が隠れるのも Claude と同じ挙動。native session id が取れる kimi セッションが対象
+- **A Kimi workspace card shows "the last answer" in the recap slot** (#473):
+  Kimi has no equivalent of Claude's away_summary, so the last assistant text in
+  the session's wire.jsonl (think parts excluded, truncated to 500 characters) is
+  returned as `ccRecap`. The card's recap display is agent-agnostic so no
+  frontend change was needed, and the title/first-prompt line is hidden while it
+  shows, exactly as with Claude. It applies to kimi sessions whose native session
+  id can be resolved
 
 ## [0.2.29] - 2026-07-19
 
 ### Added
-- **Kimi Code CLI を第4のエージェントプロバイダとしてサポート** (#472): 新規ワークスペース作成時のエージェント選択に Kimi を追加。herdr が kimi プロセスをランタイム検知し、`cchub setup` が `herdr integration install kimi` も行うため、native session id 連携・ペインインジケータがそのまま動作する。`~/.kimi-code/sessions` の `state.json` / `wire.jsonl` を読み、アクティブセッションのスレッドメタデータ（タイトル・first prompt・トークン使用量）、履歴プロジェクト一覧・検索・会話ビュー、`kimi --session '<id>'` による履歴からの resume に対応。hook 通知は payload が Claude 互換の snake_case のため、`~/.kimi-code/config.toml` の `[[hooks]]` に `cchub notify` を登録するだけで有効
-- **ダッシュボードに Kimi タブを追加**: wire.jsonl の `usage.record` を全セッション（サブエージェント分を含む）から集計し、24h/7d のトークン使用量・ターン数・モデル別内訳を表示（ローカルにレート制限窓データはないため合計値のみ）
+- **Kimi Code CLI is supported as a fourth agent provider** (#472): Kimi joins
+  the agent picker when creating a workspace. herdr detects the kimi process at
+  runtime and `cchub setup` also runs `herdr integration install kimi`, so the
+  native session id link and the pane indicator work as they are. It reads
+  `state.json` / `wire.jsonl` under `~/.kimi-code/sessions` for the active
+  session's thread metadata (title, first prompt, token usage), the history
+  project list, search and the conversation view, and resumes from history with
+  `kimi --session '<id>'`. Hook notifications need only `cchub notify` registered
+  under `[[hooks]]` in `~/.kimi-code/config.toml`, since the payload is
+  Claude-compatible snake_case
+- **A Kimi tab on the dashboard**: `usage.record` entries in wire.jsonl are
+  aggregated across every session (sub-agents included) to show 24h/7d token
+  usage, turn counts and a per-model breakdown (there is no rate-limit window
+  data locally, so totals are all it can show)
 
 ## [0.2.28] - 2026-07-19
 
 ### Added
-- **リモコンモード（PC専用）** (#470): ヘッダーの Unplug トグルで xterm のライブ描画（WS subscribe → PaneController）を止め、ローカル herdr クライアントがターミナルの所有権を保持したまま、CC Hub をワークスペース一覧＋フォーカス／split／close／prompt／Files／Dashboard／Chat のリモコンとして使えるモード。ON 中の pane 操作と Chat 送信は REST 経由（mux WS は未 subscribe セッションの操作を拒否するため）。xterm 領域はプレースホルダ（Chat 切替導線付き）に置き換わる。`cchub-remote-control` localStorage に永続化（デフォルト OFF）、storage イベントで他タブ即反映。tablet / mobile は対象外、バックエンド変更なし
+- **Remote-control mode (desktop only)** (#470): an Unplug toggle in the header
+  stops xterm's live drawing (the WS subscribe into PaneController), leaving the
+  local herdr client in possession of the terminal while CC Hub is used as a
+  remote for the workspace list plus focus / split / close / prompt / Files /
+  Dashboard / Chat. While it is on, pane operations and Chat sends go over REST
+  (the mux WS refuses operations on a session it has not subscribed to). The
+  xterm area is replaced by a placeholder with a link into Chat. Persisted in
+  `cchub-remote-control` localStorage (off by default) and reflected in other
+  tabs immediately through the storage event. Not available on tablet or mobile,
+  and no backend changes
 
 ## [0.2.27] - 2026-07-19
 
 ### Changed
-- **セッションモーダルの冗長な「Sessions」見出しを削除** (#468): ワークスペース/履歴タブが既に見出しの役割をしていたため、上部の「Sessions」タイトル行を削除し、セグメントタブ（ワークスペース／履歴）と検索/＋/× を1行に統合。上部が詰まり、一覧の表示エリアが上へ広がる。`WorkspaceList` は desktop / tablet / mobile 共有のため3つとも適用
+- **The session modal's redundant "Sessions" heading is gone** (#468): the
+  workspace/history tabs already act as the heading, so the "Sessions" title row
+  was removed and the segmented tabs (workspaces / history) merged into one row
+  with search, + and x. The top tightens up and the list area grows upward.
+  `WorkspaceList` is shared by desktop / tablet / mobile, so all three get it
 
 ## [0.2.26] - 2026-07-19
 
 ### Changed
-- **複数ペイン/タブの workspace で recap もペイン単位表示に** (#466): #463 で model/ctx/mem をペイン単位にしたのに続き、recap（away summary）も同様にした。従来はカードヘッダに代表1ペイン分の recap だけを出しており、複数エージェントペインがあるとどのペインの要約か曖昧だった。複数ペイン/複数タブの時だけ各 Claude ペイン行に自身の recap を表示（`getSessionById` はキャッシュ付きで安価）。単一ペイン単一タブの通常ケースはヘッダ recap のまま維持（`PaneInfo.recap`/`recapAt` を追加）
+- **A recap is shown per pane in a multi-pane / multi-tab workspace** (#466):
+  following #463, which moved model/ctx/mem onto panes, the recap (away summary)
+  does the same. The card header used to show the recap of one representative
+  pane, which was ambiguous with several agent panes. Each Claude pane row now
+  carries its own recap, but only with multiple panes or tabs (`getSessionById`
+  is cached and cheap). The ordinary single-pane single-tab case keeps the header
+  recap (`PaneInfo.recap` / `recapAt` added)
 
 ## [0.2.25] - 2026-07-19
 
 ### Fixed
-- **`cchub setup` のエージェント連携判定を環境対応**: 未初期化・未導入の Claude Code / Codex に herdr integration と Codex hook 移行を実行せず、適切な警告を表示するよう修正
-- **`cchub setup` のメッセージを i18n 対応**: `LC_ALL` / `LC_MESSAGES` / `LANG` のロケールに応じて日本語または英語を表示
-- **単一タブの workspace からタブを新規作成できない問題を修正** (#462): タブUI（一覧＋「+ 新規タブ」）が2タブ以上ある時だけ表示され、backend も `tab_count > 1` の時しか `tabs[]` を返さなかったため、通常の単一タブ workspace では最初の2つ目を作る導線が無かった。単一タブでも `tabs[]`/`activeTabId` を（`tab.list` RPC を増やさず）常に返し、workspace 長押しメニューに「新規タブ」を追加、展開時のインラインにも「+ 新規タブ」を表示
+- **`cchub setup` adapts its agent-integration checks to the environment**: it no
+  longer runs herdr integration or the Codex hook migration against an
+  uninitialized or absent Claude Code / Codex, and shows an appropriate warning
+- **`cchub setup`'s messages are i18n-aware**: Japanese or English according to
+  the `LC_ALL` / `LC_MESSAGES` / `LANG` locale
+- **A new tab could not be created in a single-tab workspace** (#462): the tab UI
+  (the list plus "+ New tab") only appeared with two or more tabs, and the
+  backend only returned `tabs[]` when `tab_count > 1`, so an ordinary single-tab
+  workspace had no route to creating its second. `tabs[]` / `activeTabId` are
+  always returned now (without adding a `tab.list` RPC), "New tab" was added to
+  the workspace long-press menu, and "+ New tab" appears inline when expanded
 
 ### Changed
-- **複数ペイン/タブの workspace で model/ctx/mem をペイン単位表示に** (#463): カードヘッダの model/ctx%/mem は「代表1ペイン分」で、複数ペイン/タブがあるとどのペインの値か曖昧だった。複数ペイン/複数タブの時だけ各エージェントペイン行へ移動（Claude は自 `.jsonl` から ctx/model、任意のエージェントペインは pid から mem）。単一ペイン単一タブの通常ケースはヘッダ表示のまま維持（`PaneInfo.metrics` を追加）
+- **model/ctx/mem are shown per pane in a multi-pane / multi-tab workspace**
+  (#463): the card header's model/ctx%/mem were for one representative pane and
+  were ambiguous with several panes or tabs. They move to each agent pane row,
+  but only with multiple panes or tabs (Claude takes ctx/model from its own
+  `.jsonl`; any agent pane takes mem from its pid). The ordinary single-pane
+  single-tab case keeps the header display (`PaneInfo.metrics` added)
 
 ## [0.2.24] - 2026-07-19
 
 ### Added
-- **ワークスペースの「タブ」対応（herdr の workspace > tab > pane を3階層で扱う）** (#455, #456, #457): これまで CC Hub は tab の概念を持たず、`herdr tab` で複数タブを作った workspace は全タブの pane を1画面にフラット混在させ、各タブの縦横比・ズームを失って表示が崩れていた。制御セッションを **「アクティブなタブだけを描画」** に変更し、`workspace.get` の `active_tab_id` を権威にタブ切替へ追従（別タブの pane を混ぜない／アクティブタブが空でも他タブが残ればセッションを終了しない）。**セッション一覧の各ワークスペース配下にタブを入れ子表示**し、タップで切替・「+ 新規タブ」・長押しで閉じる（desktop / tablet / mobile 共通）。`SessionResponse.tabs[]` / `activeTabId` を露出し、WebSocket（`select-tab` / `create-tab` / `close-tab`）と REST（`POST /:id/tabs/{select,create,close}`）を追加
+- **Workspace tabs (herdr's workspace > tab > pane as three levels)** (#455,
+  #456, #457): CC Hub had no concept of a tab, so a workspace with several tabs
+  created by `herdr tab` had every tab's panes mixed flat into one screen, losing
+  each tab's proportions and zoom and breaking the display. The control session
+  now **draws only the active tab** and follows tab switches with
+  `workspace.get`'s `active_tab_id` as the authority (it never mixes another
+  tab's panes, and it does not end the session when the active tab is empty but
+  other tabs remain). **Tabs are nested under each workspace in the session
+  list**, where a tap switches, "+ New tab" creates and a long press closes
+  (desktop / tablet / mobile alike). `SessionResponse.tabs[]` / `activeTabId` are
+  exposed, with WebSocket (`select-tab` / `create-tab` / `close-tab`) and REST
+  (`POST /:id/tabs/{select,create,close}`) to match
 
 ### Changed
-- **内部・API・フロントの命名を「Session」→「Workspace」に整合** (#454, #458, #460): CC Hub の1セッションは herdr の1ワークスペースそのもの。backend の型・メソッドを workspace 語彙へ寄せ、`/api/workspaces` を正典パスとして追加（旧 `/api/sessions` は**エイリアスで維持**するため CLI `cchub send`/`peek`・peer・glasses は無変更で動作）。フロントを `/api/workspaces` へ移行し、一覧のヘッダ／作成ボタンなどのラベルを「ワークスペース」に変更。エージェント会話履歴（`/api/sessions/history`）は別概念のため据え置き
-  - 注意: 更新済みのフロントは peer 宛にも `/api/workspaces` を叩くため、まだ更新していない古い peer は一時的に 404 になり得る（fleet を更新すればエイリアスにより解消）
+- **Internal, API and frontend naming aligned from "Session" to "Workspace"**
+  (#454, #458, #460): one CC Hub session is exactly one herdr workspace. The
+  backend's types and methods moved to workspace vocabulary and `/api/workspaces`
+  was added as the canonical path (the old `/api/sessions` is **kept as an
+  alias**, so the `cchub send`/`peek` CLI, peers and the glasses keep working
+  unchanged). The frontend moved to `/api/workspaces` and the list header, create
+  button and similar labels now say "workspace". Agent conversation history
+  (`/api/sessions/history`) is a different concept and stays
+  - Note: an updated frontend calls `/api/workspaces` on peers too, so a peer
+    that has not been updated can 404 temporarily (updating the fleet resolves
+    it through the alias)
 
 ## [0.2.23] - 2026-07-19
 
 ### Fixed
-- **削除したセッションの古いターミナルが残り、同名再作成時に制御ストリームエラーになる問題を修正** (#452): セッション削除時に接続中クライアントへ終了を通知して古いxterm・paneキャッシュを即座に破棄するよう変更。herdrの不変なworkspace IDで同名の新旧インスタンスを識別し、新規作成時は必ず新しい制御ストリームへ再購読する。古い遅延クリーンアップが同名の再作成セッションを削除する競合も防止
+- **A deleted session's old terminal lingered and produced a control-stream error
+  when a session of the same name was created** (#452): deleting a session now
+  notifies connected clients so the old xterm and pane cache are discarded at
+  once. herdr's immutable workspace ID distinguishes the old and new instances of
+  a name, and a newly created session always re-subscribes to a new control
+  stream. This also prevents an old deferred cleanup from deleting a same-named
+  session that was created since
 
 ## [0.2.22] - 2026-07-19
 
 ### Fixed
-- **同一セッションを2台で開くと継続的にちらつく問題を修正** (#450): タブレットとスマホで同じセッションを同時に表示すると、両端末が各自のコンテナサイズを送り合い共有セッションサイズが往復して点滅していた。「操作している端末がサイズの主導権を持つ（active-client-owns-size）」方式に変更 — アクティブな端末（最後に入力した／タップで claim した端末）だけがサイズを駆動し、非アクティブ端末の resize は記録のみで反映しないため取り合いが止まる。**画面タップで主導権を取得**（tap-to-resize）、入力でも自動でアクティブ化、切断時は残る端末へ委譲。単一クライアントは従来通り
+- **Opening one session on two devices flickered continuously** (#450): a tablet
+  and a phone showing the same session sent their own container sizes at each
+  other, and the shared session size bounced back and forth. Changed to
+  active-client-owns-size: only the active device (the one that typed last, or
+  claimed control with a tap) drives the size, and an inactive device's resize is
+  recorded without being applied, which ends the tug of war. **Tapping the screen
+  claims control** (tap-to-resize), typing activates automatically, and
+  disconnecting hands control to whoever is left. A single client behaves as
+  before
 
 ### Changed
-- **クライアント別pane sizing（smallest-wins、Phase 2/3）をopt-inに降格** (#450): 0.2.21で既定ONにしたが、アクティブ端末までレターボックス化する副作用があり、共通ケースでは上記の active-client 方式が優先。`CCHUB_PER_CLIENT_SIZING=1` で引き続き有効化可能
+- **Per-client pane sizing (smallest-wins, phases 2/3) demoted to opt-in**
+  (#450): 0.2.21 turned it on by default, and it letterboxed even the active
+  device. The active-client approach above wins for the common case.
+  `CCHUB_PER_CLIENT_SIZING=1` still enables it
 
 ## [0.2.21] - 2026-07-19
 
 ### Added
-- **クライアント別pane sizingを既定で有効化（Phase 2/3/enable）** (#443, #444, #447): モバイルとデスクトップが各paneの描画サイズ需要を申告し、**2クライアント以上で同一セッションを別サイズ表示している場合だけ**、共有paneを最小の需要側へ寄せる（tmux流のレターボックス。last-writer取り合いを回避）。単一クライアントでは従来のtree/zoom経路を厳密に維持するため挙動不変。3カラム以内の丸め誤差は無視してzoom直後の縮小やジッターを防止。既定ON、`CCHUB_PER_CLIENT_SIZING=0` で無効化可能（逃げ道）
+- **Per-client pane sizing on by default (phases 2/3/enable)** (#443, #444,
+  #447): mobile and desktop declare each pane's drawing size demand, and **only
+  when two or more clients show the same session at different sizes** the shared
+  pane follows the smallest demand (tmux-style letterboxing, avoiding a
+  last-writer fight). With a single client the old tree/zoom path is preserved
+  exactly, so behavior is unchanged. Rounding differences within three columns
+  are ignored, preventing a shrink right after a zoom and the resulting jitter.
+  On by default; `CCHUB_PER_CLIENT_SIZING=0` disables it as an escape hatch
 
 ### Fixed
-- **ダッシュボードでサーバ情報までエージェント切替の対象になる問題を修正** (#445): 使用量・日別アクティビティなどを「エージェント使用状況」、ネットワーク遅延・各peerのCPU/メモリ/ディスク情報を常時表示の「サーバ状況」として独立セクションへ分離。Claude / Codex / Grok を切り替えてもサーバ状況が消えず、タブとセクションのアクセシビリティ属性も追加
+- **The dashboard's server information switched with the agent tabs** (#445):
+  usage and daily activity became an "agent usage" section, while network latency
+  and each peer's CPU/memory/disk became an always-visible "server status"
+  section. Switching between Claude / Codex / Grok no longer hides the server
+  status, and the tabs and sections gained accessibility attributes
 
 ## [0.2.20] - 2026-07-19
 
 ### Added
-- **クライアント別pane sizing の基盤を追加（Phase 1、既定OFF）** (#441): モバイルクライアントが表示中paneのサイズ需要を申告し、サーバーがクライアント単位で保持・集約できる土台を追加。`CCHUB_PER_CLIENT_SIZING=1` の診断モードでは現行サイジングとの等価性だけを検証し、実際のPTYサイズ制御は従来経路を維持する非破壊な変更
+- **Groundwork for per-client pane sizing (phase 1, off by default)** (#441): a
+  mobile client declares the size demand of the pane it is showing, and the
+  server can hold and aggregate those per client. In the `CCHUB_PER_CLIENT_SIZING=1`
+  diagnostic mode it only verifies equivalence with current sizing; real PTY
+  sizing stays on the existing path, making this non-destructive
 
 ### Fixed
-- **開いている Codex セッションの会話履歴を表示できない問題を修正** (#439): 実行プロセス名が `node-MainThread` になるケースや、同じ作業ディレクトリに複数の履歴があるケースで、cwd から最新スレッドを推測して誤った Session ID を選ぶ可能性があった。herdr の `agent.list` が報告するエージェント種別と native Session ID を唯一の識別元に変更し、Codex/Grok の cwd フォールバックを削除。非フォーカス中の単一paneでも対象paneを選択できるようにし、native ID が未報告の場合は履歴ボタンを安全に無効化する
-- **明示的なzoom/unzoom指定がtoggleとして処理される問題を修正** (#441): `zoom-pane` の Zod schema に `zoomed` を追加し、クライアントから送った冪等なzoom意図がstripされないようにした
+- **The conversation history of an open Codex session could not be shown**
+  (#439): where the process name comes through as `node-MainThread`, or where a
+  working directory has several histories, guessing the newest thread from the
+  cwd could pick the wrong session ID. The agent kind and native session ID
+  reported by herdr's `agent.list` are the only source of identity now, and the
+  cwd fallback for Codex/Grok is gone. A single unfocused pane can also be
+  selected, and the history button is safely disabled when no native ID has been
+  reported
+- **An explicit zoom/unzoom was treated as a toggle** (#441): `zoomed` was added
+  to the `zoom-pane` Zod schema so an idempotent zoom intent from the client is
+  not stripped
 
 ### Changed
-- **Codex hooks を `~/.codex/hooks.json` に一本化** (#439): herdr の `SessionStart` と CC Hub の `Stop` / `PostToolUse:AskUserQuestion` を同じ JSON に保持し、重複していた `config.toml` の hook 定義を移行時に削除する。`cchub setup` は Claude/Codex 両方の herdr integration を導入し、既存の未知の hook と `[hooks.state]` は保持する
+- **Codex hooks consolidated into `~/.codex/hooks.json`** (#439): herdr's
+  `SessionStart` and CC Hub's `Stop` / `PostToolUse:AskUserQuestion` live in the
+  same JSON, and the duplicate hook definitions in `config.toml` are deleted
+  during migration. `cchub setup` installs the herdr integration for both Claude
+  and Codex, and preserves existing unknown hooks and `[hooks.state]`
 
 ## [0.2.19] - 2026-07-19
 
 ### Fixed
-- **スマホで複数paneセッションをzoom中にリロードするとタブバーが消える問題を修正** (#437): zoom はサーバ共有状態なのにプロトコル上「1-leaf layout」としてしか表現されず、本物の1paneセッションと区別できなかった。リロード時にサーバが1-leaf初期layoutを再送 → クライアントが「pane 1個」と誤認 → タブバーが消えてpane切替・zoom解除が不能になっていた。layout を常にフルツリーで送信し、zoom は `zoomedPaneId` メタデータとして別送する方式に変更（`toTmuxLayout` の 1-leaf collapse 廃止、`computeRects` に `ignoreZoom` opt、`zoom-pane` に明示 `zoomed` intent）。モバイルは `isZoomedRef` 推測を廃止してサーバの `zoomedPaneId` 基準に冪等に zoom を再表明し、リロード後のタブハイライトもサーバ復元 pane に一致させる。副次的に、スマホで zoom したセッションをデスクトップで開いても分割が潰れなくなった
+- **Reloading a phone while a multi-pane session was zoomed made the tab bar
+  disappear** (#437): zoom is shared server state, and the protocol could only
+  express it as a "1-leaf layout", indistinguishable from a genuinely
+  single-pane session. On reload the server resent that 1-leaf initial layout,
+  the client read it as "one pane", and the tab bar vanished, leaving no way to
+  switch panes or unzoom. The layout is always sent as the full tree now, with
+  zoom carried separately as `zoomedPaneId` metadata (the 1-leaf collapse in
+  `toTmuxLayout` is gone, `computeRects` gained an `ignoreZoom` option, and
+  `zoom-pane` carries an explicit `zoomed` intent). Mobile dropped its
+  `isZoomedRef` guesswork and idempotently re-asserts zoom against the server's
+  `zoomedPaneId`, and the tab highlight after a reload matches the pane the
+  server restored. As a side effect, opening a session zoomed on a phone no
+  longer collapses the split on desktop
 
 ## [0.2.18] - 2026-07-19
 
 ### Fixed
-- **Codexの使用量リミット到達を誤表示する問題を修正** (#435): 追加購入クレジットが無いことを示す `credits.has_credits: false` をプラン内使用量の上限到達と誤解釈し、使用率が9%でも「リミット到達中」と表示していた。Codexが返す明示的な `rate_limit_reached_type` のみを到達判定に使い、実測使用率を推測で100%へ上書きしないようにした
+- **Codex usage was wrongly reported as having hit its limit** (#435):
+  `credits.has_credits: false`, which means no purchased credits remain, was read
+  as the plan's usage cap being reached, so "limit reached" appeared at 9% usage.
+  Only the explicit `rate_limit_reached_type` Codex returns counts as reaching a
+  limit now, and the measured usage is no longer overwritten to 100% by
+  inference
 
 ## [0.2.17] - 2026-07-19
 
 ### Fixed
-- **herdr agent-status ウォッチャーの再購読ループを停止** (#433): `events.subscribe` が約2.5回/秒で開閉し続け、cchub がアイドルでも常時CPUを消費していた。herdr が購読のたびに既存paneのスナップショットを再送し、その replay バッファに `pane.list`/`workspace.list`/`pane.get` のどれにも存在しない亡霊 `pane_created`（実機 `w2N:p1`）を保持していたのが原因で、「再購読→スナップショット再送→再購読」の自己増殖ループになっていた。再購読の判定をイベントペイロードではなく `pane.list`（真実）の集合差分に変更し、pane集合が実際に変わった時だけ再購読するようにした（`paneSetRequiresResubscribe`）
+- **Stop the herdr agent-status watcher's resubscribe loop** (#433):
+  `events.subscribe` was opening and closing about 2.5 times a second, burning
+  CPU continuously even with cchub idle. herdr resends a snapshot of existing
+  panes on every subscribe, and its replay buffer held a ghost `pane_created`
+  (`w2N:p1` on this machine) that appears in none of `pane.list`,
+  `workspace.list` or `pane.get` - which made "resubscribe -> snapshot resent ->
+  resubscribe" self-sustaining. The resubscribe decision now comes from a set
+  difference against `pane.list` (the truth) rather than from event payloads, so
+  it only resubscribes when the pane set actually changed
+  (`paneSetRequiresResubscribe`)
 
 ## [0.2.16] - 2026-07-19
 
 ### Changed
-- **複数paneセッションのジャンプメニューをpane配下に移動** (#431): Remote Control セッションのジャンプメニュー（「このターミナルへ移動」「Claudeアプリで開く」）はセッションカード単位だったため、複数pane（claude + grok 等）では対象paneが曖昧だった。複数paneのカードタップはpaneリストを直接展開し（「移動」はpane行タップが担当）、「Claudeアプリで開く」はbridge対象のagent pane行の直下にネスト表示。1paneセッションは従来のメニューを維持
+- **The jump menu of a multi-pane session moved under the pane** (#431): the jump
+  menu on a remote-control session ("go to this terminal", "open in the Claude
+  app") was per session card, which is ambiguous with several panes (claude +
+  grok, say). Tapping a multi-pane card expands the pane list directly (tapping a
+  pane row is what "go to" means), and "open in the Claude app" is nested
+  directly under the bridged agent pane row. A single-pane session keeps the old
+  menu
 
 ## [0.2.15] - 2026-07-19
 
 ### Added
-- **Grok Build (xAI) を3つ目のエージェントとしてサポート** (#426): セッション作成 UI に Grok が並び、プロセス検出・resume（`grok --resume '<id>'`）・履歴/検索・会話ビュー・トークン/モデル metrics・hook 通知が Claude / Codex と同等に動く
-  - セッションストア: `~/.grok/sessions/<URLエンコードcwd>/<uuid>/` を走査（`summary.json` メタ、`chat_history.jsonl` 会話、`prompt_history.jsonl` 初回プロンプト、`updates.jsonl` の `turn_completed` トークン使用量）。エンコード照合はディレクトリ名の `decodeURIComponent` で行い、再エンコードによる不一致を構造的に排除
-  - hook 通知: Grok は `~/.claude/settings.json` の hooks を互換レイヤで読むため設定不要で発火するが、stdin JSON が camelCase 独自形式（`hookEventName: "stop"` / `sessionId` / `transcriptPath`）のため `/api/notify` で Claude 形式に正規化（`normalizeHookBody`、実キャプチャしたペイロードをフィクスチャ化）。Grok transcript（updates.jsonl）用の通知本文生成も追加
-  - herdr は Grok 未対応のため、インジケータは hook ベース（Codex と同方式）
-- **ダッシュボードに Grok タブ** (#429): xAI はレート制限ウィンドウをローカルに保存しないため、サイクル使用率の代わりに消費量を集計表示 — 24時間/7日間のトークン合計・ターン数、モデル別内訳、プランバッジ（`*-free` モデル → Free）。タブバーは「使用量データがあるプロバイダを並べる」方式に汎用化
+- **Grok Build (xAI) supported as a third agent** (#426): Grok appears in the
+  session creation UI, and process detection, resume (`grok --resume '<id>'`),
+  history and search, the conversation view, token/model metrics and hook
+  notifications all work as they do for Claude / Codex
+  - Session store: scans `~/.grok/sessions/<URL-encoded cwd>/<uuid>/`
+    (`summary.json` metadata, `chat_history.jsonl` conversation,
+    `prompt_history.jsonl` first prompt, `turn_completed` token usage in
+    `updates.jsonl`). Encoding is matched by `decodeURIComponent` on the
+    directory name, which structurally rules out mismatches from re-encoding
+  - Hook notifications: Grok reads `~/.claude/settings.json`'s hooks through a
+    compatibility layer, so they fire with no configuration, but the stdin JSON
+    is its own camelCase shape (`hookEventName: "stop"` / `sessionId` /
+    `transcriptPath`) and is normalized to Claude's in `/api/notify`
+    (`normalizeHookBody`, with a real captured payload as the fixture). Message
+    generation for Grok transcripts (updates.jsonl) was added too
+  - herdr does not support Grok, so the indicator is hook-based (the same way as
+    Codex)
+- **A Grok tab on the dashboard** (#429): xAI does not store rate-limit windows
+  locally, so consumption is aggregated in place of a cycle percentage - 24h and
+  7d token totals, turn counts, a per-model breakdown and a plan badge (a
+  `*-free` model means Free). The tab bar was generalized to "list the providers
+  that have usage data"
 - **MIT LICENSE** (#428)
 
 ### Changed
-- **エージェント追加をレジストリ+インターフェース実装だけで済む構造に抽象化** (#426): `AGENT_PROVIDERS`（shared/types.ts）に `displayName` を追加し `threadAgentOf()` を新設。backend は `AgentThreadService` / `AgentHistoryProvider` 共通インターフェース（`services/agent-providers.ts`）のプロバイダマップをルートがループする方式にし、約20箇所の `=== 'codex'` ハードコード分岐を排除。frontend は `useCodexConversation` を `useThreadConversation(agent, ...)` に汎用化、バッジ色は `utils/agentDisplay.ts` に集約
-- **セッションリストのモデル名表示をエージェントバッジに統合** (#427): `Claude ⏺ Opus 4.8` のようにバッジ内へ表示し、行のスペースを節約
+- **Adding an agent is now a registry entry plus interface implementations**
+  (#426): `AGENT_PROVIDERS` (shared/types.ts) gained `displayName` and a new
+  `threadAgentOf()`. The backend routes loop over provider maps behind the shared
+  `AgentThreadService` / `AgentHistoryProvider` interfaces
+  (`services/agent-providers.ts`), removing about 20 hardcoded `=== 'codex'`
+  branches. The frontend generalized `useCodexConversation` into
+  `useThreadConversation(agent, ...)`, and badge colors were collected into
+  `utils/agentDisplay.ts`
+- **The model name in the session list moved into the agent badge** (#427): shown
+  inside the badge as `Claude - Opus 4.8`, saving space on the row
 
 ## [0.2.14] - 2026-07-18
 
 ### Changed
-- **セッションリストの `used`（累計トークン）表示を利用中モデル表示に置き換え** (#424): 累計トークン数はほぼ参照されていなかったため削除し、エージェントが現在使っているモデルを表示する。Claude は `.jsonl` から context 計算用に抽出済みだった `latestModel` を `metrics.model` として公開し、`claude-opus-4-8` → `Opus 4.8` のように短縮表示（旧形式 `claude-3-5-sonnet-*` → `Sonnet 3.5` も対応、フル id はツールチップ）。Codex は rollout 末尾スキャンで `token_count` と同時に最新 `turn_context` の `payload.model`（例: `gpt-5.6-sol`）を抽出し、そのまま表示（`shared/types.ts`, `backend/src/services/session-metrics.ts`, `codex.ts`, `frontend/src/components/SessionList.tsx`, `frontend/src/utils/format.ts`）
+- **The session list's `used` (cumulative tokens) was replaced by the model in
+  use** (#424): almost nobody read the cumulative token count, so it was dropped
+  in favor of the model the agent is currently using. For Claude, the
+  `latestModel` already extracted from the `.jsonl` for the context calculation
+  is exposed as `metrics.model` and shortened for display (`claude-opus-4-8` ->
+  `Opus 4.8`, with the older `claude-3-5-sonnet-*` -> `Sonnet 3.5` handled too,
+  and the full id in a tooltip). For Codex, the tail scan of the rollout that
+  reads `token_count` also picks up the latest `turn_context`'s `payload.model`
+  (for example `gpt-5.6-sol`) and shows it as is (`shared/types.ts`,
+  `backend/src/services/session-metrics.ts`, `codex.ts`,
+  `frontend/src/components/SessionList.tsx`, `frontend/src/utils/format.ts`)
 
 ## [0.2.13] - 2026-07-18
 
 ### Changed
-- **pane ライフサイクルイベントを workspace でフィルタしてから reconcile するように**: 各セッションは pane.created/closed/exited を購読してペイン集合を reconcile するが、herdr のライフサイクル購読は**サーバー側フィルタ非対応**（protocol 16 で確認）で、ハンドラはペイロードを無視していた。そのため**どこかの workspace の pane イベント1つで全アクティブセッションが pane.list reconcile を実行**していた。さらに調査で、herdr は**新規購読に過去イベント約50件をリプレイ**することが実測で判明 — セッションを開くたびに無関係な reconcile の束が走っていた。受信イベントの workspace（`pane_created` は `data.pane.workspace_id`、`pane_closed`/`exited` は `data.workspace_id`。実ペイロードをキャプチャしテストフィクスチャ化）を見て自 workspace 以外をスキップする。workspace を特定できないイベントは従来どおり reconcile（fail open）。実機 E2E で自 workspace への外部分割が温めた購読で ~180ms で layout push として届くことを確認（`backend/src/services/herdr-client.ts`, `herdr-control.ts`）
-  - 副産物の実測知見: herdr は**購読直後の配信が約4秒遅延**する（購読が温まると ~40ms。cchub 抜きの生ソケットでも同一 — herdr 側の挙動）
-- **CI から tmux インストールを削除**: herdr 移行後、テスト・実行時とも tmux を使う経路は無い。tmux 残渣の掃除（#416, v0.2.11）の最後の1件（`.github/workflows/test.yml`）
+- **Pane lifecycle events are filtered by workspace before reconciling**: each
+  session subscribes to pane.created/closed/exited to reconcile its pane set, and
+  herdr's lifecycle subscription **has no server-side filter** (confirmed on
+  protocol 16) while the handler ignored the payload. So **one pane event in any
+  workspace made every active session run a pane.list reconcile**. Investigation
+  also measured that herdr **replays about 50 past events to a new subscriber** -
+  so opening a session kicked off a burst of unrelated reconciles. The workspace
+  on the received event is inspected now (`data.pane.workspace_id` for
+  `pane_created`, `data.workspace_id` for `pane_closed`/`exited`; real payloads
+  were captured as test fixtures) and anything outside this workspace is skipped.
+  An event with no identifiable workspace still reconciles (fail open). Verified
+  end to end against the device that an external split in our own workspace
+  arrives as a layout push in about 180ms on a warmed subscription
+  (`backend/src/services/herdr-client.ts`, `herdr-control.ts`)
+  - A measurement found along the way: herdr **delays delivery by about four
+    seconds right after a subscribe** (about 40ms once warm; identical over a raw
+    socket without cchub, so it is herdr's own behavior)
+- **Removed the tmux install from CI**: after the herdr migration nothing uses
+  tmux at test time or run time. The last item of the tmux cleanup (#416,
+  v0.2.11) (`.github/workflows/test.yml`)
 
 ## [0.2.12] - 2026-07-18
 
 ### Fixed
-- **ペインのディバイダドラッグを境界セマンティクスに全面刷新（タブレット実機で検証）**: リサイズ周りの4つの不具合をまとめて修正。(1) **ドラッグ追従**: タブレットでは1回の指移動が pointer と touch の両方を発火させペインツリーを毎回2回再構築、さらに touch リスナーを move ごとに張り替えていた。rAF で1フレーム1更新に集約し、リスナーはドラッグ開始時に1回だけ登録、離した瞬間に最終位置を flush。(2) **4分割時の激しい振動**: viewport 到着時の `forceResize` がペイン1枚分の提案サイズをクライアント全体のサイズとして送信し、全体幅が 38↔151 で無限往復していた（実測）。複数ペイン時は forceResize を無効化。(3) **ドラッグ結果が反映されない/無関係ペインが動く**: 従来はドラッグ確定時に全ペインの丸め済みサイズを送り、各 resize-pane が共有祖先分割を奪い合っていた。ペインサイズ方式では入れ子同方向分割（h[h[A,B],C]）の外側ディバイダを原理的に指定できない。新設の `set-split-ratios` バッチメッセージ（各分割を両側リーフの最小共通祖先で特定）で離した瞬間に1回だけ原子的に適用し、ドラッグ中はローカル楽観更新のみ＆サーバーレイアウト適用を保留。`applyBoundaryDrag` により動かした境界の両隣だけが伸縮し、他ペインは絶対サイズを維持（tmux 同様）。(4) **分割 ID 衝突**: フロントの分割 ID が座標由来（`split-${x}-${y}`）だったため、親と左上角を共有する入れ子分割（2x2 の左列、4カラムの内側左）が親と同一 ID になり、一番左のディバイダを動かすとルートのディバイダが動いていた。木のパス由来 ID に変更（`frontend/src/components/DesktopLayout.tsx`, `PaneContainer.tsx`, `useMultiplexedTerminal.ts`, `shared/types.ts`, `backend/src/services/herdr-layout.ts`, `herdr-control.ts`, `backend/src/routes/terminal-mux.ts`）
-  - backend に `PaneLayoutTree.setSplitRatio`（LCA 特定＋クランプ、ユニットテスト7件）と `setSplitRatios` バッチ（applyLayout 1回）を追加。実機 herdr + `/ws/mux` の E2E で、4カラム構成への3エントリバッチが1回の layout push で期待どおり適用されることを確認
+- **Pane divider dragging rebuilt around boundary semantics (verified on a real
+  tablet)**: four resize defects fixed together. (1) **Drag tracking**: on a
+  tablet one finger movement fires both pointer and touch events, rebuilding the
+  pane tree twice per move, and the touch listener was re-registered on every
+  move. Updates are collapsed to one per frame with rAF, the listener is
+  registered once at drag start, and the final position is flushed on release.
+  (2) **Violent oscillation with four panes**: `forceResize` on viewport arrival
+  sent one pane's proposed size as the whole client's size, and the overall width
+  ping-ponged between 38 and 151 (measured). forceResize is disabled with several
+  panes. (3) **A drag not taking effect, or moving unrelated panes**: the old
+  code sent every pane's rounded size on release, and the individual resize-pane
+  messages fought over shared ancestor splits. A pane-size approach cannot
+  express the outer divider of a same-direction nested split (h[h[A,B],C]) at
+  all. A new `set-split-ratios` batch message (identifying each split by the
+  lowest common ancestor of the leaves on either side) applies once, atomically,
+  on release, while the drag itself is a local optimistic update with the server
+  layout held back. `applyBoundaryDrag` stretches only the two neighbors of the
+  boundary being moved and keeps every other pane's absolute size (as tmux does).
+  (4) **Split ID collisions**: the frontend's split IDs came from coordinates
+  (`split-${x}-${y}`), so a nested split sharing its parent's top-left corner
+  (the left column of a 2x2, the inner left of four columns) had the same ID as
+  its parent, and dragging the leftmost divider moved the root's
+  (`frontend/src/components/DesktopLayout.tsx`, `PaneContainer.tsx`,
+  `useMultiplexedTerminal.ts`, `shared/types.ts`,
+  `backend/src/services/herdr-layout.ts`, `herdr-control.ts`,
+  `backend/src/routes/terminal-mux.ts`)
+  - The backend gained `PaneLayoutTree.setSplitRatio` (LCA identification plus
+    clamping, seven unit tests) and a `setSplitRatios` batch (one applyLayout).
+    An end-to-end run against real herdr and `/ws/mux` confirmed that a
+    three-entry batch for a four-column arrangement applies as expected in a
+    single layout push
 
 ## [0.2.11] - 2026-07-18
 
 ### Fixed
-- **バックエンド再構築時に複数ペインのレイアウトが横一列に潰れていた問題**: セッションの split tree は CC Hub 側が所有している（herdr のグリッドはヘッドレスでリサイズできないため）が、その復元処理（`setInitialPanes`）が tmux 時代の前提を引きずり、ペインを常に「均等な横一列」で組み直していた。そのため CC Hub が `HerdrControlSession` を作り直すたび — **バックエンド再起動後、または 30 秒グレースピリオドを過ぎたセッションへの再 subscribe 時** — に、2×2 や L 字のグリッドが横並び一列に潰れていた（herdr は実レイアウトを保持しているにもかかわらず）。herdr の `layout.export` が返す実際の split tree（`direction`/`ratio` 付きのネストした pane/split ノード）は CC Hub 自身の `LayoutNode` にほぼ 1:1 でマップできるため、これを優先して構造・分割方向・zoom/focus を復元するようにした。export が取得できない、またはそのペイン集合が実ペインと一致しない場合のみ従来の flat chain にフォールバックするので、**最悪でも従来挙動**で、壊れた木を描画することはない。実機 herdr 0.7.4 で L 字 workspace が `horizontal[leaf, vertical[leaf, leaf]]` として復元されることを確認（`backend/src/services/herdr-control.ts`, `herdr-layout.ts`, `herdr-client.ts`）
+- **A multi-pane layout collapsed into one row when the backend rebuilt it**: a
+  session's split tree belongs to CC Hub (herdr's grid cannot be resized
+  headlessly), and its restore path (`setInitialPanes`) carried a tmux-era
+  assumption and always rebuilt the panes as an evenly divided single row. So
+  every time CC Hub recreated a `HerdrControlSession` - **after a backend restart,
+  or on re-subscribing to a session past its 30-second grace period** - a 2x2 or
+  L-shaped grid collapsed into one row, even though herdr still held the real
+  layout. The actual split tree returned by herdr's `layout.export` (nested
+  pane/split nodes with `direction`/`ratio`) maps almost one to one onto CC Hub's
+  own `LayoutNode`, so it takes priority now and restores structure, split
+  direction and zoom/focus. It falls back to the old flat chain only when the
+  export cannot be fetched or its pane set does not match the real panes, so **the
+  worst case is the old behavior** and a broken tree is never drawn. Verified on
+  herdr 0.7.4 that an L-shaped workspace restores as
+  `horizontal[leaf, vertical[leaf, leaf]]` (`backend/src/services/herdr-control.ts`,
+  `herdr-layout.ts`, `herdr-client.ts`)
 
 ### Changed
-- **tmux → herdr 移行で残った死にコード/誤記の掃除**: 呼び出し元ゼロで `not supported in herdr mode` を throw するだけの `HerdrControlSession.sendCommand` スタブを削除。`terminal-mux.ts` の file-local 変数 `tmuxService`（実体は `HerdrService`）を `herdrService` にリネームし、現在の挙動を tmux 用語で説明していたコメント（「tmux -CC subprocess」「tmux's pane size」等）を herdr の実態に修正。`%N` 形式や「tmux convention」等の意図的なアナロジーは理解を助けるため残置。実行時挙動の変化なし（`backend/src/routes/terminal-mux.ts`, `herdr-control.ts`）
+- **Cleaned up dead code and stale wording left by the tmux -> herdr migration**:
+  deleted the `HerdrControlSession.sendCommand` stub, which had no callers and
+  only threw `not supported in herdr mode`. Renamed `terminal-mux.ts`'s
+  file-local `tmuxService` (actually a `HerdrService`) to `herdrService`, and
+  corrected comments that described current behavior in tmux terms ("tmux -CC
+  subprocess", "tmux's pane size" and so on). Deliberate analogies such as the
+  `%N` form and "tmux convention" stay, because they help. No runtime behavior
+  change (`backend/src/routes/terminal-mux.ts`, `herdr-control.ts`)
 
 ## [0.2.10] - 2026-07-18
 
 ### Fixed
-- **herdr の agent-status 即時反映が一度も効いていなかった問題**: agent が動き始めた/終わった/入力待ちになった瞬間を herdr は push で教えてくれるが、その watcher（`herdr-agent-status.ts`）のライフサイクル分岐が**起動以来一度も発火していなかった**。UI は 5 秒間隔のセッションポーリングにサイレントにフォールバックしていた。原因は herdr のイベント命名が3面で非対称なこと（実機 herdr 0.7.4 / protocol 16 で確認）: **購読リクエストの type はドット**（`pane.created`、他は `unknown variant` で拒否）、**受信するライフサイクルイベントは snake_case**（`pane_created`）、**受信する per-pane status はドット**（`pane.agent_status_changed`）。watcher は受信イベント名をドットのリストと比較していたため snake_case のライフサイクルイベントが永遠に一致せず、(1) 起動後に新規作成されたペインが status 購読を張り直してもらえず、(2) ペインの生成/消滅が即時 push されず 5 秒待ちになっていた。docstring が「取りこぼしはレイテンシ低下のみで正しさは損なわない」と設計していたため、取りこぼし率100%が正常動作と見分けられず露見しなかった。購読リクエストはドットのまま維持し、受信イベントの分類だけ `.`→`_` 正規化で両形式を受理するよう分離した。dev 実機計測で、`pane_created` の即時 push が ~2.5–3.5s（間隔ポーリング）→ 79–173ms、新規ペインの status 変化が「到達せず」→ 46–183ms に改善（`backend/src/services/herdr-agent-status.ts`）
-  - なお `pane.agent_status_changed`（主機能）分岐はドット同士で一致しており動作していた。死んでいたのはライフサイクル分岐のみ
-  - 受信イベント名の両命名を固定する純粋関数（`classifyHerdrEvent`）のユニットテストを追加
+- **herdr's immediate agent-status updates had never once worked**: herdr pushes
+  the moment an agent starts, finishes or blocks for input, and the lifecycle
+  branch of that watcher (`herdr-agent-status.ts`) **had not fired once since it
+  was written**. The UI silently fell back to the 5-second session poll. The
+  cause is that herdr's event naming is asymmetric in three places (confirmed on
+  herdr 0.7.4 / protocol 16): **subscription request types use dots**
+  (`pane.created`; anything else is rejected as an `unknown variant`), **received
+  lifecycle events are snake_case** (`pane_created`), and **received per-pane
+  status is dotted** (`pane.agent_status_changed`). The watcher compared received
+  event names against the dotted list, so a snake_case lifecycle event could
+  never match, which meant (1) a pane created after startup never got its status
+  subscription set up and (2) pane creation and destruction were not pushed
+  immediately and waited the full five seconds. The docstring had designed for
+  "a dropped event costs latency, not correctness", so a 100% drop rate was
+  indistinguishable from normal operation and went unnoticed. Subscription
+  requests keep their dots, and only the classification of received events
+  normalizes `.` to `_` so both forms are accepted. Measured in dev: an immediate
+  `pane_created` push went from about 2.5-3.5s (the poll interval) to 79-173ms,
+  and a new pane's status change from "never arrives" to 46-183ms
+  (`backend/src/services/herdr-agent-status.ts`)
+  - The `pane.agent_status_changed` branch (the main feature) matched dots
+    against dots and did work. Only the lifecycle branch was dead
+  - Added unit tests for a pure function (`classifyHerdrEvent`) pinning both
+    naming forms
 
 ## [0.2.9] - 2026-07-17
 
 ### Fixed
-- **使用量 API の失敗時にレート制御が全部外れていた問題**: `/api/oauth/usage` のレート制限は**アカウント単位**なので、cchub のキャッシュがダッシュボードのポーリング（30秒 × 開いているクライアント数）と 429 の間に立つ唯一の防壁になっている。そのキャッシュに穴があった — 判定が `if (this.lastSuccessfulResult && now - this.lastFetchAt < CACHE_TTL_MS)` で**成功結果が無いと成立せず**、`lastFetchAt` も**成功時にしか更新されない**。backoff を張るのは 429 のときだけだった。結果、**429 以外の失敗（500 / Claude Code がトークンを更新中の 401 / ネットワークエラー）でレート制御が同時に全部消え**、返せる結果もクールダウンも無いまま毎回のポーリングが上流に素通りしていた。**一番絞る必要がある「上流が不調な時」に限って絞りが無くなる**動作で、cchub 自身が 429 を作りかねなかった。試行を開始時にスタンプしてそれでゲートするようにし、前回がどう終わったかに関係なく TTL がリクエスト間の下限になるようにした（429 の backoff は従来どおりそれより長い窓で上書き）（`backend/src/services/anthropic-usage.ts`）
-  - 副産物として **#352 の no-credentials 専用クールダウンを吸収**（トークンが無いのも「何も得られなかった試行」の一種）。専用フィールドとタイマーが消え、永続化する状態が1つ減った
-  - `UsageLimitsStatus.lastFetchAt` は型定義で既に "when the last attempt happened" と書かれていたが実装は成功時しか入れていなかった。型の記述どおりの意味になり、失敗中の UI 表示としても正しくなった
-  - なお 2026-07-17 に観測された 429 の原因は cchub ではない（12時間で2回しか叩いておらず、どちらも正しく backoff していた）。同一アカウントを使う他プロセスが枠を使い切ると cchub も巻き添えを食うが、cchub 側のキャッシュは他プロセスを制御できない
+- **Every bit of rate control disappeared when the usage API failed**:
+  `/api/oauth/usage` is rate-limited **per account**, so cchub's cache is the only
+  thing standing between the dashboard's polling (every 30 seconds times the
+  number of open clients) and a 429. That cache had a hole: the check was
+  `if (this.lastSuccessfulResult && now - this.lastFetchAt < CACHE_TTL_MS)`, so
+  **it never held without a successful result**, and `lastFetchAt` **was only
+  updated on success**. A backoff was installed only for a 429. As a result,
+  **any non-429 failure (a 500, a 401 while Claude Code refreshes its token, a
+  network error) removed all rate control at once**, and every poll went straight
+  upstream with neither a result to return nor a cooldown. The throttle
+  disappeared **exactly when upstream was unhealthy and it was needed most**, and
+  cchub could have produced a 429 itself. The attempt is stamped when it starts
+  and gates on that, so the TTL is a floor between requests regardless of how the
+  previous one ended (a 429 backoff still overrides it with a longer window)
+  (`backend/src/services/anthropic-usage.ts`)
+  - As a side effect this **absorbs #352's dedicated no-credentials cooldown** (a
+    missing token is one more kind of attempt that returned nothing). Its field
+    and timer are gone, one less piece of persistent state
+  - `UsageLimitsStatus.lastFetchAt` was already documented in the type as "when
+    the last attempt happened" while the implementation only set it on success.
+    It now means what the type says, which also makes the UI correct while
+    failing
+  - For the record, the 429 observed on 2026-07-17 was not cchub's doing (it made
+    two calls in twelve hours and backed off correctly both times). Another
+    process on the same account exhausting the quota takes cchub down with it,
+    and cchub's cache cannot control another process
 
 ### Changed
-- **herdr 移行で取り残された tmux の残骸を削除**: 旧 tmux サービス自体は v0.2.0 で消えていたが、残骸が3種類残っていて、うち1つは実害があった
-  - **`install.sh` が tmux を必須にしていた** — 無いと exit 1 して `sudo apt install tmux` を案内する一方、**herdr のチェックは1つも無かった**（CC Hub が本当に無いと動かない方）。「使わないパッケージを要求し、必要なパッケージは案内しない」状態だったので herdr チェックに置き換えた
-  - **copy mode / paste buffer が死んだまま配線されていた** — どちらも herdr に対応物が無い tmux 固有機能で、移行時に `return false` / `return null` のスタブになったが配線は生きていた。`Terminal.tsx` は**ソフトキーボードが閉じるたびに** HTTP 往復して「常に false」を問い合わせており、その先の `q` 送信は絶対に発火しなかった。Ctrl+C（選択なし）も常に null のバッファを取りに行っていた。スタブ2つ・ルート2本（`GET /:id/copy-mode`, `GET /clipboard`）・呼び出し2箇所を削除（**Ctrl+C の挙動は厳密に維持** — ブラウザのコピーは従来どおり抑止し、キーは xterm に渡って SIGINT になる）
-  - **嘘になっていた命名** — `const tmuxService = new HerdrService()` や `tmuxSessions`、「tmux が報告しなかった場合」等のコメントを実態に合わせて改名
-  - CHANGELOG / specs / poc は歴史的記録なので変更していない。`TmuxLayoutNode` / `%N` ペイン ID は**フロントエンドと glasses アプリで共有する生きたワイヤ形式**、`tmuxSessionId` は peer 経由の resume も通るレスポンスフィールドのため、いずれも今回は据え置き
+- **Removed the tmux remains the herdr migration left behind**: the old tmux
+  service itself went in v0.2.0, and three kinds of residue stayed, one of which
+  did real harm
+  - **`install.sh` required tmux** - it exited 1 without it and pointed at
+    `sudo apt install tmux`, while **checking for herdr not at all** (the thing CC
+    Hub genuinely cannot run without). It demanded a package it does not use and
+    said nothing about the one it needs, so it checks for herdr now
+  - **Copy mode and the paste buffer were wired up but dead** - both are
+    tmux-specific with no herdr equivalent, and the migration reduced them to
+    `return false` / `return null` stubs with the wiring left live. `Terminal.tsx`
+    made an HTTP round trip **every time the soft keyboard closed** to ask a
+    question that always answered false, and the `q` it would have sent could
+    never fire. Ctrl+C (with no selection) also fetched a buffer that was always
+    null. Two stubs, two routes (`GET /:id/copy-mode`, `GET /clipboard`) and two
+    call sites were deleted (**Ctrl+C behavior is preserved exactly** - the
+    browser copy is still suppressed and the key reaches xterm as SIGINT)
+  - **Names that had become lies** - `const tmuxService = new HerdrService()`,
+    `tmuxSessions`, comments saying "if tmux did not report it" and so on were
+    renamed to match reality
+  - CHANGELOG, specs and poc are historical records and were not touched.
+    `TmuxLayoutNode` and `%N` pane IDs are **a live wire format shared with the
+    frontend and the glasses app**, and `tmuxSessionId` is a response field that
+    also travels through peer resume, so all of those stay for now
 
 ## [0.2.8] - 2026-07-17
 
 ### Fixed
-- **herdr 再起動後にセッションが開けず、会話も復元されなかった問題（#407）**: herdr サーバを再起動すると、セッションは一覧に並ぶのに開こうとすると真っ暗な "Connecting..." と `Failed to subscribe: herdr server is too old: pane.list returned no scroll state (protocol >= 16 / v0.7.3+ required)` が出ていた。**herdr が最新（v0.7.4 / protocol 16）でも出る完全な誤診**で、指示どおり更新しても直らない。原因は cchub と herdr の相互待ちデッドロック: ペインは terminal runtime を持つまで `scroll` を返さず、復元されたペインはエージェントが resume されるまで runtime を持たない。そして herdr はその resume を「クライアントが非ゼロのサイズで接続するまで」遅延させる（`pending_agent_resume_candidates()` が 0×0 の `terminal_area` で即 return）。cchub が `scroll` 欠損を「サーバが古い」と決めつけて subscribe を拒否 → サイズが付かない → resume が発火しない → runtime が無いまま、と互いに相手待ちで固まっていた。`scroll` 欠損は「このペインはまだ runtime を持たない」という**正常な過渡状態**として扱い、クライアント側の rows にフォールバックして subscribe を続行するようにした。これにより **セッションを開くだけで herdr が元の会話に復帰させる**（`claude --resume <元の会話 ID>`）（`backend/src/services/herdr-control.ts`）
-  - 版ズレ検知は推測をやめ、既存の正確な情報源（HerdrUpdateService が `herdr status --json` から実 protocol 番号を読む #393）に一本化
-  - このデッドロックは v0.2.3 の**前から**存在した（当時は `pane.scroll.viewport_rows` の TypeError で無言の "Failed to subscribe"）。v0.2.3 は原因ではなく誤った診断名を付けただけで、**herdr 移行（v0.2.0）以降ネイティブ復元は cchub 経由で一度も成立していなかった**可能性が高い。`resume_agents_on_restore = true` にしていても履歴タブからの手動 `-r` しか手段が無かったのはこのため
-  - なお `herdr agent list` は runtime の無いペインも「claude / idle」と報告する（復元計画から楽観的に状態を設定するため）が実プロセスは存在しない。cchub は実プロセスを見ているので正しく `agent=None` と報告する
-- **モバイルの下部バーでセッション名が切れる問題**: `cchub-work-1` が `cchub-work-…` になり、複数セッションを開いていると**どれを見ているのか判別できなかった**。名前を固定 `max-w-[84px]` で打ち切る一方、隣に `flex-1` のスペーサーを置いて余白を遊ばせていた（切れているすぐ横が空いている状態）。スペーサーではなくセレクタ側に余白を吸わせ、アクションボタンが使わない分の全幅を名前に回すようにした。本当にバーからあふれる時だけ truncate する（`frontend/src/App.tsx`）
+- **Sessions would not open after a herdr restart, and conversations were not
+  restored (#407)**: after restarting the herdr server, sessions appeared in the
+  list, and opening one gave a black "Connecting..." and
+  `Failed to subscribe: herdr server is too old: pane.list returned no scroll state (protocol >= 16 / v0.7.3+ required)`.
+  **A complete misdiagnosis that appeared even on the newest herdr (v0.7.4 /
+  protocol 16)**, so following its advice fixed nothing. The cause was a
+  deadlock of mutual waiting between cchub and herdr: a pane returns no `scroll`
+  until it has a terminal runtime, a restored pane has no runtime until its agent
+  is resumed, and herdr defers that resume "until a client connects with a
+  non-zero size" (`pending_agent_resume_candidates()` returns immediately on a
+  0x0 `terminal_area`). cchub decided a missing `scroll` meant an old server and
+  refused to subscribe -> no size was ever attached -> the resume never fired ->
+  no runtime, each side waiting on the other. A missing `scroll` is treated as
+  the **normal transient state** "this pane has no runtime yet" now, falling back
+  to the client's rows and continuing the subscribe. As a result **opening a
+  session is enough for herdr to restore the original conversation**
+  (`claude --resume <original conversation ID>`)
+  (`backend/src/services/herdr-control.ts`)
+  - Version-skew detection stopped guessing and consolidated onto the accurate
+    source that already existed (HerdrUpdateService reading the real protocol
+    number from `herdr status --json`, #393)
+  - This deadlock predates v0.2.3 (back then it was a TypeError on
+    `pane.scroll.viewport_rows` producing a silent "Failed to subscribe"). v0.2.3
+    did not cause it, it only gave it the wrong name, and **native restore has
+    most likely never once worked through cchub since the herdr migration
+    (v0.2.0)**. That is why, even with `resume_agents_on_restore = true`, a
+    manual `-r` from the history tab was the only way
+  - Note that `herdr agent list` reports a pane with no runtime as "claude /
+    idle" (it sets the state optimistically from the restore plan) while no real
+    process exists. cchub looks at the real process and correctly reports
+    `agent=None`
+- **The session name was clipped in the mobile bottom bar**: `cchub-work-1`
+  became `cchub-work-...`, and with several sessions open **there was no way to
+  tell which one you were looking at**. The name was cut at a fixed
+  `max-w-[84px]` while a `flex-1` spacer next to it wasted the room (empty space
+  right beside the clipped text). The selector absorbs the slack instead of the
+  spacer, so the name gets all the width the action buttons do not use, and it
+  truncates only when it genuinely overflows the bar (`frontend/src/App.tsx`)
 
 ## [0.2.7] - 2026-07-17
 
 ### Changed
-- **セッションの並び順を herdr 単一情報源にした**: 並び順は二重に持たれていた — herdr のワークスペース順の上に、cchub 独自の `sessionOrder`（`session-metadata.json` とクロス peer 用の `peers.json`）が乗っていた。どちらか一方で並べ替えるともう一方とズレ、実際に本番でズレていた（cchub 側は「ギガ残量通知」が先頭、herdr 側は5番目）。cchub 側のストアを両方消し、ドラッグは herdr の `workspace.move` へ直接書き込むようにした。`listSessions()` は元々 `workspace.list` の順で組み立てているので、実装はソート層2枚（`sessions.ts` のサーバ側ソートと `useSessions.ts` の `sortByMergedOrder`）の**削除**が主で、永続化する状態が1つ減った。herdr の TUI で並べ替えても cchub に反映されるようになり、逆も同様（`backend/src/services/herdr.ts`, `routes/sessions.ts`, `services/session-metadata.ts`, `services/peer-registry.ts`, `routes/peers.ts`, `frontend/src/hooks/useSessions.ts`, `components/SessionList.tsx`）
-  - `PUT /api/sessions/order` と `GET|PUT /api/peers/session-order` を廃止し、`POST /api/sessions/:id/move { index }` を新設。peer のセッションは `sessionFetch` 経由でその peer の cchub → その peer の herdr に届く
-  - herdr の `insert_index` は「そのインデックスに現在いるワークスペースの手前に挿入」という意味で、移動元がまだリストに居る状態で評価される。後方→前方の移動はインデックスちょうどに着地するが、前方→後方は1つ手前に着地するため補正している（herdr 0.7.3/0.7.4 で実測）
-  - **並び順は peer ごとにグループ化される**（peer 間は `PUT /api/peers/order` の表示順、peer 内は各 herdr の順）。herdr は自分のマシンのワークスペースしか知らないため、peer 境界をまたぐドラッグは保存先が無く無視される。`state: 'lost'` のセッションはワークスペースが無いので末尾に並ぶ
-  - 移行時、既存の cchub 側の並び順は破棄され herdr の順が正になる（`peers.json` の死んだ `sessionOrder` キーは次回保存時に自動削除）
+- **Session order has herdr as its single source of truth**: the order was held
+  twice - cchub's own `sessionOrder` (in `session-metadata.json`, and in
+  `peers.json` for cross-peer order) sat on top of herdr's workspace order.
+  Reordering in one drifted from the other, and it had drifted in production (a
+  session was first on the cchub side and fifth on herdr's). Both cchub stores
+  were deleted and a drag writes straight to herdr's `workspace.move`.
+  `listSessions()` already builds in `workspace.list` order, so the change was
+  mostly the **removal** of two sorting layers (the server-side sort in
+  `sessions.ts` and `sortByMergedOrder` in `useSessions.ts`), leaving one less
+  piece of persistent state. Reordering in herdr's TUI now shows up in cchub, and
+  the reverse (`backend/src/services/herdr.ts`, `routes/sessions.ts`,
+  `services/session-metadata.ts`, `services/peer-registry.ts`, `routes/peers.ts`,
+  `frontend/src/hooks/useSessions.ts`, `components/SessionList.tsx`)
+  - `PUT /api/sessions/order` and `GET|PUT /api/peers/session-order` are gone,
+    replaced by `POST /api/sessions/:id/move { index }`. A peer's session travels
+    through `sessionFetch` to that peer's cchub and on to that peer's herdr
+  - herdr's `insert_index` means "insert before the workspace currently at that
+    index" and is evaluated while the moved workspace is still in the list. A
+    move backwards lands exactly on the index while a move forwards lands one
+    short, so it is corrected (measured on herdr 0.7.3/0.7.4)
+  - **Order is grouped per peer** (between peers by the display order from
+    `PUT /api/peers/order`, within a peer by that herdr's order). herdr only
+    knows its own machine's workspaces, so a drag across a peer boundary has
+    nowhere to be stored and is ignored. A session in `state: 'lost'` has no
+    workspace and sorts to the end
+  - On migration the existing cchub-side order is discarded and herdr's becomes
+    authoritative (the dead `sessionOrder` key in `peers.json` is removed on the
+    next save)
 
 ## [0.2.6] - 2026-07-17
 
 ### Fixed
-- **OS通知をタップしても対象セッションへ遷移しない問題（#400）**: 既存ウィンドウには Service Worker から `postMessage` して SPA を再読込せずに切り替え、ウィンドウがない場合だけ deep link で開くようにした。通知先は Claude の `ccSessionId` と Codex の `agentSessionId` の両方から解決し、未オープンのセッションもライブAPI一覧から追加して開く。desktop / tablet の保存済みペイン状態、remote peer の `peerId`、Service Workerを使わない通常ブラウザ通知にも同じ遷移を配線した（`frontend/public/sw-notification.js`, `frontend/src/App.tsx`, `frontend/src/components/DesktopLayout.tsx`, `frontend/src/utils/notificationNavigation.ts`）
+- **Tapping an OS notification did not navigate to its session (#400)**: an
+  existing window is now switched through a `postMessage` from the service worker
+  without reloading the SPA, and a deep link is only opened when no window
+  exists. The target is resolved from both Claude's `ccSessionId` and Codex's
+  `agentSessionId`, and a session that is not open yet is added from the live API
+  list and opened. The same navigation is wired into desktop/tablet's saved pane
+  state, a remote peer's `peerId`, and ordinary browser notifications that do not
+  use a service worker (`frontend/public/sw-notification.js`,
+  `frontend/src/App.tsx`, `frontend/src/components/DesktopLayout.tsx`,
+  `frontend/src/utils/notificationNavigation.ts`)
 
 ## [0.2.5] - 2026-07-16
 
 ### Added
-- **履歴のファセットサイドバーをドラッグで幅調整できるようにした**: プロジェクトのパスが長いと 240px 固定では途中で切れて区別がつかなかった。サイドバー右端のハンドルをマウス/タッチでドラッグして 180〜480px の範囲で調整でき（リスト側は最低 320px 確保）、幅は `localStorage`（`cchub-history-sidebar-width`）に保存されてリロード後も維持される。実装は FileViewer の既存リサイズパターンと同じ（`frontend/src/components/history/SessionHistoryV2.tsx`）
+- **The history facet sidebar can be resized by dragging**: a long project path
+  was cut off at the fixed 240px and became indistinguishable. The handle at the
+  sidebar's right edge drags with a mouse or touch between 180 and 480px (the
+  list keeps at least 320px), and the width is saved to `localStorage`
+  (`cchub-history-sidebar-width`) and survives a reload. The implementation
+  follows FileViewer's existing resize pattern
+  (`frontend/src/components/history/SessionHistoryV2.tsx`)
 
 ## [0.2.4] - 2026-07-16
 
 ### Added
-- **モデル別（Fable 等）の使用量リミットをチャートに表示**: Anthropic の `GET /api/oauth/usage` に `limits[]` 配列が増え、**特定モデルにスコープされたリミットはそこにしか現れない**ようになっていた。cchub は `five_hour` / `seven_day` しか読んでいなかったため、ダッシュボードが「余裕十分（68%）」と表示している裏で Fable の週次リミットが既に 100% / critical / 適用中、という状態がまったく見えなかった。`scope` が非 null のエントリ（= モデル別）を抽出し、`group` に対応するチャート（`session`→5時間 / `weekly`→7日間）に追加のラインとして重ね、凡例に Anthropic 自身の `severity` に沿った色でパーセントを出す。`"Fable"` という名前には依存しておらず、API が scope したものがそのまま線になるので将来モデルが増えても変更は要らない。サイクル本体は従来どおり `five_hour` / `seven_day` 由来で、`limits[]` が想定外の形でも既存チャートは壊れない（全フィールドを検証し、解釈できないエントリは推測せず捨てる）。モデル別の値は使用量履歴にも記録され、線は直線補間ではなく実データになる（これ以前のスナップショットに `scoped` キーは無く、「未計測」として扱われる。0% ではない）（`backend/src/services/anthropic-usage.ts`, `usage-history.ts`, `frontend/src/components/dashboard/UsageChart.tsx`, `UsageLimits.tsx`）
-  - 現時点で API がモデル別に分けているのは週次のみ（5時間は全モデル共通の1本）。`group: "session"` の scoped リミットが返り始めたら、コード変更なしで5時間チャートにも線が出る
+- **Per-model usage limits (Fable and friends) appear on the chart**: Anthropic's
+  `GET /api/oauth/usage` gained a `limits[]` array, and **a limit scoped to a
+  specific model appears only there**. cchub only read `five_hour` /
+  `seven_day`, so while the dashboard reported "plenty of room (68%)", Fable's
+  weekly limit could already be at 100%, critical and in force, entirely
+  invisible. Entries with a non-null `scope` (that is, per model) are extracted
+  and overlaid as extra lines on the chart matching their `group` (`session` ->
+  5 hours, `weekly` -> 7 days), with the percentage in the legend colored by
+  Anthropic's own `severity`. It does not depend on the name `"Fable"` - whatever
+  the API scopes becomes a line - so new models need no change. The cycle itself
+  still comes from `five_hour` / `seven_day`, and an unexpected shape in
+  `limits[]` cannot break the existing chart (every field is validated and an
+  uninterpretable entry is discarded rather than guessed at). Per-model values
+  are recorded in the usage history too, so the lines are real data rather than
+  straight-line interpolation (snapshots from before this have no `scoped` key
+  and are treated as "not measured", not as 0%)
+  (`backend/src/services/anthropic-usage.ts`, `usage-history.ts`,
+  `frontend/src/components/dashboard/UsageChart.tsx`, `UsageLimits.tsx`)
+  - Right now the API only splits the weekly limit per model (the 5-hour one is a
+    single line across all models). If scoped limits with `group: "session"`
+    start appearing, they will show up on the 5-hour chart with no code change
 
 ## [0.2.3] - 2026-07-16
 
 ### Fixed
-- **リモートログ送信が 401 で全滅していた問題**: `remoteLogger.ts` が認証ヘッダなしの素の fetch で `/api/logs` へ送っていたため、パスワード認証を有効にした環境ではブラウザログが一切サーバに届かず、コンソールが 401 エラーで埋まっていた。保存済みトークン（`cc-hub-token`）を `Authorization: Bearer` として付与し、401 を受けたらトークンが変わるまで送信を止める（未ログインのページが console 呼び出しごとに失敗確定のリクエストを撃ち続けない）（`frontend/src/utils/remoteLogger.ts`）
-- **古い herdr サーバで subscribe が原因不明のまま失敗する問題**: protocol 16（herdr v0.7.3）未満のサーバは `pane.list` に `scroll` を返さないため、`pane.scroll.viewport_rows` の参照が TypeError になり、ブラウザには説明のない `Failed to subscribe` だけが届いてターミナルが真っ白になっていた（`herdr update` / `brew upgrade` 後にサーバが旧版のまま動き続ける版ズレで実際に発生）。subscribe の入口で検出して「herdr を更新してサーバを再起動せよ」という対処法つきのエラーを投げ、エラー詳細をクライアントへ転送し、read-only の viewport / peek 経路も `scroll` 欠損で落ちないようにした（`backend/src/services/herdr-control.ts`, `herdr-client.ts`, `backend/src/routes/terminal-mux.ts`）
+- **Remote log delivery failed wholesale with 401**: `remoteLogger.ts` posted to
+  `/api/logs` with a plain fetch and no auth header, so in an environment with
+  password auth no browser log ever reached the server and the console filled
+  with 401 errors. The stored token (`cc-hub-token`) is attached as
+  `Authorization: Bearer`, and after a 401 sending stops until the token changes
+  (so a logged-out page does not fire a guaranteed-to-fail request on every
+  console call) (`frontend/src/utils/remoteLogger.ts`)
+- **A subscribe against an old herdr server failed with no explanation**: a
+  server below protocol 16 (herdr v0.7.3) does not return `scroll` in
+  `pane.list`, so reading `pane.scroll.viewport_rows` threw a TypeError and the
+  browser received nothing but `Failed to subscribe` with a blank terminal (it
+  really happened through a version skew where the server kept running the old
+  build after `herdr update` / `brew upgrade`). It is detected at the subscribe
+  entry point and throws an error carrying the remedy ("update herdr and restart
+  the server"), the error detail is forwarded to the client, and the read-only
+  viewport / peek paths no longer break on a missing `scroll`
+  (`backend/src/services/herdr-control.ts`, `herdr-client.ts`,
+  `backend/src/routes/terminal-mux.ts`)
 
 ## [0.2.2] - 2026-07-15
 
 ### Changed
-- **セッションのインジケータを herdr のエージェント検出から取るようにした（hook 依存の解消, #390）**: これまでインジケータは hook イベント（`PreToolUse`/`UserPromptSubmit` → 処理中、`Stop` → 完了）で状態遷移を作り、その上に herdr の `blocked` 補正を乗せる二重構造だった。hook が未設定・発火漏れ・エージェントが途中で kill された場合に「自信を持って間違った」表示になる。herdr はペイン自体を見てエージェントの状態を判定するので、そちらを source of truth にした（herdr 0.7.3 / Claude 2.x で実測: `idle` ターン前 / `working` 応答中 / `blocked` AskUserQuestion・権限プロンプト待ち / `done` 応答後）。未知の状態（将来 herdr が追加するものを含む）は推測せず hook 状態にフォールバックする（`backend/src/routes/sessions.ts`, `backend/src/services/herdr.ts`）
-- **インジケータが即時になった**: herdr の `pane.agent_status_changed` を購読し、状態変化の瞬間にセッション一覧を push（従来は最大5秒のポーリング待ち）。購読はペイン単位（`pane_id` 必須）なので、ペインの生成・終了に合わせて購読を張り替える。ウォッチャーは「いつ再構築するか」だけを決め、値は従来通り `pane.list` から取るため、イベントの取りこぼしは遅延にはなっても不整合にはならない（`backend/src/services/herdr-agent-status.ts`）
-- **必要な hook が2つだけになった**: `Stop`（通知本文）と `PostToolUse`/`AskUserQuestion`（質問のツール名）。**`PreToolUse` と `UserPromptSubmit` は不要**になり、未設定でも警告しなくなった（設定済みのまま残しても害はない）。`PreToolUse` はツール呼び出しのたびに `cchub notify` プロセスを起動するので、外すと無駄がなくなる
+- **The session indicator comes from herdr's agent detection (hooks no longer
+  required, #390)**: the indicator used to build its state transitions from hook
+  events (`PreToolUse`/`UserPromptSubmit` -> working, `Stop` -> done) with
+  herdr's `blocked` correction layered on top. With hooks unconfigured, a missed
+  event or an agent killed midway, that produced a **confidently wrong** display.
+  herdr looks at the pane itself to decide the agent's state, so it is the source
+  of truth now (measured on herdr 0.7.3 / Claude 2.x: `idle` before a turn,
+  `working` during a response, `blocked` waiting on AskUserQuestion or a
+  permission prompt, `done` after a response). An unknown state (including ones
+  herdr may add later) is not guessed at and falls back to the hook state
+  (`backend/src/routes/sessions.ts`, `backend/src/services/herdr.ts`)
+- **The indicator is immediate**: it subscribes to herdr's
+  `pane.agent_status_changed` and pushes the session list the moment the state
+  changes (previously up to a five-second poll). The subscription is per pane
+  (`pane_id` is required), so it is re-established as panes are created and
+  destroyed. The watcher only decides **when to rebuild**, and the values still
+  come from `pane.list`, so a dropped event costs latency rather than
+  correctness (`backend/src/services/herdr-agent-status.ts`)
+- **Only two hooks are needed now**: `Stop` (the notification body) and
+  `PostToolUse`/`AskUserQuestion` (the question's tool name). **`PreToolUse` and
+  `UserPromptSubmit` are unnecessary** and no longer warned about when absent
+  (leaving them configured does no harm). `PreToolUse` spawns a `cchub notify`
+  process on every tool call, so removing it saves that
 
 ### Added
-- **herdr の版ズレ検知とダッシュボード通告（#393）**: `herdr update` はバイナリを置き換えるだけで稼働中のサーバは旧版のまま動き続ける。cchub はペイン制御に herdr の**バイナリ**を spawn するため、この間は「新しい CLI → 古いサーバ」の版ズレになり、「ターミナルが繋がらない」形で症状が出うる。`herdr status --json`（ディスク上のバイナリと稼働サーバを並記し、herdr 自身の `restart_needed` も返す）を 30 秒キャッシュで読み、ズレていればダッシュボードに警告を出す。判定できない出力（herdr 未インストール、形式変更、パース不能）は**警告を出さずに degrade** する（`backend/src/services/herdr-update.ts`）
-- **警告からの適用ボタン**: `POST /api/herdr/apply-update`（認証必須）で `herdr update` + 監視下の再起動（systemd: `systemctl --user restart herdr` / launchd: `launchctl kickstart -k`）を代行する。update に失敗したら再起動には進まない。**ユーザーが押したときだけ**実行し、`cchub update --auto` のタイマー経路からは決して呼ばれない。herdr が systemd/launchd の管理外で動いている場合はボタンを出さず手順の提示に留める。警告文には再起動のコスト（全ペインが張り直され、エージェントの会話は自動復元されるが実行中のコマンドは失われる）を明記
+- **herdr version-skew detection and a dashboard notice (#393)**: `herdr update`
+  only replaces the binary while the running server keeps the old build. cchub
+  spawns the herdr **binary** for pane control, so in between it is a new CLI
+  against an old server, and the symptom shows up as "the terminal will not
+  connect". It reads `herdr status --json` (which lists the on-disk binary and
+  the running server side by side and returns herdr's own `restart_needed`) with
+  a 30-second cache and warns on the dashboard when they differ. Output it cannot
+  interpret (herdr not installed, a format change, unparseable) **degrades to no
+  warning** (`backend/src/services/herdr-update.ts`)
+- **An apply button on the warning**: `POST /api/herdr/apply-update`
+  (authenticated) runs `herdr update` plus a supervised restart (systemd:
+  `systemctl --user restart herdr`; launchd: `launchctl kickstart -k`). A failed
+  update does not proceed to the restart. It runs **only when the user presses
+  it** and is never called from the `cchub update --auto` timer. When herdr runs
+  outside systemd/launchd the button is not offered and instructions are shown
+  instead. The warning text spells out the cost of a restart (every pane's PTY is
+  recreated; agent conversations restore automatically but a running command is
+  lost)
 
 ## [0.2.1] - 2026-07-15
 
 ### Fixed
-- **systemd / launchd 配下で `herdr command not found` になり起動できない問題（v0.2.0 のリグレッション）**: サービスの `ExecStart` は `zsh -lc`（非対話ログインシェル = `.zshrc` を読まない）のため、herdr の公式インストール先である `~/.local/bin` が PATH に入らず、herdr がインストール済み・稼働中でも起動に失敗して再起動ループに入っていた。herdr バイナリを `$HERDR_BIN` → PATH → 既知のインストール先（`~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`）の順に一度だけ解決し、以降のすべての herdr 起動（起動時チェック、サーバ自動起動、ペインの制御ストリーム、`cchub setup` のプロビジョニング）を絶対パスで行うようにした（`backend/src/services/herdr-client.ts`）
+- **`herdr command not found` under systemd / launchd made startup fail (a
+  v0.2.0 regression)**: the service's `ExecStart` is `zsh -lc` (a
+  non-interactive login shell, so no `.zshrc`), which leaves herdr's official
+  install location `~/.local/bin` out of PATH, so startup failed and entered a
+  restart loop even with herdr installed and running. The herdr binary is
+  resolved once through `$HERDR_BIN` -> PATH -> the known install locations
+  (`~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `/usr/bin`), and every
+  later herdr invocation (the startup check, the server autostart, a pane's
+  control stream, `cchub setup`'s provisioning) uses the absolute path
+  (`backend/src/services/herdr-client.ts`)
 
 ## [0.2.0] - 2026-07-15
 
-ターミナルバックエンドを tmux から **herdr** へ全面移行しました。**herdr のインストールが必須** になり、tmux 上の既存セッションは引き継がれません（移行手順は後述）。
+The terminal backend moved wholesale from tmux to **herdr**. **herdr is now
+required**, and existing tmux sessions do not carry over (migration steps below).
 
 ### Changed
-- **ターミナルバックエンドを tmux から herdr へ全面移行**: セッションは herdr の workspace、ペインは herdr の pane にマッピングされ、端末 I/O は herdr サーバの NDJSON ソケット API（`~/.config/herdr/herdr.sock`）経由になった。ペインごとに `herdr terminal session control` を常駐させ、raw バイト（base64）で入力をパススルー、`terminal.frame` で出力を受ける。tmux の octal デコード・レイアウト文字列パース・`send-keys` のエスケープ制約が不要になり、マウス SGR / bracketed paste / エスケープシーケンスがそのまま透過する（`backend/src/services/herdr-client.ts`, `herdr-control.ts`, `herdr.ts`）
-- **セッションが CC Hub の再起動から独立**: セッションは herdr サーバのプロセス内に存在するため、cchub の再起動・更新でセッションが落ちなくなった。herdr サーバ側も `resume_agents_on_restore` で workspace と agent 会話を復元する
-- **分割レイアウトを CC Hub 側で保持**: herdr のグリッドはヘッドレスでリサイズできないため、split ツリー（比率・ペイン矩形）を CC Hub が所有し、ペイン PTY を個別に絶対サイズで制御する（`backend/src/services/herdr-layout.ts`）
-- **セッション識別に herdr のネイティブ agent session id を使用**: `agent.list` が返す Claude のセッション ID で紐付けるようになり、同一ディレクトリに複数セッションがある場合の取り違えが解消（従来はパス一致のフォールバック）
-- **`cchub setup` が herdr をプロビジョニング**: systemd user unit / launchd plist、`~/.config/herdr/config.toml`（`resume_agents_on_restore` + `pane_history`）、`herdr integration install claude` を自動セットアップする（既存設定は上書きしない）
-- **起動時に herdr のバージョン/プロトコルを検査**: 未検証プロトコルでは警告をログに出す
+- **The terminal backend moved from tmux to herdr**: a session maps to a herdr
+  workspace and a pane to a herdr pane, and terminal I/O goes through the herdr
+  server's NDJSON socket API (`~/.config/herdr/herdr.sock`). A
+  `herdr terminal session control` runs per pane, passing input through as raw
+  bytes (base64) and receiving output as `terminal.frame`. tmux's octal decoding,
+  layout string parsing and `send-keys` escaping constraints are gone, and mouse
+  SGR, bracketed paste and escape sequences pass through intact
+  (`backend/src/services/herdr-client.ts`, `herdr-control.ts`, `herdr.ts`)
+- **Sessions are independent of CC Hub restarts**: sessions live inside the herdr
+  server process, so restarting or updating cchub no longer kills them. The herdr
+  server also restores workspaces and agent conversations through
+  `resume_agents_on_restore`
+- **CC Hub owns the split layout**: herdr's grid cannot be resized headlessly, so
+  CC Hub owns the split tree (ratios and pane rectangles) and sizes each pane's
+  PTY absolutely (`backend/src/services/herdr-layout.ts`)
+- **Session identity uses herdr's native agent session id**: sessions are matched
+  by the Claude session ID reported by `agent.list`, which removes the mix-ups
+  that happened when several sessions shared a directory (it used to fall back to
+  path matching)
+- **`cchub setup` provisions herdr**: the systemd user unit / launchd plist,
+  `~/.config/herdr/config.toml` (`resume_agents_on_restore` + `pane_history`) and
+  `herdr integration install claude` are set up automatically (existing
+  configuration is never overwritten)
+- **herdr's version and protocol are checked at startup**: an unverified protocol
+  logs a warning
 
 ### Added
-- **インジケータの `waiting_input` を herdr の agent status から補正**: パーミッション確認待ちなど、hook が来ない状態でもペインの `blocked` 状態を反映する
+- **The indicator's `waiting_input` is corrected from herdr's agent status**: a
+  pane's `blocked` state is reflected even where no hook arrives, such as waiting
+  on a permission prompt
 
 ### Removed
-- **tmux 関連コードを全削除**: `tmux-control.ts` / `tmux.ts` / `pane-viewport.ts` / `viewport-cursor-policy.ts` / `tmux-layout-parser.ts` / `tmux-octal-decoder.ts` とそのテスト
-- **`cchub tui`（embed-tui）を削除**: tmux をレンダリングバックエンドとして直接使う設計だったため、herdr 移行に伴い撤去（`tui/` ワークスペースごと削除）
-- **ペインの respawn / copy-mode**: herdr に対応機能がないため撤去
+- **All tmux code**: `tmux-control.ts` / `tmux.ts` / `pane-viewport.ts` /
+  `viewport-cursor-policy.ts` / `tmux-layout-parser.ts` / `tmux-octal-decoder.ts`
+  and their tests
+- **`cchub tui` (embed-tui)**: it used tmux directly as its rendering backend, so
+  it went with the herdr migration (the whole `tui/` workspace was deleted)
+- **Pane respawn and copy-mode**: herdr has no equivalent
 
 ### Fixed
-- **UTF-8 のチャンク分断による文字化け**: ソケットの NDJSON リーダーをストリーミング対応の共通実装に統一（絵文字・日本語がパケット境界で壊れない）
-- **入力の取りこぼしと順序逆転**: ペインごとに単一の制御ストリーム stdin へ流すことで順序を保証。制御ストリームがない状態での送信は成功扱いにせずエラーを返す
-- **Claude / Codex TUI への複数行プロンプト送信**: bracketed paste で送り、送信の `\r` は 80ms 遅らせて別チャンクで送る（同一チャンクだと TUI が改行を飲む）
-- **履歴からの再開後に画面が空白のままリロードが必要だった問題**: セッション切替時に viewport の配送先登録を一括破棄していたのを修正。加えて workspace 削除後にゾンビ制御セッションが残り同名セッションの再開を壊す問題も修正
-- **再開時の「No conversation found」**: Claude 終了後に作業ディレクトリが `~` へ劣化するため、会話ログ（`.jsonl`）に記録された cwd を優先して復帰する
-- **alt-screen 判定でスクロールできない問題**: 再開直後のシェルのエコー行を alt-screen と誤判定していたのを緩和し、スクロールバック増加で自己修正するようにした
-- **ペインのドラッグリサイズが元に戻る / 分割の競合**: レイアウトツリー側で絶対サイズと重複リーフを扱うよう修正
-- **読み取り専用 REST がペインを乗っ取る問題**: `cchub peek` や viewport スナップショットは RPC のみで行い、制御ストリームは WebSocket 購読・入力時にのみ起動する（lazy controllers）
-- **メタデータストアを tmux 版と分離**: `~/.cc-hub` を共有する tmux 版と衝突しないよう `herdr-session-metadata.json` / `herdr-last-known-sessions.json` に分離
+- **Corruption from UTF-8 split across chunks**: the socket's NDJSON reader was
+  unified into one streaming-safe implementation (emoji and Japanese no longer
+  break at a packet boundary)
+- **Dropped and reordered input**: everything goes through a single control
+  stream's stdin per pane, which guarantees ordering. Sending with no control
+  stream returns an error rather than reporting success
+- **Multi-line prompts to the Claude / Codex TUI**: sent as a bracketed paste,
+  with the submitting `\r` delayed 80ms into a separate chunk (in the same chunk
+  the TUI swallows the newline)
+- **A blank screen after resuming from history required a reload**: switching
+  sessions discarded the viewport delivery registrations wholesale. Also fixed a
+  zombie control session surviving a workspace deletion and breaking the resume
+  of a session with the same name
+- **"No conversation found" on resume**: the working directory degrades to `~`
+  after Claude exits, so the cwd recorded in the conversation log (`.jsonl`) is
+  preferred when restoring
+- **Scrolling blocked by alt-screen detection**: the shell's echo line right
+  after a resume was misread as alt-screen; the heuristic is looser and
+  self-corrects as the scrollback grows
+- **Pane drag-resize snapping back / splits fighting**: absolute sizes and
+  duplicate leaves are handled in the layout tree
+- **Read-only REST taking over a pane**: `cchub peek` and viewport snapshots are
+  pure RPC, and a control stream starts only on a WebSocket subscribe or on input
+  (lazy controllers)
+- **The metadata store is separate from the tmux version's**: split into
+  `herdr-session-metadata.json` / `herdr-last-known-sessions.json` so it does not
+  collide with the tmux version sharing `~/.cc-hub`
 
 ### Notes
-- **移行手順**: `curl -fsSL https://herdr.dev/install.sh | sh`（または `brew install herdr`）で herdr を入れ、`cchub update` 後に `cchub setup` を各マシンで再実行する。tmux 上の既存セッションは引き継がれないため、必要な作業は事前に区切っておくこと
-- **既知の制限**: スクロールバックは herdr の `pane.read` 1000 行キャップが上限（upstream の offset 対応待ち）
-- **herdr の更新運用**: `herdr update`（バイナリ置換のみ）→ `systemctl --user restart herdr`。systemd/launchd 配下では `--handoff` を使わないこと（監視外の新サーバに切り替わるため）
+- **Migration**: install herdr with `curl -fsSL https://herdr.dev/install.sh | sh`
+  (or `brew install herdr`), then re-run `cchub setup` on each machine after
+  `cchub update`. Existing tmux sessions do not carry over, so reach a stopping
+  point first
+- **Known limitation**: scrollback is capped by herdr's 1000-line `pane.read`
+  limit (awaiting offset support upstream)
+- **Updating herdr**: `herdr update` (which only replaces the binary) followed by
+  `systemctl --user restart herdr`. Do not use `--handoff` under
+  systemd/launchd (it hands over to a new server outside the supervisor)
 
 ## [0.1.192] - 2026-07-14
 
 ### Fixed
-- **`cchub tui`（バイナリ）が起動直後に終了する問題**: embed-tui の `main()` がセットアップ後すぐ return する設計だったため、CLI 経路（`await runTui()` → `process.exit`）ではプロセスごと即終了していた（v0.1.189 から）。`bun run dev:tui` ではイベントループが残るため露見しなかった。`main()` が終了（`q` / Ctrl-C → cleanup）まで待つよう修正（`tui/src/embed/embed-tui.ts`）
+- **`cchub tui` (the binary) exited immediately after starting**: embed-tui's
+  `main()` returned as soon as setup finished, so through the CLI path
+  (`await runTui()` -> `process.exit`) the whole process ended at once (since
+  v0.1.189). It never surfaced under `bun run dev:tui`, where the event loop
+  stays alive. `main()` now waits until it ends (`q` / Ctrl-C -> cleanup)
+  (`tui/src/embed/embed-tui.ts`)
 
 ## [0.1.191] - 2026-07-13
 
 ### Added
-- **`cchub tui` に複数 pane 分割表示**: 選択セッションの全 pane を tmux レイアウト通りに 1 画面へ合成描画（区切り線 │/─）。クリックで pane フォーカス切替、ホイールはマウス直下の pane へルーティング、**端末領域の右クリックメニューで split │（左右）/ split ─（上下）/ close pane**（split は元 pane の cwd を引き継ぎ、最後の 1 枚は close 不可）（`tui/src/embed/embed-tui.ts`）
-- **`cchub tui` にダッシュボードパネル**: サイドバーの `dash` ボタンまたは `D` キーで、Claude/Codex の使用率バー（5h/7d、状態色付き）・today のアクティビティ・システムメトリクス・disk をオーバーレイ表示。データはサーバの `/api/dashboard` から statusline.sh と同じ経路（HTTPS 自己署名許容＋Keychain の `cchub` パスワードで login → Bearer）で取得し、表示中は 5 秒ごとに自動更新。サーバ未起動時はエラーメッセージに degrade（`tui/src/embed/dashboard.ts`）
+- **Split panes in `cchub tui`**: every pane of the selected session is composed
+  onto one screen following the tmux layout (with vertical and horizontal
+  rules). Clicking moves pane focus, the wheel is routed to the pane under the
+  mouse, and **a right-click menu in the terminal area offers split vertically /
+  split horizontally / close pane** (a split inherits the original pane's cwd,
+  and the last pane cannot be closed) (`tui/src/embed/embed-tui.ts`)
+- **A dashboard panel in `cchub tui`**: the sidebar's `dash` button or the `D`
+  key overlays Claude/Codex usage bars (5h/7d with status colors), today's
+  activity, system metrics and disk. The data comes from the server's
+  `/api/dashboard` through the same path statusline.sh uses (self-signed HTTPS
+  allowed, logging in with the `cchub` password from the Keychain for a Bearer
+  token) and refreshes every five seconds while shown. With no server it
+  degrades to an error message (`tui/src/embed/dashboard.ts`)
 
 ### Changed
-- **`cchub tui` の描画エンジンを tmux 制御モード常駐クライアント化**: 毎フレームの `tmux` fork（macOS で 1 回 5〜20ms）をやめ、常駐 `tmux -C attach` へコマンドをパイプ（サブ ms）。`%output` をダーティ信号としたイベント駆動再描画＋行差分キャッシュ＋約 30fps レート制限＋Synchronized Output (DEC 2026) で、スクロール/ストリーミング時の遅さと点滅を解消（`tui/src/embed/tmux-ctl.ts`, `tui/src/embed/embed-tui.ts`）
-- **normal-screen の void 埋め（padFill）**: Claude Code 等の非 alt-screen TUI でカーソル行より下の空白を刈り、スクロールバックを上に継ぎ足して画面を埋める（web UI の PaneViewport と同じ方式）
+- **`cchub tui`'s rendering engine became a resident tmux control-mode client**:
+  instead of forking `tmux` every frame (5-20ms per call on macOS), commands are
+  piped into a resident `tmux -C attach` (sub-millisecond). Event-driven redraws
+  using `%output` as the dirty signal, a per-line diff cache, a roughly 30fps
+  rate limit and Synchronized Output (DEC 2026) removed the sluggishness and
+  flicker while scrolling or streaming (`tui/src/embed/tmux-ctl.ts`,
+  `tui/src/embed/embed-tui.ts`)
+- **Void filling on the normal screen (padFill)**: for non-alt-screen TUIs such
+  as Claude Code, the blank space below the cursor row is trimmed and scrollback
+  is prepended to fill the screen (the same approach as the web UI's
+  PaneViewport)
 
 ### Fixed
-- **トラックパッドの横スクロールで pane メニューが誤って開く問題**: SGR ホイールイベント（button 64〜67）をクリック判定から除外（`66 & 3 === 2` が右クリックに誤マッチしていた）。メニュー表示中のホイールがクリック扱いになる穴も修正
-- **描画中のカーソルちらつき**: カーソル可視性（DECTCEM）の切替を状態遷移時のみに限定し、サイドバー定期更新後にカーソル位置を pane へ復元
-- **罫線・ブロック文字（│ ─ █ ░）の幅計算**: 全角扱い（幅 2）していたのを幅 1 に修正し、メニューやバーの右罫線ズレを解消
+- **Horizontal trackpad scrolling opened the pane menu by mistake**: SGR wheel
+  events (buttons 64-67) are excluded from click detection (`66 & 3 === 2`
+  matched a right click). Also fixed a hole where a wheel event with the menu
+  open counted as a click
+- **Cursor flicker while drawing**: cursor visibility (DECTCEM) is toggled only
+  on a state transition, and the cursor position is restored to the pane after
+  the sidebar's periodic refresh
+- **Width of rules and block characters**: they were treated as full-width (2)
+  and are width 1, which fixes the misaligned right-hand rules in menus and bars
 
 ## [0.1.190] - 2026-07-10
 
 ### Added
-- **`cchub tui`（embed-tui）に選択セッションの詳細パネル**: web 版の表示に寄せて、サイドバー下部に選択中セッションの **recap / branch / tokens / ctx%** を表示。サーバが `buildSessionsList` から `@cchub_recap` / `@cchub_branch` / `@cchub_tokens` / `@cchub_ctx` の tmux ユーザオプションへ書き込み（`@cchub_state` と同じ dedupe/fire-and-forget 方式）、embed-tui が `list-sessions -F` で tmux 直読みして描画する（HTTP 不使用・サーバ未起動時は非表示で degrade）（`backend/src/services/tmux.ts`, `backend/src/routes/sessions.ts`, `tui/src/embed/embed-tui.ts`）
-- **サイドバーにクリック可能なアクションボタン**: 2行目に `[ + 新規 ]` `[ 履歴 ]` を表示し、マウスクリックで新規作成 file manager / 履歴パネルを開けるようにした（キー `n` / `H` も併用可）
+- **A detail panel for the selected session in `cchub tui` (embed-tui)**:
+  following the web version, the bottom of the sidebar shows the selected
+  session's **recap / branch / tokens / ctx%**. The server writes them from
+  `buildSessionsList` into the `@cchub_recap` / `@cchub_branch` / `@cchub_tokens`
+  / `@cchub_ctx` tmux user options (the same dedupe / fire-and-forget approach as
+  `@cchub_state`), and embed-tui reads them straight from tmux with
+  `list-sessions -F` (no HTTP, and it degrades to hiding them when the server is
+  not running) (`backend/src/services/tmux.ts`, `backend/src/routes/sessions.ts`,
+  `tui/src/embed/embed-tui.ts`)
+- **Clickable action buttons in the sidebar**: `[ + New ]` and `[ History ]` on
+  the second row open the create file manager and the history panel by mouse (the
+  `n` / `H` keys still work)
 
 ## [0.1.189] - 2026-07-10
 
 ### Changed
-- **`cchub tui` を自前フルスクリーン TUI（embed-tui）に全面移行**: これまでの Ink 製・サーバ API クライアント・`tmux attach` ハンドオフ方式の `cchub tui` を廃止し、**tmux をバックエンド（PTY・端末レンダリング）としてのみ使い UI は完全自前描画**する embed-tui に置き換えた。左サイドバー＋選択セッションの実端末（`capture-pane`）を1画面に描画し、入力は `send-keys` で転送。サーバ API を経由しないので CC Hub サーバ未起動でも動く。マウス操作（選択/フォーカス/幅ドラッグ/右クリックメニューでセッション close）、枠線 file manager での新規作成、**履歴からの復帰（`~/.claude/projects` 直読み → `claude -r`、`H` キー）** を備える（`tui/src/embed/embed-tui.ts`, `tui/src/embed/history.ts`）
+- **`cchub tui` moved wholesale to a custom fullscreen TUI (embed-tui)**: the
+  previous `cchub tui` - built on Ink, a client of the server API, handing off to
+  `tmux attach` - was replaced by embed-tui, which **uses tmux only as a backend
+  (PTY and terminal rendering) and draws the entire UI itself**. A left sidebar
+  and the selected session's real terminal (`capture-pane`) are drawn on one
+  screen, with input forwarded through `send-keys`. It does not go through the
+  server API, so it works with the CC Hub server down. It has mouse support
+  (selection, focus, width dragging, closing a session from the right-click
+  menu), a framed file manager for creating sessions, and **resume from history**
+  (reading `~/.claude/projects` directly, then `claude -r`, on the `H` key)
+  (`tui/src/embed/embed-tui.ts`, `tui/src/embed/history.ts`)
 
 ### Removed
-- **旧 Ink TUI 一式を削除**: `tui/src/index.ts` / `components/` / `hooks/` / `api/` / `sidebar/mouse-sidebar.ts` / `tmux/attach.ts,send.ts` とそのテスト、tmux config の F10/F11/F12・status ボタンバインド、CLI の `cchub tui --popup` / `--sidebar` を撤去。tui から ink/react 依存も除去
+- **The whole old Ink TUI**: `tui/src/index.ts`, `components/`, `hooks/`, `api/`,
+  `sidebar/mouse-sidebar.ts`, `tmux/attach.ts,send.ts` and their tests, the tmux
+  config's F10/F11/F12 and status button bindings, and the CLI's
+  `cchub tui --popup` / `--sidebar`. The ink/react dependencies were dropped from
+  tui as well
 
 ## [0.1.188] - 2026-07-10
 
 ### Added
-- **実験的な自前フルスクリーン TUI（embed-tui）**: `bun run dev:tui-embed` で起動する新しいローカル TUI。tmux をバックエンド（PTY・端末レンダリング）としてのみ使い、UI は完全自前描画・サーバ API を経由せず tmux を直接叩く。左=自前サイドバー / 右=選択セッションの実端末（`capture-pane -e -p` を自領域に描画）、入力転送（`send-keys -H`）、フォーカスモデル（Enter=端末 / Ctrl-B=一覧）、状態ドット（`@cchub_state`）・カスタムタイトル（`~/.cc-hub/session-metadata.json` 直読み）、サイドバー幅調整（`[` `]` ＋区切り線マウスドラッグ）、枠線 file manager UI の新規作成（fs 直・マウス操作）、右クリックのコンテキストメニュー→セッション close、スクロール（通常=tmux 履歴 offset / alt-screen=ホイール転送、慣性フラッドをレート制限）を備える（`tui/src/embed/embed-tui.ts`）
-- **リリース不要のソース起動 dev ハーネス**: サイドバー起動コマンドを `CCHUB_SIDEBAR_CMD` で差し替え可能にし、`scripts/dev-tui.sh`（`bun run dev:tui-live`）でソースから TUI を試せるようにした
+- **An experimental custom fullscreen TUI (embed-tui)**: a new local TUI started
+  with `bun run dev:tui-embed`. It uses tmux only as a backend (PTY and terminal
+  rendering), draws the whole UI itself and talks to tmux directly rather than
+  through the server API. It has a custom sidebar on the left and the selected
+  session's real terminal on the right (`capture-pane -e -p` drawn into its own
+  area), input forwarding (`send-keys -H`), a focus model (Enter for the
+  terminal, Ctrl-B for the list), status dots (`@cchub_state`), custom titles
+  (read straight from `~/.cc-hub/session-metadata.json`), sidebar width
+  adjustment (`[` and `]` plus dragging the divider), a framed file manager UI
+  for creating sessions (direct fs access, mouse-driven), a right-click context
+  menu for closing a session, and scrolling (normal screen through the tmux
+  history offset, alt-screen by forwarding the wheel, with momentum floods rate
+  limited) (`tui/src/embed/embed-tui.ts`)
+- **A dev harness that runs from source without a release**: the sidebar launch
+  command can be replaced through `CCHUB_SIDEBAR_CMD`, and `scripts/dev-tui.sh`
+  (`bun run dev:tui-live`) runs the TUI from source
 
 ### Changed
-- **コードから外部プロダクト名の表記を撤去**: コメント / CLI ヘルプ / スクリプトの表記を中立表現へ置換（`backend/src/cli.ts`, `backend/src/services/tmux.ts`, `tui/src/tmux/attach.ts` 他）
+- **Removed references to another product's name from the code**: comments, CLI
+  help and scripts use neutral wording (`backend/src/cli.ts`,
+  `backend/src/services/tmux.ts`, `tui/src/tmux/attach.ts` and others)
 
 ## [0.1.187] - 2026-07-07
 
 ### Changed
-- **サイドバーをマウスでクリック選択できるように（Ink → raw ターミナル実装）**: Ink はマウス非対応のため、常時表示サイドバーの中身を React/Ink から raw ターミナル描画へ置き換えた。SGR マウス（`\x1b[?1006h`）を自前で有効化し、tmux が転送してくるマウスイベントをパースして、**行をクリックするとそのセッションへ switch** する（herdr 風の「左でクリック→右が切替」）。キーボード操作（↑↓ / j k / Enter / q）と状態ドット（🟡🔴🔵🟢）・2.5s ごとのライブ更新も維持。旧 Ink サイドバー（`Sidebar.tsx`）は削除（`tui/src/sidebar/mouse-sidebar.ts`）
+- **The sidebar is clickable (Ink -> raw terminal)**: Ink has no mouse support,
+  so the always-on sidebar's contents moved from React/Ink to raw terminal
+  drawing. SGR mouse mode (`\x1b[?1006h`) is enabled directly, the mouse events
+  tmux forwards are parsed, and **clicking a row switches to that session**
+  (a herdr-like "click on the left, the right switches"). Keyboard control
+  (up/down, j/k, Enter, q), the status dots and the 2.5-second live refresh all
+  remain. The old Ink sidebar (`Sidebar.tsx`) was deleted
+  (`tui/src/sidebar/mouse-sidebar.ts`)
 
 ## [0.1.186] - 2026-07-06
 
 ### Fixed
-- **react/react-dom のバージョン不整合でアプリが起動不能になる問題**: lockfile が react@19.2.6 / react-dom@19.2.4 と不整合なまま（v0.1.166 直後の tui scaffold 以降）で、依存の再インストールや vite の deps 再最適化を踏むと "Incompatible React versions" で White Screen になっていた。両方を 19.2.7 に整合させた（`frontend/package.json`, `bun.lock`）
-- **frontend の `bun:test` 型解決が backend への import 連鎖に偶然依存していた**: `@types/bun` を frontend に明示追加し、tsconfig に `types: ["bun"]` を設定（backend/tui と同じパターン）
+- **A react/react-dom version mismatch made the app impossible to start**: the
+  lockfile had react@19.2.6 against react-dom@19.2.4 (since the tui scaffold
+  right after v0.1.166), and reinstalling dependencies or triggering vite's dep
+  re-optimization produced a white screen with "Incompatible React versions".
+  Both are 19.2.7 now (`frontend/package.json`, `bun.lock`)
+- **The frontend's `bun:test` types resolved only by accident through an import
+  chain into the backend**: `@types/bun` was added to the frontend explicitly and
+  `types: ["bun"]` set in its tsconfig (the same pattern as backend/tui)
 
 ### Changed
-- **デッドコード除去（knip 走査）**: 未使用の export・関数・型・ファイル・依存を全ワークスペースから削除（31ファイル、−525行）。`session-history.ts` に重複していた `ConversationMessage` / `ToolUseInfo` / `ToolResultInfo` / `ToolResultImage` を `shared/types.ts` に一元化。未使用依存 `hono`・`sharp` を frontend から削除。ファイル内でのみ使用される約20シンボルを un-export（#379）
+- **Dead code removed (a knip sweep)**: unused exports, functions, types, files
+  and dependencies were deleted across every workspace (31 files, -525 lines).
+  `ConversationMessage` / `ToolUseInfo` / `ToolResultInfo` / `ToolResultImage`,
+  duplicated in `session-history.ts`, were consolidated into `shared/types.ts`.
+  The unused `hono` and `sharp` dependencies were removed from the frontend, and
+  about 20 symbols used only within their file were un-exported (#379)
 
 ## [0.1.185] - 2026-07-04
 
 ### Added
-- **herdr 風の既定レイアウト（入室時に左サイドバーを自動表示）**: `cchub tui` でセッションに入室すると、左端に幅34桁のセッション一覧サイドバーを自動で開くようにした（「左に一覧・右に作業」の herdr 風レイアウト）。狭幅向けの専用コンポーネント（1セッション=1行: `▸ ドット セッション名`）で描画し、既にサイドバーがあれば二重に開かず、フォーカスは作業ペインに残す。popup 経由の切替でも切替え先にサイドバーを生やす。`CCHUB_TUI_SIDEBAR=0`（または `off` / `false`）で無効化できる（`tui/src/components/Sidebar.tsx`, `tui/src/tmux/attach.ts`, `tui/src/index.ts`）
+- **A herdr-like default layout (the left sidebar opens automatically on entry)**:
+  entering a session through `cchub tui` opens a 34-column session-list sidebar
+  on the left (the herdr-style "list on the left, work on the right"). It is
+  drawn by a component built for narrow widths (one session per row:
+  `> dot session-name`), it does not open a second one if a sidebar already
+  exists, and focus stays in the work pane. Switching through the popup grows a
+  sidebar in the destination too. `CCHUB_TUI_SIDEBAR=0` (or `off` / `false`)
+  disables it (`tui/src/components/Sidebar.tsx`, `tui/src/tmux/attach.ts`,
+  `tui/src/index.ts`)
 
 ### Changed
-- **常時表示サイドバーの幅を 48→34 桁に縮小**: herdr のスリムなサイドバーに寄せ、専用のコンパクト表示（カードではなく1行表示）に変更（`tui/src/tmux/attach.ts`, `backend/src/services/tmux.ts` の F10 バインド）
+- **The always-on sidebar narrowed from 48 to 34 columns**: closer to herdr's
+  slim sidebar, with a compact display built for it (one row per session rather
+  than a card) (`tui/src/tmux/attach.ts`, the F10 binding in
+  `backend/src/services/tmux.ts`)
 
 ## [0.1.184] - 2026-07-03
 
 ### Fixed
-- **端末クライアントでマウスが一切効かなくなる**: Web UI（tmux -CC 制御モード）は接続時に copy-mode 誤爆防止のため `set-option -t <session> mouse off` を実行するが、Web 切断後もこの override がセッションに残り続けるため、同じ tmux セッションに繋いでいるローカル端末クライアントのマウス（クリック選択・境界ドラッグ・ホイール）まで死んでいた。`TmuxControlSession.destroy()` で mouse override を `set-option -u` で解除し、global の `mouse on` へフォールバックさせるよう修正（`backend/src/services/tmux-control.ts`）
+- **The mouse stopped working entirely in terminal clients**: the web UI (tmux
+  -CC control mode) runs `set-option -t <session> mouse off` on connect to avoid
+  triggering copy-mode, and that override stayed on the session after the web
+  client disconnected, killing the mouse (click selection, boundary dragging, the
+  wheel) for local terminal clients attached to the same tmux session.
+  `TmuxControlSession.destroy()` clears the override with `set-option -u` so it
+  falls back to the global `mouse on` (`backend/src/services/tmux-control.ts`)
 
 ## [0.1.183] - 2026-07-03
 
 ### Added
-- **herdr 風のエージェント状態ドットを tmux status-bar に表示**: cchub 経由で入室中のセッションで、エージェント状態を色ドット（🟡 作業中 / 🔴 入力待ち / 🔵 完了 / 🟢 アイドル）として status-bar に表示する。セッション一覧処理が hook ベースの状態を tmux ユーザオプション `@cchub_state` へ変更時のみ push（dedupe / fire-and-forget）し、`attachStatusRight` の `#{@cchub_state}` が描画する（`backend/src/services/tmux.ts`, `backend/src/routes/sessions.ts`, `tui/src/tmux/attach.ts`）
-- **常時表示のセッションサイドバー（`cchub tui --sidebar` / no-prefix F10）**: 左端に幅48桁のライブなセッション一覧をペインとして常駐させる。Enter で `switch-client` してもサイドバーは閉じず、切替え先セッションにもサイドバーを自動で生やすため「どこへ行っても左に一覧が居る」herdr 風の体験になる。サイドバーは自ペインを `@cchub_sidebar=1` でマークして重複作成を防ぎ、`q` で自ペインを閉じる（`tui/src/index.ts`, `tui/src/tmux/attach.ts`, `backend/src/cli.ts`）
+- **herdr-style agent status dots in the tmux status bar**: for a session entered
+  through cchub, the agent's state appears as a colored dot in the status bar
+  (working / waiting for input / done / idle). The session list processing pushes
+  the hook-based state into the `@cchub_state` tmux user option only when it
+  changes (dedupe, fire and forget), and `attachStatusRight`'s `#{@cchub_state}`
+  draws it (`backend/src/services/tmux.ts`, `backend/src/routes/sessions.ts`,
+  `tui/src/tmux/attach.ts`)
+- **An always-on session sidebar (`cchub tui --sidebar` / no-prefix F10)**: a
+  48-column live session list lives as a pane on the left edge. Pressing Enter
+  runs `switch-client` without closing the sidebar and grows one in the
+  destination session too, which gives the herdr-like feeling that "the list is
+  on the left wherever you go". The sidebar marks its own pane with
+  `@cchub_sidebar=1` to avoid being created twice, and `q` closes it
+  (`tui/src/index.ts`, `tui/src/tmux/attach.ts`, `backend/src/cli.ts`)
 
 ### Changed
-- **`cchub tui` の Help をカテゴリ分け + 状態ドット凡例を追加**: フラットなキー一覧を「移動 / セッション操作 / 入室中 / 履歴・その他」にグループ化し、状態ドットの凡例を併記。App のフッタヒントも状況（通常 / 終了確認 / ヘルプ）で出し分けるようにした（`tui/src/components/Help.tsx`, `tui/src/components/App.tsx`）
+- **`cchub tui`'s help is grouped, with a legend for the status dots**: the flat
+  key list is grouped into navigation / session actions / while attached /
+  history and other, with the dot legend alongside. The App's footer hint also
+  varies by situation (normal / exit confirmation / help)
+  (`tui/src/components/Help.tsx`, `tui/src/components/App.tsx`)
 
 ## [0.1.182] - 2026-07-02
 
 ### Added
-- **代替スクリーンの TUI にスクロールを明け渡す**: Claude Code (v2.1.172+) / Codex は TUI を端末の代替スクリーン(alternate screen)に描画するようになり、代替スクリーンは tmux scrollback を持たないため、cchub の「上スクロールで tmux 履歴を辿る」方式では過去が一切出なくなっていた。alt スクリーンのペイン（各 viewport frame の `modes.altScreen` で判定）では、スクロールを横取りして tmux scrollback を辿る代わりに、**SGR マウスホイールイベント（button 64=上/65=下）をペインへ送信**してアプリ自身に transcript をスクロールさせるよう変更。wheel/touch/momentum は `flushPendingScroll` に集約されているのでそこで一括分岐し、touch momentum の flood は1フラッシュあたり上限でガード。タップでの live 復帰は tmux offset が無いため Ctrl+End を送ってアプリの transcript を最下部へジャンプさせる。normal スクリーンのペインは既存の tmux-scrollback 挙動のまま（#373, `frontend/src/components/Terminal.tsx`）
+- **Hand scrolling over to a TUI on the alternate screen**: Claude Code (v2.1.172+)
+  and Codex draw their TUI on the terminal's alternate screen, which has no tmux
+  scrollback, so cchub's "scroll up to walk the tmux history" produced nothing at
+  all. On an alt-screen pane (detected through `modes.altScreen` on each viewport
+  frame), instead of intercepting the scroll to walk the tmux scrollback, **SGR
+  mouse wheel events (button 64 up / 65 down) are sent to the pane** so the app
+  scrolls its own transcript. Wheel, touch and momentum all funnel through
+  `flushPendingScroll`, so the branch lives there, with a per-flush cap guarding
+  against a touch-momentum flood. Returning to live by tapping has no tmux offset
+  to use, so it sends Ctrl+End to jump the app's transcript to the bottom. A
+  normal-screen pane keeps the existing tmux-scrollback behavior (#373,
+  `frontend/src/components/Terminal.tsx`)
 
 ## [0.1.181] - 2026-06-21
 
 ### Fixed
-- **Claude TUI のカーソルが入力行からズレる**: 最近の Claude Code がモードヒントのフッター下に空行を残すレイアウトになり、`padFill`（ペイン下部の void を scrollback で埋める処理）が prepend する行数が常時 1 以上になった。カーソル補正 `computeCursorPadShift` は prepend 量から 2 を引いていた（`prependCount - 2`）ため、カーソルが入力ボックス（`›` / `❯`）より最大2行上の空白行・枠線上に浮いて表示されていた。prepend した行数ぶんちょうど下げるよう修正（`Math.max(0, prependCount)`）（#371, `backend/src/services/viewport-cursor-policy.ts`）
+- **The Claude TUI's cursor drifted off the input line**: recent Claude Code
+  leaves a blank line under the mode-hint footer, so the number of lines
+  `padFill` prepends (filling the void at the bottom of a pane with scrollback)
+  is now always at least one. The cursor correction `computeCursorPadShift`
+  subtracted 2 from the prepend count (`prependCount - 2`), which floated the
+  cursor up to two rows above the input box, onto a blank line or the frame. It
+  now shifts down by exactly the number of prepended lines
+  (`Math.max(0, prependCount)`) (#371,
+  `backend/src/services/viewport-cursor-policy.ts`)
 
 ## [0.1.180] - 2026-06-20
 
 ### Fixed
-- **ファイルブラウザの展開済みディレクトリに新規ファイルが表示されない**: ファイルブラウザは展開した各ディレクトリの中身を `dirContents` Map にキャッシュしたまま一度も無効化せず、リロードボタンも `listDirectory` でルート階層しか再取得しなかったため、展開中フォルダ内（や初回ロード後のルート直下）に作成したファイル/ディレクトリが表示されなかった。`FileBrowser` に `refreshSignal` prop を追加し、bump で展開中の全ディレクトリを背景で再取得・再展開時もキャッシュ表示しつつ背景再取得するよう変更。リロードボタンはルート再取得に加えて `refreshSignal` を bump し、ツリー全体を一括更新する（#369, `frontend/src/components/files/FileBrowser.tsx`, `frontend/src/components/files/FileViewer.tsx`）
+- **New files did not appear in an expanded directory in the file browser**: the
+  file browser cached each expanded directory's contents in a `dirContents` Map
+  and never invalidated it, and the reload button only refetched the root level
+  through `listDirectory`, so a file or directory created inside an expanded
+  folder (or at the root after the first load) never appeared. `FileBrowser`
+  gained a `refreshSignal` prop: bumping it refetches every expanded directory in
+  the background, and re-expanding shows the cache while refetching behind it.
+  The reload button bumps `refreshSignal` in addition to refetching the root, so
+  the whole tree updates at once (#369,
+  `frontend/src/components/files/FileBrowser.tsx`,
+  `frontend/src/components/files/FileViewer.tsx`)
 
 ## [0.1.179] - 2026-06-11
 
 ### Changed
-- **Model Usage パネルを過去30日に限定**: 従来は `stats-cache.json` の日付なし累計を表示していたため全期間累計しか出せなかった。`~/.claude/projects/*/*.jsonl` トランスクリプトを直接集計し、`timestamp` で過去30日にフィルタしてモデル別トークンを表示するよう変更。mtime が cutoff より古いファイルはスキップ、結果は5分 TTL でキャッシュ。見出しを「モデル使用量（過去30日）」/ "Model Usage (last 30 days)" に変更（#367, `backend/src/services/stats-service.ts`, `frontend/src/components/dashboard/ModelUsageChart.tsx`）
-  - 注: jsonl 直集計の数値は Claude Code 本体の累計値と完全一致しない（本体側の重複排除を再現しないため）が、期間内の相対内訳は正確
+- **The Model Usage panel is limited to the last 30 days**: it used to show
+  `stats-cache.json`'s undated totals, which could only ever be all-time. It
+  aggregates `~/.claude/projects/*/*.jsonl` transcripts directly now, filtering
+  by `timestamp` to the last 30 days for per-model tokens. Files whose mtime
+  predates the cutoff are skipped and the result is cached with a 5-minute TTL.
+  The heading became "Model Usage (last 30 days)" (#367,
+  `backend/src/services/stats-service.ts`,
+  `frontend/src/components/dashboard/ModelUsageChart.tsx`)
+  - Note: numbers aggregated straight from jsonl do not match Claude Code's own
+    totals exactly (they do not reproduce its deduplication), but the relative
+    breakdown within the period is accurate
 
 ## [0.1.178] - 2026-06-11
 
-全体レビューで検出した問題の一括修正リリース（issue #346〜#355）。
+A batch of fixes for problems found in a full review (issues #346-#355).
 
 ### Security
-- **/api/notify の任意ファイル読み取り**: 認証不要の `POST /api/notify` がリクエストボディの `transcript_path` を無検証でファイル読み取り（→内容断片を全クライアントへブロードキャスト）に使えた。`realpath` でシンボリックリンクを解決し `~/.claude` / `~/.codex` 配下のみ許可（#347, `backend/src/routes/notify.ts`）
-- **/files/changes の検証漏れ**: `GET /files/changes/:sessionWorkingDir` だけ `isAllowedSessionDir` ガードが抜けていた。他のファイルエンドポイントと同じ 403 ガードを追加（#349, `backend/src/routes/files.ts`）
-- **認証照合のタイミング攻撃対策**: JWT 署名検証 (`verifyToken`) とサーバーパスワード照合を、SHA-256 ダイジェスト + `crypto.timingSafeEqual` による定数時間比較に変更（#353, `backend/src/services/auth.ts`, `backend/src/routes/auth.ts`）
+- **Arbitrary file read through /api/notify**: the unauthenticated
+  `POST /api/notify` used the request body's `transcript_path` for an unvalidated
+  file read (whose contents were then broadcast in fragments to every client).
+  Symlinks are resolved with `realpath` and only paths under `~/.claude` /
+  `~/.codex` are allowed (#347, `backend/src/routes/notify.ts`)
+- **A missing check on /files/changes**: `GET /files/changes/:sessionWorkingDir`
+  alone lacked the `isAllowedSessionDir` guard. It has the same 403 guard as the
+  other file endpoints now (#349, `backend/src/routes/files.ts`)
+- **Timing-attack hardening on authentication comparisons**: JWT signature
+  verification (`verifyToken`) and the server password comparison use a SHA-256
+  digest plus `crypto.timingSafeEqual` for a constant-time comparison (#353,
+  `backend/src/services/auth.ts`, `backend/src/routes/auth.ts`)
 
 ### Fixed
-- **mux subscribe 中の WS 切断によるリーク**: `handleSubscribe` / `handleSubscribeConversation` が await 中に WS が閉じると、`TmuxControlSession` のクライアントカウント過剰計上（tmux -CC プロセスが永続化）と `ConversationWatcher` の FSWatcher リークが起きた。await 完了後に切断を検知してロールバックするよう修正（#346, `backend/src/routes/terminal-mux.ts`）
-- **pane-dead の誤通知**: `%window-renamed [dead]` で既知の全ペインを dead 通知しており、複数ペイン構成で生きている兄弟ペインや別ウィンドウのペインまで dead 表示になっていた。ペインをウィンドウ単位で管理し、単一ペインは同期通知・複数ペインは `list-panes` で実際に死んだペインのみ通知（#348, `backend/src/services/tmux-control.ts`）
-- **cchub notify -p の送信失敗**: 明示ポート指定時に dev ポートが `https:false` になり、HTTPS で待ち受けるサーバへ届かずサイレント失敗していた。常に https で送信するよう統一（#350, `backend/src/commands/notify.ts`）
-- **cchub send のペイロード破損**: `--base64` と `--submit` / `--newline` を併用すると base64 文字列に VT エスケープが混入してデコードが壊れた。併用を実行前に拒否（#351, `backend/src/commands/send.ts`）
-- **usage 取得の無駄なディスク I/O**: credentials 不在時にキャッシュが効かず、ダッシュボードのポーリングごとに credentials ファイルを再読み込みしていた。no-credentials クールダウン（60s）を追加（#352, `backend/src/services/anthropic-usage.ts`）
-- **frontend のリスナー/タイマー cleanup 漏れ**: App.tsx の resize リスナー毎レンダー再登録、`subscribe-conversation` 重複送信、InputBar / Terminal のタイマー未クリアをまとめて修正（#354, `frontend/src/App.tsx` 他）
-- **usage-history の legacy 形式破棄**: `getHistory` がコメントに反して legacy `{snapshots:[...]}` 形式を `[]` で捨てていた。`parsed.snapshots` を読むよう修正（#355, `backend/src/services/usage-history.ts`）
+- **A leak when the WS disconnected mid-subscribe**: if the WS closed while
+  `handleSubscribe` / `handleSubscribeConversation` were awaiting, the
+  `TmuxControlSession`'s client count was over-counted (leaving the tmux -CC
+  process resident) and `ConversationWatcher` leaked an FSWatcher. The
+  disconnection is detected after the await completes and rolled back (#346,
+  `backend/src/routes/terminal-mux.ts`)
+- **False pane-dead notifications**: `%window-renamed [dead]` notified every known
+  pane as dead, so in a multi-pane setup live siblings and panes in other windows
+  were shown as dead. Panes are tracked per window now: a single pane notifies
+  synchronously, and with several panes `list-panes` identifies the ones that
+  actually died (#348, `backend/src/services/tmux-control.ts`)
+- **`cchub notify -p` failed to deliver**: with an explicit port the dev port
+  became `https:false`, so it never reached a server listening over HTTPS and
+  failed silently. It always sends over https now (#350,
+  `backend/src/commands/notify.ts`)
+- **`cchub send` corrupted its payload**: combining `--base64` with `--submit` /
+  `--newline` mixed VT escapes into the base64 string and broke decoding. The
+  combination is rejected before execution (#351,
+  `backend/src/commands/send.ts`)
+- **Pointless disk I/O in the usage fetch**: with no credentials the cache did
+  not hold and the credentials file was re-read on every dashboard poll. Added a
+  no-credentials cooldown (60s) (#352,
+  `backend/src/services/anthropic-usage.ts`)
+- **Missing listener/timer cleanup in the frontend**: App.tsx re-registering its
+  resize listener on every render, duplicate `subscribe-conversation` messages
+  and uncleared timers in InputBar / Terminal, fixed together (#354,
+  `frontend/src/App.tsx` and others)
+- **usage-history discarded the legacy format**: contrary to its comment,
+  `getHistory` threw away the legacy `{snapshots:[...]}` shape as `[]`. It reads
+  `parsed.snapshots` now (#355, `backend/src/services/usage-history.ts`)
 
 ## [0.1.177] - 2026-06-10
 
-セキュリティ・安定性のバグ修正リリース（issue #331〜#337 を一括対応）。
+A security and stability release (issues #331-#337 together).
 
 ### Security
-- **git-changes / git-diff の任意パスアクセス**: `GET /api/files/git-changes/:workingDir` と `git-diff/:workingDir` が client 指定のパスを無検証で `git -C` に渡しており、ホスト上の任意 git リポジトリの status/diff を読めた。`/files/list`・`/files/read` と同じ `isAllowedSessionDir` ガードを追加し、git-diff の untracked フォールバック読み取りにも `../` エスケープ防止を追加（#337, `backend/src/routes/files.ts`）
+- **Arbitrary path access through git-changes / git-diff**:
+  `GET /api/files/git-changes/:workingDir` and `git-diff/:workingDir` passed a
+  client-supplied path to `git -C` unvalidated, exposing the status and diff of
+  any git repository on the host. They have the same `isAllowedSessionDir` guard
+  as `/files/list` and `/files/read`, and git-diff's untracked fallback read
+  gained `../` escape prevention (#337, `backend/src/routes/files.ts`)
 
 ### Fixed
-- **control session のゾンビ登録で再接続不能**: `getOrCreateControlSession` が `start()` の前にレジストリ登録していたため、spawn 失敗時に壊れたエントリが残り、以後そのセッションが再起動まで回復不能だった。失敗時に `destroy()` でロールバックするよう修正（#331, `backend/src/services/tmux-control.ts`）
-- **mux subscribe 失敗時の tmux -CC プロセスリーク**: `handleSubscribe` の例外時に `addClient()` がロールバックされず、クライアントカウント過剰計上でグレースピリオドが開始されなくなっていた。catch でリスナー解除・subscription 削除・`removeClient()` を行うよう修正（#332, `backend/src/routes/terminal-mux.ts`）
-- **セッションメタデータの lost-update / 消失**: テーマ・タイトル・表示順の永続化が非アトミック上書き + 非直列 read-modify-write で、並行更新の喪失や書き込み中クラッシュでの全メタデータ消失が起き得た。peer-registry のパターンを `utils/storage.ts` に共通化（`atomicWriteFile` + `createMutationLock`）して適用（#333, `backend/src/services/session-metadata.ts`, `sessions.ts`）
-- **ConversationWatcher の fs.watch リーク**: `start()` 再入時に旧 watcher を close せず上書きしており、リーク + 誤ファイルの会話配信が起き得た。`start()` 冒頭で旧 watcher を close するよう修正（#334, `backend/src/services/conversation-watcher.ts`）
-- **履歴検索の limit 無効化と全量メモリ読み**: `searchSessions` の早期打ち切りが `Promise.all` の内側で機能せず、検索1回で全 JSONL の走査が同時起動していた。シリアル走査の `searchSessionsStream` への委譲に書き換え、`searchInSessionFile` も readline 逐次スキャン化（#335, `backend/src/services/session-history.ts`）
-- **usePeers の 5 秒ポーリング多重化**: フックのインスタンスごとに `setInterval` が張られ、`/api/peers` ポーリングが利用コンポーネント数の N 倍になっていた。モジュールレベルの単一タイマー（参照カウント方式）+ in-flight 合流に変更。unmount 後 setState も解消（#336, `frontend/src/hooks/usePeers.ts`）
+- **A zombie control-session registration made reconnection impossible**:
+  `getOrCreateControlSession` registered before calling `start()`, so a failed
+  spawn left a broken entry and that session could not recover until a restart.
+  A failure rolls back through `destroy()` now (#331,
+  `backend/src/services/tmux-control.ts`)
+- **A tmux -CC process leak when a mux subscribe failed**: an exception in
+  `handleSubscribe` did not roll `addClient()` back, and the over-counted clients
+  meant the grace period never started. The catch now removes the listener,
+  deletes the subscription and calls `removeClient()` (#332,
+  `backend/src/routes/terminal-mux.ts`)
+- **Lost updates and data loss in session metadata**: persisting the theme, title
+  and display order used a non-atomic overwrite with an unserialized
+  read-modify-write, so a concurrent update could be lost and a crash mid-write
+  could destroy all the metadata. peer-registry's pattern was generalized into
+  `utils/storage.ts` (`atomicWriteFile` + `createMutationLock`) and applied
+  (#333, `backend/src/services/session-metadata.ts`, `sessions.ts`)
+- **An fs.watch leak in ConversationWatcher**: re-entering `start()` overwrote
+  the old watcher without closing it, leaking it and potentially delivering the
+  wrong file's conversation. `start()` closes the old watcher first (#334,
+  `backend/src/services/conversation-watcher.ts`)
+- **History search ignored its limit and read everything into memory**:
+  `searchSessions`'s early exit did not work inside `Promise.all`, so one search
+  started a scan of every JSONL at once. It delegates to the serial
+  `searchSessionsStream` now, and `searchInSessionFile` scans line by line
+  through readline (#335, `backend/src/services/session-history.ts`)
+- **usePeers multiplied its 5-second polling**: a `setInterval` was created per
+  hook instance, so `/api/peers` was polled N times over for N consuming
+  components. Changed to a single module-level timer (reference counted) with
+  in-flight coalescing, which also fixed a setState after unmount (#336,
+  `frontend/src/hooks/usePeers.ts`)
 
 ## [0.1.176] - 2026-06-10
 
-ダッシュボードの Model Usage 表示を改善し、未使用のコスト推定コードを削除。
+Improved the dashboard's Model Usage display and deleted unused cost estimation
+code.
 
 ### Fixed
-- **Model Usage に生のモデルIDが表示される**: モデル表示名の整形が opus/sonnet 決め打ちだったため、`claude-haiku-4-5-20251001` などが生IDのまま折り返して表示されていた。任意のファミリーに対応する整形に一般化（"Haiku 4.5"、"Fable 5" 等。`backend/src/services/stats-service.ts`）
-- **macOS で file-service テストが失敗する**: `/var` → `/private/var` symlink 解決により `validatePath` の realpath 出力と期待値が不一致だった。テストの `testDir` を `realpath` で解決するように修正（`backend/tests/unit/file-service.test.ts`）
+- **Raw model IDs appeared in Model Usage**: display-name formatting was
+  hardcoded for opus/sonnet, so `claude-haiku-4-5-20251001` and friends wrapped
+  as raw IDs. Generalized to any family ("Haiku 4.5", "Fable 5" and so on;
+  `backend/src/services/stats-service.ts`)
+- **The file-service test failed on macOS**: the `/var` -> `/private/var` symlink
+  made `validatePath`'s realpath output differ from the expectation. The test's
+  `testDir` is resolved through `realpath` (`backend/tests/unit/file-service.test.ts`)
 
 ### Changed
-- **Model Usage チャートの改善**: 使用量降順ソート、凡例の折り返し対応、ファミリー単位カラーパレットの循環割り当て（新モデル追加時もコード変更不要）、凡例の数値をバーと同じ基準（in+out+cache read）に統一しパーセンテージを追加（`frontend/src/components/dashboard/ModelUsageChart.tsx`）
-- **デッドコード削除**: 未使用の `PRICING` テーブル・`getCostEstimates()`・`CostEstimate` 型・`DashboardResponse.costEstimates`・i18n `costEstimate` ラベルを削除。実際のコスト計算は `AnthropicModels` + `SessionMetricsService` 系統が担当
+- **Model Usage chart improvements**: sorted by usage descending, a wrapping
+  legend, a per-family color palette assigned cyclically (so a new model needs no
+  code change), and legend numbers on the same basis as the bars (in + out +
+  cache read) with a percentage added
+  (`frontend/src/components/dashboard/ModelUsageChart.tsx`)
+- **Dead code removed**: the unused `PRICING` table, `getCostEstimates()`, the
+  `CostEstimate` type, `DashboardResponse.costEstimates` and the i18n
+  `costEstimate` label. Real cost calculation is handled by `AnthropicModels` +
+  `SessionMetricsService`
 
 ## [0.1.175] - 2026-06-09
 
-ソフトキーボードの Shift+Tab を修正。
+Fixed Shift+Tab on the soft keyboard.
 
 ### Fixed
-- **ソフトキーボードの Shift+Tab が効かない**: `TAB` キーはアクションバーにあり `ActionButton` 経由で `onSend("\t")` を直接送るため、`⇧` モディファイアを無視して常に素の `\t`（hex `09`）を送っていた。`sendKeyPress` 側にあった Shift+Tab→VT back-tab（CSI Z, `\x1b[Z`）処理は TAB に到達できず dead code だった。`ActionButton` で `⇧`+TAB のとき CSI Z を送るようにし（Claude Code の auto-mode / plan-mode / accept-edits 循環が効くように）、`⇧` 押下中はラベルを「⇧TAB」に変更（`frontend/src/components/Keyboard.tsx`）
+- **Shift+Tab did nothing on the soft keyboard**: the `TAB` key lives in the
+  action bar and sends `onSend("\t")` directly through `ActionButton`, so it
+  ignored the shift modifier and always sent a bare `\t` (hex `09`). The
+  Shift+Tab -> VT back-tab (CSI Z, `\x1b[Z`) handling in `sendKeyPress` could
+  never be reached and was dead code. `ActionButton` sends CSI Z for shift+TAB
+  now (so Claude Code's auto-mode / plan-mode / accept-edits cycle works), and
+  the label shows the shifted form while shift is held
+  (`frontend/src/components/Keyboard.tsx`)
 
 ## [0.1.174] - 2026-06-07
 
-セッション一覧の pane 操作の不具合を2件修正。
+Two pane-operation fixes in the session list.
 
 ### Fixed
-- **2 paneでpaneにアクセスできない**: Remote Control セッション（`bridgeSessionId` あり）の複数paneセッションをセッション一覧でタップすると jump menu のみ展開され、その下の pane一覧（各paneの focus / close / split）に到達できなくなっていた問題を修正。jump menu と pane一覧の両方を展開するようにした（`41637d3` のデグレ。`frontend/src/components/SessionList.tsx`）
-- **複数windowセッションで pane を閉じられない**: 「最後のpaneは閉じない」判定が `tmux list-panes -t <id>` で現在の window の pane しか数えず、複数window構成のセッション（各 window が1 pane）が誤って count=1 と判定され close が 400 で拒否されていた問題を修正。`-s` を付けてセッション全体の pane を数えるようにした（`backend/src/routes/sessions.ts`）
+- **Panes were unreachable with two panes**: tapping a multi-pane remote-control
+  session (one with a `bridgeSessionId`) in the session list expanded only the
+  jump menu, putting the pane list beneath it (focus / close / split per pane)
+  out of reach. Both are expanded now (a regression from `41637d3`;
+  `frontend/src/components/SessionList.tsx`)
+- **A pane could not be closed in a multi-window session**: the "never close the
+  last pane" check counted only the current window's panes through
+  `tmux list-panes -t <id>`, so a session made of several windows (one pane each)
+  was wrongly counted as 1 and close was rejected with a 400. It counts the whole
+  session's panes with `-s` now (`backend/src/routes/sessions.ts`)
 
 ## [0.1.173] - 2026-06-06
 
-`cchub tui` に popup サイドバー機能を追加。attach 中でもセッション一覧を即座に呼び出せるように。
+Added a popup sidebar to `cchub tui`, so the session list can be summoned
+instantly even while attached.
 
 ### Added
-- **TUI: popup モード (`cchub tui --popup`)**: tmux `display-popup` から呼び出される単発モード。Enter で `tmux switch-client` してそのまま終了するので popup が自動で閉じる（`tui/src/index.ts`, `tui/src/tmux/attach.ts`）
-- **tmux F11 バインド (no-prefix)**: 左端 50col × 全高の popup サイドバーとして session list を表示。`CCHUB_TMUX_CONFIG` に同梱されサーバ起動時に自動 source される（`backend/src/services/tmux.ts`）
-- **tmux F12 バインド (no-prefix)**: detach-client（cchub TUI 一覧へ戻る）を `CCHUB_TMUX_CONFIG` 側にも追加。従来は attach 時に `preAttachCommands` で都度設定していたが、サーバレベルで常時有効に
-- **status-bar クリックボタン**: cchub TUI 経由で attach 中、status-right に `#[range=user|sessions,reverse] ≡ cchub` のクリック可能ボタンを表示。マウスクリックで F11 と同じ popup を開く。`MouseDown1Status` の `if-shell` フィルタで他の status クリックには影響しない（`tui/src/tmux/attach.ts`: `attachStatusRight`、`backend/src/services/tmux.ts`）
+- **TUI: popup mode (`cchub tui --popup`)**: a one-shot mode invoked from tmux
+  `display-popup`. Enter runs `tmux switch-client` and exits, so the popup closes
+  itself (`tui/src/index.ts`, `tui/src/tmux/attach.ts`)
+- **A tmux F11 binding (no prefix)**: shows the session list as a popup sidebar,
+  50 columns wide and full height. It ships in `CCHUB_TMUX_CONFIG` and is sourced
+  automatically when the server starts (`backend/src/services/tmux.ts`)
+- **A tmux F12 binding (no prefix)**: detach-client (returning to the cchub TUI
+  list) was added to `CCHUB_TMUX_CONFIG` too. It used to be set per attach
+  through `preAttachCommands`; now it is always on at the server level
+- **A clickable status-bar button**: while attached through the cchub TUI,
+  status-right shows a clickable `#[range=user|sessions,reverse] cchub` button
+  that opens the same popup as F11. A `MouseDown1Status` `if-shell` filter keeps
+  other status clicks unaffected (`attachStatusRight` in
+  `tui/src/tmux/attach.ts`, `backend/src/services/tmux.ts`)
 
 ### Notes
-- popup binding は `cchub` バイナリを PATH 経由で呼び出すため、本リリースを `cchub update` で適用したホストでのみ自動的に F11 / クリックボタンが有効になる
-- 既存の F12（一覧へ戻る）の挙動は変わらず
+- The popup binding calls the `cchub` binary through PATH, so F11 and the click
+  button only become available automatically on hosts that applied this release
+  with `cchub update`
+- The existing F12 behavior (back to the list) is unchanged
 
 ## [0.1.172] - 2026-06-06
 
-モバイルのファイルViewer フッターのタップ性改善 ＋ アーキテクチャ情報の更新。
+Better tap targets in the mobile file viewer footer, plus an architecture
+documentation update.
 
 ### Fixed
-- **モバイル: ファイルViewer フッターのボタンが小さく操作しづらい問題を改善**: Row1 のアイコンボタン（戻る / アップロード / 隠しファイル / ダウンロード / 閉じる）を下段セッションバー並み（`p-1.5`→`p-2.5`、アイコン 16px→20px）に拡大し、タブ・Source/Preview を `text-sm` 化。横幅対策にタイトル幅を 120px→84px に詰め、overflow なしを実機確認（`frontend/src/components/files/FileViewer.tsx`）
+- **Mobile: the file viewer footer's buttons were small and awkward**: row 1's
+  icon buttons (back / upload / hidden files / download / close) were enlarged to
+  match the session bar below (`p-1.5` -> `p-2.5`, icons 16px -> 20px), and the
+  tabs and Source/Preview became `text-sm`. To keep the width in check the title
+  was narrowed from 120px to 84px, with no overflow confirmed on a device
+  (`frontend/src/components/files/FileViewer.tsx`)
 
 ### Changed
-- **architecture: ファイルViewer 脱モノリス (#311-#314) を反映**: 新規 `FileContentView` / `ChangesView` コンポーネントと `useViewerSettings` / `usePinchZoom` / `useScrollRatio` / `useViewHistory` フックを追加し、FileViewer / CodeViewer / DiffViewer / MarkdownViewer の説明と親子関係を更新（`architecture.json`, `architecture.html`）
+- **architecture: reflect the file viewer de-monolithing (#311-#314)**: added the
+  new `FileContentView` / `ChangesView` components and the `useViewerSettings` /
+  `usePinchZoom` / `useScrollRatio` / `useViewHistory` hooks, and updated the
+  descriptions and parent-child relationships of FileViewer / CodeViewer /
+  DiffViewer / MarkdownViewer (`architecture.json`, `architecture.html`)
 
 ## [0.1.171] - 2026-06-05
 
-ファイルViewer の作り込み（Phase 1-4）。共通化による脱モノリス・重複解消に加え、Markdown画像の peer 対応・バイナリ表示ガード・i18n 配線を実施。
+File viewer work (phases 1-4): de-monolithing and de-duplication through shared
+code, plus peer support for Markdown images, a binary display guard and i18n
+wiring.
 
 ### Changed
-- **ファイルViewer: ビューア共通フック/ユーティリティを抽出 (#311)**: CodeViewer/DiffViewer/MarkdownViewer に散在していた word-wrap・font-size 設定、ピンチズーム、スクロール位置復元、シンタックスハイライトのコピペを共通化（`useViewerSettings`/`usePinchZoom`/`useScrollRatio`/`utils/highlight`）。副作用として一貫性が揃い、DiffViewer に font-size・ピンチが付き、word-wrap デフォルトが3ビューアで統一（`frontend/src/hooks/`, `frontend/src/utils/highlight.ts`, `frontend/src/components/files/`）
-- **ファイルViewer: FileViewer.tsx 脱モノリス (#312)**: 1681行のモノリスを分解し、wide/mobile の二重 JSX を解消。描画スイッチを `FileContentView` に集約、`ChangesView`/`useViewHistory`/`file-types` を分離し、`FileViewer.tsx` はレイアウト＋状態のオーケストレーションに縮小（`frontend/src/components/files/`, `frontend/src/hooks/useViewHistory.ts`）
-- **ファイルViewer: ハードコード文字列を i18n キーへ配線 (#314)**: 散在していた日本語/英語UI文字列を `t()` 経由に統一し、不足キーを ja/en に追加。FileBrowser/CodeViewer/DiffViewer/MarkdownViewer/ImageViewer/PromptComposer に `useTranslation` を追加（`frontend/src/components/files/`, `frontend/src/i18n/locales/`）
+- **File viewer: extracted shared viewer hooks and utilities (#311)**: the
+  word-wrap and font-size settings, pinch zoom, scroll position restoration and
+  syntax highlighting copy-pasted across CodeViewer/DiffViewer/MarkdownViewer are
+  now shared (`useViewerSettings` / `usePinchZoom` / `useScrollRatio` /
+  `utils/highlight`). As a side effect they became consistent: DiffViewer gained
+  font size and pinch, and the word-wrap default is the same in all three
+  (`frontend/src/hooks/`, `frontend/src/utils/highlight.ts`,
+  `frontend/src/components/files/`)
+- **File viewer: FileViewer.tsx de-monolithed (#312)**: the 1681-line monolith
+  was broken up and the duplicated wide/mobile JSX removed. The rendering switch
+  was collected into `FileContentView`, `ChangesView` / `useViewHistory` /
+  `file-types` were separated out, and `FileViewer.tsx` shrank to orchestrating
+  layout and state (`frontend/src/components/files/`,
+  `frontend/src/hooks/useViewHistory.ts`)
+- **File viewer: hardcoded strings wired to i18n keys (#314)**: scattered
+  Japanese/English UI strings all go through `t()` and the missing keys were
+  added to ja/en. `useTranslation` was added to FileBrowser / CodeViewer /
+  DiffViewer / MarkdownViewer / ImageViewer / PromptComposer
+  (`frontend/src/components/files/`, `frontend/src/i18n/locales/`)
 
 ### Fixed
-- **ファイルViewer: Markdown内画像が remote peer で表示されない問題を修正 (#313)**: `MarkdownViewer.resolveImageSrc` が `/api/files/raw` を固定しており peer セッションで 404/401 になっていたため、`filesApiBase`（`/api/peers/<id>/files`）を渡して解決（`frontend/src/components/files/MarkdownViewer.tsx`, `FileContentView.tsx`）
-- **ファイルViewer: 非画像バイナリの base64 ダンプを防止 (#313)**: PDF/zip 等のバイナリが CodeViewer に base64 のまま流れ込んでいたのを、プレビュー不可プレースホルダ＋ダウンロード導線に置き換え（`frontend/src/components/files/FileContentView.tsx`）
+- **File viewer: images inside Markdown did not show for a remote peer (#313)**:
+  `MarkdownViewer.resolveImageSrc` hardcoded `/api/files/raw` and produced
+  404/401 on a peer session, so `filesApiBase` (`/api/peers/<id>/files`) is
+  passed in and used to resolve them
+  (`frontend/src/components/files/MarkdownViewer.tsx`, `FileContentView.tsx`)
+- **File viewer: prevented base64 dumps of non-image binaries (#313)**: PDFs,
+  zips and the like flowed into CodeViewer as base64; they are replaced by a "no
+  preview" placeholder with a download link
+  (`frontend/src/components/files/FileContentView.tsx`)
 
 ## [0.1.170] - 2026-06-05
 
-`cchub tui` で attach 後にトラックパッドスクロールが入力履歴ナビになる問題を修正。
+Fixed trackpad scrolling turning into input-history navigation after attaching
+with `cchub tui`.
 
 ### Fixed
-- **`cchub tui`: attach 後のトラックパッドスクロールが Claude Code の入力履歴ナビに化ける問題を修正**: web UI (`tmux -CC`) は attach 時にセッション単位で `mouse off` を立てるため、その後 `cchub tui` から `tmux attach` するとセッションは mouse off のまま。alt-screen 中のホスト端末（iTerm/Terminal.app）は wheel を ↑/↓ キーに変換し、Claude Code (Ink) がそれを履歴ナビとして拾っていた。`cchub tui` の attach 前に `set-option mouse on`、detach 後に元の値へ復元するようにし、attach 中は tmux が wheel を copy-mode スクロールに振り向け、ホスト端末も wheel→arrow 変換を停止する（`tui/src/tmux/attach.ts`）
+- **`cchub tui`: trackpad scrolling after attach became Claude Code's input
+  history navigation**: the web UI (`tmux -CC`) sets `mouse off` per session when
+  it attaches, so a later `tmux attach` from `cchub tui` finds the session still
+  in mouse off. On the alternate screen the host terminal (iTerm, Terminal.app)
+  converts the wheel into up/down keys, and Claude Code (Ink) picked those up as
+  history navigation. `cchub tui` sets `set-option mouse on` before attaching and
+  restores the original value after detaching, so while attached tmux routes the
+  wheel to copy-mode scrolling and the host terminal stops converting wheel to
+  arrows (`tui/src/tmux/attach.ts`)
 
 ## [0.1.169] - 2026-06-05
 
-モバイル Web UI: セッション操作バーのアイコンを押しやすく。
+Mobile web UI: easier to hit icons in the session action bar.
 
 ### Fixed
-- **モバイル: セッション操作バー（overlayBar）のアイコンがタップしづらい問題を修正**: タップ領域を ~40px → ~44px（iOS 推奨最小）へ拡大し、アイコン色を明るく（zinc-500 → zinc-300）して視認性を改善。幅のはみ出し対策として右アクション群を `shrink-0`、セッション名の最大幅を 140px → 84px に調整（`frontend/src/App.tsx`）
+- **Mobile: the session action bar (overlayBar) icons were hard to tap**: the tap
+  area grew from about 40px to about 44px (iOS's recommended minimum) and the
+  icon color brightened (zinc-500 -> zinc-300) for legibility. To keep the width
+  in check the right-hand actions became `shrink-0` and the session name's
+  maximum width went from 140px to 84px (`frontend/src/App.tsx`)
 
 ## [0.1.168] - 2026-06-04
 
-`cchub tui` の改善: カード形式の一覧・縦スクロール・1キーで戻る・`/compact` 送信。
+`cchub tui` improvements: a card-based list, vertical scrolling, a one-key way
+back and sending `/compact`.
 
 ### Added
-- **`cchub tui`: セッション一覧をカード形式に刷新**: 各セッションを枠付きカードで表示し、状態（◐/●/○/✓）・エージェント・コンテキスト使用率（ctx%）・経過時間・現在のタスク（paneTitle）・作業ディレクトリ・ペイン数・トークン数を表示（情報量を増やした）。全体を外枠フレームで囲み、フッタに操作ショートカットを常時表示（`tui/src/components/SessionCard.tsx`, `App.tsx`）
-- **`cchub tui`: 縦スクロール（選択追従ウィンドウ）**: 端末高さに収まる枚数だけ描画し、↑↓ で選択が端に来るとウィンドウがずれて実際にスクロールする（上下に残り件数を表示）。従来は全件描画で画面外が見えずスクロールにならなかった（`tui/src/components/SessionList.tsx`）
-- **`cchub tui`: `c` で選択セッションに `/compact` を送信**: コンテキストが膨らんだセッションを一覧から compact できる（bracketed paste + Enter で確実に submit）（`tui/src/tmux/send.ts`）
+- **`cchub tui`: the session list is card-based**: each session is drawn as a
+  framed card showing its state, agent, context usage (ctx%), elapsed time,
+  current task (paneTitle), working directory, pane count and token count (more
+  information than before). The whole thing sits inside an outer frame with the
+  shortcuts always visible in the footer (`tui/src/components/SessionCard.tsx`,
+  `App.tsx`)
+- **`cchub tui`: vertical scrolling (a window that follows the selection)**: it
+  draws as many cards as fit the terminal height, and moving the selection to an
+  edge with the arrow keys shifts the window so it actually scrolls (with the
+  remaining counts shown above and below). It used to draw every card, so
+  anything off screen was simply invisible (`tui/src/components/SessionList.tsx`)
+- **`cchub tui`: `c` sends `/compact` to the selected session**: a session whose
+  context has grown can be compacted from the list (bracketed paste plus Enter
+  for a reliable submit) (`tui/src/tmux/send.ts`)
 
 ### Fixed
-- **`cchub tui`: 入室後に一覧へ戻れない問題を修正**: tmux の detach（prefix+d）を知らないと戻れなかったため、prefix 不要の戻りキー（F12 → detach-client）を登録し、入室中は status バーに「F12 で cchub の一覧へ戻る」を常時表示（元の status-right は復帰後に戻す）。一覧/ヘルプにも F12 を案内（`tui/src/tmux/attach.ts`）
-- **`cchub tui`: 入室時に画面サイズが端末に追従しない問題を修正**: 入室セッションに `window-size latest` を設定し、入室した端末のサイズへ追従させる
+- **`cchub tui`: no way back to the list after entering a session**: without
+  knowing tmux's detach (prefix+d) there was no way back, so a prefix-free return
+  key was registered (F12 -> detach-client) and while attached the status bar
+  always says F12 returns to the cchub list (the original status-right is
+  restored afterwards). The list and the help mention F12 too
+  (`tui/src/tmux/attach.ts`)
+- **`cchub tui`: the screen size did not follow the terminal on entry**: the
+  entered session is set to `window-size latest` so it follows the size of the
+  terminal that entered it
 
 ## [0.1.167] - 2026-06-04
 
-ローカル専用のターミナル UI `cchub tui` を新規追加。ブラウザを開かずに、稼働中の CC Hub サーバのセッション一覧・入室・履歴検索をターミナルから行える。
+Added `cchub tui`, a local-only terminal UI. It lists sessions on a running CC
+Hub server, enters them and searches history from the terminal without opening a
+browser.
 
 ### Added
-- **CC Hub TUI (`cchub tui`) を追加 (#306)**: 新規 `tui/` ワークスペース（Ink + React on Bun）。稼働中の CC Hub サーバを**データ源とするクライアント**として動作し、既存 API（`/api/sessions`・履歴検索・ライフサイクル）を再利用する。セッションへの「入室」は端末画面をネットワーク転送せず、ネイティブ `tmux attach` にハンドオフして完結（`$TMUX` ネスト時は子 env から TMUX を外して attach）。機能: セッション一覧（状態インジケータ ◐/●/○/✓・エージェント・作業ディレクトリ・ペイン数）、履歴検索（SSE 逐次表示）→ resume → 入室、新規作成（エージェント + 作業ディレクトリ）/ 終了（y/n 確認）/ 再開、ヘルプ（`?`）。ローカル限定（他ピア対象外）、HTTPS（Tailscale 証明書）の localhost は TLS 検証スキップ、認証はゼロコンフィグ（data-dir の `jwt-secret` からローカルトークン自己発行）。raw mode 非対応の端末（パイプ/ラッパ経由）では明確に案内して終了。`bun build --compile` で単一バイナリ `cchub` に同梱（`cchub tui` 実行時のみ遅延ロードのためサーバ実行経路には影響なし）。設計は Spec Kit で spec→plan→tasks→analyze を経て実装（`specs/002-cchub-tui/`、`tui/README.md`）。tui 56 / backend 258 テスト、行カバレッジ 82.56% (`tui/`, `backend/src/cli.ts`, `backend/src/commands/tui.ts`, `scripts/build.sh`)
+- **Added the CC Hub TUI (`cchub tui`) (#306)**: a new `tui/` workspace (Ink +
+  React on Bun). It runs as a **client with a running CC Hub server as its data
+  source**, reusing the existing APIs (`/api/sessions`, history search,
+  lifecycle). Entering a session does not send the terminal screen over the
+  network; it hands off to a native `tmux attach` (and when nested inside
+  `$TMUX`, TMUX is stripped from the child environment before attaching).
+  Features: the session list (status indicators, agent, working directory, pane
+  count), history search (streamed over SSE) -> resume -> enter, creating a
+  session (agent plus working directory), closing one (with a y/n confirmation),
+  resuming, and help (`?`). Local only (no other peers), TLS verification is
+  skipped for HTTPS on localhost (a Tailscale certificate), and auth is
+  zero-config (a local token is self-issued from the data dir's `jwt-secret`). A
+  terminal without raw mode support (through a pipe or a wrapper) exits with a
+  clear explanation. It is bundled into the single `cchub` binary through
+  `bun build --compile` and lazily loaded only when `cchub tui` runs, so the
+  server path is unaffected. Designed through Spec Kit (spec -> plan -> tasks ->
+  analyze) before implementation (`specs/002-cchub-tui/`, `tui/README.md`). 56
+  tui and 258 backend tests, 82.56% line coverage (`tui/`,
+  `backend/src/cli.ts`, `backend/src/commands/tui.ts`, `scripts/build.sh`)
 
 ### Changed
-- **Spec Kit を v0.8.19 へ更新、憲章を v1.6.0 へ改訂 (#305)**: spec-kit を初期 init 時の版から最新へ更新（`.claude/commands/speckit.*` ドット形式 → `.claude/skills/speckit-*` ハイフン形式のスキル）。憲章の原則III「Web-First Architecture」を改訂し、Web を置換せず補完するローカル/非Web インターフェース（TUI/CLI）を条件付きで許容（`.specify/`, `.claude/skills/`, `.specify/memory/constitution.md`）
+- **Spec Kit updated to v0.8.19 and the constitution revised to v1.6.0 (#305)**:
+  spec-kit moved from the version used at init to the latest (the
+  `.claude/commands/speckit.*` dotted form became `.claude/skills/speckit-*`
+  hyphenated skills). The constitution's principle III, "Web-First
+  Architecture", was revised to conditionally allow local, non-web interfaces
+  (TUI/CLI) that complement rather than replace the web (`.specify/`,
+  `.claude/skills/`, `.specify/memory/constitution.md`)
 
 ## [0.1.166] - 2026-05-31
 
-v0.1.165 で追加した「Claudeアプリで開く」がモバイルで表示されない/開けない不具合を修正。
+Fixed "Open in the Claude app", added in v0.1.165, not appearing or not opening
+on mobile.
 
 ### Fixed
-- **「Claudeアプリで開く」がモバイルで動作しない問題を修正 (#303)**: モバイルは desktop/tablet とは別レイアウト（`App.tsx` の overlayBar / `openSessions`）を使うが、そこへ `bridgeSessionId` を流しておらずボタンも未設置だった（v0.1.165 は `DesktopLayout`+`PaneContainer` 経路のみ対応）。加えて `window.open(url, "_blank", "noopener,noreferrer")` の windowFeatures 文字列がモバイル Safari でポップアップ扱いとなりブロックされ、開けなかった。`App.tsx` の `OpenSession` 型 / `apiToOpenSession` / モバイル live-update マージに `bridgeSessionId` を追加し、モバイルのターミナルツールバー（overlayBar）に「Claudeアプリで開く」アイコンボタンを追加。共有ユーティリティ `openClaudeAppSession()` を新設して `window.open(url, "_blank")`（features 文字列なし）+ `opener=null` に統一し、`SessionList`/`PaneContainer` のインライン実装も置換。dev 実機（390×844 モバイルビューポート）でツールバー・リストのタップ選択メニュー双方が正しい URL を開くことを確認 (`frontend/src/App.tsx`, `frontend/src/utils/claude-app.ts`, `frontend/src/components/SessionList.tsx`, `frontend/src/components/PaneContainer.tsx`)
+- **"Open in the Claude app" did not work on mobile (#303)**: mobile uses a
+  different layout from desktop/tablet (`App.tsx`'s overlayBar / `openSessions`),
+  and `bridgeSessionId` was never passed into it and no button existed there
+  (v0.1.165 only covered the `DesktopLayout` + `PaneContainer` path). On top of
+  that, the windowFeatures string in
+  `window.open(url, "_blank", "noopener,noreferrer")` made mobile Safari treat it
+  as a popup and block it. `bridgeSessionId` was added to `App.tsx`'s
+  `OpenSession` type, `apiToOpenSession` and the mobile live-update merge, and an
+  "Open in the Claude app" icon button was added to the mobile terminal toolbar
+  (overlayBar). A shared `openClaudeAppSession()` utility standardizes on
+  `window.open(url, "_blank")` (no features string) plus `opener=null`, replacing
+  the inline implementations in `SessionList` / `PaneContainer`. Verified on a
+  device (a 390x844 mobile viewport) that both the toolbar and the list's tap
+  menu open the right URL (`frontend/src/App.tsx`,
+  `frontend/src/utils/claude-app.ts`, `frontend/src/components/SessionList.tsx`,
+  `frontend/src/components/PaneContainer.tsx`)
 
 ## [0.1.165] - 2026-05-31
 
-Remote Control が有効なセッションから、対応する Claude アプリのクラウドセッションへジャンプする導線を追加。
+Added a way to jump from a Remote Control session to the matching cloud session
+in the Claude app.
 
 ### Added
-- **「Claudeアプリで開く」導線を追加 (#301)**: Remote Control を有効化したセッションについて、対応するクラウドセッション (`https://claude.ai/code/<bridgeSessionId>`) を Claude アプリ/ブラウザで開けるようにした。backend は `~/.claude/sessions/<pid>.json` を読んで Claude Code の `sessionId`（.jsonl UUID）→ `bridgeSessionId`（`session_…`）の対応を構築し、`buildSessionsList()` で各セッションに `bridgeSessionId` を付与（`sessionId` 完全一致のみ。cwd フォールバックは誤紐付け回避のため不採用）。Remote Control 非アクティブなセッションには付かない。UI は2箇所: (1) セッションリストで bridge ありのセッションを**タップ**すると「このターミナルへ移動 / Claudeアプリで開く」の**選択メニュー**を表示（bridge 無しは従来通り直接移動）、(2) **ターミナルのペインヘッダー**に「Claudeアプリで開く」アイコンボタンを追加（bridge ありのアクティブセッションのみ、desktop/tablet 両対応）。URL は `encodeURIComponent` を通す。`ExtendedSessionResponse.bridgeSessionId?` を追加、`session.openInClaudeApp`/`session.goToTerminal` を i18n（en/ja）に追加 (`backend/src/services/claude-code.ts`, `backend/src/routes/sessions.ts`, `shared/types.ts`, `frontend/src/components/SessionList.tsx`, `frontend/src/components/PaneContainer.tsx`, `frontend/src/components/DesktopLayout.tsx`)
-  - 既知の制約: Claude Code 側のネイティブ・アプリディープリンクは未実装（issue #48220）のため、現状モバイルでもタップ時は一旦システムブラウザで claude.ai/code が開く。将来 `claude://` スキーム等が入れば URL 差し替えだけで対応可能。
+- **"Open in the Claude app" (#301)**: for a session with Remote Control
+  enabled, the matching cloud session (`https://claude.ai/code/<bridgeSessionId>`)
+  can be opened in the Claude app or a browser. The backend reads
+  `~/.claude/sessions/<pid>.json` to map Claude Code's `sessionId` (the .jsonl
+  UUID) to its `bridgeSessionId` (`session_...`) and attaches `bridgeSessionId`
+  to each session in `buildSessionsList()` (on an exact `sessionId` match only; a
+  cwd fallback was rejected to avoid mismatching). Sessions without Remote
+  Control active do not get one. Two places in the UI: (1) **tapping** a session
+  with a bridge in the session list shows a **menu** offering "go to this
+  terminal" or "open in the Claude app" (without a bridge it goes straight there
+  as before), and (2) an "open in the Claude app" icon button in the
+  **terminal's pane header** (only for an active session with a bridge, on both
+  desktop and tablet). The URL goes through `encodeURIComponent`. Added
+  `ExtendedSessionResponse.bridgeSessionId?` and the
+  `session.openInClaudeApp` / `session.goToTerminal` i18n keys (en/ja)
+  (`backend/src/services/claude-code.ts`, `backend/src/routes/sessions.ts`,
+  `shared/types.ts`, `frontend/src/components/SessionList.tsx`,
+  `frontend/src/components/PaneContainer.tsx`,
+  `frontend/src/components/DesktopLayout.tsx`)
+  - Known limitation: Claude Code has no native app deep link yet (issue
+    #48220), so on mobile a tap currently opens claude.ai/code in the system
+    browser. If a `claude://` scheme arrives, only the URL needs changing
 
 ## [0.1.164] - 2026-05-31
 
-セッション履歴UIを全面刷新。プロジェクト階層を辿る旧UIから、全プロジェクト横断のフラットな仮想化リスト + ファセット絞り込みサイドバー（B案）へ移行。「網羅的に見づらい・検索しづらい」を解消し、各セッションに最新 recap プレビューを表示。さらに履歴ロードを 10秒超 → 約 0.8 秒に短縮。全 PR を adversarial review + dev 実機（agent-browser）で検証済み。
+The session history UI was rebuilt. The old UI, which walked a project
+hierarchy, became a flat virtualized list across every project with a facet
+filter sidebar. It fixes "hard to survey, hard to search" and shows each
+session's latest recap preview. History loading also went from over 10 seconds
+to about 0.8. Every PR was adversarially reviewed and verified in dev on a real
+browser (agent-browser).
 
 ### Added
-- **V2 履歴ビュー: 仮想化フラットリスト + ファセットサイドバー (#290〜#296, #298)**: プロジェクト階層を開いて辿る旧UIを廃し、全プロジェクトのセッションを `modified` 降順の単一リストに統合。`@tanstack/react-virtual` で仮想化し、日付バケット（今日/昨日/今週/それ以前）ヘッダーをインライン挿入。左サイドバー（狭幅では下からのドロワー）でプロジェクト/エージェント/ブランチ/期間のファセット絞り込み（軸内 OR・軸間 AND、件数表示付き）と選択チップ + クリアを提供。インクリメンタル検索（既存 SSE 検索を 150ms デバウンス）対応。`useHistoryV2Flag` で localStorage gating し、デフォルト ON（`cchub-history-v2` に `"false"` でオプトアウト可）。`SIDEBAR_MIN_WIDTH=760` のレスポンシブ切替はコールバック ref で loading early-return を跨いでも安定 (`frontend/src/components/history/SessionHistoryV2.tsx`, `HistoryFacetSidebar.tsx`, `HistoryFacetDrawer.tsx`, `HistoryActiveChips.tsx`, `VirtualizedHistoryList.tsx`, `HistoryRowV2.tsx`, `frontend/src/utils/historyBuckets.ts`, `historyFacets.ts`, `frontend/src/hooks/useFlatHistoryItems.ts`, `useHistoryActions.ts`, `useHistoryV2Flag.ts`)
-- **各セッションに最新 recap プレビューを表示 (#291, #292)**: `.jsonl` 末尾を `readLastLines` で読み、純粋関数 `parseRecapFromLines` で直近の recap を抽出（300字 truncate、`away_summary` で pending リセット）。`HistorySession` に `lastPrompt`/`recap`/`recapAt`、`PeerHistoryProject` に `cwdKey` を追加。V1 リストにも recap の amber 行を追加し、表示プロンプトは「最後に入力したプロンプト」(`lastPrompt`) を優先（旧来の `firstPrompt` フォールバック） (`shared/types.ts`, `backend/src/utils/read-last-lines.ts`, `backend/src/utils/recap-scanner.ts`, `backend/src/services/session-history.ts`, `backend/src/services/codex-history.ts`, `frontend/src/components/SessionHistory.tsx`)
+- **V2 history view: a virtualized flat list plus a facet sidebar (#290-#296,
+  #298)**: the old click-through hierarchy is gone and every project's sessions
+  are merged into a single list sorted by `modified` descending. It is
+  virtualized with `@tanstack/react-virtual`, with date bucket headers (today /
+  yesterday / this week / earlier) inserted inline. The left sidebar (a bottom
+  drawer at narrow widths) offers facet filtering by project / agent / branch /
+  period (OR within an axis, AND across axes, with counts), plus selection chips
+  and a clear button. Incremental search is supported (the existing SSE search,
+  debounced 150ms). Gated on localStorage through `useHistoryV2Flag`, on by
+  default (opt out with `"false"` in `cchub-history-v2`). The responsive switch at
+  `SIDEBAR_MIN_WIDTH=760` uses a callback ref so it survives the loading early
+  return (`frontend/src/components/history/SessionHistoryV2.tsx`,
+  `HistoryFacetSidebar.tsx`, `HistoryFacetDrawer.tsx`, `HistoryActiveChips.tsx`,
+  `VirtualizedHistoryList.tsx`, `HistoryRowV2.tsx`,
+  `frontend/src/utils/historyBuckets.ts`, `historyFacets.ts`,
+  `frontend/src/hooks/useFlatHistoryItems.ts`, `useHistoryActions.ts`,
+  `useHistoryV2Flag.ts`)
+- **A latest-recap preview per session (#291, #292)**: the tail of the `.jsonl`
+  is read with `readLastLines` and the most recent recap extracted by the pure
+  function `parseRecapFromLines` (truncated to 300 characters, with pending reset
+  on `away_summary`). `HistorySession` gained `lastPrompt` / `recap` / `recapAt`
+  and `PeerHistoryProject` gained `cwdKey`. The V1 list also gained the amber
+  recap line, and the displayed prompt prefers "the last prompt entered"
+  (`lastPrompt`) with the old `firstPrompt` as a fallback (`shared/types.ts`,
+  `backend/src/utils/read-last-lines.ts`, `backend/src/utils/recap-scanner.ts`,
+  `backend/src/services/session-history.ts`,
+  `backend/src/services/codex-history.ts`,
+  `frontend/src/components/SessionHistory.tsx`)
 
 ### Fixed
-- **履歴ロードがオフライン peer で 10秒超ハングする問題を修正 (#299)**: `/api/peers/history/projects` の peer fan-out が `Promise.all` 内でオフライン peer の 5秒タイムアウトを待ち、履歴タブ全体のロードが 10秒以上かかっていた。`peerRecentlyFailed`（60秒クールダウン）で直近失敗 peer をスキップし、`peerFetch` に短い `timeoutMs`（2.5秒）を渡せるよう拡張。実測 10秒超 → 約 783ms (`backend/src/routes/peers.ts`, `backend/src/services/peer-auth.ts`)
-- **V2 リストの表示時刻が recapAt と modified で食い違う問題を修正 (#296)**: リストは `modified` 降順ソートなのに行には `recapAt` を表示しており、recap が古いセッション（実測で 6 日ずれ）で並び順と表示時刻が矛盾していた。`session.modified` を表示するよう統一 (`frontend/src/components/history/HistoryRowV2.tsx`)
+- **History loading hung for over 10 seconds on an offline peer (#299)**: the
+  peer fan-out in `/api/peers/history/projects` waited out an offline peer's
+  5-second timeout inside `Promise.all`, so the whole history tab took more than
+  ten seconds to load. `peerRecentlyFailed` (a 60-second cooldown) skips recently
+  failed peers, and `peerFetch` accepts a short `timeoutMs` (2.5s). Measured:
+  over 10 seconds to about 783ms (`backend/src/routes/peers.ts`,
+  `backend/src/services/peer-auth.ts`)
+- **The V2 list showed a time that disagreed with its sort (#296)**: the list
+  sorts by `modified` descending while each row displayed `recapAt`, so a session
+  with an old recap (six days apart in practice) contradicted the ordering. Rows
+  display `session.modified` now
+  (`frontend/src/components/history/HistoryRowV2.tsx`)
 
 ### Changed
-- **`getProjectSessions` の N+1 I/O を並列化 (#291)**: セッションごとの逐次 `.jsonl` 読みを `Promise.all` 化、`tail` サブプロセスを `readLastLines(500)` に置換。検索結果は SSE 順で届くため、バケットヘッダーの重複/key 衝突を避けるよう `modified` 降順で明示ソートしてから bucketize (`backend/src/services/session-history.ts`, `frontend/src/components/history/SessionHistoryV2.tsx`)
+- **`getProjectSessions`'s N+1 I/O runs in parallel (#291)**: the sequential
+  per-session `.jsonl` reads became a `Promise.all`, and the `tail` subprocess
+  was replaced by `readLastLines(500)`. Search results arrive in SSE order, so
+  they are explicitly sorted by `modified` descending before bucketing to avoid
+  duplicated bucket headers and key collisions
+  (`backend/src/services/session-history.ts`,
+  `frontend/src/components/history/SessionHistoryV2.tsx`)
 
 ## [0.1.163] - 2026-05-30
 
-ダッシュボードの「使用量リミット」グラフの表示バグを2件修正。
+Two display bugs in the dashboard's usage-limit graph.
 
 ### Fixed
-- **使用量グラフが途中で減少して見える + サイクル中央から始まる問題を修正 (#288)**: 7日サイクルの線が `18 → 7 → 8 → ...` のように下がって描画され、さらに左半分に何も描かれていなかった。Anthropic API はリセット境界をまたいだ旧サイクルのスナップショットにも新しい `resetsAt` を返すため `resetsAt` 一致では旧サイクル除外できず、utilization の drop パターンが唯一の手がかりとなる。`shared/usage-cycle.ts` に純粋関数 `filterToCurrentCycle()` を新規追加（時系列順に最後の drop > CYCLE_DROP_TOLERANCE=2 を検出してそれ以降だけ返す）し、`UsageChart` で濾過 + 最初のサンプルが cycleStart から 2% 以上奥なら `(cycleStart, 0%)` アンカーを prepend。monotonic envelope は使わず生データを正しく描画。ユニットテスト 10 ケース追加 (`shared/usage-cycle.ts`, `frontend/src/components/dashboard/UsageChart.tsx`)
-- **使用量グラフの「現在」と「リセット」ラベルが重なる問題を修正 (#287)**: `currentPoint.x` がチャート右端から 28px 以内に来るとラベルが衝突し判読不能だった。閾値以内なら「現在 / リセット」統合ラベル 1 つに切り替え、左右端寄りなら textAnchor を start/end に動的調整 (`frontend/src/components/dashboard/UsageChart.tsx`)
+- **The usage graph appeared to decrease midway and started from the middle of
+  the cycle (#288)**: the 7-day line was drawn descending (`18 -> 7 -> 8 -> ...`)
+  and nothing was drawn in the left half. The Anthropic API returns the new
+  `resetsAt` even for snapshots from the previous cycle across a reset boundary,
+  so matching on `resetsAt` cannot exclude the old cycle and the drop pattern in
+  utilization is the only signal. A pure function `filterToCurrentCycle()` was
+  added to `shared/usage-cycle.ts` (it finds the last drop greater than
+  `CYCLE_DROP_TOLERANCE=2` in chronological order and returns everything after
+  it), and `UsageChart` filters through it and prepends a `(cycleStart, 0%)`
+  anchor when the first sample is more than 2% into the cycle. No monotonic
+  envelope - the raw data is drawn correctly. Ten unit test cases added
+  (`shared/usage-cycle.ts`, `frontend/src/components/dashboard/UsageChart.tsx`)
+- **The "now" and "reset" labels overlapped on the usage graph (#287)**: within
+  28px of the chart's right edge the labels collided and became unreadable.
+  Inside that threshold they merge into a single "now / reset" label, and near
+  either edge the textAnchor switches to start/end dynamically
+  (`frontend/src/components/dashboard/UsageChart.tsx`)
 
 ## [0.1.162] - 2026-05-30
 
-全コードベースのマルチエージェントレビュー由来の確定 medium 17 件を 14 PR で修正。Security 2 件、Auth bypass 2 件、Peer-routing 2 件、Silent message loss 2 件、Concurrency/Race 2 件、Resource leak 3 件、Correctness 4 件。確定 mediumの主要 4 件 (#259/#260/#261/#263) は agent-browser 経由で実機ブラウザ検証済み、他は unit test + lint + typecheck。
+17 confirmed medium findings from a multi-agent review of the whole codebase,
+fixed across 14 PRs: 2 security, 2 auth bypass, 2 peer routing, 2 silent message
+loss, 2 concurrency/race, 3 resource leak, 4 correctness. The four principal
+findings (#259/#260/#261/#263) were verified in a real browser through
+agent-browser; the rest through unit tests, lint and typecheck.
 
 ### Security
-- **HTML preview iframe の sandbox から `allow-same-origin` を除去 (#261)**: `<iframe sandbox="allow-scripts allow-same-origin">` が同一 origin の blob: URL に対して MDN が禁ずる組み合わせになっており、プレビューした任意 HTML から `window.parent.localStorage.getItem('cc-hub-token')` で JWT を窃取できた。`sandbox="allow-scripts"` のみにして unique opaque origin を強制 (`frontend/src/components/files/HtmlViewer.tsx`)
-- **`cchub update` の整合性検証を追加 (#255)**: 旧実装はリリースアセットを取得して renameするだけで checksum/signature/magic-byte いずれもチェックしていなかった。release workflow に `SHA256SUMS` 生成を追加し、`cchub update` でファイル必須化 + ELF/Mach-O magic + Content-Length + SHA-256 検証して `rename()` 直前で abort 可能に。`backend/src/commands/__tests__/update-integrity.test.ts` で 11 ケース検証 (`backend/src/commands/update.ts`, `.github/workflows/release.yml`)
+- **Removed `allow-same-origin` from the HTML preview iframe's sandbox (#261)**:
+  `<iframe sandbox="allow-scripts allow-same-origin">` against a same-origin
+  blob: URL is the combination MDN forbids, and arbitrary previewed HTML could
+  steal the JWT with `window.parent.localStorage.getItem('cc-hub-token')`. It is
+  `sandbox="allow-scripts"` only now, forcing a unique opaque origin
+  (`frontend/src/components/files/HtmlViewer.tsx`)
+- **Integrity verification in `cchub update` (#255)**: the old implementation
+  fetched the release asset and renamed it, checking neither checksum nor
+  signature nor magic bytes. The release workflow generates `SHA256SUMS`, and
+  `cchub update` requires the file and verifies the ELF/Mach-O magic, the
+  Content-Length and the SHA-256 so it can abort right before `rename()`. Eleven
+  cases in `backend/src/commands/__tests__/update-integrity.test.ts`
+  (`backend/src/commands/update.ts`, `.github/workflows/release.yml`)
 
 ### Fixed
-- **password 認証時に FileViewer の upload/download/raw が無言 401 する問題を修正 (#259, #260)**: `handleUploadFiles` が `fetch` を直叩き、`<a href>`/`<img>`/`<video>`/`<audio>` が `/api/files/raw|download` を Bearer ヘッダ無しで開いていた。新規 `useAuthBlobUrl` フックで raw URL を authFetch → blob URL → src に注入、download は authFetch → Blob → `URL.createObjectURL` → anchor click → revoke、upload は authFetch (`frontend/src/hooks/useAuthBlobUrl.ts`, `frontend/src/components/files/FileViewer.tsx`)
-- **WS 再接続後の respawnPane REST フォールバック / SessionList の pane action / 確認ダイアログが peer routing を無視する問題を修正 (#256, #258)**: いずれも常に Hub origin + auth ヘッダ無しで叩いており、password 認証で 401 か、peer session で別マシンの誤った session id に当たっていた。`useMultiplexedTerminal` に `peerApiBase` を追加して fallback を authFetch / peer URL+token に振り分け、`SessionList.handlePaneAction` と確認ダイアログを `sessionFetch` 経由に (`frontend/src/hooks/useMultiplexedTerminal.ts`, `frontend/src/components/SessionList.tsx`, `frontend/src/components/DesktopLayout.tsx`, `frontend/src/pages/TerminalPage.tsx`)
-- **ChatComposer/FloatingKeyboard の送信失敗時メッセージ消失を修正 (#263, #264)**: `sendTerminalInput`/`onSend` が WS 切断時に false を返すのに無視して textarea をクリアしていたため、reconnect window 中の送信内容が無言で消えていた。返り値を捕捉して成功時のみクリア + `addToHistory` に変更。agent-browser で `WebSocket.prototype.readyState=CLOSED` を patch して実機確認 (`frontend/src/components/chat/ChatComposer.tsx`, `frontend/src/components/FloatingKeyboard.tsx`)
-- **glasses の WS 再接続後に subscribe が no-op になる問題を修正 (#265)**: `onclose` で `subscribedSession` を clear せず、再接続後の `subscribe(sessionId)` が dedup ガードに引っかかって viewport が止まっていた。`onclose` で `null` に reset (`glasses/src/ws-client.ts`)
-- **`useCodexConversation` の cancellation race を修正 (#257)**: 共有 `cancelledRef` が次の effect 実行で false にリセットされ、A スレッドの遅延 response が B スレッドの messages を上書きしていた。per-effect の `let cancelled = false` に置換 (`frontend/src/hooks/useCodexConversation.ts`)
-- **Terminal の rAF / WebGL reload timer leak を修正 (#262)**: momentum scroll / touch coalesce / wheel flush の 3 つの requestAnimationFrame と WebGL context-loss の `setTimeout` が cleanup でキャンセルされず、sessionTheme 変更や session 切替時に旧クロージャが新ターミナルへ `scrollBy`/`setState` を飛ばしていた。全てキャンセル (`frontend/src/components/Terminal.tsx`)
-- **ClaudeCodeService の 3 つの長寿命 Map が無制限に肥大化する問題を修正 (#249)**: `sessionDataCache`/`pathResultCache`/`ttySessionCache` が TTL を「再利用判定」にしか使わず evict していなかった。静的 `evictAndCap` ヘルパで TTL sweep + 1000 entries cap (FIFO) を全 `cache.set` 直前に実行。5 ケースのテスト追加 (`backend/src/services/claude-code.ts`)
-- **未認証の `/api/notify` 経由で `stateOverrides` Map が無制限に肥大化する問題を修正 (#254)**: arbitrary `session_id` で 24h 残る entry を作れたため flood DoS が可能。`/^[A-Za-z0-9._-]{1,128}$/` で形式検証 + 500 entries cap (FIFO) + insert 前の TTL sweep (`backend/src/routes/notify.ts`)
-- **`peers.json` の concurrent mutation TOCTOU を修正 (#251)**: `Promise.all` で fan-out した peer fetch の completion が `recordPeerSuccess/Failure` を同時に load→mutate→save し、相互上書きで `lastSeenAt` や fresh wsToken が消えていた。module-level promise queue で全 mutator を直列化 + temp file + atomic rename で save。2 ケースのテスト追加 (`backend/src/services/peer-registry.ts`)
-- **`session-metrics`/`file-change-tracker`/`conversation-watcher`/`codex-history` の Claude project dir 名生成がドット入りパスで壊れていた問題を修正 (#252)**: 4 ファイルがそれぞれ `replace(/\//g, '-')` をしていたが、Claude Code は `[/.]/g` で両方潰す。`github.com/m0a/cc-hub` 等で metrics 等が無言失敗していた。共有 helper `claudeProjectDirName` を utils に切り出し全 5 callers (claude-code 含む) を統一。4 ケースのテスト追加 (`backend/src/utils/claude-project-path.ts`, etc.)
-- **`/files/raw` の Range request 検証/クランプ不足を修正 (#253)**: start/end の境界チェックがなく `bytes=10000-20000` を 905-byte ファイルに投げると bogus 206 を返し、Content-Length 嘘で keep-alive クライアントがハングしていた。さらに Bun の `Response(file.slice(...))` が transport で slice 境界を捨てて full file を chunked で流すため Content-Length も合っていなかった。416 / clamp + slice を `arrayBuffer()` 化で実 transport 整合。dev curl で 5 ケース実機確認 (`backend/src/routes/files.ts`)
-- **session 名の SEP sentinel ('||~~||') 含み許可によるパン misattribution を修正 (#250)**: `tmux list-panes` 出力を `||~~||` で split 9 fields にしていたが session 名に sentinel を含めると全 field がシフトして別 session の pane として登録されていた。`CreateSessionSchema.name` を `/^[A-Za-z0-9._-]+$/` で制約 + パーサ側で paneId を `/^%\d+$/` で defensiveに検証して不正行は drop (`shared/types.ts`, `backend/src/services/tmux.ts`)
+- **FileViewer's upload/download/raw failed silently with 401 under password auth
+  (#259, #260)**: `handleUploadFiles` called `fetch` directly, and `<a href>` /
+  `<img>` / `<video>` / `<audio>` opened `/api/files/raw|download` with no Bearer
+  header. A new `useAuthBlobUrl` hook fetches a raw URL through authFetch into a
+  blob URL injected as the src, downloads go authFetch -> Blob ->
+  `URL.createObjectURL` -> anchor click -> revoke, and uploads use authFetch
+  (`frontend/src/hooks/useAuthBlobUrl.ts`,
+  `frontend/src/components/files/FileViewer.tsx`)
+- **The respawnPane REST fallback after a WS reconnect, SessionList's pane
+  actions and the confirmation dialog ignored peer routing (#256, #258)**: all of
+  them always hit the hub origin with no auth header, producing a 401 under
+  password auth or hitting the wrong session id on another machine for a peer
+  session. `useMultiplexedTerminal` gained `peerApiBase` and routes the fallback
+  through authFetch or the peer URL plus token, and
+  `SessionList.handlePaneAction` and the confirmation dialog go through
+  `sessionFetch` (`frontend/src/hooks/useMultiplexedTerminal.ts`,
+  `frontend/src/components/SessionList.tsx`,
+  `frontend/src/components/DesktopLayout.tsx`,
+  `frontend/src/pages/TerminalPage.tsx`)
+- **ChatComposer / FloatingKeyboard lost a message when sending failed (#263,
+  #264)**: `sendTerminalInput` / `onSend` return false while the WS is down, and
+  the textarea was cleared regardless, so anything sent during a reconnect window
+  vanished silently. The return value is captured and the field is cleared (and
+  `addToHistory` called) only on success. Verified in a real browser by patching
+  `WebSocket.prototype.readyState=CLOSED` through agent-browser
+  (`frontend/src/components/chat/ChatComposer.tsx`,
+  `frontend/src/components/FloatingKeyboard.tsx`)
+- **A subscribe became a no-op after the glasses' WS reconnected (#265)**:
+  `onclose` did not clear `subscribedSession`, so the `subscribe(sessionId)`
+  after reconnecting hit the dedup guard and the viewport stopped. `onclose`
+  resets it to `null` (`glasses/src/ws-client.ts`)
+- **A cancellation race in `useCodexConversation` (#257)**: the shared
+  `cancelledRef` was reset to false by the next effect run, so a late response
+  from thread A overwrote thread B's messages. Replaced by a per-effect
+  `let cancelled = false` (`frontend/src/hooks/useCodexConversation.ts`)
+- **rAF and WebGL reload timer leaks in Terminal (#262)**: the three
+  requestAnimationFrames (momentum scroll, touch coalescing, wheel flush) and the
+  WebGL context-loss `setTimeout` were not cancelled on cleanup, so an old
+  closure fired `scrollBy` / `setState` at a new terminal on a sessionTheme
+  change or session switch. All of them are cancelled now
+  (`frontend/src/components/Terminal.tsx`)
+- **Three long-lived Maps in ClaudeCodeService grew without bound (#249)**:
+  `sessionDataCache` / `pathResultCache` / `ttySessionCache` used their TTL only
+  to decide reuse and never evicted. A static `evictAndCap` helper runs a TTL
+  sweep plus a 1000-entry cap (FIFO) before every `cache.set`. Five test cases
+  added (`backend/src/services/claude-code.ts`)
+- **The `stateOverrides` Map grew without bound through the unauthenticated
+  `/api/notify` (#254)**: an arbitrary `session_id` could create an entry that
+  lived 24 hours, which makes a flood DoS possible. Format validation with
+  `/^[A-Za-z0-9._-]{1,128}$/`, a 500-entry cap (FIFO) and a TTL sweep before
+  insertion (`backend/src/routes/notify.ts`)
+- **A concurrent-mutation TOCTOU on `peers.json` (#251)**: peer fetches fanned
+  out with `Promise.all` completed into concurrent
+  `recordPeerSuccess/Failure` load-mutate-save cycles that overwrote each other
+  and lost `lastSeenAt` or a fresh wsToken. A module-level promise queue
+  serializes every mutator, and saving uses a temp file plus an atomic rename.
+  Two test cases added (`backend/src/services/peer-registry.ts`)
+- **Claude project dir name generation broke on paths containing dots in
+  `session-metrics` / `file-change-tracker` / `conversation-watcher` /
+  `codex-history` (#252)**: four files each did `replace(/\//g, '-')` while
+  Claude Code collapses both characters with `[/.]/g`. Metrics and friends failed
+  silently on paths like `github.com/m0a/cc-hub`. A shared
+  `claudeProjectDirName` helper was extracted into utils and all five callers
+  (claude-code included) now use it. Four test cases added
+  (`backend/src/utils/claude-project-path.ts` and others)
+- **Insufficient validation and clamping of Range requests on `/files/raw`
+  (#253)**: with no bounds checks, `bytes=10000-20000` against a 905-byte file
+  returned a bogus 206 whose false Content-Length hung keep-alive clients. Bun's
+  `Response(file.slice(...))` also discarded the slice bounds in transport and
+  streamed the whole file chunked, so the Content-Length did not match either. A
+  416 or a clamp plus reading the slice through `arrayBuffer()` makes the real
+  transport consistent. Five cases verified with curl in dev
+  (`backend/src/routes/files.ts`)
+- **Pane misattribution from allowing the SEP sentinel ('||~~||') in a session
+  name (#250)**: `tmux list-panes` output was split on `||~~||` into nine fields,
+  and a session name containing the sentinel shifted every field so panes were
+  registered against another session. `CreateSessionSchema.name` is constrained
+  by `/^[A-Za-z0-9._-]+$/`, and the parser defensively validates paneId with
+  `/^%\d+$/` and drops malformed rows (`shared/types.ts`,
+  `backend/src/services/tmux.ts`)
 
 ## [0.1.161] - 2026-05-30
 
-全コードベースのマルチエージェントレビューで検出した Critical/High の脆弱性 9 件を修正。各修正はユニットテスト追加 + dev 実機（回帰＋攻撃の両面）検証済み。
+Nine Critical/High vulnerabilities found by a multi-agent review of the whole
+codebase. Every fix has unit tests and was verified in dev both as a regression
+and as an attack.
 
 ### Security
-- **JWT 署名鍵のハードコード公開定数を廃止 (#230, Critical)**: `JWT_SECRET` がどのデプロイ経路でも設定されず、公開定数 `development-secret-change-in-production` にフォールバックしていたため、誰でもトークンを偽造して `CCHUB_PASSWORD` 認証を完全回避できた。起動時にランダム 32byte 秘密鍵を生成し data dir に永続化 (0600)、使える既定値を排除 (`backend/src/middleware/auth.ts`, `backend/src/index.ts`)
-- **WebSocket 制御経路の tmux コマンドインジェクション (RCE) を修正 (#231, Critical)**: `/ws/mux` が `paneId`/`cols`/`rows` を無検証で tmux control-mode コマンドへ生補間しており、改行入り `paneId` で任意 tmux コマンド (= ホスト RCE) を注入できた。`MuxClientMessageSchema` (zod) で全フレームを検証 + 各コマンド sink に `assertPaneId`/整数ガードを追加 (`shared/types.ts`, `backend/src/routes/terminal-mux.ts`, `backend/src/services/tmux-control.ts`, `backend/src/services/pane-viewport.ts`)
-- **file ルートの client 指定 base 信頼による任意ファイル read/write を修正 (#232, Critical)**: `/list`/`/read`/`/raw`/`/download`/`/upload` が client の `sessionWorkingDir` を信頼 base にしていたため、`base=/etc&path=/etc/passwd` 等でセッションサンドボックス外の任意ファイルを read/write できた。`sessionWorkingDir` を実ライブセッションの作業ディレクトリと realpath 照合してから使用 (`backend/src/routes/files.ts`)
-- **session-history のパストラバーサルを修正 (#233, High)**: `projectDirName`/`sessionId` を無検証で `~/.claude/projects` 配下に join しており、`../../../etc` (percent-encode でルータ制約も回避) で任意ディレクトリ列挙と `*.jsonl` 読取ができた。フラットセグメント検証を追加 (`backend/src/services/session-history.ts`)
-- **resume sessionId の shell インジェクションを修正 (#234, High)**: `sessionId` が bare string で `claude -r <id>` として対話シェルに入力されており、`x; rm -rf ~ #` で任意コマンドを実行できた。`SessionIdSchema` で制約 + `agentResumeCommand` で quote (`shared/types.ts`, `backend/src/routes/sessions.ts`)
-- **peer URL の SSRF を修正 (#235, High)**: `PeerCreateSchema.url` が任意 scheme/host を許可し、保存 URL を credential 付きでサーバ側 fetch していたため、loopback/`169.254.169.254`/RFC1918 を指す peer で SSRF できた。https 必須 + 非ローカル限定 (Tailscale 範囲は許可) のガードを全 outbound peer fetch に追加 (`backend/src/services/peer-url.ts`, `backend/src/services/peer-auth.ts`, `backend/src/routes/peers.ts`, `shared/types.ts`)
+- **Removed the hardcoded public constant used as the JWT signing key (#230,
+  Critical)**: `JWT_SECRET` was set on no deployment path and fell back to the
+  public constant `development-secret-change-in-production`, so anyone could
+  forge a token and bypass `CCHUB_PASSWORD` authentication entirely. A random
+  32-byte secret is generated at startup and persisted in the data dir (0600),
+  and the usable default is gone (`backend/src/middleware/auth.ts`,
+  `backend/src/index.ts`)
+- **tmux command injection (RCE) through the WebSocket control path (#231,
+  Critical)**: `/ws/mux` interpolated `paneId` / `cols` / `rows` into tmux
+  control-mode commands unvalidated, so a `paneId` containing a newline could
+  inject arbitrary tmux commands (that is, host RCE). Every frame is validated
+  through `MuxClientMessageSchema` (zod) and each command sink gained
+  `assertPaneId` and integer guards (`shared/types.ts`,
+  `backend/src/routes/terminal-mux.ts`, `backend/src/services/tmux-control.ts`,
+  `backend/src/services/pane-viewport.ts`)
+- **Arbitrary file read/write from trusting a client-supplied base in the file
+  routes (#232, Critical)**: `/list` / `/read` / `/raw` / `/download` / `/upload`
+  trusted the client's `sessionWorkingDir` as the base, so
+  `base=/etc&path=/etc/passwd` and similar could read or write any file outside
+  the session sandbox. `sessionWorkingDir` is checked against a real live
+  session's working directory by realpath before use
+  (`backend/src/routes/files.ts`)
+- **Path traversal in session-history (#233, High)**: `projectDirName` /
+  `sessionId` were joined under `~/.claude/projects` unvalidated, so `../../../etc`
+  (percent-encoded to bypass the router constraints too) could list arbitrary
+  directories and read `*.jsonl`. Flat-segment validation was added
+  (`backend/src/services/session-history.ts`)
+- **Shell injection through the resume sessionId (#234, High)**: `sessionId` went
+  into an interactive shell as a bare string in `claude -r <id>`, so
+  `x; rm -rf ~ #` executed arbitrary commands. Constrained by `SessionIdSchema`
+  and quoted in `agentResumeCommand` (`shared/types.ts`,
+  `backend/src/routes/sessions.ts`)
+- **SSRF through peer URLs (#235, High)**: `PeerCreateSchema.url` accepted any
+  scheme and host, and the stored URL was fetched server-side with credentials,
+  so a peer pointing at loopback, `169.254.169.254` or RFC1918 gave SSRF. https
+  is required and non-local is enforced (with the Tailscale ranges allowed) on
+  every outbound peer fetch (`backend/src/services/peer-url.ts`,
+  `backend/src/services/peer-auth.ts`, `backend/src/routes/peers.ts`,
+  `shared/types.ts`)
 
 ### Fixed
-- **ping keepalive の再接続ストームを修正 (#236, High)**: ターミナル未選択時 (`sessionId=""`) の ping が subscription gate で drop され pong が返らず、~25s ごとに切断/再接続を繰り返していた。`ping` を gate より前で処理 (`backend/src/routes/terminal-mux.ts`)
-- **peer file proxy が Range/条件付きヘッダを非転送 (#237, High)**: peer ホストのメディアをシークできず大ファイルが全転送されていた。`Range`/`If-Range`/`If-None-Match`/`If-Modified-Since` を上流へ転送 (`backend/src/routes/peers.ts`)
-- **password 認証時に履歴検索が無言失敗する問題を修正 (#238, High)**: 検索が生 `EventSource` で Authorization ヘッダを送れず 401 → 無言で「結果なし」になっていた。`fetch` + `ReadableStream` で Bearer を付与し SSE を手動パース、AbortController で旧 EventSource リークも解消 (`frontend/src/hooks/useSessionHistory.ts`)
+- **A reconnect storm in the ping keepalive (#236, High)**: with no terminal
+  selected (`sessionId=""`) the ping was dropped by the subscription gate and no
+  pong came back, so it disconnected and reconnected about every 25 seconds.
+  `ping` is handled before the gate (`backend/src/routes/terminal-mux.ts`)
+- **The peer file proxy did not forward Range or conditional headers (#237,
+  High)**: media on a peer host could not be seeked and large files transferred
+  in full. `Range` / `If-Range` / `If-None-Match` / `If-Modified-Since` are
+  forwarded upstream (`backend/src/routes/peers.ts`)
+- **History search failed silently under password auth (#238, High)**: search
+  used a raw `EventSource`, which cannot send an Authorization header, so a 401
+  turned into a silent "no results". It uses `fetch` plus `ReadableStream` to
+  attach the Bearer and parses the SSE by hand, and an AbortController also
+  resolves the old EventSource leak (`frontend/src/hooks/useSessionHistory.ts`)
 
 ## [0.1.160] - 2026-05-24
 
 ### Fixed
-- **viewport 下部の void が画面全体に広がる不具合 (v0.1.159 リグレッション + 真の root cause) を解消**: v0.1.159 の修正は方針自体が誤りで、`cs.sendCommand` の戻り値が trailing `\n` artifact を持たない事実を見落とし、本物の trailing 空行を pop して状況を悪化させていた。さらに調査の結果、より深層の bug が判明 — `TmuxControlSession.processRawLine` は空 `Buffer` を early return しており、`capture-pane -p` 応答内の **literal blank rows がパーサ層で完全に消えていた** (55 行のキャプチャが 32 行に縮む等)。`pane-viewport.ts` の下流処理が短くなった応答を見て padFill で `''` を bottom に埋めるため、scroll を進めるほど void が広がって見えていた。真の修正は `processRawLine` で `%begin`/`%end` block 内に居る場合のみ空行を `currentOutput` に push するようにした。v0.1.159 の `parseCaptureOutput` 改変は revert し、`split('\n')` に戻した。dev 環境で 4 pane (cchub-work-1, orchestrator, linux, cchub-work-2/node) に対し offset 0..500 で実機検証 — 全 offset で trailing void = 0 を確認 (`backend/src/services/tmux-control.ts`, `backend/src/services/pane-viewport.ts`, `backend/src/services/__tests__/tmux-control-serialize.test.ts`)
+- **The void at the bottom of the viewport spreading across the screen (a
+  v0.1.159 regression, plus the real root cause)**: v0.1.159's fix was wrong in
+  principle - it missed that `cs.sendCommand`'s return value carries no trailing
+  `\n` artifact, and popped genuine trailing blank lines, making things worse.
+  Investigation then found a deeper bug: `TmuxControlSession.processRawLine`
+  early-returned on an empty `Buffer`, so **literal blank rows inside a
+  `capture-pane -p` response disappeared entirely at the parser layer** (a
+  55-line capture shrinking to 32, for instance). Downstream, `pane-viewport.ts`
+  saw the shortened response and padFilled `''` at the bottom, so the void
+  appeared to grow as you scrolled. The real fix is that `processRawLine` pushes
+  a blank line into `currentOutput` only while inside a `%begin`/`%end` block.
+  v0.1.159's `parseCaptureOutput` change was reverted back to `split('\n')`.
+  Verified in dev against four panes at offsets 0..500 - trailing void = 0 at
+  every offset (`backend/src/services/tmux-control.ts`,
+  `backend/src/services/pane-viewport.ts`,
+  `backend/src/services/__tests__/tmux-control-serialize.test.ts`)
 
 ## [0.1.159] - 2026-05-24
 
 ### Fixed
-- **スクロール時に viewport 下部の void エリアが offset に応じて変動する不具合を解消**: `pane-viewport.ts` の padFill ロジック (`captureScrollback` と scrolled-mode の pad capture 両方) が pad capture の trailing visually-blank rows を多段 `pop` で削っており、scrollback に空行を含む pane (e.g., dev server logs は 1 行おきに空行) で `prepend` が `padNeeded` に届かず、後段の `lines.push('')` が rendered viewport の **bottom** に void を埋めていた。scroll offset によって content/blank の parity が変わるので void サイズが 0〜数行で変動して見えた。修正は tmux capture-pane が必ず付ける trailing `\n` artifact のみを 1 回 pop するシンプルな `parseCaptureOutput()` helper に置き換え、scrollback 内の本物の空行を保持するようにした。実機 sim では修正前 odd offset で 1 行 void → 修正後全 offset で void = 0 (`backend/src/services/pane-viewport.ts`, `backend/src/services/__tests__/pane-viewport-capture.test.ts`)
+- **The void area at the bottom of the viewport varied with the scroll offset**:
+  `pane-viewport.ts`'s padFill logic (both `captureScrollback` and the scrolled
+  mode's pad capture) stripped trailing visually-blank rows from the pad capture
+  with repeated `pop`s, so on a pane whose scrollback contains blank lines (a dev
+  server log has one every other line) `prepend` never reached `padNeeded` and
+  the later `lines.push('')` filled the **bottom** of the rendered viewport with
+  void. The parity of content and blank lines changes with the scroll offset, so
+  the void appeared to vary between zero and a few lines. The fix replaces it
+  with a simple `parseCaptureOutput()` helper that pops only the single trailing
+  `\n` artifact tmux capture-pane always adds, preserving genuine blank lines in
+  the scrollback. In a simulation, one line of void at odd offsets before the fix
+  became zero at every offset after (`backend/src/services/pane-viewport.ts`,
+  `backend/src/services/__tests__/pane-viewport-capture.test.ts`)
 
 ## [0.1.158] - 2026-05-24
 
 ### Fixed
-- **`cchub send --submit` で長文 payload (~300 bytes 以上) が submit されず入力欄に貼り付く root cause を解消**: 従来の末尾 `\r\r` 追加方式は、TUI が大きな入力バッチを auto-paste と判定したときに trailing CR を paste 内に吸収してしまい、本文が submit されないバグがあった。`\x1b[200~${payload}\x1b[201~\r` で bracketed paste markers を明示的に付けて wrap する方式に変更し、payload サイズ無関係に確実に submit されるようにした (`/api/sessions/:id/prompt` で既に確立された方式と同じ)。空 payload (`cchub send <target> "" --submit`) による flush も引き続き動作する。dev 環境の Claude TUI で 507 bytes / 43 bytes / flush 全 case の動作確認済 (`backend/src/commands/send.ts`)
-- CLI help と `cchub-send` スキル docs を新挙動 (長さ無関係に submit、~v0.1.157 までの workaround 不要) に追随 (`backend/src/cli.ts`, `.claude/skills/cchub-send/SKILL.md`)
+- **Root cause of `cchub send --submit` pasting a long payload (over about 300
+  bytes) into the input box without submitting**: the old approach of appending
+  `\r\r` failed when the TUI decided a large input batch was an auto-paste and
+  absorbed the trailing CR into the paste, leaving the body unsubmitted. It wraps
+  the payload in explicit bracketed paste markers now
+  (`\x1b[200~${payload}\x1b[201~\r`), which submits reliably regardless of size
+  (the same approach already established for `/api/sessions/:id/prompt`). A flush
+  with an empty payload (`cchub send <target> "" --submit`) still works. Verified
+  against the Claude TUI in dev at 507 bytes, 43 bytes and the flush case
+  (`backend/src/commands/send.ts`)
+- The CLI help and the `cchub-send` skill docs follow the new behavior (submits
+  regardless of length; the workaround needed up to v0.1.157 is gone)
+  (`backend/src/cli.ts`, `.claude/skills/cchub-send/SKILL.md`)
 
 ## [0.1.157] - 2026-05-24
 
 ### Fixed
-- **`cchub peek` / `cchub send --wait` の `detectedState` 判定精度を向上**: 狭ペイン (≤60 cols) で `(esc to interrupt)` が `esc to int…` に truncate されるケース、Claude busy 中の `Press up to edit queued messages`、`tokens…)` の末尾に追加情報が続くケース、スピナーマーカー (`✻ Channeling…` の marker + verb-ing + 三点リーダ構造) など、これまで `idle` と誤判定されていたシナリオを `processing` として正しく判定するよう `detectPaneState` を強化した。スピナー verb は release ごとに変わるため verb 名ではなく構造でマッチする。過去形 `✻ Sautéed for 1m` は idle のまま維持 (`backend/src/services/pane-viewport.ts`)
+- **Better `detectedState` accuracy for `cchub peek` / `cchub send --wait`**:
+  scenarios previously misread as `idle` are correctly `processing` now -
+  `(esc to interrupt)` truncated to `esc to int...` in a narrow pane (<=60
+  columns), `Press up to edit queued messages` while Claude is busy, extra
+  information after a trailing `tokens...)`, and the spinner marker (the marker +
+  verb-ing + ellipsis structure). Spinner verbs change from release to release,
+  so the match is structural rather than by verb. A past-tense spinner line stays
+  idle (`backend/src/services/pane-viewport.ts`)
 
 ### Docs
-- **`cchub-send` スキルに実機学習を反映**: 改行なしの単一行でも 500 bytes 以上の payload は bracketed paste 扱いで `--submit` の `\r\r` が吸収され入力欄に残る (実機確認: 単一行 979 bytes で発生)。長文 send は原則 `--submit --wait` で submit 確認すべきと明記。`cchub peek` の stdout/stderr 出力フォーマット、rtk 環境下で `curl | python3` が truncate される回避策、TUI rating overlay を `cchub send "0"` (改行なし) や Esc で dismiss する手順も追加 (`.claude/skills/cchub-send/SKILL.md`)
+- **Field learnings folded into the `cchub-send` skill**: even a single line with
+  no newlines is treated as a bracketed paste past 500 bytes, so `--submit`'s
+  `\r\r` is absorbed and the text stays in the input box (confirmed on a device
+  with a single 979-byte line). It now states that a long send should generally
+  use `--submit --wait` to confirm the submit. Also added `cchub peek`'s
+  stdout/stderr output format, a workaround for `curl | python3` truncating under
+  rtk, and how to dismiss the TUI rating overlay with `cchub send "0"` (no
+  newline) or Esc (`.claude/skills/cchub-send/SKILL.md`)
 
 ## [0.1.156] - 2026-05-23
 
 ### Fixed
-- **tmux viewport の cursor 補正を session metadata ベースに整理**: これまで `pane-viewport.ts` に散っていた cursor 補正を `viewport-cursor-policy.ts` に切り出し、`agent=currentCommand` が `codex` のときだけ footer 専用の cursor policy を使うように変更した。shell 系は従来の padFill ベースの補正を維持しつつ、最後の表示行を超えないように軽くクランプして `haskel` などの空行ズレを抑えた (`backend/src/services/pane-viewport.ts`, `backend/src/services/viewport-cursor-policy.ts`, `backend/src/routes/terminal-mux.ts`, `backend/src/routes/sessions.ts`)
+- **The tmux viewport's cursor correction was reorganized around session
+  metadata**: the corrections scattered through `pane-viewport.ts` were extracted
+  into `viewport-cursor-policy.ts`, and the footer-specific cursor policy is used
+  only when `agent=currentCommand` is `codex`. Shells keep the padFill-based
+  correction while being lightly clamped so the cursor cannot pass the last
+  visible line, which suppresses the blank-line drift seen with some shells
+  (`backend/src/services/pane-viewport.ts`,
+  `backend/src/services/viewport-cursor-policy.ts`,
+  `backend/src/routes/terminal-mux.ts`, `backend/src/routes/sessions.ts`)
 
 ## [0.1.155] - 2026-05-23
 
 ### Fixed
-- **ソフトウェアキーボードの Shift+Tab が効かなかった問題を修正**: `Keyboard.tsx` の `sendKeyPress` に Shift+Tab の専用処理がなく、フォールバックで `"\t".toUpperCase()` = `"\t"` となって Shift が落ちて素の Tab が送られていた。既存の Shift+Enter 分岐と同じパターンで `\x1b[Z` (CSI Z = VT back-tab、xterm が Shift+Tab で送るシーケンス) を返すよう追加。Claude Code の `shift+tab to cycle` (auto-mode / plan-mode / accept-edits の切り替え) がモバイル/タブレットの仮想キーボードからも使えるようになる (`frontend/src/components/Keyboard.tsx`)
+- **Shift+Tab did nothing on the software keyboard**: `sendKeyPress` in
+  `Keyboard.tsx` had no case for Shift+Tab, and the fallback produced
+  `"\t".toUpperCase()` = `"\t"`, dropping the shift and sending a plain Tab. It
+  returns `\x1b[Z` (CSI Z, the VT back-tab xterm sends for Shift+Tab) following
+  the same pattern as the existing Shift+Enter branch, so Claude Code's
+  "shift+tab to cycle" (auto-mode / plan-mode / accept-edits) works from the
+  virtual keyboard on mobile and tablet (`frontend/src/components/Keyboard.tsx`)
 
 ## [0.1.154] - 2026-05-23
 
 ### Fixed
-- **macOS で tmux ペインが突然 1〜2 行の CSV だけになる / 文章の途中に空白が抜ける問題を修正**: `TmuxControlSession.sendCommand` の `pendingQueue` を同じセッションを共有する複数の呼び出し (ライブ WebSocket viewport + `cchub peek` / `cchub send --wait`) が共有していたため、10s タイムアウト時の `pendingQueue.splice` で FIFO がズレ、`display-message` メタデータの応答 (例: `277,74,2,70,0,0,8452` = `cols,rows,cx,cy,cflag,alt,hist`) が後続の `capture-pane` 応答に化けてペインの内容として描画されていた。`commandTail` プロミスチェーンによる直列化で stdin への書き込みを前コマンドの settle 後に限定し、タイムアウト時 (30s に延長) は単体 pending の splice ではなくセッション全体を `destroy()` するよう変更。遅延応答による silent corruption を根絶 (`backend/src/services/tmux-control.ts`, `backend/src/services/__tests__/tmux-control-serialize.test.ts`)
+- **A tmux pane on macOS suddenly showing one or two lines of CSV, or losing
+  spaces mid-sentence**: `TmuxControlSession.sendCommand`'s `pendingQueue` was
+  shared by several callers on one session (the live WebSocket viewport plus
+  `cchub peek` / `cchub send --wait`), so the `pendingQueue.splice` on a
+  10-second timeout shifted the FIFO and a `display-message` metadata reply (for
+  example `277,74,2,70,0,0,8452` = `cols,rows,cx,cy,cflag,alt,hist`) was mistaken
+  for a later `capture-pane` reply and drawn as the pane's contents. Writes to
+  stdin are serialized through a `commandTail` promise chain so a command only
+  goes out after the previous one settles, and a timeout (extended to 30s) now
+  `destroy()`s the whole session rather than splicing a single pending entry.
+  Silent corruption from a late reply is eliminated
+  (`backend/src/services/tmux-control.ts`,
+  `backend/src/services/__tests__/tmux-control-serialize.test.ts`)
 
 ## [0.1.153] - 2026-05-23
 
 ### Added
-- **`cchub peek` / `cchub send --wait` で peer pane の状態を覗けるように**: peer に送ったあと「届いてるのか？permission prompt で止まってないか？」を UI を開かずに確認するための仕組み。pane viewport を取得して `idle / processing / permission_prompt / ask_user_question / unknown` のいずれかにヒューリスティック判定する。`POST /api/sessions/:id/panes/input` に `{wait, waitMs, lines}` を追加 (送信後に viewport を返す)、新規 `GET /api/sessions/:id/panes/:paneId/viewport` を peek のバックエンドとして追加。CLI 側は `cchub send --wait/--wait-ms/--lines` と新規 `cchub peek <peer>:<session>:<paneId>`。判定ロジックは `backend/src/services/pane-viewport.ts` の `detectPaneState()` (`(esc to interrupt)` / `tokens)` スピナーで processing、`Do you want to ...?` / `Yes, and don't ask again` で permission_prompt、`✻/✳/✶` マーカー or 空入力箱で idle 等を検知)。cchub-send スキルのドキュメントも更新済み (`backend/src/cli.ts`, `backend/src/commands/send.ts`, `backend/src/routes/sessions.ts`, `backend/src/services/pane-viewport.ts`, `.claude/skills/cchub-send/SKILL.md`)
+- **`cchub peek` / `cchub send --wait` can inspect a peer pane's state**: a way
+  to answer "did it arrive? is it stuck on a permission prompt?" after sending to
+  a peer, without opening the UI. It captures the pane viewport and heuristically
+  classifies it as `idle` / `processing` / `permission_prompt` /
+  `ask_user_question` / `unknown`. `POST /api/sessions/:id/panes/input` gained
+  `{wait, waitMs, lines}` (returning a viewport after sending), and a new
+  `GET /api/sessions/:id/panes/:paneId/viewport` backs peek. On the CLI side:
+  `cchub send --wait/--wait-ms/--lines` and a new
+  `cchub peek <peer>:<session>:<paneId>`. The classification lives in
+  `detectPaneState()` in `backend/src/services/pane-viewport.ts` (processing from
+  `(esc to interrupt)` or the `tokens)` spinner, permission_prompt from
+  `Do you want to ...?` / `Yes, and don't ask again`, idle from the spinner
+  markers or an empty input box, and so on). The cchub-send skill docs were
+  updated too (`backend/src/cli.ts`, `backend/src/commands/send.ts`,
+  `backend/src/routes/sessions.ts`, `backend/src/services/pane-viewport.ts`,
+  `.claude/skills/cchub-send/SKILL.md`)
 
 ## [0.1.152] - 2026-05-22
 
 ### Fixed
-- **リモート peer セッションでファイルブラウザが「Access denied」になる問題を修正**: FileViewer は常に Hub の `/api/files/*` を叩いていたため、pane が remote peer 上の Claude Code につながっているとき Hub から peer のファイルシステムが見えず 403 を返していた。新規 `/api/peers/:peerId/files/*` 汎用 proxy を追加して `list / read / raw / changes / git-changes / git-diff / language / download / upload / images` を peer の `/api/files` にストリーミング転送する (binary streaming を切らないよう `peerFetch` の 5s timeout は経由しない)。フロントは `useFileViewer(sessionWorkingDir, peerId?)` で URL prefix を切り替え、`DesktopLayout` / `App.tsx` (mobile path) どちらも `{ dir, peerId }` ペアで FileViewer を mount し直すよう揃えた。Mobile 経路では `apiSessions` からの peerId フォールバック lookup を追加して、reload 直後に `openSessions` がまだ peer session を含まない瞬間でも peer URL に解決できるようにした (`backend/src/routes/peers.ts`, `frontend/src/hooks/useFileViewer.ts`, `frontend/src/components/files/FileViewer.tsx`, `frontend/src/components/DesktopLayout.tsx`, `frontend/src/components/PaneContainer.tsx`, `frontend/src/App.tsx`)
-- **DesktopLayout が propSessions と apiSessions をマージするときに peerId を落としていた問題を修正**: pane の sessionId が `apiSessions` だけに存在する状態 (= reload 直後で `openSessions` に未追加) で `sessions.find(...).peerId` が undefined になり、画像 upload / FileViewer の URL が Hub local に流れてしまっていた。マージ結果に `peerId: apiSession.peerId ?? propSession.peerId` を常に付ける (`frontend/src/components/DesktopLayout.tsx`)
+- **The file browser said "Access denied" on a remote peer session**: FileViewer
+  always called the hub's `/api/files/*`, so when a pane was connected to Claude
+  Code on a remote peer the hub could not see that peer's filesystem and returned
+  403. A new general proxy at `/api/peers/:peerId/files/*` streams
+  `list / read / raw / changes / git-changes / git-diff / language / download /
+  upload / images` through to the peer's `/api/files` (bypassing `peerFetch`'s 5s
+  timeout so binary streaming is not cut off). The frontend switches the URL
+  prefix through `useFileViewer(sessionWorkingDir, peerId?)`, and both
+  `DesktopLayout` and `App.tsx` (the mobile path) remount FileViewer on the
+  `{ dir, peerId }` pair. The mobile path also gained a peerId fallback lookup
+  from `apiSessions`, so it resolves to the peer URL even in the moment right
+  after a reload when `openSessions` does not yet contain the peer session
+  (`backend/src/routes/peers.ts`, `frontend/src/hooks/useFileViewer.ts`,
+  `frontend/src/components/files/FileViewer.tsx`,
+  `frontend/src/components/DesktopLayout.tsx`,
+  `frontend/src/components/PaneContainer.tsx`, `frontend/src/App.tsx`)
+- **DesktopLayout dropped peerId when merging propSessions with apiSessions**:
+  where a pane's sessionId existed only in `apiSessions` (right after a reload,
+  before it joins `openSessions`), `sessions.find(...).peerId` was undefined and
+  image uploads and FileViewer URLs went to the local hub. The merged result
+  always carries `peerId: apiSession.peerId ?? propSession.peerId`
+  (`frontend/src/components/DesktopLayout.tsx`)
 
 ## [0.1.151] - 2026-05-22
 
 ### Fixed
-- **画像添付がリモート peer のセッションで動かなかった問題を修正**: 画像 upload は常に Hub の `/tmp/cchub-images/` に保存して、その path を tmux pane に送る作りだった。pane が remote peer 上の Claude Code につながっていると、peer 側からは Hub のディスクが見えないので「ファイルが見つかりません」になっていた。新規 `POST /api/peers/:peerId/upload/image` を追加してアクティブな pane が属する peer に multipart を proxy 転送し、peer 側の `/tmp/cchub-images/` に保存して peer-local な path を返すよう変更。フォーカス中の pane の peerId を `useSessions` → `OpenSession` → `Terminal` → `InputBar` の経路で伝搬し、`DesktopLayout` の paste / file pick、および mobile path (`TerminalPage`) の Terminal にも peerId を渡すよう揃えた (`backend/src/routes/peers.ts`, `backend/src/routes/upload.ts`, `frontend/src/utils/upload-image.ts`, `frontend/src/components/InputBar.tsx`, `frontend/src/components/Terminal.tsx`, `frontend/src/components/DesktopLayout.tsx`, `frontend/src/pages/TerminalPage.tsx`)
+- **Attaching an image did not work on a remote peer's session**: an image upload
+  always saved to the hub's `/tmp/cchub-images/` and sent that path to the tmux
+  pane. With the pane connected to Claude Code on a remote peer, that peer cannot
+  see the hub's disk, so it became "file not found". A new
+  `POST /api/peers/:peerId/upload/image` proxies the multipart body to the peer
+  that owns the active pane, saves into that peer's `/tmp/cchub-images/` and
+  returns a peer-local path. The focused pane's peerId is propagated through
+  `useSessions` -> `OpenSession` -> `Terminal` -> `InputBar`, and it is also
+  passed to `DesktopLayout`'s paste and file-pick paths and to the mobile
+  Terminal (`TerminalPage`) (`backend/src/routes/peers.ts`,
+  `backend/src/routes/upload.ts`, `frontend/src/utils/upload-image.ts`,
+  `frontend/src/components/InputBar.tsx`, `frontend/src/components/Terminal.tsx`,
+  `frontend/src/components/DesktopLayout.tsx`,
+  `frontend/src/pages/TerminalPage.tsx`)
 
 ## [0.1.150] - 2026-05-22
 
 ### Added
-- **ダッシュボードのマルチサーバー対応**: 登録された peer ごとに `ServerInfo` カードを並べて、各 peer の CPU / Memory / Disk / Swap / Load を独立にポーリング表示する。新規 hook `usePeerServerMetrics` が `/api/peers/:peerId/dashboard` を 30 秒間隔で叩く。Throughput はブラウザの WS バイト数を見ているので Local カードのみで表示し、remote カードでは抑制する (`frontend/src/components/dashboard/PeerServerCard.tsx`, `frontend/src/hooks/usePeerServerMetrics.ts`, `backend/src/routes/peers.ts`, `backend/src/routes/dashboard.ts`)
+- **Multi-server support on the dashboard**: a `ServerInfo` card per registered
+  peer, each polling its own CPU / memory / disk / swap / load. A new
+  `usePeerServerMetrics` hook calls `/api/peers/:peerId/dashboard` every 30
+  seconds. Throughput measures the browser's own WS byte counts, so it is shown
+  on the local card only and suppressed on remote ones
+  (`frontend/src/components/dashboard/PeerServerCard.tsx`,
+  `frontend/src/hooks/usePeerServerMetrics.ts`, `backend/src/routes/peers.ts`,
+  `backend/src/routes/dashboard.ts`)
 
 ### Changed
-- **接続端末数をユニーク化**: `connectedClients` バッジが従来は WebSocket 接続数 (= 同じブラウザの複数タブ・再接続も別カウント) を返していた。フロントが `localStorage` に永続 UUID を保存して mux WS の URL に `?deviceId=...` で送信し、backend は deviceId 単位でユニーク化した数を返すよう変更。1 端末から複数タブを開いても 1 カウント、別端末/別ブラウザは別カウントになる (`frontend/src/utils/device-id.ts`, `frontend/src/hooks/useMultiplexedTerminal.ts`, `backend/src/index.ts`, `backend/src/routes/terminal-mux.ts`)
+- **The connected-device count is deduplicated**: the `connectedClients` badge
+  returned the number of WebSocket connections (so several tabs in one browser,
+  and reconnects, counted separately). The frontend persists a UUID in
+  `localStorage` and sends it on the mux WS URL as `?deviceId=...`, and the
+  backend counts unique deviceIds. Several tabs on one device count once, and
+  another device or browser counts separately (`frontend/src/utils/device-id.ts`,
+  `frontend/src/hooks/useMultiplexedTerminal.ts`, `backend/src/index.ts`,
+  `backend/src/routes/terminal-mux.ts`)
 
 ## [0.1.149] - 2026-05-22
 
 ### Fixed
-- **v0.1.148 で全 tmux session の indicator が常に `completed` のまま動かなくなった退化を修正**: 親遡上削除により `ccSessionId` が null になり、hook event の `session_id` と紐付けできなくなっていた。親遡上は復活させて hook 紐付け用の `ccSessionId` は取得し、漏洩防止のために recap 系 (`ccRecap` / `ccFirstPrompt` / `ccSummary`) は `ccSession.projectPath === currentPath` のときだけ表示するよう分離 (`backend/src/services/claude-code.ts`, `backend/src/routes/sessions.ts`)
-- **`pathToProjectName` が `.` を `-` に置換していなかった問題を修正**: Claude Code 側は `/Users/m0a/repo/github.com/m0a/cc-hub` → `-Users-m0a-repo-github-com-m0a-cc-hub` のように `.` も `-` に変換するが、cchub の `pathToProjectName` は `/` のみ置換していたため、`.` を含む path (`github.com` 等) の project dir を見つけられず親遡上で祖先 (= `/Users/m0a`) のセッションを全 pane に共有してしまっていた。`/` と `.` の両方を置換するよう修正 (`backend/src/services/claude-code.ts`)
+- **A v0.1.148 regression froze every tmux session's indicator at `completed`**:
+  removing the parent walk made `ccSessionId` null, so it could no longer be
+  matched against a hook event's `session_id`. The parent walk is restored to
+  obtain `ccSessionId` for hook matching, and to prevent leakage the recap
+  fields (`ccRecap` / `ccFirstPrompt` / `ccSummary`) are only shown when
+  `ccSession.projectPath === currentPath` (`backend/src/services/claude-code.ts`,
+  `backend/src/routes/sessions.ts`)
+- **`pathToProjectName` did not replace `.` with `-`**: Claude Code converts both
+  (`/Users/m0a/repo/github.com/m0a/cc-hub` ->
+  `-Users-m0a-repo-github-com-m0a-cc-hub`) while cchub's `pathToProjectName` only
+  replaced `/`, so a path containing a dot (`github.com` and the like) could not
+  find its project dir and the parent walk shared an ancestor's session
+  (`/Users/m0a`) across every pane. Both characters are replaced now
+  (`backend/src/services/claude-code.ts`)
 
 ### Changed
-- `cchub-send` Skill に複数行 paste の submit 挙動 (`--submit` フラグの末尾 CR2回でも paste mode を抜けないことがある) と、対処手順 (別 send で `\r` を追い打ち / 受信側 pane で `tmux send-keys Enter`) を追記 (`.claude/skills/cchub-send/SKILL.md`)
+- Added the multi-line paste submit behavior (even `--submit`'s two trailing CRs
+  may not leave paste mode) and the workarounds (send `\r` again separately, or
+  `tmux send-keys Enter` on the receiving pane) to the `cchub-send` skill
+  (`.claude/skills/cchub-send/SKILL.md`)
 
 ## [0.1.148] - 2026-05-22
 
 ### Fixed
-- **複数の tmux セッションが同じ `ccSessionId` / `ccRecap` / `ccFirstPrompt` を共有してしまう問題を修正**: `getSessionForPath` / `getRecentSessionsForPath` は workingDir の project dir に jsonl が見つからないと `/` まで親ディレクトリへ遡って探す挙動だった。これが「Claude Code を `/Users/m0a` で起動 → `cd <subdir>` した tmux pane」では祖先 (= m0a) project の最新 jsonl を全 pane に返してしまい、別々の Claude Code セッションが同じ recap を表示する漏洩を起こしていた。親遡上を削除して exact path match のみに変更。jsonl が無い pane は `null` を返す (= 表示しない方が誤情報よりまし)。launchd / TZ skew のフォールバックは既存の `ptySessionId` / `tty-start-time` 経路でカバー済み (`backend/src/services/claude-code.ts`)
+- **Several tmux sessions shared one `ccSessionId` / `ccRecap` /
+  `ccFirstPrompt`**: `getSessionForPath` / `getRecentSessionsForPath` walked up
+  to `/` looking for a jsonl when the workingDir's project dir had none. In a
+  "start Claude Code in `/Users/m0a`, then `cd <subdir>`" tmux pane, that
+  returned the ancestor project's newest jsonl to every pane, leaking one recap
+  across separate Claude Code sessions. The parent walk was removed in favor of
+  an exact path match, and a pane with no jsonl returns `null` (showing nothing
+  beats showing something wrong). The launchd and TZ-skew fallbacks are already
+  covered by the existing `ptySessionId` / `tty-start-time` paths
+  (`backend/src/services/claude-code.ts`)
 
 ### Changed
-- `cchub-send` Skill に「双方向対話のセットアップ」「peer の hook 設定を診断する (`/api/notify/hook-status`)」「`--submit` フラグの使い方」を追記。`Bash(cchub send:*)` の事前許可を必須ステップとして明文化 (`.claude/skills/cchub-send/SKILL.md`)
+- Added "setting up a two-way conversation", "diagnosing a peer's hook
+  configuration (`/api/notify/hook-status`)" and "how to use the `--submit` flag"
+  to the `cchub-send` skill, and made pre-approving `Bash(cchub send:*)` an
+  explicit required step (`.claude/skills/cchub-send/SKILL.md`)
 
 ## [0.1.147] - 2026-05-22
 
 ### Fixed
-- **新規 `claude` セッション (= `-r` フラグ無し) で `ccSessionId` が取れず indicator state の即時更新と通知が動かない問題を修正**: `buildSessionsList` の最終 path fallback (`ccSessionsByPath.get(currentPath)`) が `ptySessionId` 必須になっていたため、`claude -r <uuid>` ではない新規起動セッションでは hook event の `session_id` と紐付けるべき `ccSessionId` が常に `undefined` になり、`applyHookIndicatorUpdate` が peer 横断検索しても何にもヒットしないという経路ができていた。条件から `ptySessionId` 要件を外し、`getSessionByTtyStartTime` (TZ skew で失敗することがある) が null を返したら無条件で cwd 配下の最新 `.jsonl` にフォールバックするよう変更 (`backend/src/routes/sessions.ts`)
+- **A new `claude` session (started without `-r`) had no `ccSessionId`, so
+  immediate indicator updates and notifications did not work**: the final path
+  fallback in `buildSessionsList` (`ccSessionsByPath.get(currentPath)`) required
+  a `ptySessionId`, so a freshly started session (not `claude -r <uuid>`) always
+  had `ccSessionId` undefined and `applyHookIndicatorUpdate` matched nothing even
+  searching across peers. The `ptySessionId` requirement was dropped from the
+  condition, and when `getSessionByTtyStartTime` returns null (it can fail on TZ
+  skew) it unconditionally falls back to the newest `.jsonl` under the cwd
+  (`backend/src/routes/sessions.ts`)
 
 ### Added
-- **`cchub send --submit` フラグ**: 末尾に `\r\r` を追加して送信する。Claude Code の TUI は paste mode に入った入力を `\r` 1回では submit せず、明示的に2回の Enter を要求するため、`cchub send` から Claude Code に対話させるときは `--newline` ではなく `--submit` を使うのが確実 (`backend/src/commands/send.ts`, `backend/src/cli.ts`)
+- **A `cchub send --submit` flag**: appends `\r\r` before sending. Claude Code's
+  TUI does not submit input that entered paste mode with a single `\r` and
+  requires two explicit Enters, so `--submit` rather than `--newline` is the
+  reliable way to converse with Claude Code from `cchub send`
+  (`backend/src/commands/send.ts`, `backend/src/cli.ts`)
 
 ## [0.1.146] - 2026-05-22
 
 ### Added
-- **`cchub send` CLI と `POST /api/sessions/:id/panes/input` エンドポイント**: ローカル / peer サーバの tmux パネルへ任意のバイト列を CLI から送り込めるようになった。`cchub send <peer>:<session>:<paneId> "text"` の形式で、`<peer>` は `local` / peer id / nickname のいずれかを許容。`--stdin` で stdin から payload を読み込み、`--newline` で末尾に CR を付与 (シェルや TUI に "Enter で確定" させる用途)、`--base64` でバイナリを送信できる。peer 認証がある場合は `peers.json` の `wsToken` を Bearer として自動で付ける (`backend/src/routes/sessions.ts`, `backend/src/commands/send.ts`, `backend/src/cli.ts`)
-- `cchub-send` skill を追加。target 記法、フラグの使い分け、`paneId` の調べ方、よくあるエラーの解決手順をまとめてある (`.claude/skills/cchub-send/SKILL.md`)
+- **The `cchub send` CLI and the `POST /api/sessions/:id/panes/input`
+  endpoint**: arbitrary bytes can be sent from the CLI into a tmux pane on a
+  local or peer server. The form is
+  `cchub send <peer>:<session>:<paneId> "text"`, where `<peer>` accepts `local`,
+  a peer id or a nickname. `--stdin` reads the payload from stdin, `--newline`
+  appends a CR (to make a shell or TUI submit), and `--base64` sends binary. When
+  the peer requires authentication, the `wsToken` from `peers.json` is attached
+  as a Bearer automatically (`backend/src/routes/sessions.ts`,
+  `backend/src/commands/send.ts`, `backend/src/cli.ts`)
+- Added the `cchub-send` skill, covering the target notation, when to use which
+  flag, how to find a `paneId` and how to resolve common errors
+  (`.claude/skills/cchub-send/SKILL.md`)
 
 ## [0.1.145] - 2026-05-22
 
 ### Changed
-- **「キャッシュクリア」を完全リセット仕様に強化**: 従来は Service Worker unregister と Cache API 削除のみで、IndexedDB / localStorage / sessionStorage が残り、`location.reload()` も memory cache を許容していたため、PWA がスタックしたバージョンに留まることがあった。`frontend/src/utils/nuke-cache.ts` (新規) に統一処理を切り出し、SW + Cache API + IndexedDB + localStorage + sessionStorage をすべて削除した上で `?_nocache=<timestamp>` 付きの cache-busted hard reload (`location.replace`) を行う。Dashboard の「キャッシュクリア」ボタンと `Ctrl/Cmd+Shift+F5` ショートカット両方で同じ処理を実行 (`frontend/src/components/dashboard/Dashboard.tsx`, `frontend/src/components/DesktopLayout.tsx`)
-- 副作用: localStorage を消すため認証トークンも消える → 再ログインが必要になる
+- **"Clear cache" became a full reset**: it used to unregister the service worker
+  and delete the Cache API only, leaving IndexedDB, localStorage and
+  sessionStorage behind, and `location.reload()` still allowed the memory cache,
+  so a PWA could stay stuck on one version. The unified handling moved into a new
+  `frontend/src/utils/nuke-cache.ts`, which deletes the SW, the Cache API,
+  IndexedDB, localStorage and sessionStorage and then performs a cache-busted
+  hard reload (`location.replace` with `?_nocache=<timestamp>`). Both the
+  dashboard's "clear cache" button and the `Ctrl/Cmd+Shift+F5` shortcut run it
+  (`frontend/src/components/dashboard/Dashboard.tsx`,
+  `frontend/src/components/DesktopLayout.tsx`)
+- Side effect: clearing localStorage also clears the auth token, so a fresh login
+  is required
 
 ## [0.1.144] - 2026-05-22
 
 ### Fixed
-- **他 peer の indicator state / OS 通知が動かない問題を修正**: 従来は peer の `hook-event` (Stop / PreToolUse / UserPromptSubmit / PostToolUse) が「ターミナルでアクティブに表示している peer」の sharedWs 経由でしか届かず、他 peer は通知も indicator 即時更新も受け取れなかった。`usePeerSessionsWatcher` が各 peer 用 WS で hook-event を受け、`applyHookIndicatorUpdate` (全 peer 横断検索) で indicator を即時反映 + `fireHookNotification` で OS 通知を発火するように変更 (`frontend/src/hooks/usePeerSessionsWatcher.ts`)
-- 副次: `applyHookIndicatorUpdate` を Hub local 限定から全 peer 横断検索 (ccSessionId UUID) に変更
+- **Other peers' indicator state and OS notifications did not work**: a peer's
+  `hook-event` (Stop / PreToolUse / UserPromptSubmit / PostToolUse) only arrived
+  through the sharedWs of "the peer actively shown in the terminal", so other
+  peers received neither notifications nor immediate indicator updates.
+  `usePeerSessionsWatcher` receives hook-events on each peer's own WS and applies
+  them immediately through `applyHookIndicatorUpdate` (which searches across all
+  peers), firing the OS notification through `fireHookNotification`
+  (`frontend/src/hooks/usePeerSessionsWatcher.ts`)
+- Related: `applyHookIndicatorUpdate` went from hub-local only to searching
+  across every peer (by the ccSessionId UUID)
 
 ## [0.1.143] - 2026-05-22
 
 ### Fixed
-- **peer sessions watcher の WS が backend zombie 検知で 60 秒ごとに切断され、retry ループに陥っていた問題を修正**: v0.1.140 で導入した watcher が ping を送っていなかったため、Hub の `terminal-mux` (`PING_TIMEOUT_MS=60s`) で zombie 判定され `close → 5s 後 retry → close` のサイクルに入っていた。Linux Hub 側に対しても Mac peer 側に対しても同様に発生し、その副作用で peer のターミナル表示が停止する症状が出ていた。watcher に 25 秒間隔の ping を追加 (`frontend/src/hooks/usePeerSessionsWatcher.ts`)
+- **The peer sessions watcher's WS was cut every 60 seconds by the backend's
+  zombie detection and fell into a retry loop**: the watcher introduced in
+  v0.1.140 sent no pings, so the hub's `terminal-mux` (`PING_TIMEOUT_MS=60s`)
+  judged it a zombie and it entered a close -> retry after 5s -> close cycle. It
+  happened both against the Linux hub and against a Mac peer, and as a side
+  effect the peer's terminal display stopped. The watcher pings every 25 seconds
+  now (`frontend/src/hooks/usePeerSessionsWatcher.ts`)
 
 ## [0.1.142] - 2026-05-22
 
 ### Added
-- **peer 横断のセッション並び替え**: Hub 側に `${peerId}:${sessionId}` 形式の merged order を保存する `/api/peers/session-order` (GET/PUT) を新設し、ドラッグ&ドロップで Hub と remote peer のセッションを混在して並び替え可能にした。並び順は端末間で共有される (`backend/src/services/peer-registry.ts`, `backend/src/routes/peers.ts`, `frontend/src/hooks/useSessions.ts`, `frontend/src/components/SessionList.tsx`)
+- **Cross-peer session reordering**: a new `/api/peers/session-order` (GET/PUT)
+  stores a merged order of `${peerId}:${sessionId}` on the hub, so hub and remote
+  peer sessions can be dragged into one combined order. The order is shared
+  across devices (`backend/src/services/peer-registry.ts`,
+  `backend/src/routes/peers.ts`, `frontend/src/hooks/useSessions.ts`,
+  `frontend/src/components/SessionList.tsx`)
 
 ### Fixed
-- 並び替え時に `useSortable` / `SortableContext` の id が `session.id` のみだったため、Hub と peer で同名 tmux セッション (e.g. `cchub-work-1`) があると衝突して並び替えが破綻していた問題を修正。composite key (`${peerId}:${sessionId}`) で一意化
+- Reordering used `session.id` alone as the `useSortable` / `SortableContext` id,
+  so a tmux session with the same name on the hub and a peer (`cchub-work-1`, for
+  instance) collided and broke the reorder. Made unique with a composite key
+  (`${peerId}:${sessionId}`)
 
 ## [0.1.141] - 2026-05-22
 
 ### Fixed
-- **Hub local セッションが peer 接続中に消える問題を完全解消**: v0.1.140 で peer のセッション一覧を WS push に統一したが、Hub local 自身は引き続き `useMultiplexedTerminal` の sharedWs (アクティブセッションの peer に追従する) 経由でしか受信できておらず、Mac peer のセッションを開いた状態のままだと Hub の sessions-updated が来ず Linux 側の一覧が空になっていた。`usePeerSessionsWatcher` を Hub local も対象にして全 peer (local 含む) に独立 WS を張る設計に変更。`useMultiplexedTerminal` 側の sessions-updated dispatch は重複防止で撤去 (`frontend/src/hooks/usePeerSessionsWatcher.ts`, `frontend/src/hooks/useSessions.ts`, `frontend/src/hooks/useMultiplexedTerminal.ts`)
-- 副次: `cachedSessions` / `cachedRemotePeerSessions` の二系統 cache を watcher の sessionsByPeer 一系統に統合し、`mergedSessions` / `updateSessions` を撤去して useSessions のコードを簡素化
+- **Hub-local sessions disappearing while connected to a peer, fully resolved**:
+  v0.1.140 moved the peer session list onto WS push, but the hub's own list still
+  arrived only through `useMultiplexedTerminal`'s sharedWs (which follows the
+  active session's peer), so with a Mac peer's session open the hub's
+  sessions-updated never arrived and the Linux list went empty.
+  `usePeerSessionsWatcher` now covers hub-local too, holding an independent WS to
+  every peer including local. The sessions-updated dispatch in
+  `useMultiplexedTerminal` was removed to avoid duplication
+  (`frontend/src/hooks/usePeerSessionsWatcher.ts`,
+  `frontend/src/hooks/useSessions.ts`,
+  `frontend/src/hooks/useMultiplexedTerminal.ts`)
+- Related: the two caches (`cachedSessions` / `cachedRemotePeerSessions`) were
+  merged into the watcher's single `sessionsByPeer`, and `mergedSessions` /
+  `updateSessions` were removed, simplifying useSessions
 
 ## [0.1.140] - 2026-05-22
 
 ### Changed
-- **peer セッション取得を polling → WS push に統一**: 5秒間隔の `GET /api/peers/sessions` を撤廃し、各 remote peer の `/ws/mux` に常時接続して `sessions-updated` push を直接購読するよう変更。PWA を peer セッションのまま再オープンした場合に Hub の sessions-updated が一度も届かず Linux 側のセッションが画面から消える問題も同時に解消する。WS 接続は peer 単位で永続化されるので peer 切替で leak しない (`frontend/src/hooks/usePeerSessionsWatcher.ts` 新規, `frontend/src/hooks/useSessions.ts`)
-- **peer WS URL ヘルパー共通化**: `peerHttpUrlToWsUrl` / `appendWsToken` を `frontend/src/services/peer-ws.ts` に切り出し、`useMultiplexedTerminal` / `usePeerConnection` / `usePeerSessionsWatcher` の3箇所のインライン正規表現を統一 (`frontend/src/services/peer-ws.ts` 新規)
-- watcher の再接続を exponential backoff (5s→60s cap) に変更。永続的にオフラインな peer への connect loop を抑制
+- **Peer session fetching moved from polling to WS push**: the 5-second
+  `GET /api/peers/sessions` is gone; each remote peer's `/ws/mux` is held open
+  and its `sessions-updated` push is subscribed to directly. This also fixes the
+  hub's sessions-updated never arriving - and Linux's sessions vanishing from the
+  screen - when the PWA is reopened on a peer session. The WS connections are
+  persisted per peer, so switching peers does not leak
+  (new `frontend/src/hooks/usePeerSessionsWatcher.ts`,
+  `frontend/src/hooks/useSessions.ts`)
+- **Shared peer WS URL helpers**: `peerHttpUrlToWsUrl` / `appendWsToken` moved
+  into `frontend/src/services/peer-ws.ts`, unifying the three inline regexes in
+  `useMultiplexedTerminal` / `usePeerConnection` / `usePeerSessionsWatcher`
+  (new `frontend/src/services/peer-ws.ts`)
+- The watcher reconnects with exponential backoff (5s up to a 60s cap),
+  suppressing a connect loop against a permanently offline peer
 
 ## [0.1.139] - 2026-05-22
 
 ### Fixed
-- **macOS launchd 経由起動時に pane_title の非ASCII文字が `_` に化ける**: Mac で `cchub` を launchd で起動した場合、子プロセスに `LANG`/`LC_ALL` が継承されないため tmux が ASCII fallback モードで動き、Claude Code のスピナー `⠐` (U+2810) などの非ASCII文字を `_` に置換していた。結果として peer 経由で Linux Hub に届く paneTitle が `_ <topic>` の形式になり、UI 上で `_` プレフィックスとして表示されていた。`backend/src/services/tmux.ts` 内の全 `Bun.spawn` 呼び出しに `env: TMUX_ENV` (LANG/LC_ALL を UTF-8 で固定) を渡すよう修正。launchd 経由でも UTF-8 出力が保証されるようになった (`backend/src/services/tmux.ts`)
-- 関連: SessionList / App / PaneContainer / FileBrowser / FileViewer / hookNotification の paneTitle 加工正規表現を `[✳★●◆✻✽⏳⠀-⣿]\s*` に統一。Claude/Codex のスピナーアニメーション全フレーム (U+2800–U+28FF) を除去できるようにした (`frontend/src/App.tsx`, `frontend/src/components/PaneContainer.tsx`, `frontend/src/components/SessionList.tsx`, `frontend/src/components/files/FileBrowser.tsx`, `frontend/src/components/files/FileViewer.tsx`, `frontend/src/utils/hookNotification.ts`)
-- 関連: ホームディレクトリ短縮の正規表現を `/(?:home|Users)/<user>` 対応に拡張し、共通ユーティリティ `frontend/src/utils/path.ts` (`toHomeShortPath` / `stripHomeProjectPrefix`) に集約。macOS の `/Users/<user>` パスもチルダ省略されるようになり、`SessionList` / `PaneContainer` / `FileBrowser` / `FileViewer` / `hookNotification` の 7 箇所のインライン regex を1関数経由に統一 (`frontend/src/utils/path.ts` 新規)
+- **Non-ASCII characters in pane_title became `_` when started through launchd on
+  macOS**: starting `cchub` through launchd on a Mac does not pass `LANG`/`LC_ALL`
+  to child processes, so tmux ran in ASCII fallback mode and replaced non-ASCII
+  characters such as Claude Code's spinner `⠐` (U+2810) with `_`. The paneTitle
+  reaching the Linux hub through a peer therefore had the form `_ <topic>` and
+  displayed with a `_` prefix. Every `Bun.spawn` call in
+  `backend/src/services/tmux.ts` now passes `env: TMUX_ENV` (pinning LANG/LC_ALL
+  to UTF-8), which guarantees UTF-8 output even through launchd
+  (`backend/src/services/tmux.ts`)
+- Related: the paneTitle-cleaning regexes in SessionList / App / PaneContainer /
+  FileBrowser / FileViewer / hookNotification were unified to
+  `[✳★●◆✻✽⏳⠀-⣿]\s*` so every frame of Claude's and Codex's spinner animation
+  (U+2800-U+28FF) is stripped (`frontend/src/App.tsx`,
+  `frontend/src/components/PaneContainer.tsx`,
+  `frontend/src/components/SessionList.tsx`,
+  `frontend/src/components/files/FileBrowser.tsx`,
+  `frontend/src/components/files/FileViewer.tsx`,
+  `frontend/src/utils/hookNotification.ts`)
+- Related: the home-directory shortening regex was extended to handle
+  `/(?:home|Users)/<user>` and collected into a shared utility
+  `frontend/src/utils/path.ts` (`toHomeShortPath` / `stripHomeProjectPrefix`), so
+  macOS `/Users/<user>` paths also shorten to a tilde and the seven inline
+  regexes across `SessionList` / `PaneContainer` / `FileBrowser` / `FileViewer` /
+  `hookNotification` go through one function (new `frontend/src/utils/path.ts`)
 
 ## [0.1.138] - 2026-05-21
 
 ### Fixed
-- **Lost セッション再開時の peer ルーティング**: `SessionList.handleResume` がローカル Hub の `/api/sessions/history/resume` を `authFetch` で直接叩いており、`session.peerId` を無視していた。これにより remote peer (例: Mac) 上のロストセッションを再開しようとすると Hub (例: Linux) 側で `cd '/Users/m0a' && claude -r ...` を実行しようとして `cd: no such file or directory` で失敗していた。`sessionFetch(session, peers, …)` 経由に切り替え、所属 peer の URL に直接 POST されるよう修正。conversationId なし時の `createSession` 経路にも `session.peerId` を引き継ぐようにした。あわせてアクティブセッションの `POST /:id/resume` も peer-aware に統一 (`frontend/src/components/SessionList.tsx`)
-- `SessionListProps.onSelectSession` / `onSelectPane` の引数型を `SessionResponse` → `ExtendedSessionResponse` に拡張。resume 後のナビゲートで `peerId` を伝搬できるようにし、後続の WebSocket subscribe が正しい peer に向くようにした (`frontend/src/components/SessionList.tsx`)
+- **Peer routing when resuming a lost session**: `SessionList.handleResume`
+  called the local hub's `/api/sessions/history/resume` directly through
+  `authFetch`, ignoring `session.peerId`. Resuming a lost session on a remote
+  peer (a Mac, say) therefore tried to run `cd '/Users/m0a' && claude -r ...` on
+  the hub (Linux) and failed with `cd: no such file or directory`. It goes
+  through `sessionFetch(session, peers, ...)` now and POSTs directly to the
+  owning peer's URL. The `createSession` path used when there is no
+  conversationId carries `session.peerId` too, and an active session's
+  `POST /:id/resume` was made peer-aware as well
+  (`frontend/src/components/SessionList.tsx`)
+- `SessionListProps.onSelectSession` / `onSelectPane` widened their argument type
+  from `SessionResponse` to `ExtendedSessionResponse` so `peerId` propagates
+  through the navigation after a resume and the following WebSocket subscribe
+  points at the right peer (`frontend/src/components/SessionList.tsx`)
 
 ## [0.1.137] - 2026-05-21
 
 ### Added
-- **peer に対するセッション作成**: 新規セッションダイアログに「サーバー」セレクターを追加し、Hub だけでなく登録済み peer 上にも新しいセッションを作れるようにした。さらに peer 選択時はその peer の filesystem を Hub のディレクトリピッカーと同じ UI で browse できる ─ `~/Users/m0a` などをタップで掘っていける (`frontend/src/components/SessionList.tsx`, `frontend/src/hooks/useSessions.ts`, `backend/src/routes/peers.ts`)
-- **履歴一覧のマルチサーバー対応**: 「履歴」タブで全 peer のプロジェクトをマージ表示し、各プロジェクト・各セッションに peer ニックネームバッジと色付き左ボーダーを付ける。プロジェクト展開、会話履歴の表示、再開ボタンすべてが該当 peer の API に振り分けられるようになった。検索 (SSE) は当面 Hub 限定 (`backend/src/routes/peers.ts`, `frontend/src/hooks/useSessionHistory.ts`, `frontend/src/components/SessionHistory.tsx`)
-- **`usePeers` の定期 polling**: 5秒間隔で `/api/peers` を再取得することで、verify の一時的失敗で `offline` 表示のまま固定されていた peer がオンライン復帰時に自動で再選択可能になる (`frontend/src/hooks/usePeers.ts`)
+- **Creating a session on a peer**: the new-session dialog gained a "server"
+  selector, so a session can be created on a registered peer as well as the hub.
+  With a peer selected, that peer's filesystem can be browsed in the same
+  directory-picker UI as the hub's - tapping down into paths like
+  `/Users/m0a` works (`frontend/src/components/SessionList.tsx`,
+  `frontend/src/hooks/useSessions.ts`, `backend/src/routes/peers.ts`)
+- **Multi-server support in the history list**: the History tab merges every
+  peer's projects, with a peer nickname badge and a colored left border on each
+  project and session. Expanding a project, showing a conversation and the resume
+  button all route to the right peer's API. Search (SSE) stays hub-only for now
+  (`backend/src/routes/peers.ts`, `frontend/src/hooks/useSessionHistory.ts`,
+  `frontend/src/components/SessionHistory.tsx`)
+- **Periodic polling in `usePeers`**: refetching `/api/peers` every five seconds
+  means a peer stuck showing `offline` after a transient verify failure becomes
+  selectable again once it is back (`frontend/src/hooks/usePeers.ts`)
 
 ### Fixed
-- `POST /api/peers/history/:peerId/resume` が peer 側の status code を 200/502 に潰していて、`duplicate_working_dir` (409) のような特別ハンドリングが効かなくなっていたのを修正。peer のステータスをそのまま透過する (`backend/src/routes/peers.ts`)
+- `POST /api/peers/history/:peerId/resume` collapsed the peer's status code into
+  200/502, which broke special handling such as `duplicate_working_dir` (409).
+  The peer's status passes through unchanged (`backend/src/routes/peers.ts`)
 
 ### Notes
-- File viewer / conversation viewer / session resume は引き続き peer 対応の余地あり (Phase 4 候補)
-- peer 横断 search も Hub のみ。SSE のストリーミング merge は今後の課題
+- The file viewer, conversation viewer and session resume still have room for
+  peer support (candidates for phase 4)
+- Cross-peer search is hub-only as well; merging SSE streams is future work
 
 ## [0.1.136] - 2026-05-21
 
 ### Added
-- **マルチサーバー対応 (Phase 1 + 2)**: Hub に登録した複数の cchub インスタンス (peer) のセッションを 1 画面でマージ表示し、選択するとターミナル WebSocket がその peer に直接切り替わる。ブラウザは Hub URL を1つ知っていれば全マシン操作できる。
-  - Hub に peer レジストリ (`~/.cc-hub/peers.json`, mode 0600) を追加し、`GET/POST/PATCH/DELETE /api/peers` および集約 `GET /api/peers/sessions` を提供 (`backend/src/services/peer-registry.ts`, `backend/src/services/peer-auth.ts`, `backend/src/routes/peers.ts`)
-  - Servers タブを Dashboard パネルに追加し、デスクトップ・モバイル両方から peer の追加 / ニックネーム / 識別色 / 削除を操作可能に (`frontend/src/components/PeerManager.tsx`, `frontend/src/components/DashboardPanel.tsx`, `frontend/src/App.tsx`)
-  - セッションカードに peer ニックネームバッジと色付き左ボーダーを表示 (`frontend/src/components/SessionList.tsx`)
-  - `useMultiplexedTerminal` に `peerWsBase` を渡せるよう refactor、選択中セッションの peer に応じて WS 接続先を切替 (`frontend/src/hooks/useMultiplexedTerminal.ts`, `frontend/src/hooks/usePeerConnection.ts`, `frontend/src/pages/TerminalPage.tsx`, `frontend/src/components/DesktopLayout.tsx`)
-- **peer 自動検出**: Servers タブの「🔍 検索」ボタンで Tailscale tailnet 内の cchub インスタンスを発見。クリックで peer 追加フォームに pre-fill。実行前に必ず確認ダイアログを出すため、社内ネットワーク等でスキャンしてしまう事故を防ぐ (`backend/src/services/peer-discovery.ts`)
-- **パスワード無効な peer の追加**: peer 側で `cchub` を `-P` なしで起動していても追加できるよう、`/api/auth/required` で事前判定する (`backend/src/services/peer-auth.ts`)
+- **Multi-server support (phases 1 + 2)**: sessions from several cchub instances
+  (peers) registered with the hub are merged into one screen, and selecting one
+  switches the terminal WebSocket directly to that peer. A browser that knows one
+  hub URL can drive every machine.
+  - The hub gained a peer registry (`~/.cc-hub/peers.json`, mode 0600) with
+    `GET/POST/PATCH/DELETE /api/peers` and the aggregate `GET /api/peers/sessions`
+    (`backend/src/services/peer-registry.ts`,
+    `backend/src/services/peer-auth.ts`, `backend/src/routes/peers.ts`)
+  - A Servers tab in the dashboard panel allows adding a peer and editing its
+    nickname, color or removal from both desktop and mobile
+    (`frontend/src/components/PeerManager.tsx`,
+    `frontend/src/components/DashboardPanel.tsx`, `frontend/src/App.tsx`)
+  - Session cards show a peer nickname badge and a colored left border
+    (`frontend/src/components/SessionList.tsx`)
+  - `useMultiplexedTerminal` was refactored to accept a `peerWsBase`, switching
+    the WS target according to the selected session's peer
+    (`frontend/src/hooks/useMultiplexedTerminal.ts`,
+    `frontend/src/hooks/usePeerConnection.ts`,
+    `frontend/src/pages/TerminalPage.tsx`,
+    `frontend/src/components/DesktopLayout.tsx`)
+- **Peer discovery**: a "Discover" button on the Servers tab finds cchub
+  instances on the Tailscale tailnet, and clicking one pre-fills the add-peer
+  form. It always asks for confirmation first, so it cannot accidentally scan a
+  corporate network (`backend/src/services/peer-discovery.ts`)
+- **Adding a peer with auth disabled**: `/api/auth/required` is checked first so
+  a peer running `cchub` without `-P` can still be added
+  (`backend/src/services/peer-auth.ts`)
 
 ### Fixed
-- `fetchAndOpenSession` の useEffect 依存に毎レンダー再生成される `createInitialSession` が含まれていたため、効果が無限に再実行され `activeSessionId` を localStorage の値に巻き戻していた。`useCallback` で安定化し、`t` は ref 経由で参照することで peer セッションが「開いてすぐ Hub セッションに戻る」現象を解消 (`frontend/src/App.tsx`)
-- peer 接続中にその peer から届く `sessions-updated` push が Hub のマージ済み一覧を上書きし、`peerId` を `local` に書き換えて WS 接続先がフリップしていた。Hub 接続中のみ受信するようガード追加 (`frontend/src/hooks/useMultiplexedTerminal.ts`)
-- モバイル (TerminalPage) は `peerWsBase` を `useMultiplexedTerminal` に渡していなかったため、スマホからは peer セッションのターミナルが開けなかった。desktop と同じ配線に統一 (`frontend/src/pages/TerminalPage.tsx`)
-- peer セッションのテーマ / タイトル変更 / 削除が Hub 固定で 404 になっていたのを、`sessionFetch(session, peers, path, init)` ヘルパー経由で peer の URL + トークンに振り分けるよう修正 (`frontend/src/services/peer-fetch.ts`, `frontend/src/hooks/useSessions.ts`, `frontend/src/components/SessionList.tsx`)
+- `fetchAndOpenSession`'s useEffect depended on `createInitialSession`, which was
+  recreated on every render, so the effect re-ran forever and rewound
+  `activeSessionId` to the localStorage value. Stabilized with `useCallback`,
+  with `t` reached through a ref, which fixes a peer session "snapping back to a
+  hub session right after opening" (`frontend/src/App.tsx`)
+- While connected to a peer, that peer's `sessions-updated` push overwrote the
+  hub's merged list and rewrote `peerId` to `local`, flipping the WS target. A
+  guard limits it to hub connections (`frontend/src/hooks/useMultiplexedTerminal.ts`)
+- Mobile (TerminalPage) did not pass `peerWsBase` into
+  `useMultiplexedTerminal`, so a peer session's terminal could not be opened from
+  a phone. Wired the same way as desktop (`frontend/src/pages/TerminalPage.tsx`)
+- Changing a peer session's theme or title, or deleting it, was pinned to the hub
+  and 404ed; a `sessionFetch(session, peers, path, init)` helper routes it to the
+  peer's URL and token (`frontend/src/services/peer-fetch.ts`,
+  `frontend/src/hooks/useSessions.ts`,
+  `frontend/src/components/SessionList.tsx`)
 
 ### Notes
-- File viewer / conversation viewer / session resume / session order などの REST 系は引き続き Hub 固定 (peer の対象に飛ばさない)。Phase 3 で対応予定
-- peer 追加 / 削除は Hub にログインしているクライアントなら誰でも実行可能 (家庭内利用前提)
+- REST paths such as the file viewer, conversation viewer, session resume and
+  session order remain pinned to the hub (they are not sent to a peer). Planned
+  for phase 3
+- Anyone logged into the hub can add or remove a peer (this assumes home use)
 
 ## [0.1.135] - 2026-05-20
 
 ### Changed
-- **セッション削除を「kill のみ・一覧から消さない」挙動に変更**: アクティブセッションを削除しても tmux は kill するが `last-known-sessions.json` のエントリは残し、一覧には Lost として表示され続けるようにした。これにより削除後も「再開」ボタンで会話の続きをワンタップで開ける。完全に一覧から消したい場合は Lost セッションをもう一度削除すると last-known からも除外される (`backend/src/routes/sessions.ts`)
-- 削除確認ダイアログの警告文を実挙動に合わせて更新 (「この操作は取り消せません」→「tmuxセッションを終了します。一覧には Lost として残り、「再開」ボタンで会話を続けられます。」)、トーンを警告赤から中立色に変更 (`frontend/src/App.tsx`, `frontend/src/components/SessionList.tsx`, `frontend/src/i18n/locales/{ja,en}.json`)
+- **Deleting a session now only kills it, without removing it from the list**:
+  deleting an active session kills tmux but keeps its entry in
+  `last-known-sessions.json`, so it stays in the list as Lost. That makes
+  continuing the conversation one tap on the resume button. To remove it from the
+  list entirely, delete the Lost session again and it leaves last-known too
+  (`backend/src/routes/sessions.ts`)
+- The delete confirmation's warning matches the real behavior now ("this cannot
+  be undone" became "the tmux session ends; it stays in the list as Lost and the
+  resume button continues the conversation") and its tone moved from warning red
+  to neutral (`frontend/src/App.tsx`, `frontend/src/components/SessionList.tsx`,
+  `frontend/src/i18n/locales/{ja,en}.json`)
 
 ## [0.1.134] - 2026-05-20
 
 ### Fixed
-- ターミナルでマウスホイール/トラックパッドのスクロールが効かず、代わりに Claude / Codex の入力履歴が切り替わる問題を修正
-  - 原因: xterm.js は active mouse protocol が WHEEL を含むとき、wheel イベントを直接アプリ (Ink TUI) に転送し、TUI 側で↑/↓キー扱いとなっていた
-  - 対応: `Terminal.tsx` の wheel listener を capture 段階に移し `stopPropagation()` を追加。xterm.js のハンドラに届かないようにして、`scrollTerminal()` だけが走るようにした
+- The mouse wheel and trackpad did not scroll the terminal and cycled Claude's or
+  Codex's input history instead
+  - Cause: when the active mouse protocol includes WHEEL, xterm.js forwards wheel
+    events straight to the app (the Ink TUI), which treats them as up/down keys
+  - Fix: `Terminal.tsx`'s wheel listener moved to the capture phase and added
+    `stopPropagation()`, so it never reaches xterm.js's handler and only
+    `scrollTerminal()` runs
 
 ## [0.1.133] - 2026-05-20
 
 ### Added
-- `cchub update` で GitHub トークン認証をサポートし、未認証 60/時のレート制限 (60/hr) を 5000/時 に引き上げ可能に
-  - 検出順: `GITHUB_TOKEN` env → `GH_TOKEN` env → `gh auth token` サブプロセス自動検出
-  - 認証時は `🔑 Using GitHub token from {{source}}` を表示
-  - 403 + `x-ratelimit-remaining: 0` を rate limit として識別し、リセット時刻と認証手順 (`export GITHUB_TOKEN=<token>` / `gh auth login`) を表示
-  - 未設定時は従来通り未認証で動作 (`backend/src/commands/update.ts`, `backend/src/i18n/index.ts`)
+- `cchub update` supports GitHub token authentication, raising the
+  unauthenticated 60/hour rate limit to 5000/hour
+  - Detection order: the `GITHUB_TOKEN` env var, the `GH_TOKEN` env var, then the
+    `gh auth token` subprocess
+  - When authenticated it prints `Using GitHub token from {{source}}`
+  - A 403 with `x-ratelimit-remaining: 0` is identified as a rate limit and shows
+    the reset time and how to authenticate (`export GITHUB_TOKEN=<token>` /
+    `gh auth login`)
+  - With nothing configured it runs unauthenticated as before
+    (`backend/src/commands/update.ts`, `backend/src/i18n/index.ts`)
 
 ## [0.1.132] - 2026-05-20
 
 ### Added
-- **履歴タブの Codex 対応**: `~/.codex/sessions/**` の rollout JSONL を読み取り、Claude セッションと同じ project バケットに merge して表示する `CodexHistoryService` を追加。各履歴行に `Claude` / `Codex` バッジを表示、再開時は agent に応じて `claude -r` / `codex resume` を自動切り替え。検索 (SSE ストリーミング含む)・会話表示・プロジェクト一覧の全エンドポイントで Codex セッションを統合 (`backend/src/services/codex-history.ts`, `backend/src/routes/sessions.ts`, `frontend/src/components/SessionHistory.tsx`, `frontend/src/hooks/useSessionHistory.ts`, `shared/types.ts`)
+- **Codex support in the history tab**: a new `CodexHistoryService` reads the
+  rollout JSONL under `~/.codex/sessions/**` and merges it into the same project
+  buckets as Claude sessions. Each history row shows a `Claude` or `Codex` badge,
+  and resuming switches between `claude -r` and `codex resume` by agent. Codex
+  sessions are integrated across every endpoint - search (including the SSE
+  stream), the conversation view and the project list
+  (`backend/src/services/codex-history.ts`, `backend/src/routes/sessions.ts`,
+  `frontend/src/components/SessionHistory.tsx`,
+  `frontend/src/hooks/useSessionHistory.ts`, `shared/types.ts`)
 
 ## [0.1.131] - 2026-05-19
 
 ### Changed
-- **ConversationViewer の可読性向上**: Tool 結果を再びデフォルトで展開状態に (1行サマリだけだと結果が見づらかった)。折りたたみ内部の本文色を `zinc-500` / `th-text-secondary` から `zinc-300` / `zinc-200` に引き上げ、ダーク背景でのコントラストを改善 (`frontend/src/components/ConversationViewer.tsx`)
+- **Better readability in ConversationViewer**: tool results are expanded by
+  default again (a one-line summary made results hard to read). The body color
+  inside a collapsed block went from `zinc-500` / `th-text-secondary` to
+  `zinc-300` / `zinc-200`, improving contrast on a dark background
+  (`frontend/src/components/ConversationViewer.tsx`)
 
 ## [0.1.130] - 2026-05-19
 
 ### Changed
-- **ConversationViewer の見た目を再設計**: ターミナル風のコンパクトレイアウトに変更。各ターンに role 色のサイドバー (2px) + 役割ラベル (uppercase, dim) + 本文を indent、Claude は violet / Codex は cyan / User は blue / System は gray / Summary は amber で識別。Tool 呼び出し・結果・Thinking はデフォルトで畳むようにし、1行サマリで全体を俯瞰しやすく (`frontend/src/components/ConversationViewer.tsx`)
+- **ConversationViewer redesigned**: a compact, terminal-like layout. Each turn
+  has a 2px role-colored sidebar, a role label (uppercase, dim) and an indented
+  body, with Claude in violet, Codex in cyan, User in blue, System in gray and
+  Summary in amber. Tool calls, results and thinking are collapsed by default so
+  a one-line summary keeps the whole thing surveyable
+  (`frontend/src/components/ConversationViewer.tsx`)
 
 ## [0.1.129] - 2026-05-19
 
 ### Fixed
-- **ConversationViewer の追従スクロール**: ストリーミング中にメッセージが追加されるたび最下部に強制スクロールしてしまい、上にスクロールして読んでいるとその場に留まれなかった問題を修正。ターミナルと同じ挙動 (最下部にいるときだけ追従、上にスクロール中は留まる、最下部に戻すと追従再開) に変更。`atBottomRef` を常時更新するよう内部状態追跡と外部コールバック (キーボード制御) を分離し、auto-scroll を `atBottomRef` でゲート (`frontend/src/components/ConversationViewer.tsx`)
+- **ConversationViewer's follow scrolling**: it forced a scroll to the bottom
+  every time a message arrived during streaming, so scrolling up to read did not
+  hold position. It behaves like the terminal now (follow only while at the
+  bottom, stay put while scrolled up, resume following once back at the bottom).
+  Internal state tracking and the external callback (keyboard control) were
+  separated so `atBottomRef` is always current, and auto-scroll is gated on it
+  (`frontend/src/components/ConversationViewer.tsx`)
 
 ## [0.1.128] - 2026-05-19
 
 ### Fixed
-- **lost セッションの再開**: 再起動後に lost 状態で復元されたセッションで、`last-known-sessions.json` のスナップショットを毎回上書きする際 `currentPath` などが一時的に取れなかったタイミングで既存値ごと消えてしまい、フロントの再開フローが履歴 API ではなくアクティブ用エンドポイントに落ちて 404 になる事象を修正。新しい値が無いときだけ前回値を維持する fallback を追加 (`backend/src/routes/sessions.ts`)
+- **Resuming a lost session**: for a session restored as lost after a restart,
+  overwriting the `last-known-sessions.json` snapshot every time could wipe
+  existing values in a moment when `currentPath` and friends were temporarily
+  unavailable, and the frontend's resume flow then fell to the active-session
+  endpoint instead of the history API and got a 404. A fallback keeps the
+  previous value when there is no new one (`backend/src/routes/sessions.ts`)
 
 ## [0.1.127] - 2026-05-19
 
 ### Added
-- **`cchub debug` CLI**: 本番 systemd user service の Bun inspector モードを必要な時だけ on/off できる仕組み。`BUN_OPTIONS` 環境変数を systemd drop-in (`~/.config/systemd/user/cchub.service.d/99-inspect.conf`) として書き出して `daemon-reload` + `restart`、終わったら drop-in を消して通常モードに戻す
-  - `cchub debug enable` — `0.0.0.0:9229` で Bun inspector を開く
-  - `cchub debug disable` — inspector を閉じて通常モードへ
-  - `cchub debug profile [--seconds N]` — N 秒だけ inspector を開いて自動で disable (デフォルト 30s)
-  - `cchub debug status` — 現在の inspector 状態を表示
-  - **アイドル時オーバーヘッドゼロ**: 通常モードでは inspector port は開かない。本番で慢性的なフットプリントを増やさずに、必要な時だけ Chrome DevTools (`chrome://inspect`) から JS 関数名・行番号付きで CPU profile / heap snapshot を取得可能
-  - Linux systemd user 限定 (macOS launchd は未対応)
+- **The `cchub debug` CLI**: turns Bun inspector mode on and off for the
+  production systemd user service only when needed. It writes the `BUN_OPTIONS`
+  environment variable as a systemd drop-in
+  (`~/.config/systemd/user/cchub.service.d/99-inspect.conf`), runs
+  `daemon-reload` plus `restart`, and afterwards deletes the drop-in to return to
+  normal
+  - `cchub debug enable` - opens the Bun inspector on `0.0.0.0:9229`
+  - `cchub debug disable` - closes it and returns to normal
+  - `cchub debug profile [--seconds N]` - opens it for N seconds and disables it
+    automatically (30s by default)
+  - `cchub debug status` - shows the current inspector state
+  - **Zero overhead when idle**: normal mode never opens the inspector port. A
+    CPU profile or heap snapshot with JS function names and line numbers can be
+    taken from Chrome DevTools (`chrome://inspect`) only when needed, without a
+    chronic production footprint
+  - Linux systemd user only (macOS launchd is not supported)
 
 ## [0.1.126] - 2026-05-19
 
 ### Added
-- **スクロール体験の刷新**: server-side scrollback でスクロール時にサーバ応答待ちで画面が止まる問題を解消
-  - `viewport-pseudo.ts` 新設。`makePseudoViewport(viewport, delta)` で現フレームを delta 行ぶんずらし露出側を空行で埋めた疑似 viewport を生成。`scrollBy` / `scrollToLive` のキャッシュミス時にこの疑似フレームを即時描画し、サーバから本物が届いたら上書き。応答待ち中でも画面が実際にずれて動く
-  - クライアント側 viewport キャッシュ (`Map<offset, {viewport, historySize}>`、pane あたり LRU 20件)。同じ offset への往復スクロールはサーバラウンドトリップなしで即時描画。`historySize` を一緒に保存し、tmux 出力で履歴が変わった場合は自動で stale 扱い。`layout-change` で全キャッシュ破棄
-  - 右上のスクロール位置インジケータを `{ text, loading }` に拡張。応答待ち中は青色の `[N/M] ⏳`、本物着弾で黄色の `[N/M]` に切替＋3秒フェード。今どのくらいスクロール中で、サーバが追いついているかが視認できる
+- **Scrolling rebuilt**: the screen no longer freezes waiting for the server
+  under server-side scrollback
+  - A new `viewport-pseudo.ts`. `makePseudoViewport(viewport, delta)` shifts the
+    current frame by delta lines and fills the exposed side with blanks. A cache
+    miss in `scrollBy` / `scrollToLive` draws that pseudo frame immediately and
+    overwrites it when the real one arrives, so the screen actually moves while
+    waiting
+  - A client-side viewport cache (`Map<offset, {viewport, historySize}>`, LRU of
+    20 per pane). Scrolling back and forth over the same offset draws instantly
+    with no server round trip. `historySize` is stored alongside so a tmux output
+    that changes the history marks it stale automatically, and `layout-change`
+    discards the whole cache
+  - The scroll position indicator in the top right became `{ text, loading }`:
+    blue `[N/M]` with a spinner while waiting, switching to yellow `[N/M]` when
+    the real frame lands and fading after three seconds. How far you have
+    scrolled, and whether the server has caught up, are both visible
 
 ### Fixed
-- 連続 wheel / touch スクロールで `scrollBy` が秒間 50回以上発火し、毎回 viewport 再取得＋全画面 VT 再描画が走って小刻みな揺れに見えていた問題を rAF coalesce で解消 (フレームに 1 回だけ scrollBy を flush)
-- 高速スクロール中に in-flight な複数の `request-viewport` 応答が前後して届いて画面が一瞬戻る現象に対し、`onPaneViewport` で現在の期待 offset と応答 offset を照合して不一致なら repaint をスキップする stale guard を追加 (キャッシュには保存)
+- Continuous wheel or touch scrolling fired `scrollBy` more than 50 times a
+  second, refetching a viewport and repainting the whole screen in VT each time,
+  which looked like a fine tremor. Resolved with rAF coalescing (one scrollBy
+  flush per frame)
+- During fast scrolling several in-flight `request-viewport` responses arrived
+  out of order and the screen briefly jumped back. A stale guard in
+  `onPaneViewport` compares the current expected offset with the response's and
+  skips the repaint on a mismatch (while still caching it)
 
 ## [0.1.125] - 2026-05-19
 
 ### Fixed
-- **慢性的な CPU 高負荷 (平均 73〜108%) を解消**: `sessions-push` のホットループで毎周期に全 jsonl の readdir + stat + 内容読み込みが走り、加えて UI セッション切替のたびに `tmux -CC attach` を再 spawn していた問題を修正。平均 CPU を **77.6% → 23.4% (約70%削減)** に低下 (10分間観測)
-  - `tmux-control.ts`: `GRACE_PERIOD_MS` を 5s → 30s に戻す。idle CPU 削減目的で短縮されていたが、結果として UI 切替のたびに `tmux -CC attach` を再 spawn して逆に負荷を増やしていた
-  - `claude-code.ts`: `SESSION_DATA_CACHE_TTL` を 5s → 30s。`sessions-push` 周期 (5s) と同位相で毎回 cache miss していた問題を解消。mtime チェックは内側に残るのでフレッシュさは維持
-  - `claude-code.ts`: `pathResultCache` (TTL 3s) を追加し、`getSessionForPath` / `getRecentSessionsForPath` / `getSessionByTtyStartTime` の readdir + 全 jsonl stat スイープを同一 `sessions-push` tick 内でショートサーキット
+- **Chronic high CPU (73-108% on average) resolved**: the `sessions-push` hot
+  loop ran a readdir plus stat plus content read over every jsonl on each cycle,
+  and switching sessions in the UI respawned `tmux -CC attach` each time. Average
+  CPU dropped from **77.6% to 23.4% (about 70% less)** over ten minutes of
+  observation
+  - `tmux-control.ts`: `GRACE_PERIOD_MS` back from 5s to 30s. It had been
+    shortened to cut idle CPU and instead respawned `tmux -CC attach` on every UI
+    switch, raising the load
+  - `claude-code.ts`: `SESSION_DATA_CACHE_TTL` from 5s to 30s, which fixes it
+    missing the cache every time by being in phase with the 5-second
+    `sessions-push`. The mtime check remains inside, so freshness is preserved
+  - `claude-code.ts`: added a `pathResultCache` (TTL 3s) that short-circuits the
+    readdir plus full jsonl stat sweep in `getSessionForPath` /
+    `getRecentSessionsForPath` / `getSessionByTtyStartTime` within one
+    `sessions-push` tick
 
 ## [0.1.124] - 2026-05-18
 
 ### Fixed
-- **EVEN G2 Glasses 統合の復旧**: v0.1.121 のプロトコル切替 (server-side scrollback) に追従できておらず、glasses クライアントが旧 `request-content` / `initial-content` / バイナリ `0x02` フレームに依存していた問題を修正
-  - WebSocket メッセージを `request-viewport` / `viewport` に置き換え、`viewport.lines` (ANSI 付き行配列) から `stripAnsi` してバッファ更新
-  - 不要になったバイナリフレームハンドラ・`resize 120x20` 送信を撤去 (resize はメイン UI 側のクライアントサイズを上書きしてしまうため、観測専用クライアントとしては正しい挙動)
-  - `requestContentAndWait` は新プロトコルでも引き続き機能 (buffer 差分で待機)
+- **EVEN G2 glasses integration restored**: it had not followed v0.1.121's
+  protocol change (server-side scrollback) and the glasses client still depended
+  on the old `request-content` / `initial-content` and binary `0x02` frames
+  - The WebSocket messages were replaced with `request-viewport` / `viewport`,
+    and the buffer is updated by `stripAnsi`-ing `viewport.lines` (the array of
+    ANSI-bearing lines)
+  - The now-unnecessary binary frame handler and the `resize 120x20` send were
+    removed (a resize would overwrite the main UI's client size, and an
+    observation-only client should not do that)
+  - `requestContentAndWait` still works under the new protocol (it waits on a
+    buffer diff)
 
 ## [0.1.123] - 2026-05-18
 
 ### Added
-- **Server-side scrollback (再導入)**: tmux を visible region とスクロールバックの単一情報源とし、xterm.js は描画専用にする構成へ。v0.1.121 で発生したモバイル描画 regression を解消した上で再投入
-  - WebSocket `request-viewport` / `viewport` プロトコル: クライアントが offset を指定して任意の窓を要求、サーバは tmux `capture-pane -S/-E` で該当行を返す
-  - `pane-viewport.ts` に offset ベースの window 取得を集約。altScreen TUI (htop/vim/Codex) は触らず、normal-screen の inline TUI / シェルに対してだけ scrollback で padFill して "void" を消す
-  - subscribe 直後に初期 viewport を即配信し、モバイルでの「灰色キャンバス」レースを排除
-  - 慣性スクロールは scroll 量を offset に換算して tmux に問い合わせる方式に置き換え (xterm 側 scrollback は 0)
-  - ターミナルタップ / ソフトキーボード表示で offset=0 (live edge) に強制復帰
+- **Server-side scrollback (reintroduced)**: tmux becomes the single source of
+  truth for the visible region and the scrollback, and xterm.js is render-only.
+  Reintroduced after fixing the mobile rendering regression from v0.1.121
+  - The WebSocket `request-viewport` / `viewport` protocol: the client requests
+    an arbitrary window by offset and the server returns those lines through tmux
+    `capture-pane -S/-E`
+  - Offset-based window retrieval is collected in `pane-viewport.ts`. An
+    altScreen TUI (htop, vim, Codex) is left alone; only normal-screen inline
+    TUIs and shells get scrollback padFill to remove the "void"
+  - An initial viewport is delivered immediately on subscribe, removing the "gray
+    canvas" race on mobile
+  - Momentum scrolling was replaced by converting the scroll amount into an
+    offset and asking tmux (xterm's own scrollback is 0)
+  - Tapping the terminal or showing the soft keyboard forces a return to
+    offset=0 (the live edge)
 
 ### Fixed
-- Void エリア対策の総合修正
-  - Claude TUI のように pane 全域を塗らないアプリで残る末尾空白を、上の scrollback で穴埋めして常にフル pane 分の内容を見せる
-  - スクロール中も同じ padFill を適用 (capture window が visible region をまたいでも void が広がらない)
-  - シェルがプロンプトを空白行に置いている場合は、カーソル行を含めて trim を止め、padFill のシフト分だけ cursor を下に追従させる (cursor が padded-in な scrollback 上に乗らない)
-- モバイルで `client-size` が 1 行単位で揺れて viewport が再送される現象を抑制 (`±1` 行は noise として吸収)
+- A comprehensive fix for void areas
+  - For an app such as the Claude TUI that does not paint the whole pane, the
+    remaining trailing blank space is filled from the scrollback above so a full
+    pane's worth of content is always shown
+  - The same padFill applies while scrolling (so the void does not grow when the
+    capture window straddles the visible region)
+  - Where a shell puts its prompt on a blank line, trimming stops at the cursor
+    row and the cursor follows padFill's shift downward (so it does not land on
+    padded-in scrollback)
+- Suppressed `client-size` jittering by one row on mobile and re-sending the
+  viewport (a difference of one row is absorbed as noise)
 
 ### Changed
-- `state-snapshot` / `state-diff` ベースのフレーム配信を撤廃し、`viewport` 配信に統一 (実コード -481 行)
-- フロントエンドの xterm scrollback を 0 に固定 (履歴の管理は tmux 側のみ)
+- Frame delivery based on `state-snapshot` / `state-diff` was dropped in favor of
+  `viewport` alone (-481 lines of real code)
+- The frontend's xterm scrollback is pinned to 0 (history is managed only by
+  tmux)
 
 ## [0.1.122] - 2026-05-18
 
 ### Reverted
-- v0.1.121 (server-side scrollback) を完全に revert。モバイル端末で xterm.js キャンバスがグレーになりターミナルが描画されない深刻な regression があったため
-  - 機能内容としては v0.1.120 と完全に同等 (revert コミット 2 本のみ)
-  - v0.1.121 の GitHub Release と tag は削除済み。`cchub update` は v0.1.122 を最新として取得する
-  - server-side scrollback 自体は後日、モバイル側の挙動を含めて再検討する
+- v0.1.121 (server-side scrollback) was reverted completely, because of a serious
+  regression where the xterm.js canvas turned gray on mobile and the terminal did
+  not render
+  - Functionally identical to v0.1.120 (two revert commits and nothing else)
+  - v0.1.121's GitHub release and tag were deleted, and `cchub update` resolves
+    v0.1.122 as the latest
+  - Server-side scrollback itself will be revisited later, mobile behavior
+    included
 
 ## [0.1.120] - 2026-05-18
 
 ### Added
-- ダッシュボードに UI 拡大率設定を追加 (80% / 90% / 100% / 115% / 130%)
-  - `<html>` の `font-size` を経由して Tailwind の rem ベース要素 (Dashboard / SessionList / FileViewer / アイコン) を一括スケール
-  - xterm.js は独自フォント設定のためターミナル本文には影響せず、Terminal の Cmd+= / Cmd+- とは独立して制御可能
-  - 設定は `localStorage['cchub-ui-scale']` に永続化、FOUC を防ぐため `main.tsx` で early apply
+- A UI scale setting on the dashboard (80% / 90% / 100% / 115% / 130%)
+  - It scales Tailwind's rem-based elements (Dashboard / SessionList /
+    FileViewer / icons) together through `<html>`'s `font-size`
+  - xterm.js has its own font setting, so the terminal body is unaffected and can
+    still be controlled independently with Cmd+= / Cmd+-
+  - The setting persists in `localStorage['cchub-ui-scale']` and is applied early
+    in `main.tsx` to prevent a flash of unstyled content
 
 ### Fixed
-- Welcome セッション作成時に `cd '~' && claude` が `cd: no such file or directory: ~` で失敗していた問題を修正
-  - `agentStartCommand` / resume command で `shellQuote` 前に `~` / `~/...` を `homedir()` に展開する `expandHome()` ヘルパーを追加
+- Creating the welcome session failed with `cd '~' && claude` producing
+  `cd: no such file or directory: ~`
+  - Added an `expandHome()` helper that expands `~` / `~/...` to `homedir()`
+    before `shellQuote` in `agentStartCommand` and the resume command
 
 ## [0.1.119] - 2026-05-18
 
 ### Fixed
-- ターミナルが出力中にスクロールできない問題を修正 (#166)
-  - state-snapshot 適用後に毎回無条件で `term.scrollToBottom()` していたため、5/sec の snapshot 流入下でユーザーのスクロールアップが 200ms 以内に引き戻されていた
-  - 適用前に `viewportY >= baseY` (= 末尾固定) かどうかを判定し、末尾固定時のみ自動スクロール
+- The terminal could not be scrolled while it was producing output (#166)
+  - `term.scrollToBottom()` ran unconditionally after applying every
+    state-snapshot, so under a 5/sec snapshot flow a user's scroll up was pulled
+    back within 200ms
+  - It checks `viewportY >= baseY` (pinned to the bottom) before applying, and
+    auto-scrolls only when pinned
 
 ### Changed
-- `cchub notify` hook 受信時の CPU を大幅削減 (#166)
-  - `generateSmartMessage` がアクティブな Claude transcript (数 MB) を毎回 `readFile` + `split('\n')` していたのを、`Bun.file().slice()` で末尾 256 KB のみ読む方式に変更
-  - Hono request logger が `POST /api/notify` をスキップするように (既存の `/api/sessions` スキップと同様)
-  - cpu-prof 計測: `stringSplitFast` 17.1% + logger 5.1% が消失 → 想定 CPU 削減 ~20%
+- Much less CPU when receiving a `cchub notify` hook (#166)
+  - `generateSmartMessage` did a `readFile` plus `split('\n')` over the active
+    Claude transcript (several MB) every time; it reads only the trailing 256 KB
+    through `Bun.file().slice()` now
+  - The Hono request logger skips `POST /api/notify` (as it already skips
+    `/api/sessions`)
+  - cpu-prof measurement: `stringSplitFast` at 17.1% and the logger at 5.1%
+    disappeared, an estimated 20% CPU reduction
 
 ## [0.1.118] - 2026-05-18
 
 ### Changed
-- state-snapshot の per-pane emit cap を 100ms (10/sec) → 200ms (5/sec) に変更 (#164)
-  - v0.1.117 でも cchub CPU が ~127% 残存していたため、レート制限を倍に強化
-  - 初回 (idle 後) snapshot は 50ms debounce のままなのでタイピングレイテンシは不変
-  - 連続再描画 (スピナー / log tail) のみ 5fps に頭打ち
+- The per-pane state-snapshot emit cap moved from 100ms (10/sec) to 200ms
+  (5/sec) (#164)
+  - cchub CPU was still around 127% after v0.1.117, so the rate limit was
+    doubled
+  - The first snapshot after idle keeps its 50ms debounce, so typing latency is
+    unchanged
+  - Only continuous redraws (a spinner, a log tail) are capped at 5fps
 
 ## [0.1.117] - 2026-05-18
 
 ### Fixed
-- state-snapshot 送信が pane あたり最大 ~20/sec で連続発火し cchub が CPU 150% 以上を消費する問題を修正 (#162)
-  - `SNAPSHOT_MIN_INTERVAL_MS=100` の hard rate-limit を導入し、連続 `%output` 下でも 1 pane あたり最大 ~10/sec に制限
-  - 初回 (idle 後) snapshot は従来通り 50ms debounce 後に送信されるためタイピングレイテンシは維持
-- `[mux] state-snapshot ...` の詳細ログを `DEBUG_MUX=1` 配下に隔離し、journald への書き込み量を削減
+- state-snapshot sends fired continuously at up to about 20/sec per pane and
+  cchub burned over 150% CPU (#162)
+  - A hard rate limit of `SNAPSHOT_MIN_INTERVAL_MS=100` caps it at about 10/sec
+    per pane even under continuous `%output`
+  - The first snapshot after idle is still sent after a 50ms debounce, so typing
+    latency is preserved
+- The detailed `[mux] state-snapshot ...` logging moved behind `DEBUG_MUX=1`,
+  reducing what is written to journald
 
 ## [0.1.116] - 2026-05-18
 
 ### Fixed
-- Codex hook イベントが CC Hub のセッション / pane indicator に反映されない問題を修正 (#160)
-  - Codex の `agentSessionId` を hook override のキーとして扱い、`PreToolUse` / `Stop` などの状態を session と pane に反映
-  - `~/.codex/config.toml` / `~/.codex/hooks.json` の `cchub notify` 設定検出に対応
-  - Codex hook 設定はホームディレクトリ側を使い、repo-local な Codex 専用コピーを持たない方針を明文化
+- Codex hook events were not reflected in CC Hub's session and pane indicators
+  (#160)
+  - Codex's `agentSessionId` is used as the hook override key, so `PreToolUse` /
+    `Stop` and the rest reach both the session and the pane
+  - Detection of the `cchub notify` configuration in `~/.codex/config.toml` /
+    `~/.codex/hooks.json` was added
+  - The policy of using the home directory's Codex hook configuration, with no
+    repo-local Codex-specific copy, was written down
 
 ## [0.1.115] - 2026-05-17
 
 ### Added
-- デスクトップの選択モード（マウス長押しで起動）に Enter / Esc キーバインドを追加
-  - Enter: 選択範囲を OS クリップボードにコピー＋モード終了
-  - Esc: コピーせずモード終了
+- Enter and Esc key bindings in desktop selection mode (started by a long mouse
+  press)
+  - Enter: copy the selection to the OS clipboard and leave the mode
+  - Esc: leave without copying
 
 ## [0.1.114] - 2026-05-17
 
 ### Changed
-- デスクトップのセッションモーダル (Ctrl+B) とダッシュボードパネル (Ctrl+Shift+B) を 1.25 倍に拡大し、Mac などの高 DPI モニタでも読みやすく
-  - タブレットには影響なし (`isTablet` 時は zoom 適用なし)
+- The desktop session modal (Ctrl+B) and dashboard panel (Ctrl+Shift+B) are
+  1.25x larger, which reads better on a high-DPI monitor such as a Mac's
+  - Tablets are unaffected (no zoom is applied when `isTablet`)
 
 ## [0.1.113] - 2026-05-17
 
 ### Fixed
-- WebSocket が `CONNECTING` のまま長時間固まり「WebSocket connection error」+「Connecting...」表示で操作不能になる問題を修正
-  - 10秒の接続 watchdog を追加し、`onopen` が発火しなければ強制クローズして既存の再接続経路を起動
-  - `pong` の応答が25秒以上途絶えた OPEN ソケットを silently dead とみなし強制クローズ
-  - `window` の `online` イベントで stale な socket を強制クローズしてから即時再接続
-  - タブ復帰時 (`visibilitychange`) に `CONNECTING` が3秒超なら即座に強制クローズして再試行
+- The WebSocket could sit in `CONNECTING` for a long time, leaving "WebSocket
+  connection error" plus "Connecting..." on screen with nothing usable
+  - A 10-second connection watchdog force-closes the socket if `onopen` never
+    fires, which starts the existing reconnect path
+  - An OPEN socket whose `pong` has been missing for over 25 seconds is treated
+    as silently dead and force-closed
+  - The `window` `online` event force-closes a stale socket and reconnects
+    immediately
+  - On returning to the tab (`visibilitychange`), a `CONNECTING` state older than
+    three seconds is force-closed and retried at once
 
 ### Changed
-- サーバ側 WebSocket の `idleTimeout` を 120 秒から 60 秒に短縮し、死亡セッションの掃除を倍速化
+- The server WebSocket's `idleTimeout` went from 120 to 60 seconds, cleaning up
+  dead sessions twice as fast
 
 ## [0.1.112] - 2026-05-17
 
 ### Fixed
-- ターミナル state-sync が連続出力中に止まって見える問題を修正 (#154)
-  - `%output` トリガの snapshot scheduling を debounce から throttle に変更し、Codex のストリーミング出力や秒表示のように出力が途切れないケースでも定期的に反映
-  - xterm.js の diff 適用ずれを避けるため、可視変更は full `state-snapshot` として配信
-  - full snapshot 適用後に viewport を下端へ戻し、buffer は更新済みなのに古いスクロール位置を見続ける状態を防止
-  - `capture-pane -a` は使わず、`capture-pane -e -p` で現在見えている TUI 画面を取得する方針を明文化
+- Terminal state-sync appeared to stall during continuous output (#154)
+  - Snapshot scheduling on the `%output` trigger moved from debounce to throttle,
+    so it updates regularly even where output never pauses (Codex's streaming
+    output, a ticking clock)
+  - Visible changes are delivered as a full `state-snapshot` to avoid diff
+    application drift in xterm.js
+  - After applying a full snapshot the viewport returns to the bottom, so the
+    buffer is not updated while an old scroll position remains on screen
+  - The policy of using `capture-pane -e -p` to capture the currently visible TUI
+    screen, rather than `capture-pane -a`, was written down
 
 ### Docs
-- Codex / 他エージェント向けの `AGENTS.md` を追加し、`CLAUDE.md` と `.claude/skills` / `.claude/commands` を single source として参照する方針に統一 (#154)
+- Added `AGENTS.md` for Codex and other agents, standardizing on `CLAUDE.md` and
+  `.claude/skills` / `.claude/commands` as the single source (#154)
 
 ## [0.1.111] - 2026-05-17
 
 ### Fixed
-- Claude TUI が pane の下半分を描画しないことによる「黒い void」 を解消 (#152)
-  - server が短い snap.lines を直前の scrollback で先頭埋め (prepend) して visible 全体を情報で満たす
-  - `PadFillCache` を historySize 単位でキャッシュし、 毎 tick の追加 tmux round-trip を回避
-  - 末尾 blank trim を `isVisuallyBlank` で統一 (ANSI escape のみの行も対象)
+- Resolved the "black void" from the Claude TUI not drawing the bottom half of a
+  pane (#152)
+  - The server prepends recent scrollback to short `snap.lines` so the whole
+    visible area carries information
+  - `PadFillCache` caches per historySize, avoiding an extra tmux round trip on
+    every tick
+  - Trailing blank trimming was unified on `isVisuallyBlank` (a line of nothing
+    but ANSI escapes counts)
 
 ### Changed
-- state-sync renderer を大幅 simplify (#152)
-  - `bottomAlignOffset` / diff offset / auto-scroll fallback / EXTRA pane inflation を撤回
-  - snap render は top-aligned で全行書き込み (snap canonical)
-  - Channel C dump は `applied.baseY` から `snap.rows` 行を素直に読み出し
-  - 差分: `+115 / -236` の縮減
+- The state-sync renderer was greatly simplified (#152)
+  - `bottomAlignOffset`, diff offsets, the auto-scroll fallback and EXTRA pane
+    inflation were withdrawn
+  - A snap render writes every line top-aligned (the snap is canonical)
+  - The Channel C dump simply reads `snap.rows` lines from `applied.baseY`
+  - Diff: `+115 / -236`
 
 ### Docs
-- アーキテクチャドキュメント (architecture.json / .html) を state-sync 化 + scrollback prepend pad に追従 (#151)
+- The architecture documentation (architecture.json / .html) follows the move to
+  state-sync plus scrollback prepend padding (#151)
 
 ## [0.1.110] - 2026-05-17
 
 ### Changed
-- ターミナル転送方式を byte-stream から tmux canonical state sync に置換 (#149, #147 Phase 2)
-  - `tmux capture-pane -e -p` の出力を canonical state として扱い、snapshot/diff 形式で client に配信
-  - scrollback delta を snapshot に同梱し、 client 側でも履歴をスクロールできるよう拡張
-  - Channel C (drift detection) を新方式に対応 (state-sync 適用後の grid と canonical を比較)
+- Terminal transport replaced from a byte stream by tmux canonical state sync
+  (#149, #147 phase 2)
+  - `tmux capture-pane -e -p`'s output is treated as canonical state and
+    delivered to the client as a snapshot/diff
+  - The scrollback delta rides along in the snapshot so the client can scroll
+    history too
+  - Channel C (drift detection) was adapted to the new approach (comparing the
+    grid after applying state-sync against the canonical output)
 
 ### Fixed
-- Claude TUI で画面下半分が「黒い void」 として固定表示される問題に暫定対応
-  - server: `capture-pane` が trim する trailing blank 行に空文字 padding しない。 ANSI strip 後に空白のみの行も trim 対象に拡張
-  - client: snapshot.lines を xterm grid の下端揃えで描画 (上端の余白は scrollback / 前 frame が見える)
-  - 全て TEMPORARY マーク付き — Claude TUI が pane を画面下まで使う設計に変わったら削除可能
-- モバイルでアクセスしたときに pane が desktop サイズのまま固定される問題を修正
-  - `refresh-client -C` だけでは `window-size manual` の session で pane が resize されないため、 `resize-window` をペアで発行
-  - 両 tmux コマンドを `Promise.all` で並列化し resize latency を半減
+- A stopgap for the bottom half of the screen being stuck as a "black void" in
+  the Claude TUI
+  - Server: no empty padding for trailing blank lines that `capture-pane` trims,
+    and lines that are blank after ANSI stripping are trimmed as well
+  - Client: snapshot.lines are drawn bottom-aligned in the xterm grid (the
+    scrollback or the previous frame shows through at the top)
+  - All of it marked TEMPORARY - removable once the Claude TUI uses the pane down
+    to the bottom of the screen
+- Panes stayed at their desktop size when accessed from mobile
+  - `refresh-client -C` alone does not resize panes in a session with
+    `window-size manual`, so `resize-window` is issued alongside it
+  - Both tmux commands run in parallel through `Promise.all`, halving the resize
+    latency
 
 ## [0.1.109] - 2026-05-16
 
 ### Added
-- Channel C: クライアント xterm.js と tmux 内部状態の drift 検知機構 (dev-only、#147 Phase 1)
-  - `CCHUB_SELF_VERIFY=1` でサーバ起動時に有効化
-  - クライアントが trigger (`resize-done` / `reconnect-done` / `output-idle` / `periodic`) で xterm の可視範囲を server に送信
-  - サーバが `tmux capture-pane -p` と比較し、差分を `/tmp/cchub-drift.log` に JSON Lines 形式で追記
-  - production 環境では完全 no-op、ユーザに影響なし
-  - 後続の state diff sync (#147 Phase 2-) の正しさ検証 oracle として継続利用
+- Channel C: drift detection between the client's xterm.js and tmux's internal
+  state (dev only, #147 phase 1)
+  - Enabled by starting the server with `CCHUB_SELF_VERIFY=1`
+  - The client sends xterm's visible region to the server on a trigger
+    (`resize-done` / `reconnect-done` / `output-idle` / `periodic`)
+  - The server compares it against `tmux capture-pane -p` and appends the
+    difference to `/tmp/cchub-drift.log` as JSON Lines
+  - A complete no-op in production, with no user impact
+  - It stays as the correctness oracle for the state diff sync that follows
+    (#147 phase 2 onward)
 
 ## [0.1.108] - 2026-05-16
 
 ### Fixed
-- ファイルビューでファイルを開く / 切替時にファイル一覧のスクロール位置がリセットされる問題を修正
-  - 原因1: `useFileViewer` の `isLoading` フラグが `listDirectory` と `readFile` で共有されており、ファイルを開くと FileBrowser が「読み込み中…」プレースホルダーで置き換わってアンマウントされていた
-  - 原因2: モバイル単一ペインレイアウトでは `viewMode` が `'file'` に切り替わると FileBrowser 自体がアンマウントされていた
-  - 修正: 初回ディレクトリ読み込み時のみプレースホルダー表示、`viewMode` 切替時は display 切替で FileBrowser を常駐させスクロール位置を保持
-- ファイルビューで現在開いているファイルが視覚的に分かるよう、選択中ファイルを青背景＋青ボーダーでハイライト
-  - popstate ハンドラーがブラウザビューに戻る際に `selectedFile` を明示的にクリアしていたため、戻ったタイミングでハイライトが消えていた問題も併せて修正
+- The file list's scroll position reset when opening or switching files in the
+  file view
+  - Cause 1: `useFileViewer`'s `isLoading` flag was shared by `listDirectory` and
+    `readFile`, so opening a file replaced FileBrowser with a "loading"
+    placeholder and unmounted it
+  - Cause 2: in the mobile single-pane layout, FileBrowser itself unmounted when
+    `viewMode` switched to `'file'`
+  - Fix: the placeholder shows only on the first directory load, and a `viewMode`
+    switch toggles display so FileBrowser stays mounted and keeps its scroll
+    position
+- The currently open file is highlighted with a blue background and border so it
+  is visually identifiable in the file view
+  - Also fixed the highlight disappearing on the way back, because the popstate
+    handler explicitly cleared `selectedFile` when returning to the browser view
 
 ### Added
-- ファイルビュー回帰テスト (`frontend/tests/e2e/file-viewer-selection.spec.ts`): desktop split layout でのスクロール保持＋選択ハイライト、mobile での browser↔file 往復スクロール保持
+- A file view regression test
+  (`frontend/tests/e2e/file-viewer-selection.spec.ts`): scroll retention plus
+  selection highlight in the desktop split layout, and scroll retention across a
+  browser-to-file round trip on mobile
 
 ## [0.1.107] - 2026-05-15
 
 ### Fixed
-- セッション一覧から別セッションを選んだ際 (`handleSelectSession`) や、ペインを直接選んだ際 (`handleSelectPane`) にも会話ビューで「会話を表示できません」が出る問題を修正
-  - v0.1.106 では `fetchAndOpenSession` の3箇所のみ修正していたが、`OpenSession` を組み立てる経路は他にも `handleSelectSession` / `handleSelectPane` / `createInitialSession` の合計6箇所あり、その3箇所で `agent` / `agentSessionId` が欠落していた
-  - 全ての構築箇所を `apiToOpenSession()` ヘルパーに集約。今後 `OpenSession` にフィールドを追加する際の取りこぼしを防止
+- "The conversation cannot be shown" also appeared in the conversation view when
+  choosing another session from the list (`handleSelectSession`) or selecting a
+  pane directly (`handleSelectPane`)
+  - v0.1.106 fixed only the three places in `fetchAndOpenSession`, and
+    `OpenSession` is assembled in six places in total
+    (`handleSelectSession` / `handleSelectPane` / `createInitialSession`), three
+    of which were missing `agent` / `agentSessionId`
+  - Every construction site was collected into an `apiToOpenSession()` helper,
+    which prevents the same omission when a field is added to `OpenSession`
 
 ### Changed
-- `App.tsx` の `fetchAndOpenSession()` 内のネストされた if/else 階層を早期 return でフラット化、重複していた "create initial session" else ブロックを統一（130行→66行に圧縮）
+- The nested if/else in `App.tsx`'s `fetchAndOpenSession()` was flattened with
+  early returns and the duplicated "create initial session" else blocks unified
+  (130 lines down to 66)
 
 ## [0.1.106] - 2026-05-11
 
 ### Fixed
-- スマホで会話ビューを開いた際に「会話を表示できません / セッションのエージェント情報が取得できませんでした」が表示される問題を修正
-  - `App.tsx` の `fetchAndOpenSession()` 内 3 箇所で `OpenSession` を組み立てる際に `agent` と `agentSessionId` フィールドが欠落していた
-  - API は `agent: 'claude'` を返していたが、フロントが受け取った値を捨てていたため `activeSession.agent` が undefined となり ChatView が `missing-agent` エラーを表示
-  - WebSocket が不安定な環境では後追い同期パス（mobile `setOpenSessions` effect）も働かず、エラーが固定化していた
+- Opening the conversation view on a phone showed "the conversation cannot be
+  shown / the session's agent information could not be retrieved"
+  - Three places in `App.tsx`'s `fetchAndOpenSession()` assembled an
+    `OpenSession` without the `agent` and `agentSessionId` fields
+  - The API returned `agent: 'claude'` and the frontend discarded it, so
+    `activeSession.agent` was undefined and ChatView showed the `missing-agent`
+    error
+  - On an unstable WebSocket the later sync path (the mobile `setOpenSessions`
+    effect) did not run either, so the error became permanent
 
 ## [0.1.105] - 2026-05-09
 
 ### Added
-- ターミナル遅延の end-to-end 計測用 instrumentation を追加（ssh+termux との比較用、本番動作には影響なし）
-  - `CCHUB_BENCH=1` で起動するとバックエンドが WebSocket 送信ごとにフレームサイズ・送信所要時間・タイムスタンプをログ出力
-  - フロントエンドに `window.__cchub_bench` を公開: `start()` で計測開始、受信フレーム数・xterm.js parse 時間 (P50/P95/Max)・スループットを記録
-  - 受信ストリームに `__BENCH_END__` マーカーが現れると自動で集計レポートを `console.table` 出力
-  - `scripts/prepare-bench-data.sh` で 4 種類のベンチ用データ (`/tmp/bench-{plain,color,jp,redraw}.txt`) を生成
+- Instrumentation for end-to-end terminal latency measurement (for comparison
+  against ssh+termux; no effect in production)
+  - Started with `CCHUB_BENCH=1`, the backend logs the frame size, send duration
+    and timestamp of every WebSocket send
+  - The frontend exposes `window.__cchub_bench`: `start()` begins measuring and
+    records the number of frames received, xterm.js parse time (P50/P95/max) and
+    throughput
+  - A `__BENCH_END__` marker in the incoming stream prints the aggregate report
+    automatically through `console.table`
+  - `scripts/prepare-bench-data.sh` generates four kinds of benchmark data
+    (`/tmp/bench-{plain,color,jp,redraw}.txt`)
 
 ## [0.1.104] - 2026-05-09
 
 ### Fixed
-- Lost セッションの Resume ボタンを押しても新しい tmux セッションへ自動で切り替わらない問題を修正
-  - `useCallback` クロージャ内で古い `sessions` 配列を `find` していたため、resume API で作成された新セッションが見つからず navigation が呼ばれなかった
-  - API レスポンスと lost セッションのメタデータから直接セッションオブジェクトを組み立てて即座に遷移するよう変更
-- Claude セッションでアクティブな Resume バッジ条件が壊れていた回帰を修正
-  - `d4d570d` (Codex MVP) で `!isClaudeRunning` を `!supportsConversationMetadata` に取り違えていたため、Claude では絶対にバッジが出ない状態だった
-  - agent プロセス検出ベースで条件を再構築
+- Pressing Resume on a lost session did not switch to the new tmux session
+  - A `useCallback` closure searched a stale `sessions` array, so the session the
+    resume API created was not found and navigation never happened
+  - The session object is assembled directly from the API response and the lost
+    session's metadata, and navigation happens immediately
+- Fixed a regression in the active Resume badge condition for Claude sessions
+  - `d4d570d` (the Codex MVP) mistook `!isClaudeRunning` for
+    `!supportsConversationMetadata`, so the badge could never appear for Claude
+  - The condition was rebuilt on agent process detection
 
 ### Added
-- Codex 使用量ダッシュボードに limit 到達予測時刻 (`estimatedHitTime`) を追加
-  - Anthropic と同じ計算ロジックで、現在のペースから 100% 到達時刻を予測
-  - 予測がある場合は status を `danger` に格上げし、チャートのマーカーと文言を一致させる
+- An estimated limit-hit time (`estimatedHitTime`) on the Codex usage dashboard
+  - The same calculation as Anthropic's: when the current pace reaches 100%
+  - When there is an estimate the status is raised to `danger`, and the chart's
+    marker matches the wording
 
 ## [0.1.103] - 2026-05-08
 
 ### Fixed
-- Codex 使用量ダッシュボードで 5h cycle の reset 時刻を過ぎても exhausted 状態が残り、制限超過表示が継続していた問題を修正 (#136)
-  - `credits.has_credits === false` の exceeded 上書きは、5h cycle の `resetsAt` が未来の場合だけ適用
-  - reset 後は最新の windowed rate limit を優先し、古い no-credits イベントで 100% 表示に戻さない
-- Usage チャートが cycle start に人工的な 0% 点を追加していたため、履歴が少ない cycle で縦方向のスパイクが描画される問題を修正 (#136)
-  - 実サンプルのみを時系列ソートして描画
+- The Codex usage dashboard kept its exhausted state past the 5h cycle's reset
+  time and continued to show a limit exceeded (#136)
+  - The `credits.has_credits === false` exceeded override only applies while the
+    5h cycle's `resetsAt` is in the future
+  - After a reset the newest windowed rate limit wins, and an old no-credits
+    event no longer returns the display to 100%
+- The usage chart added an artificial 0% point at the cycle start, which drew a
+  vertical spike in a cycle with little history (#136)
+  - Only real samples are drawn, sorted chronologically
 
 ## [0.1.102] - 2026-05-08
 
 ### Fixed
-- Lost セッション（再起動などで tmux から消えたセッション）の Resume ボタンが Codex セッションでも Claude として復活していた問題を修正 (#134)
-  - `LastKnownSession` に `agentSessionId` を追加し、再起動を跨いで Codex thread id を保持
-  - Resume 時は `session.agent` に応じて conversation id を選択（Codex → `agentSessionId`、Claude → `ccSessionId`）し、`/sessions/history/resume` に渡す
-  - conversation id が無い場合のフォールバックも `createSession` に元の agent を渡すように変更（旧挙動: claude 固定）
+- The Resume button on a lost session (one that disappeared from tmux after a
+  restart) revived a Codex session as Claude (#134)
+  - `LastKnownSession` gained `agentSessionId`, preserving the Codex thread id
+    across a restart
+  - Resuming selects the conversation id by `session.agent` (Codex ->
+    `agentSessionId`, Claude -> `ccSessionId`) and passes it to
+    `/sessions/history/resume`
+  - The fallback when there is no conversation id also passes the original agent
+    to `createSession` (it used to be pinned to claude)
 
 ## [0.1.101] - 2026-05-08
 
 ### Added
-- Codex セッションの会話履歴ビューア (#132)
-  - ペインヘッダーの Terminal ↔ Chat トグル（既存ボタン）を Codex セッションでも有効化
-  - `~/.codex/sessions/.../rollout-*.jsonl` を読み取り、`user_message` / `agent_message` をテキストとして、`function_call` / `function_call_output` を toolUse / toolResult として Claude 互換の `ConversationMessage[]` に変換
-  - HTTP polling (5秒間隔) で会話を取得・更新（Codex 側に WebSocket hook がないため）
-  - ConversationViewer の役割ラベルを agent 別に切替（Codex セッションでは "Codex" 表示）
-- 各 agent の会話取得方式を統一する `useAgentConversation` ファサード hook
-  - Claude → WebSocket stream / Codex → HTTP polling / 不明な agent → 明示的なエラー表示
-  - 新しい agent を足すときは ChatView を触らずファサードに分岐を追加するだけ
+- A conversation history viewer for Codex sessions (#132)
+  - The existing Terminal / Chat toggle in the pane header is enabled for Codex
+    sessions
+  - `~/.codex/sessions/.../rollout-*.jsonl` is read and converted into
+    Claude-compatible `ConversationMessage[]`, with `user_message` /
+    `agent_message` as text and `function_call` / `function_call_output` as
+    toolUse / toolResult
+  - The conversation is fetched and refreshed by HTTP polling (every five
+    seconds), since Codex has no WebSocket hook
+  - ConversationViewer's role label switches by agent ("Codex" on a Codex
+    session)
+- A `useAgentConversation` facade hook that unifies how each agent's conversation
+  is fetched
+  - Claude through a WebSocket stream, Codex through HTTP polling, an unknown
+    agent through an explicit error
+  - Adding an agent means adding a branch to the facade rather than touching
+    ChatView
 
 ### Fixed
-- DesktopLayout のセッション merge で `agent` / `agentSessionId` がコピーされず、Codex セッションの会話表示が同じ cwd の Claude jsonl にフォールバックしていた問題を修正
-- ChatView が `agent` 未指定時に暗黙的に Claude WebSocket にフォールバックしていた挙動を撤廃。未対応 agent は中央寄せのエラーメッセージを表示
+- DesktopLayout's session merge did not copy `agent` / `agentSessionId`, so a
+  Codex session's conversation fell back to a Claude jsonl in the same cwd
+- ChatView silently fell back to the Claude WebSocket when `agent` was
+  unspecified; that is gone, and an unsupported agent shows a centered error
+  message
 
 ## [0.1.100] - 2026-05-07
 
 ### Added
-- ダッシュボードに Codex 用の使用量リミット表示を追加 (#130)
-  - `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` の `token_count` イベントに含まれる `rate_limits` を読み取り、Anthropic Usage Limits と同じ形のチャートで表示
-  - `primary` / `secondary` を `window_minutes` で 5h/7d に振り分け（24h 未満は短期サイクル扱い）
-  - ダッシュボード上部に `Claude` / `Codex` の agent タブを追加（両方のデータが存在するときのみ表示）。片方しか無い環境では自動でそちら側を表示
-  - `UsageLimits` コンポーネントを optional cycle 対応にリファクタし、未対応 cycle を「現在のプランでは未対応」プレースホルダで表示
-  - plan_type を見出し横にバッジ表示（free / plus 等）
-- Codex のレート制限到達検知 (#130)
-  - `credits.has_credits === false` を検出すると `rateLimitExceeded` フラグを立て、5h cycle を 100% / exceeded で上書き、ダッシュボードに赤いバナーを表示
-  - OpenAI はリミット到達時に primary/secondary を null で返すため、その後の rollout イベントで誤って古いデータを表示してしまう問題への対処も兼ねる
+- Codex usage limits on the dashboard (#130)
+  - The `rate_limits` inside the `token_count` events of
+    `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` are read and drawn in the same
+    chart shape as the Anthropic usage limits
+  - `primary` / `secondary` are assigned to 5h/7d by `window_minutes` (under 24h
+    counts as the short cycle)
+  - `Claude` / `Codex` agent tabs at the top of the dashboard (shown only when
+    both have data; with only one, that one is shown automatically)
+  - The `UsageLimits` component was refactored for optional cycles and shows a
+    placeholder for a cycle the plan does not support
+  - plan_type is shown as a badge next to the heading (free, plus and so on)
+- Detection of Codex hitting its rate limit (#130)
+  - `credits.has_credits === false` raises a `rateLimitExceeded` flag, overrides
+    the 5h cycle to 100% / exceeded and shows a red banner on the dashboard
+  - This also handles OpenAI returning null for primary/secondary at the limit,
+    which would otherwise make later rollout events display stale data
 
 ### Fixed
-- プラン遷移後に rate_limits が空イベントになる問題への対処 (#130)
-  - 例: free → plus に upgrade した直後の rollout は windows が null だが plan_type は更新済み。windows が populated されている最新イベントを別途追跡して、グラフ用データと plan/credits 用データを独立に取得する構造に変更
+- Empty rate_limits events after a plan change (#130)
+  - For example, the rollout right after upgrading free -> plus has null windows
+    but an updated plan_type. The newest event with populated windows is tracked
+    separately, so the graph data and the plan/credits data are obtained
+    independently
 
 ## [0.1.99] - 2026-05-07
 
 ### Fixed
-- Codex セッションの resume が Claude セッションとして起動してしまう問題を修正 (#128)
-  - `POST /sessions/:id/resume` と `POST /sessions/history/resume` が `claude -r` 固定だったため、Codex セッションを resume すると claude が起動していた
-  - `AGENT_PROVIDERS` に `resumeCommand` を追加し、`agentResumeCommand(agent, sessionId)` ヘルパー経由で組み立てる構造に統一
-  - active セッションの resume は tmux ペインで検出された agent を採用（リクエストボディでの override も可能）
-  - 履歴からの resume はリクエストボディの `agent` フィールドを参照
-  - フロント (App.tsx / SessionList.tsx) は resume API 呼び出し時に `session.agent` を渡すよう変更
+- Resuming a Codex session started it as a Claude session (#128)
+  - `POST /sessions/:id/resume` and `POST /sessions/history/resume` were pinned
+    to `claude -r`, so resuming a Codex session started claude
+  - `AGENT_PROVIDERS` gained `resumeCommand`, and the command is composed through
+    an `agentResumeCommand(agent, sessionId)` helper
+  - Resuming an active session uses the agent detected in the tmux pane (with an
+    override possible in the request body)
+  - Resuming from history reads the request body's `agent` field
+  - The frontend (App.tsx / SessionList.tsx) passes `session.agent` when calling
+    the resume API
 
 ## [0.1.98] - 2026-05-07
 
 ### Added
-- Codex (OpenAI) を agent provider として追加 (#127)
-  - セッション作成時に `agent: codex` を指定可能（デフォルトは claude）
-  - セッション一覧/メタデータ行に agent badge を表示（Lost セッションも含む）
-  - `~/.codex/state_5.sqlite` から Codex thread のメタデータ（タイトル、初回プロンプト、git branch）を読み取り表示
-  - rollout ファイル末尾を tail して Codex の context token 使用量を読み取り、Claude と同等のメトリクス表示に対応
-  - 同一ディレクトリで同じ agent が走っているかどうかをチェックする重複判定ロジックを追加
+- Codex (OpenAI) added as an agent provider (#127)
+  - `agent: codex` can be specified when creating a session (claude by default)
+  - An agent badge appears on the session list and metadata rows (lost sessions
+    included)
+  - Codex thread metadata (title, first prompt, git branch) is read from
+    `~/.codex/state_5.sqlite` and displayed
+  - Codex's context token usage is read by tailing the rollout file, matching
+    Claude's metrics display
+  - Duplicate detection was added for whether the same agent is already running
+    in the same directory
 
 ## [0.1.97] - 2026-05-01
 
 ### Fixed
-- Model Usage チャートで Opus 4.5 / 4.6 / 4.7 の色がほぼ同じで判別できなかった問題を修正
-  - Opus 4.7 が `startsWith('Opus')` のフォールバックで Opus 4.6 と同じ `bg-purple-500` になっていた
-  - Opus 4.5 → `bg-fuchsia-500`、Opus 4.6 → `bg-violet-400`、Opus 4.7 → `bg-indigo-500` と色相段階に分散して識別性を改善
+- Opus 4.5 / 4.6 / 4.7 were almost the same color in the Model Usage chart and
+  could not be told apart
+  - Opus 4.7 fell through `startsWith('Opus')` and got the same `bg-purple-500`
+    as Opus 4.6
+  - They are spread across hues now: Opus 4.5 `bg-fuchsia-500`, Opus 4.6
+    `bg-violet-400`, Opus 4.7 `bg-indigo-500`
 
 ## [0.1.96] - 2026-05-01
 
 ### Fixed
-- セッションリストの `ctx` インジケーターが macOS で常に 100%(赤)になる問題を修正 (#125)
-  - `anthropic-models.ts` が `~/.claude/.credentials.json` のみ参照しており、Keychain にトークンを保存している新しい Claude Code 環境で `/v1/models` 取得に失敗
-  - 結果として `contextMaxTokens` が fallback の 200,000 になり、Opus 4.7 (1M context) のような実際の上限が大きいセッションで `contextPercent` が 100 で頭打ちになっていた
-  - file → Keychain のトークン取得ロジックを `utils/claude-credentials.ts` に共通化し、`anthropic-models.ts` / `anthropic-usage.ts` 両方で利用
-  - `anthropic-models.ts` の User-Agent も `cchub/<version>` に変更(v0.1.93 で `anthropic-usage.ts` に行った変更を踏襲)
-  - Linux は元から `.credentials.json` ベースで動いていたため挙動変更なし
+- The session list's `ctx` indicator was always 100% (red) on macOS (#125)
+  - `anthropic-models.ts` only read `~/.claude/.credentials.json`, so fetching
+    `/v1/models` failed in newer Claude Code environments that store the token in
+    the Keychain
+  - As a result `contextMaxTokens` fell back to 200,000 and `contextPercent`
+    saturated at 100 for a session whose real ceiling is much larger (Opus 4.7
+    with a 1M context)
+  - The file-then-Keychain token retrieval was collected into
+    `utils/claude-credentials.ts` and is used by both `anthropic-models.ts` and
+    `anthropic-usage.ts`
+  - `anthropic-models.ts`'s User-Agent also became `cchub/<version>` (following
+    the change made to `anthropic-usage.ts` in v0.1.93)
+  - Linux already worked from `.credentials.json`, so its behavior is unchanged
 
 ## [0.1.95] - 2026-04-30
 
 ### Fixed
-- 会話履歴ボタンが macOS で常に disabled になる問題を修正 (#123)
-  - 非標準パス(`~/.local/bin/claude`、`/opt/homebrew/bin/claude` 等)で起動した Claude Code を `isClaudeProcess` が認識できず、ペインの `currentCommand` が tmux の `pane_current_command` (バージョン番号 `2.1.123` 等) のまま伝搬していた
-  - `isClaudeProcess` の判定を `/(?:^|\/)claude(?:\s|$)/` 正規表現ベースに変更し、フルパス起動を含む全パターンを検出
-  - `buildSessionsList` で ps ベースの検出結果を使ってペインレベルの `currentCommand` も `'claude'` に正規化(従来は session レベルのみ正規化されていた)
-  - Linux の挙動は変更なし(元から `pane_current_command` が `claude` を正しく返す)
+- The conversation history button was always disabled on macOS (#123)
+  - `isClaudeProcess` did not recognize a Claude Code started from a non-standard
+    path (`~/.local/bin/claude`, `/opt/homebrew/bin/claude` and so on), so the
+    pane's `currentCommand` propagated as tmux's `pane_current_command` (a
+    version number such as `2.1.123`)
+  - `isClaudeProcess` now matches on the regex `/(?:^|\/)claude(?:\s|$)/`, which
+    covers every pattern including a full-path launch
+  - `buildSessionsList` uses the ps-based detection to normalize the pane-level
+    `currentCommand` to `'claude'` too (it used to normalize only at the session
+    level)
+  - Linux behavior is unchanged (its `pane_current_command` already returns
+    `claude` correctly)
 
 ## [0.1.94] - 2026-04-30
 
 ### Added
-- macOS Keychain によるパスワード保存 (#121)
-  - `cchub setup -P pass` で渡されたパスワードを `~/Library/LaunchAgents/com.cchub.server.plist` に直接埋め込む代わりに、macOS Keychain (`service: cchub`) に保存
-  - `cchub` 起動時の優先順位: `-P` CLI 引数 → `CCHUB_PASSWORD` 環境変数 → Keychain
-  - 起動ログにパスワード取得元を表示 (`(Keychain)` / `(env)`)
-  - `cchub uninstall` で Keychain エントリも削除
-  - 既存インストールは plist の `-P` がそのまま使われるため互換性あり。Keychain への移行は次回の `cchub setup -P pass` で自動的に行われる
-  - Linux はヘッドレスサービス向けの信頼できる secret store がないため従来の `EnvironmentFile` 方式を維持
+- Password storage in the macOS Keychain (#121)
+  - The password passed to `cchub setup -P pass` is stored in the macOS Keychain
+    (`service: cchub`) rather than embedded directly in
+    `~/Library/LaunchAgents/com.cchub.server.plist`
+  - Priority when `cchub` starts: the `-P` CLI argument, the `CCHUB_PASSWORD`
+    environment variable, then the Keychain
+  - The startup log says where the password came from (`(Keychain)` / `(env)`)
+  - `cchub uninstall` removes the Keychain entry too
+  - Existing installations remain compatible because the plist's `-P` is still
+    used; migration to the Keychain happens automatically on the next
+    `cchub setup -P pass`
+  - Linux keeps the existing `EnvironmentFile` approach, as there is no reliable
+    secret store for a headless service
 
 ### Fixed
-- `cchub --help` で `setup` の説明が常に「systemd service setup」となっていたのを「Register service (systemd on Linux, launchd on macOS)」に変更
-- launchd plist の文字列補間に XML エスケープを追加（`<`, `>`, `&`, `"`, `'` を含むパスワードでも plist が壊れない）
+- `cchub --help` always described `setup` as "systemd service setup"; it now
+  says "Register service (systemd on Linux, launchd on macOS)"
+- XML escaping was added to the launchd plist's string interpolation (so a
+  password containing `<`, `>`, `&`, `"` or `'` cannot break the plist)
 
 ## [0.1.93] - 2026-04-30
 
 ### Fixed
-- セッションリストのステータス表示が macOS で正しく動作するよう修正 (#119)
-  - `/api/notify/hook-status` が必須4イベント（Stop / PreToolUse / UserPromptSubmit / PostToolUse[AskUserQuestion]）を個別検証するように変更
-  - 設定不足時のセットアップバナーが「全くないとき」だけでなく「不足があるとき」に表示されるように
-  - セットアップ用プロンプトが4イベントすべてをカバー、`prompt-recorder.sh` 等の既存 hook を保持するよう Claude へ指示
-- 手動 `/recap` slash command の出力がセッションリストに反映されるように修正
-  - `readLastAwaySummary` → `readLastRecap` にリネームし、`subtype:'local_command'` も `<command-name>/recap</command-name>` を直前の user entry に持つ場合は recap として採用
-  - 自動 `away_summary` と手動 `/recap` のうち最新を採用
-- `readLastLines` のバッファ推定不足を修正
-  - 200 バイト/行 → 2KB/行スタートで不足時は 4倍ずつリトライ（2K → 8K → 32K）、最終手段は全読み
-  - Claude Code の JSONL は tool result 埋め込みで平均 2KB/行のため、`300` 指定でも実質 28 行しか読めていなかった
-- `cchub status` が macOS で `systemctl not found` で落ちる問題を修正
-  - `platform()` で OS 判定し、`darwin` では `launchctl list com.cchub.server` を使用、PID と LastExitStatus を表示
+- The session list's status display now works correctly on macOS (#119)
+  - `/api/notify/hook-status` validates each of the four required events
+    individually (Stop / PreToolUse / UserPromptSubmit /
+    PostToolUse[AskUserQuestion])
+  - The setup banner appears when anything is missing rather than only when
+    nothing is configured
+  - The setup prompt covers all four events and instructs Claude to preserve
+    existing hooks such as `prompt-recorder.sh`
+- The output of a manual `/recap` slash command reaches the session list
+  - `readLastAwaySummary` was renamed to `readLastRecap`, and a
+    `subtype:'local_command'` entry counts as a recap when the user entry right
+    before it carries `<command-name>/recap</command-name>`
+  - The newer of the automatic `away_summary` and a manual `/recap` wins
+- Fixed `readLastLines` underestimating its buffer
+  - It starts at 2KB per line rather than 200 bytes and retries at 4x when short
+    (2K -> 8K -> 32K), falling back to reading the whole file
+  - Claude Code's JSONL averages 2KB per line because of embedded tool results,
+    so asking for `300` really read only about 28 lines
+- `cchub status` crashed with `systemctl not found` on macOS
+  - The OS is checked through `platform()`, and `darwin` uses
+    `launchctl list com.cchub.server`, showing the PID and LastExitStatus
 
 ### Added
-- Anthropic API の使用量取得エラーをダッシュボードに表示
-  - エラー種別（rate-limited / no-credentials / unauthorized / fetch-failed / unknown）に応じたメッセージ
-  - レート制限中はキャッシュ値を `(showing cached value)` バッジ付きで表示し、再試行までのカウントダウンを表示
-  - 429 レスポンスの `Retry-After` ヘッダーを尊重（5分〜1時間にクランプ）
-- macOS Keychain からの OAuth トークン取得をサポート
-  - 新しい Claude Code が `~/.claude/.credentials.json` ではなく Keychain (`Claude Code-credentials`) に資格情報を保存するため、フォールバックを追加
-- `User-Agent` を `cchub/<version>` に変更（旧 `claude-code/2.0.32` は Claude Code への impersonation だったため）
-- DashboardPanel の幅を画面サイズに応じて拡張（xl: 420px、2xl: 480px）
+- Anthropic API usage fetch errors are shown on the dashboard
+  - Messages per error kind (rate-limited / no-credentials / unauthorized /
+    fetch-failed / unknown)
+  - While rate limited, the cached value is shown with a
+    `(showing cached value)` badge plus a countdown to the retry
+  - The `Retry-After` header on a 429 is honored (clamped between 5 minutes and
+    an hour)
+- Support for reading the OAuth token from the macOS Keychain
+  - Newer Claude Code stores credentials in the Keychain
+    (`Claude Code-credentials`) rather than `~/.claude/.credentials.json`, so a
+    fallback was added
+- The `User-Agent` became `cchub/<version>` (the old `claude-code/2.0.32`
+  impersonated Claude Code)
+- DashboardPanel widens with the screen (xl: 420px, 2xl: 480px)
 
 ### Changed
-- `.gitignore` に `.claude-user-prompts/`、`.playwright-mcp/`、ルート直下 `*.png` を追加（ローカル開発の副産物を除外）
+- Added `.claude-user-prompts/`, `.playwright-mcp/` and top-level `*.png` to
+  `.gitignore` (byproducts of local development)
 
 ## [0.1.92] - 2026-04-29
 
 ### Changed
-- 会話履歴ビューの背景色をセッションテーマカラーに同期
-  - ターミナル背景と一致した色（pink / indigo / teal 等）でチャットビュー全体（コンテナ・エコー行・ローディング表示）を着色
-  - 視覚的な一体感を向上、セッション切替時のテーマも追従
+- The conversation view's background follows the session theme color
+  - The whole chat view (container, echo line, loading display) is colored to
+    match the terminal background (pink / indigo / teal and so on)
+  - It feels like one surface, and the theme follows a session switch
 
 ## [0.1.91] - 2026-04-29
 
 ### Added
-- 会話履歴ビュー（chat mode）を追加 (#116)
-  - ターミナルの xterm 領域を Claude の会話履歴に置き換える別表示モード。`fs.watch` で JSONL を監視しリアルタイム更新（150ms debounce）
-  - WebSocket プロトコルに `subscribe-conversation` / `initial-conversation` / `conversation-update` / `unsubscribe-conversation` を追加
-  - ペインヘッダーの単一アイコントグルでターミナル⇄会話履歴を切替（Claude 起動中のみ有効）
-  - ペインごと・セッションごとの表示モードを localStorage に永続化（split/再マウントでも維持）
-  - 「処理中」「入力待ち」バッジを `indicatorState` ベースに統一（接続状態ではなく Claude の実状態を反映）
-- インライン画像のライトボックス表示
-  - 会話履歴・Read 等のツール結果に含まれる画像をタップで全画面表示。背景タップ／×ボタン／Esc で閉じる
-- 会話履歴のフォントサイズ調整
-  - ピンチズーム / 左下のフォントコントロール（−／A／＋）でサイズ変更、localStorage に永続化
-  - 通常時は `Aa` の小トリガーのみ表示、変更時のみフルコントロール表示
-- 入力エコー行
-  - FloatingKeyboard / InputBar から送信した文字を会話履歴下部にプロンプト風表示。送信先（ターミナル）が隠れていても入力中の文字を確認可能
-- 入力フォーム（デスクトップ）
-  - PC では会話履歴の下に textarea + 送信ボタンを表示。モバイルは Terminal InputBar、タブレットは FloatingKeyboard を流用
+- A conversation history view (chat mode) (#116)
+  - A separate display mode replacing the terminal's xterm area with Claude's
+    conversation history. `fs.watch` monitors the JSONL and updates in real time
+    (150ms debounce)
+  - The WebSocket protocol gained `subscribe-conversation` /
+    `initial-conversation` / `conversation-update` / `unsubscribe-conversation`
+  - A single icon toggle in the pane header switches terminal and conversation
+    (enabled only while Claude is running)
+  - The display mode is persisted per pane and per session in localStorage
+    (surviving a split or a remount)
+  - The "working" and "waiting for input" badges are unified on `indicatorState`
+    (reflecting Claude's real state rather than the connection state)
+- A lightbox for inline images
+  - Images in the conversation and in tool results such as Read open full screen
+    on a tap, and close on a background tap, the x button or Esc
+- Font size adjustment in the conversation history
+  - Pinch zoom or the font controls in the bottom left, persisted in localStorage
+  - Only a small `Aa` trigger is shown normally, with the full controls appearing
+    once it changes
+- An input echo line
+  - Characters sent from FloatingKeyboard / InputBar are shown prompt-style at
+    the bottom of the conversation, so what is being typed is visible even when
+    the destination (the terminal) is hidden
+- An input form (desktop)
+  - On a PC a textarea plus a send button appear below the conversation. Mobile
+    reuses the Terminal InputBar and tablet the FloatingKeyboard
 
 ### Changed
-- 会話履歴ビューの情報密度を向上（メッセージ間隔・行高・マージンの全体的な詰め）
-- ペインヘッダーのターミナル/チャット切替を 2 アイコンから単一アイコン（切替先表示）方式に変更
-- ペインが 1 つしかない時は close（×）と zoom（最大化）ボタンを非表示
-- スクロール時のキーボード制御
-  - 会話履歴を上にスクロールするとソフトキーボードを自動非表示にし表示領域を拡大
-  - 一番下まで戻るとキーボードを再表示（タッチ駆動 + 600ms クールダウンでレイアウトシフトの振動を防止）
+- Higher information density in the conversation view (tighter message spacing,
+  line height and margins throughout)
+- The pane header's terminal/chat switch went from two icons to a single one
+  showing the destination
+- The close (x) and zoom buttons are hidden when there is only one pane
+- Keyboard control while scrolling
+  - Scrolling the conversation up hides the soft keyboard automatically to
+    enlarge the visible area
+  - Returning to the bottom shows it again (touch-driven with a 600ms cooldown,
+    which prevents layout-shift oscillation)
 
 ## [0.1.90] - 2026-04-28
 
 ### Fixed
-- モバイル端末で FileViewer の Copy Prompt ボタンを押してもプロンプトテキストが入力欄に挿入されない不具合を修正 (#114)
-  - 6 週間前の Terminal.tsx 分割リファクタで失われていた InputBar へのテキスト注入経路を復元
-  - InputBar に forwardRef + useImperativeHandle で `setText(text)` を公開
+- The Copy Prompt button in FileViewer did not insert the prompt text into the
+  input field on a mobile device (#114)
+  - Restored the text injection path into InputBar, lost in the Terminal.tsx
+    split refactor six weeks earlier
+  - InputBar exposes `setText(text)` through forwardRef + useImperativeHandle
 
 ## [0.1.89] - 2026-04-27
 
 ### Changed
-- セッションカードの recap テキスト色を `text-zinc-400` (灰) → `text-amber-200` (薄い琥珀) に変更し、暗背景での視認性とカードの華やかさを改善
-- recap タイムスタンプを `text-zinc-600` → `text-zinc-500` に微調整
+- The session card's recap text went from `text-zinc-400` (gray) to
+  `text-amber-200` (pale amber), which reads better on a dark background and
+  livens the card up
+- The recap timestamp was nudged from `text-zinc-600` to `text-zinc-500`
 
 ## [0.1.88] - 2026-04-27
 
 ### Fixed
-- macOS で `/api/sessions` のレスポンスから `currentPath` / `panes` / `ccSummary` 等が欠落していた問題を修正 (#110)
-  - `ps -eo tty,args --no-headers` (GNU 専用) を `ps -A -o tty,args` + ユーザー空間でのヘッダースキップに変更し、BSD ps と GNU ps の両方で動作するように
-  - `tmux list-panes` のフィールドセパレータを `\x1f` から ASCII の `||~~||` に変更（macOS + Bun.spawn で 0x1f が `_` に化ける問題を回避）
+- `currentPath` / `panes` / `ccSummary` and others were missing from
+  `/api/sessions`'s response on macOS (#110)
+  - `ps -eo tty,args --no-headers` (GNU only) became `ps -A -o tty,args` with the
+    header skipped in user space, which works on both BSD and GNU ps
+  - `tmux list-panes`'s field separator changed from `\x1f` to the ASCII
+    `||~~||` (working around 0x1f becoming `_` under macOS + Bun.spawn)
 
 ## [0.1.87] - 2026-04-27
 
 ### Changed
-- デスクトップ表示のヘッダーアイコンとペインヘッダーアイコンを 14-16px から 18px に拡大、余白も `p-1` → `p-1.5` に調整して視認性を改善
-- ペインヘッダーのタイトル文字サイズを `text-xs` (12px) → `text-base` (16px) に拡大
+- The desktop header and pane header icons grew from 14-16px to 18px with padding
+  from `p-1` to `p-1.5`, which is easier to see
+- The pane header's title grew from `text-xs` (12px) to `text-base` (16px)
 
 ### Removed
-- ペインヘッダーの黄色「キャッシュクリア & リロード」ボタンを削除（通常リロードと紛らわしいため）
+- The yellow "clear cache and reload" button in the pane header (too easily
+  confused with an ordinary reload)
 
 ## [0.1.86] - 2026-04-26
 
 ### Fixed
-- 未知の拡張子のテキストファイルが File Viewer で開けず base64 化されていた問題を修正
-  - NUL バイト / 制御文字のヒューリスティックで判定し、テキストっぽければ UTF-8 で返す
-  - バイナリファイルは引き続き base64 で返却
+- A text file with an unknown extension could not be opened in the File Viewer
+  and came back base64-encoded
+  - A heuristic over NUL bytes and control characters decides, and anything
+    text-like is returned as UTF-8
+  - Binary files are still returned as base64
 
 ## [0.1.85] - 2026-04-26
 
 ### Fixed
-- ConversationViewer で Read ツールが画像を返した際に「(出力なし)」と表示されていた不具合を修正
-  - jsonl パース時に `tool_result` の content array から `type: "image"` ブロックを抽出し、base64 画像をインライン表示
+- ConversationViewer showed "(no output)" when the Read tool returned an image
+  - While parsing the jsonl, `type: "image"` blocks are extracted from a
+    `tool_result`'s content array and the base64 image is shown inline
 
 ### Changed
-- `formatRelativeTime` を `frontend/src/utils/format.ts` に集約し、SessionList / SessionHistory / PromptSearch の重複実装を統一
-- 秒単位の相対時刻表示に対応（`time.secondsAgo` キー追加）
-- 未使用の `UsageTracker` サービスと `PromptSearch` コンポーネント、deprecated な `getSessionIdFromTty` を削除（-356 行）
-- リリーススキルを PR ベースのフローに変更し、リリース専用ブランチ (`release/vX.X.X`) を切る運用に統一
+- `formatRelativeTime` was collected into `frontend/src/utils/format.ts`,
+  unifying the duplicate implementations in SessionList / SessionHistory /
+  PromptSearch
+- Relative times can be expressed in seconds (a `time.secondsAgo` key was added)
+- Deleted the unused `UsageTracker` service, the `PromptSearch` component and the
+  deprecated `getSessionIdFromTty` (-356 lines)
+- The release skill moved to a PR-based flow, standardizing on a dedicated
+  release branch (`release/vX.X.X`)
 
 ## [0.1.84] - 2026-04-25
 
 ### Fixed
-- 日本語入力モードの InputBar 下段ボタン (履歴 / ファイル / クリア / ↑ / ↓ / 送信) の幅を `w-9` (36px) → `w-14` (56px) に拡大
-  - スマートフォンでタップしづらかった状態を解消
+- The bottom row buttons of the InputBar in Japanese input mode (history / file /
+  clear / up / down / send) grew from `w-9` (36px) to `w-14` (56px)
+  - They were hard to tap on a phone
 
 ## [0.1.83] - 2026-04-25
 
 ### Fixed
-- File Viewer の Markdown プレビューで相対パス画像 (`![](docs/foo.png)` 等) が読み込めず壊れていた問題を修正
-  - `<img src>` をそのままブラウザに渡していたため、フロントエンドのオリジン (`/docs/foo.png`) として解決され 404 になっていた
-  - Markdown ファイルのディレクトリを基準に解決し、`/api/files/raw` 経由で配信するよう変更
-  - `http(s)://`、`data:`、`blob:` 等の絶対 URL は従来通りパススルー
+- Relative-path images (`![](docs/foo.png)` and the like) were broken in the File
+  Viewer's Markdown preview
+  - The `<img src>` was handed to the browser unchanged and resolved against the
+    frontend's origin (`/docs/foo.png`), producing a 404
+  - It is resolved relative to the Markdown file's directory and served through
+    `/api/files/raw`
+  - Absolute URLs (`http(s)://`, `data:`, `blob:` and so on) still pass through
 
 ### Added
-- README にスクリーンショット (タブレット全景・セッション一覧・モバイル端末) を追加 (`docs/images/`)
+- Screenshots in the README (a full tablet view, the session list, a mobile
+  device) (`docs/images/`)
 
 ## [0.1.82] - 2026-04-25
 
 ### Changed
-- セッション一覧カードのレイアウトを圧縮
-  - タイトルとパスを同じ行に並べる (例: `ホーム  /home/m0a`)
-  - recap タイムスタンプ (`2h ago` 等) を recap 本文の末尾にインライン配置
-  - recap ブロックの枠線・背景・"RECAP" ラベルを削除しフラット化
-  - recap が表示されているセッションでは last-prompt サマリを非表示 (recap が同じ情報を含むため)
+- The session list cards were compressed
+  - The title and the path share a line (for example `home  /home/m0a`)
+  - The recap timestamp (`2h ago` and the like) sits inline at the end of the
+    recap text
+  - The recap block's border, background and "RECAP" label were removed, leaving
+    it flat
+  - The last-prompt summary is hidden for a session showing a recap (the recap
+    already contains it)
 
 ## [0.1.81] - 2026-04-25
 
 ### Added
-- セッション一覧の各セッションカードに Claude Code の auto-recap (`away_summary`) を表示
-  - Claude Code が端末をアンフォーカス後 3 分以上経つと自動生成する 1〜3 文のサマリ (「今何やってるか + 次のアクション」) をカード上部に表示
-  - `RECAP · 2h ago` のラベル + 相対タイムスタンプ + 本文 (3行で line-clamp)
-  - recap が無いセッションでは表示されず、既存の last-prompt サマリのみ
-  - セッション検索 (Ctrl+B のフィルタ) でも recap 本文がヒット対象に
-  - `~/.claude/projects/<dir>/<session>.jsonl` 内の `system/away_summary` エントリを末尾から拾う実装。既存の jsonl 読み取りキャッシュ (5秒 TTL) に乗るためオーバーヘッドなし
+- Claude Code's auto-recap (`away_summary`) appears on each session card in the
+  list
+  - The one-to-three sentence summary Claude Code generates automatically three
+    minutes after the terminal loses focus ("what I am doing plus the next
+    action") is shown at the top of the card
+  - A `RECAP - 2h ago` label with a relative timestamp and the body (clamped to
+    three lines)
+  - A session with no recap shows nothing extra, only the existing last-prompt
+    summary
+  - Session search (the Ctrl+B filter) matches recap text too
+  - It reads the `system/away_summary` entries from the end of
+    `~/.claude/projects/<dir>/<session>.jsonl`, riding the existing jsonl read
+    cache (5s TTL) at no extra cost
 
 ## [0.1.80] - 2026-04-25
 
 ### Refactored
-- デッドコード掃除 (-981 行)
-  - 未使用ファイル7個を削除: `UrlMenu.tsx`, `SessionListMini.tsx`, `SessionTabs.tsx`, `SessionTab.tsx`, `LanguageSwitcher.tsx`, `dashboard/CostEstimate.tsx`, `dashboard/LimitWarning.tsx`
-  - 未使用 state/関数/prop の削除 (Terminal/InputBar の URL menu dead state、`onReload`、`hideDashboardTab` 等)
-  - 未使用 import の削除 (`Settings`, `PaneInfo`, `UrlMenu`, `symlink`)
-  - 未使用 npm パッケージ削除: `@xterm/addon-web-links`, `qrcode.react`
-- 機能変更なし。dev 環境で sessions/dashboard/file browser の動作確認済み
+- Dead code cleanup (-981 lines)
+  - Deleted seven unused files: `UrlMenu.tsx`, `SessionListMini.tsx`,
+    `SessionTabs.tsx`, `SessionTab.tsx`, `LanguageSwitcher.tsx`,
+    `dashboard/CostEstimate.tsx`, `dashboard/LimitWarning.tsx`
+  - Removed unused state, functions and props (Terminal/InputBar's dead URL menu
+    state, `onReload`, `hideDashboardTab` and so on)
+  - Removed unused imports (`Settings`, `PaneInfo`, `UrlMenu`, `symlink`)
+  - Removed unused npm packages: `@xterm/addon-web-links`, `qrcode.react`
+- No functional change. Sessions, dashboard and file browser were verified in dev
 
 ## [0.1.79] - 2026-04-25
 
 ### Fixed
-- WS 再接続時に Claude Code の入力プロンプト (permission / plan / AskUserQuestion 等) が画面に表示されない問題を修正
-  - v0.1.78 で追加した「再接続時 initial-content 破棄」が副作用となり、再接続中に到着したプロンプト UI が xterm に書き込まれず、ユーザーがリロードするまで気づかない状態を引き起こしていた
-  - `onInitialContent` を v0.1.77 動作に戻し、wasExpected=false でも書き込む。clear sequence は visible のみ (ESC[2J + ESC[H) でユーザーのスクロール位置は保持
-  - scrollback 二重化は再現するが、上流の [Claude Code TUI redraw バグ](https://github.com/anthropics/claude-code/issues/49086) が支配的のため許容
-- v0.1.78 で導入した CJK の `rescaleOverlappingGlyphs: true` (文字重なり対策) は維持
+- Claude Code's input prompts (permission, plan, AskUserQuestion and so on) did
+  not appear after a WS reconnect
+  - The "discard initial-content on reconnect" added in v0.1.78 had the side
+    effect that a prompt UI arriving during the reconnect was never written to
+    xterm, leaving the user unaware until they reloaded
+  - `onInitialContent` is back to its v0.1.77 behavior and writes even when
+    wasExpected=false. The clear sequence covers only the visible area (ESC[2J +
+    ESC[H), so the user's scroll position is preserved
+  - Duplicated scrollback returns with it, but the upstream
+    [Claude Code TUI redraw bug](https://github.com/anthropics/claude-code/issues/49086)
+    dominates, so it is accepted
+- The CJK `rescaleOverlappingGlyphs: true` from v0.1.78 (overlapping characters)
+  is kept
 
 ## [0.1.78] - 2026-04-25
 
 ### Fixed
-- ターミナル表示の不安定さを2点修正
-  - **scrollback 二重化**: WebSocket 再接続時に古い履歴と新しい initial-content が重複し、スクロールアップで同じ出力が2回表示される問題を解消。再接続時は initial-content を破棄して live %output に任せる方式に変更
-  - **CJK グリフの重なり**: 日本語+ASCII 混在出力で文字が隣接セルに侵食する問題を `rescaleOverlappingGlyphs: true` で解消
+- Two terminal display instabilities
+  - **Duplicated scrollback**: on a WebSocket reconnect the old history and the
+    new initial-content overlapped, so scrolling up showed the same output twice.
+    A reconnect discards initial-content and leaves it to the live `%output`
+  - **Overlapping CJK glyphs**: characters bled into the neighboring cell in
+    mixed Japanese and ASCII output, resolved with
+    `rescaleOverlappingGlyphs: true`
 
 ## [0.1.77] - 2026-04-24
 
 ### Fixed
-- コンテキスト使用率が正しく計測されない問題を修正
-  - モデルの context window max をハードコード (200k) から Anthropic `/v1/models` API 経由の動的取得に変更
-  - Opus 4.7 (1M context) で 100% cap されていた問題を解消、`/context` コマンドと ±1% 以内で一致
+- Context usage was measured incorrectly
+  - A model's maximum context window moved from a hardcoded 200k to a dynamic
+    fetch through Anthropic's `/v1/models` API
+  - Fixes the 100% cap on Opus 4.7 (1M context), and now matches the `/context`
+    command within 1%
 
 ### Changed
-- トークン使用量表示を output のみから累計 used (input + cache_creation + output) に変更
-  - cache_read は billing 10% なので除外、実質のレート制限寄与度に近い値を表示
-  - UI ラベル `out` → `used`、tooltip に内訳 (in / cache_create / cache_read / out)
+- Token usage went from output only to cumulative used (input + cache_creation +
+  output)
+  - cache_read is billed at 10% and is excluded, so the number is close to the
+    real contribution toward the rate limit
+  - The UI label changed from `out` to `used`, with the breakdown in the tooltip
+    (in / cache_create / cache_read / out)
 
 ### Added
-- `backend/src/services/anthropic-models.ts` 新規
-  - OAuth トークンで `/v1/models` を叩き、`model_id → max_input_tokens` を 24h キャッシュ
+- A new `backend/src/services/anthropic-models.ts`
+  - Calls `/v1/models` with the OAuth token and caches
+    `model_id -> max_input_tokens` for 24 hours
 
 ## [0.1.76] - 2026-04-24
 
 ### Fixed
-- メモリメトリクスを macOS でも取得可能に
-  - `/proc` 依存の実装を `ps -A -o pid=,ppid=,rss=` に統一（Linux/macOS 共通）
-  - 1 秒 TTL のプロセステーブルキャッシュを追加し、複数セッション間で `ps` spawn を共有
+- Memory metrics work on macOS too
+  - The `/proc`-dependent implementation was unified on
+    `ps -A -o pid=,ppid=,rss=` (which works on both Linux and macOS)
+  - A process-table cache with a 1-second TTL shares one `ps` spawn across
+    sessions
 
 ## [0.1.75] - 2026-04-24
 
 ### Added
-- セッション一覧の各カードにメトリクス表示を追加
-  - **コンテキスト使用率**: .jsonl の最新 usage から算出、200k max に対する % をプログレスバーで可視化 (緑 <60% / アンバー 60-80% / 赤 ≥80%)
-  - **メモリ使用率**: tmux pane_pid から /proc ツリーを走査して RSS 合計を算出
-  - **トークン使用量**: .jsonl 全スキャンで output トークン累計を算出
-- mtime+size ベースのキャッシュで 2 回目以降 56-83ms の応答
-- デスクトップ (SessionList) とモバイル/タブレット (SessionListMini) 両方に対応
+- Metrics on each card in the session list
+  - **Context usage**: computed from the latest usage in the .jsonl and shown as
+    a progress bar against a 200k maximum (green below 60%, amber 60-80%, red at
+    80% or above)
+  - **Memory usage**: the RSS total from walking the /proc tree from tmux's
+    pane_pid
+  - **Token usage**: cumulative output tokens from a full scan of the .jsonl
+- An mtime+size cache answers in 56-83ms from the second call onward
+- Supported on both desktop (SessionList) and mobile/tablet (SessionListMini)
 
 ### Changed
-- セッションカードの要約/プロンプト表示を `truncate` (1行+...) から `line-clamp-2` (最大2行) に変更し、読みやすさを向上
+- A session card's summary and prompt went from `truncate` (one line plus an
+  ellipsis) to `line-clamp-2` (two lines maximum), which reads better
 
 ## [0.1.74] - 2026-04-22
 
 ### Added
-- TypeScript 7.0 beta (tsgo) による型チェック基盤を導入（tsc 5.9.3 比で約6.8倍高速化）
-- 各 workspace に `typecheck` スクリプト追加、root から `bun run typecheck` で一括実行可能
-- CI (`.github/workflows/test.yml`) に typecheck ステップを追加
+- Type checking through the TypeScript 7.0 beta (tsgo), about 6.8 times faster
+  than tsc 5.9.3
+- A `typecheck` script in each workspace, runnable together from the root with
+  `bun run typecheck`
+- A typecheck step in CI (`.github/workflows/test.yml`)
 
 ### Fixed
-- backend/frontend で検出されなかった既存型エラー 13 件を修正
-  - `SessionState` の narrow 解除、lost session の必須プロパティ補完
-  - テストコードの optional chaining 化
-  - frontend の CSS module 宣言（`vite-env.d.ts`）
-  - `SessionResponse` 型の import 漏れ
-- `backend/tsconfig.json`: `bun-types` → `bun`（`@types/bun` に整合）
+- 13 existing type errors in backend/frontend that had gone undetected
+  - A lost narrow on `SessionState`, and missing required properties on a lost
+    session
+  - Optional chaining in test code
+  - The frontend's CSS module declaration (`vite-env.d.ts`)
+  - A missing `SessionResponse` type import
+- `backend/tsconfig.json`: `bun-types` -> `bun` (matching `@types/bun`)
 
 ## [0.1.73] - 2026-04-12
 
 ### Added
-- File Viewer: ファイルアップロード/ダウンロード機能（動画など大きいファイルも対応）
-- `POST /files/upload` — 複数ファイル一括アップロード、ストリーミング書き込み（Bun.write）
-- `GET /files/download` — 添付ダウンロード、ストリーミング配信（Bun.file）
-- `GET /files/raw` — 画像/動画/音声の直接ストリーミング配信（Range request対応）
-- 動画再生（MP4, WebM, MOV等）と音声再生（MP3, WAV, FLAC等）をFileViewerに追加
-- アップロード成功/失敗のトースト通知
-- モバイルレイアウトにもアップロード/ダウンロードボタンを追加
+- File Viewer: file upload and download (large files such as video included)
+- `POST /files/upload` - multi-file upload with streaming writes (Bun.write)
+- `GET /files/download` - download as an attachment, streamed (Bun.file)
+- `GET /files/raw` - direct streaming of images, video and audio (Range requests
+  supported)
+- Video playback (MP4, WebM, MOV and so on) and audio playback (MP3, WAV, FLAC
+  and so on) in the FileViewer
+- Toast notifications for upload success and failure
+- Upload and download buttons in the mobile layout too
 
 ### Fixed
-- 大きい画像が1MB制限で崩れて表示される問題を修正（/files/raw ストリーミングに変更）
-- サーバーの最大リクエストボディサイズを10GBに拡張
-- モバイルPWAでFileオブジェクト参照が切れる問題にBlob変換で対応
-- 動画シーク・プログレッシブ再生対応（Range request / 206 Partial Content）
-- 動画プレーヤーの画面サイズ自動調整（object-contain, playsInline）
+- Large images were broken by the 1MB limit (they go through /files/raw
+  streaming now)
+- The server's maximum request body size was raised to 10GB
+- Handled the File object reference being lost in a mobile PWA by converting to a
+  Blob
+- Video seeking and progressive playback (Range request / 206 Partial Content)
+- The video player sizes itself to the screen (object-contain, playsInline)
 
 ## [0.1.65] - 2026-04-11
 
 ### Added
-- 会話ビューアーでツールブロックにdescription要約を表示（折りたたみ時に「Bash: コマンドの説明」のように表示）
-- G2 Glasses: 同じくツール名にdescriptionを併記
+- The conversation viewer shows a description summary on a tool block (collapsed
+  it reads like "Bash: what the command does")
+- G2 Glasses: the description accompanies the tool name there too
 
 ## [0.1.64] - 2026-04-10
 
 ### Fixed
-- ゾンビWebSocket接続の検出と切断（60秒間pingがない接続を閉じる）
-- デバイススリープ/ネットワーク切断でcloseイベントが発火しないケースに対応
+- Zombie WebSocket connections are detected and closed (a connection with no ping
+  for 60 seconds)
+- Handles the case where a device sleeping or the network dropping never fires a
+  close event
 
 ## [0.1.63] - 2026-04-10
 
 ### Fixed
-- ダッシュボードの使用量データがレートリミット(429)で表示されない問題を修正
-- Anthropic usage APIのレスポンスを60秒キャッシュし、429時は5分バックオフ
+- Dashboard usage data did not appear when rate limited (429)
+- The Anthropic usage API response is cached for 60 seconds, with a 5-minute
+  backoff on a 429
 
 ## [0.1.62] - 2026-04-10
 
 ### Fixed
-- セッションインジケーターが許可待ち/入力待ちなのに「処理中」と表示される問題を修正
-- hookオーバーライドTTLを24時間に統一（許可プロンプトで長時間待ってもステータスが消えなくなった）
-- jsonlからPendingTool状態を検出（新しいtool_useがjsonl未記録でもバッジ表示）
+- The session indicator said "working" while it was waiting for permission or
+  input
+- The hook override TTL was unified at 24 hours (so the status no longer expires
+  during a long wait on a permission prompt)
+- A pending-tool state is detected from the jsonl (the badge appears even when a
+  new tool_use is not yet recorded there)
 
 ### Added
-- G2 Glasses: requestContentAndWait でターミナルコンテンツ取得の信頼性向上
+- G2 Glasses: `requestContentAndWait` makes fetching terminal content more
+  reliable
 
 ## [0.1.61] - 2026-04-09
 
 ### Added
-- glasses-upload スキル（EVEN Hubへのビルド・アップロード・Beta切替を自動化）
+- The glasses-upload skill (automating the build, upload and Beta promotion to
+  EVEN Hub)
 
 ## [0.1.60] - 2026-04-09
 
 ### Fixed
-- G2 Glasses: 会話ページネーションのページ数計算を行数ベースに統一（最終ページに到達できない問題を修正）
+- G2 Glasses: conversation pagination counts pages by lines throughout (fixing
+  the last page being unreachable)
 
 ## [0.1.59] - 2026-04-09
 
 ### Added
-- G2 Glasses: 行数ベースのページネーション（文字幅計算でCJK/ASCII自動判定）
-- G2 Glasses: 複数メッセージ表示（短いメッセージを7行に詰め込み）
-- G2 Glasses: スワイプ時の表示メッセージ数分ジャンプ
+- G2 Glasses: line-based pagination (character width detects CJK against ASCII
+  automatically)
+- G2 Glasses: multi-message display (short messages packed into seven lines)
+- G2 Glasses: a swipe jumps by the number of messages displayed
 
 ### Changed
-- G2 Glasses: 全コンテナからボーダー削除、borderWidth: 0を明示
-- G2 Glasses: ヘッダー/フッター高さを36pxに統一
-- G2 Glasses: セッションリスト表示を7行に制限（スクロールインジケータ解消）
-- G2 Glasses: display.tsリファクタリング（コンテンツヘルパー抽出、DRY化）
+- G2 Glasses: borders removed from every container, with `borderWidth: 0` stated
+  explicitly
+- G2 Glasses: header and footer heights unified at 36px
+- G2 Glasses: the session list is limited to seven lines (removing the scroll
+  indicator)
+- G2 Glasses: display.ts refactored (content helpers extracted, duplication
+  removed)
 
 ## [0.1.58] - 2026-04-09
 
 ### Fixed
-- G2 Glasses: 会話表示からツール結果のみのメッセージをスキップ、連続アシスタントメッセージをマージ
-- G2 Glasses: テキスト内容を先、ツール呼び出しを後に表示するよう改善
-- G2 Glasses: conversationモードでtapして会話リフレッシュ＋WS再接続
-- G2 Glasses: WS再接続時に自動re-subscribe
-- G2 Glasses: EVEN Hub SDK bridge初期化のタイムアウトを5秒に延長
-- G2 Glasses: phone UIのWS診断で動的インポートを使用し初期化順エラーを解消
-- G2 Glasses: シミュレーター用にdev環境でlocalhost URLを自動設定
+- G2 Glasses: messages containing only a tool result are skipped in the
+  conversation, and consecutive assistant messages are merged
+- G2 Glasses: text content is shown before tool calls
+- G2 Glasses: tapping in conversation mode refreshes the conversation and
+  reconnects the WS
+- G2 Glasses: automatic re-subscribe after a WS reconnect
+- G2 Glasses: the EVEN Hub SDK bridge initialization timeout was extended to five
+  seconds
+- G2 Glasses: the phone UI's WS diagnostics use a dynamic import, resolving an
+  initialization-order error
+- G2 Glasses: the localhost URL is set automatically in dev for the simulator
 
 ## [0.1.57] - 2026-04-08
 
 ### Fixed
-- G2 Glasses: 選択肢モードでrequest-contentにより最新ターミナル画面を取得するよう修正
-- G2 Glasses: セッション再ソートによる意図しないセッション切替を防止
-- G2 Glasses: フォールバック選択肢 (y/n/skip) を廃止
+- G2 Glasses: choice mode fetches the latest terminal screen through
+  request-content
+- G2 Glasses: re-sorting sessions no longer switches session unintentionally
+- G2 Glasses: the fallback choices (y/n/skip) were removed
 
 ### Added
-- G2 Glasses: phone UIにWS診断情報を追加
-- G2 Glasses: ブラウザデバッグUIにWS状態・バッファ表示を追加
-- G2 Glasses: ws-clientにrequestContentメソッドを追加
+- G2 Glasses: WS diagnostics in the phone UI
+- G2 Glasses: WS state and buffer display in the browser debug UI
+- G2 Glasses: a requestContent method on ws-client
 
 ## [0.1.56] - 2026-04-08
 
 ### Changed
-- Terminal.txを2397行→1151行に分割（InputBar, SelectionOverlay, UrlMenu, useSelectionMode, terminal-themesを抽出）
+- Terminal.tsx was split from 2397 lines to 1151 (extracting InputBar,
+  SelectionOverlay, UrlMenu, useSelectionMode and terminal-themes)
 
 ## [0.1.55] - 2026-04-08
 
 ### Changed
-- ソフトキーボードのデフォルトを日本語入力モードに変更
-- glasses app.jsonのpackage_id/permissions形式をEVEN Hub仕様に修正
+- The soft keyboard defaults to Japanese input mode
+- The glasses app.json's package_id and permissions format was corrected to EVEN
+  Hub's specification
 
 ## [0.1.54] - 2026-04-08
 
 ### Added
-- デスクトップブラウザで長押しによるテキスト選択モードを追加（タブレット/スマホと同じUX）
-- 長押し後のドラッグで選択範囲をリアルタイム拡張
-- S/Eハンドルのマウスドラッグによる選択範囲の微調整
-- Selection Modeバッジ/Copy・Cancelパネルの位置を選択範囲と被らないよう自動調整
+- Long-press text selection mode in a desktop browser (the same UX as tablet and
+  phone)
+- Dragging after a long press extends the selection in real time
+- The S and E handles can be dragged with the mouse to fine-tune the selection
+- The selection mode badge and the copy/cancel panel move automatically so they
+  do not overlap the selection
 
 ### Fixed
-- マウスリリース後にxterm.jsが選択範囲を変更する問題を修正（pointer-events制御）
-- S/Eハンドルドラッグ後にmouseupが検知されない問題を修正（captureフェーズ使用）
+- xterm.js changed the selection after the mouse was released (controlled through
+  pointer-events)
+- mouseup was not detected after dragging an S or E handle (the capture phase is
+  used)
 
 ## [0.1.53] - 2026-04-08
 
 ### Changed
-- any/as型キャストを除去し、ExtendedSessionResponse型を全体で統一
-- buildSessionsListの戻り値をobject[]からExtendedSessionResponse[]に変更
-- Bun WebSocketハンドラにServerWebSocket<MuxData>型を適用
-- CLAUDE.mdのコンポーネント一覧を実ファイルと同期
+- `any` and `as` casts were removed and `ExtendedSessionResponse` is used
+  consistently
+- `buildSessionsList`'s return type went from `object[]` to
+  `ExtendedSessionResponse[]`
+- The Bun WebSocket handler is typed as `ServerWebSocket<MuxData>`
+- CLAUDE.md's component list was synchronized with the real files
 
 ## [0.1.52] - 2026-04-08
 
 ### Added
-- lostセッションに削除ボタンを追加（Resumeの横に表示）
+- A delete button on a lost session (next to Resume)
 
 ## [0.1.51] - 2026-04-07
 
 ### Added
-- **G2スマートグラス コンパニオンアプリ** (`glasses/` ワークスペース)
-  - セッション一覧（ステータスアイコン付き、リングスワイプで選択）
-  - 会話表示（ページ送り、リアルタイム更新3秒ポーリング）
-  - 選択肢モード（カーソルキー送信でClaude Codeの選択画面を操作）
-  - スマホ設定画面（CC Hub紹介、セットアップ手順、URL入力＆自動補完）
-  - LocalStorage共有（スマホで設定→メガネが自動検出して接続）
-  - ツール実行のコンパクト表示（[Edit] path, [Bash] command 等）
-- conversation APIに`?last=N`パラメータ追加
+- **A G2 smart glasses companion app** (the `glasses/` workspace)
+  - The session list (with status icons, selected by a ring swipe)
+  - The conversation view (paging, refreshed by 3-second polling)
+  - Choice mode (sending cursor keys to drive Claude Code's selection screen)
+  - A phone settings screen (a CC Hub introduction, setup steps, URL entry with
+    autocompletion)
+  - LocalStorage sharing (configure on the phone and the glasses find and connect
+    automatically)
+  - Compact display of tool calls (`[Edit] path`, `[Bash] command` and so on)
+- A `?last=N` parameter on the conversation API
 
 ## [0.1.49] - 2026-04-07
 
 ### Fixed
-- lostセッションのccSessionId無しでのresume対応
+- Resuming a lost session with no ccSessionId
 
 ## [0.1.47] - 2026-04-06
 
 ### Changed
-- waitingForInputフィールドを削除（hookベースのindicatorに統一）
+- The waitingForInput field was removed (unified on the hook-based indicator)
 
 ## [0.1.44] - 2026-04-05
 
 ### Fixed
-- AskUserQuestionのPreToolUseでwaiting_inputステータスを表示
+- AskUserQuestion's PreToolUse shows the waiting_input status
 
 ## [0.1.42] - 2026-04-04
 
 ### Fixed
-- PreToolUseイベントのブラウザ通知を抑制（ステータス更新のみ）
+- Browser notifications for PreToolUse events are suppressed (status update only)
 
 ## [0.1.41] - 2026-04-04
 
 ### Changed
-- セッションインジケーターをhookイベント専用に変更（jsonl/ps判定を廃止）
-  - PreToolUse/UserPromptSubmit → processing
-  - Stop/SubagentStop → completed
-  - PostToolUse(AskUserQuestion) → waiting_input
-- ~/.claude/settings.jsonにPreToolUse/UserPromptSubmit hookを追加
+- The session indicator is driven by hook events alone (the jsonl/ps heuristics
+  were removed)
+  - PreToolUse / UserPromptSubmit -> processing
+  - Stop / SubagentStop -> completed
+  - PostToolUse (AskUserQuestion) -> waiting_input
+- Added the PreToolUse and UserPromptSubmit hooks to `~/.claude/settings.json`
 
 ## [0.1.40] - 2026-04-04
 
 ### Changed
-- psのwchan解析を廃止（Node.jsでは常にdo_epoll_waitで無意味）
-- セッションインジケーターをhook/jsonlベースに変更
-- jsonlキャッシュTTLを5s→2sに短縮
-- processRunningマップと関連ロジックを完全削除（-81行）
+- Dropped the wchan analysis from ps (it is always do_epoll_wait on Node.js and
+  says nothing)
+- The session indicator moved to hook/jsonl
+- The jsonl cache TTL went from 5s to 2s
+- The processRunning map and its logic were deleted entirely (-81 lines)
 
 ## [0.1.39] - 2026-04-04
 
 ### Fixed
-- cchub updateがサービス登録パスのバイナリを更新するように修正
-- CLIバイナリとサービスバイナリが異なるパスにある場合、両方を更新
+- `cchub update` updates the binary at the registered service path
+- When the CLI binary and the service binary are at different paths, both are
+  updated
 
 ## [0.1.38] - 2026-04-04
 
 ### Fixed
-- メタデータ（テーマ・タイトル）消失のrace condition修正
-  - lastKnownSessionsを別ファイル（last-known-sessions.json）に分離
-  - 5秒ごとのスナップショット書き込みがmetadata本体を上書きしなくなった
+- A race condition that lost metadata (theme and title)
+  - lastKnownSessions moved into its own file (last-known-sessions.json)
+  - The snapshot written every five seconds no longer overwrites the metadata
+    itself
 
 ### Changed
-- コード健全化
-  - フロントエンドlintエラー3件修正（CSS parse, noImportantStyles, noUselessCatch）
-  - バックエンドlint修正（parseInt radix, unused param, optional chain）
-  - zod統一（shared v3→v4）、ローカルスキーマ重複削除
-  - listPanesにisActiveフィールド追加
-  - 旧メタデータファイル（session-themes.json, session-titles.json）の自動削除
-- 完了済みGitHub issueをクローズ（#1, #2, #12, #47）
+- Code health
+  - Three frontend lint errors fixed (CSS parse, noImportantStyles,
+    noUselessCatch)
+  - Backend lint fixes (parseInt radix, unused parameter, optional chain)
+  - zod unified (shared v3 -> v4) and duplicate local schemas removed
+  - An isActive field added to listPanes
+  - The old metadata files (session-themes.json, session-titles.json) are deleted
+    automatically
+- Closed the GitHub issues that were already done (#1, #2, #12, #47)
 
 ## [0.1.37] - 2026-04-04
 
 ### Fixed
-- リブート後のlostセッションがリフレッシュで消えなくなった
-- lostセッションのResume時にclaude -rで会話引き継ぎ
+- A lost session after a reboot no longer disappears on refresh
+- Resuming a lost session carries the conversation over through `claude -r`
 
 ## [0.1.36] - 2026-04-04
 
 ### Added
-- リブート後のlostセッションにccSessionIdを保存
-- lostセッションのResumeでclaude -rによる会話引き継ぎ
+- ccSessionId is stored for a lost session after a reboot
+- Resuming a lost session carries the conversation over through `claude -r`
 
 ## [0.1.35] - 2026-04-04
 
 ### Fixed
-- デスクトップ版コピペ（テキスト選択、Ctrl+C/V、右クリックメニュー）
-- デスクトップ版フォントサイズ変更（Ctrl+=/-/0）
-- iPad safe-area-inset-top対応
-- マウストラッキングリセット
+- Desktop copy and paste (text selection, Ctrl+C/V, the right-click menu)
+- Desktop font size changes (Ctrl+=/-/0)
+- iPad safe-area-inset-top support
+- Mouse tracking reset
 
 ### Changed
-- CLAUDE.md/README全面更新（WebSocket /ws/mux, 全サービス・API・コンポーネント文書化）
+- CLAUDE.md and the README were fully updated (the WebSocket `/ws/mux`, and every
+  service, API and component documented)
 
 ## [0.1.5] - 2026-03-20
 
 ### Changed
-- スマホ日本語入力を二段レイアウトに変更（上:入力欄幅いっぱい、下:ボタン列）
-- ボタン配置: 左に履歴/ファイル/ABC/クリア、右にカーソル上下/送信
-- ボタンサイズを44pxタッチターゲットに拡大
+- Japanese input on a phone moved to a two-row layout (the input field takes the
+  full width on top, with the buttons underneath)
+- Button layout: history / file / ABC / clear on the left, cursor up and down
+  plus send on the right
+- Buttons enlarged to 44px touch targets
 
 ### Fixed
-- UserPromptSubmitフックの不要な通知を抑制
+- Suppressed the unnecessary notification from the UserPromptSubmit hook
 
 ## [0.1.4] - 2026-03-20
 
 ### Changed
-- Connecting表示を全画面オーバーレイから左上の小さなバナーに変更（接続中もターミナル操作可能に）
+- The "Connecting" indication moved from a full-screen overlay to a small banner
+  in the top left (so the terminal stays usable while connecting)
 
 ## [0.1.3] - 2026-03-20
 
 ### Fixed
-- ファイルビューアで長押し時にブラウザのコンテキストメニュー（ダウンロード/共有/印刷）が表示される問題を修正
+- A long press in the file viewer brought up the browser's context menu
+  (download / share / print)
 
 ## [0.1.2] - 2026-03-20
 
 ### Added
-- セッション一覧でペインを長押しして閉じる機能（確認ダイアログ付き）
+- Long-pressing a pane in the session list closes it (with a confirmation
+  dialog)
 
 ### Fixed
-- zod v4でペイン操作API（close/focus/split/respawn）が500エラーになる問題を修正
+- The pane operation APIs (close / focus / split / respawn) returned a 500 under
+  zod v4
 
 ## [0.1.1] - 2026-03-19
 
 ### Fixed
-- macOSでtmux制御モードが動作しない問題を修正（`script`→`expect`でPTYラッパー）
+- tmux control mode did not work on macOS (the PTY wrapper moved from `script` to
+  `expect`)
 
 ## [0.1.0] - 2026-03-19
 
 ### Added
-- ターミナル長押しテキスト選択（タッチデバイス対応）
-  - 長押しで選択モード開始、ドラッグで文字レベル選択
-  - S/Eハンドルで選択範囲をドラッグ調整
-  - 選択テキストのプレビューパネル表示
-  - Copy/Cancelボタン、クリップボードコピー対応
+- Long-press text selection in the terminal (for touch devices)
+  - A long press starts selection mode and dragging selects by character
+  - The S and E handles adjust the selection by dragging
+  - A preview panel of the selected text
+  - Copy and Cancel buttons, with clipboard support
 
 ## [0.0.99] - 2026-03-19
 
 ### Added
-- FileViewerにCopy Prompt機能（行選択→コメント→ターミナル入力欄にセット）
-- 日本語入力に送信ボタン(↵)とクリアボタン(×)を追加（スマホ・タブレット両対応）
-- Markdown/HTMLファイルのSource/Preview切替ボタン
+- Copy Prompt in the FileViewer (select lines, add a comment, and it lands in the
+  terminal's input field)
+- A send button and a clear button for Japanese input (on both phone and tablet)
+- A Source/Preview toggle for Markdown and HTML files
 
 ### Changed
-- FileViewerの行番号を常時表示（ワードラップ時も）
-- 行全体をタップで選択可能に（行番号以外も）
-- タブレットでFileViewer表示中はFloatingKeyboardを非表示に
+- Line numbers are always visible in the FileViewer (word wrap included)
+- The whole row is tappable for selection (not just the line number)
+- The FloatingKeyboard is hidden while the FileViewer is shown on a tablet
 
 ## [0.0.98] - 2026-03-18
 
 ### Changed
-- zod 3→4、@hono/zod-validator 0.5→0.7 にメジャーアップグレード
-- vite 6→8、@vitejs/plugin-react 4→6 にメジャーアップグレード
+- Major upgrades: zod 3 -> 4, @hono/zod-validator 0.5 -> 0.7
+- Major upgrades: vite 6 -> 8, @vitejs/plugin-react 4 -> 6
 
 ## [0.0.97] - 2026-03-18
 
 ### Added
-- share-tokenサービスのユニットテスト追加（18テスト）
+- Unit tests for the share-token service (18 tests)
 
 ### Changed
-- パッチ/マイナー依存関係更新（hono, react, tailwindcss, i18next等）
+- Patch and minor dependency updates (hono, react, tailwindcss, i18next and
+  others)
 
 ## [0.0.96] - 2026-03-18
 
 ### Removed
-- 非推奨TabletLayoutコンポーネント削除（478行、DesktopLayout+isTabletに統合済み）
-- 未使用isExternalフィールド、onReload prop、レガシーsessionsフラット配列
-- ext:プレフィックス正規化、旧localStorageキー掃除、旧ペインタイプ変換等のマイグレーションコード
+- The deprecated TabletLayout component (478 lines, already merged into
+  DesktopLayout + isTablet)
+- The unused isExternal field, the onReload prop and the legacy flat sessions
+  array
+- Migration code such as the `ext:` prefix normalization, the old localStorage
+  key cleanup and the old pane type conversion
 
 ## [0.0.95] - 2026-03-18
 
 ### Fixed
-- ファイルブラウザでシンタックスハイライトが付かないことがある問題を修正
+- Syntax highlighting was sometimes missing in the file browser
 
 ## [0.0.94] - 2026-03-18
 
 ### Fixed
-- ソフトキーボードで`/`を押すと`?`が付く問題を修正（タッチ+マウスの二重発火による長押しタイマーの残留）
+- Pressing `/` on the soft keyboard produced `?` (a long-press timer left behind
+  by touch and mouse both firing)
 
 ## [0.0.93] - 2026-03-17
 
 ### Changed
-- タブレットFloatingKeyboardの日本語入力をスマホと統一（textarea + Enter×2送信 + ブラケットペースト）
+- Japanese input on the tablet FloatingKeyboard matches the phone (a textarea,
+  Enter twice to send, bracketed paste)
 
 ## [0.0.92] - 2026-03-17
 
 ### Added
-- スマホ日本語入力に履歴ボタン追加（FloatingKeyboardと履歴共有）
-- スマホ日本語入力を複数行編集対応（textarea化）
-- Enter×2で送信、複数行はブラケットペーストモードで一括送信
+- A history button for Japanese input on a phone (sharing history with the
+  FloatingKeyboard)
+- Multi-line editing for Japanese input on a phone (a textarea)
+- Enter twice sends, and multiple lines are sent at once in bracketed paste mode
 
 ### Fixed
-- ビューアページの縦スクロール有効化
+- Vertical scrolling was enabled on the viewer page
 
 ## [0.0.91] - 2026-03-16
 
 ### Fixed
-- ビューアページで画面下部のターミナル内容が見えない問題を修正（縦スクロール有効化）
+- The terminal content at the bottom of the viewer page was invisible (vertical
+  scrolling enabled)
 
 ## [0.0.90] - 2026-03-16
 
 ### Changed
-- Funnelをオンデマンド化: 共有トークン生成時にON、全トークン消滅時にOFF
-- 起動時の自動Funnel設定を廃止（前回のFunnel残骸はクリーンアップ）
+- Funnel became on-demand: on when a share token is created, off when the last
+  token disappears
+- Automatic Funnel setup at startup was dropped (leftovers from a previous Funnel
+  are cleaned up)
 
 ## [0.0.89] - 2026-03-16
 
 ### Added
-- Tailscale Funnel自動設定: サーバー起動時にポート8443で外部公開を自動セットアップ
-- 共有ダイアログのQRコード/URLが自動的にFunnel経由の外部URLを使用
+- Automatic Tailscale Funnel setup: external exposure on port 8443 is configured
+  when the server starts
+- The share dialog's QR code and URL use the external Funnel URL automatically
 
 ### Fixed
-- Funnelとバックエンドのポート競合を修正（別ポート8443で転送）
-- ViewerPageのターミナル固定幅レンダリングとフォントサイズ調整
+- A port conflict between Funnel and the backend (it forwards through a separate
+  port 8443)
+- Fixed-width terminal rendering and font size adjustment on the ViewerPage
 
 ## [0.0.88] - 2026-03-16
 
 ### Added
-- プレゼンテーションモード: セッションを読み取り専用URLで共有可能に
-- 共有トークン管理（生成・一覧・無効化、最大5トークン/セッション、有効期限付き）
-- QRコード表示付き共有ダイアログ（デスクトップ/タブレット/モバイル全対応）
-- 読み取り専用WebSocketエンドポイント（/ws/view/:token）で入力操作を遮断
-- ビューア側フォントサイズ調整（提供側に影響なし）
-- 横スクロール対応（タブレットの広い画面をスマホで閲覧可能）
-- Tailscale Funnel URL自動検出によるVPN外共有
+- Presentation mode: a session can be shared through a read-only URL
+- Share token management (create, list, revoke; up to five tokens per session,
+  with an expiry)
+- A share dialog with a QR code (desktop, tablet and mobile)
+- A read-only WebSocket endpoint (`/ws/view/:token`) that blocks input
+- Font size adjustment on the viewer's side (with no effect on the sharer's)
+- Horizontal scrolling (so a tablet's wide screen can be viewed on a phone)
+- Sharing outside the VPN through automatic Tailscale Funnel URL detection
 
 ## [0.0.87] - 2026-03-15
 
 ### Fixed
-- ターミナルのスクロール不能問題を修正（初期接続時にスクロールバックをxterm.jsに送信）
-- Connectingオーバーレイがタッチ操作をブロックしないよう修正
+- The terminal could not be scrolled (the scrollback is sent to xterm.js on the
+  initial connection)
+- The Connecting overlay no longer blocks touch input
 
 ## [0.0.86] - 2026-03-14
 
 ### Fixed
-- ファイルブラウザのタッチターゲット・フォントサイズを拡大（スマホ操作改善）
+- Larger touch targets and font sizes in the file browser (better on a phone)
 
 ## [0.0.85] - 2026-03-14
 
 ### Fixed
-- バッジ表示を indicatorState ベースに統一（processing→緑cc、waiting_input→黄、idle→なし）
+- Badges are unified on indicatorState (processing -> green cc, waiting_input ->
+  yellow, idle -> nothing)
 
 ## [0.0.84] - 2026-03-14
 
 ### Fixed
-- アイドル状態（UserInput/end_turn）を completed として扱い、不要な入力待ちバッジを抑制
+- The idle state (UserInput/end_turn) is treated as completed, suppressing an
+  unnecessary waiting-for-input badge
 
 ## [0.0.83] - 2026-03-14
 
 ### Added
-- スマホ: セッション長押しでメニューダイアログ（タイトル編集・テーマ変更・削除）
-- タブレット: メニューダイアログにカスタムタイトル入力欄を追加
+- Phone: long-pressing a session opens a menu dialog (edit the title, change the
+  theme, delete)
+- Tablet: a custom title field in the menu dialog
 
 ### Fixed
-- WebSocket再接続時にスクロール位置を保持（スクロールバッククリア・scrollToBottomをスキップ）
-- processing状態のhook TTLを30秒→5分に延長（誤った入力待ち表示を削減）
+- The scroll position is preserved across a WebSocket reconnect (the scrollback
+  clear and scrollToBottom are skipped)
+- The hook TTL for the processing state went from 30 seconds to 5 minutes
+  (reducing false waiting-for-input displays)
 
 ## [0.0.82] - 2026-03-14
 
 ### Fixed
-- WebSocket再接続時のターミナルちらつき・スクロールリセットを軽減
+- Reduced terminal flicker and scroll resets on a WebSocket reconnect
 
 ## [0.0.81] - 2026-03-14
 
 ### Added
-- サーバーサイドでのカスタムセッションタイトル保存（session-metadata.jsonに統合）
-- セッション一覧を全画面表示（ファイルビューワーと同様）
-- タブレット/PCでセッションカード・履歴を2列グリッド表示
-- タブレットでfirstPrompt常時表示、summary複数行表示
-- hook経由のステータス検知改善（UserPromptSubmit、Stop、AskUserQuestion）
+- Custom session titles are stored server-side (merged into
+  session-metadata.json)
+- The session list is shown full screen (like the file viewer)
+- Session cards and history are a two-column grid on tablet and PC
+- firstPrompt is always visible on tablet, and the summary spans several lines
+- Better status detection through hooks (UserPromptSubmit, Stop,
+  AskUserQuestion)
 
 ### Fixed
-- Bashツール等の許可待ちで「許可待ち」バッジを表示
-- スマホ版セッション一覧でカスタムタイトルを表示
-- cchub notifyがdev環境にHTTPSで送信するように修正
-- 履歴プロジェクトをパス辞書順でソート
+- A "waiting for permission" badge appears while a tool such as Bash waits for
+  approval
+- Custom titles appear in the phone session list
+- `cchub notify` sends over HTTPS in dev
+- History projects are sorted by path
 
 ## [0.0.29] - 2026-02-07
 
 ### Added
 
-- **Git差分ビューア** - ファイルビューアの「変更」タブにClaude/Git切り替えトグルを追加
-  - Gitモード: `git status --porcelain` + `git diff` でワーキングツリーの変更を表示
-  - Claude変更とGit変更をセグメントボタンで切り替え（デフォルト: Git）
-  - 一覧/ツリー表示モード（localStorageで保存）
-  - ファイルクリックで既存のDiffViewerにunified diffを表示
-  - 新規API: `GET /api/files/git-changes/:workingDir`, `GET /api/files/git-diff/:workingDir`
+- **A git diff viewer** - a Claude/Git toggle in the file viewer's Changes tab
+  - Git mode shows the working tree's changes through `git status --porcelain`
+    and `git diff`
+  - A segmented button switches between Claude's changes and git's (git by
+    default)
+  - List and tree display modes (saved in localStorage)
+  - Clicking a file shows the unified diff in the existing DiffViewer
+  - New APIs: `GET /api/files/git-changes/:workingDir`,
+    `GET /api/files/git-diff/:workingDir`
 
-- **ブラウザバックジェスチャー対応** - FileViewerでhistory.back()によるナビゲーション
-  - diff表示 → 変更一覧 → ブラウザビュー → ターミナル の順に戻る
-  - `window.history.pushState` / `popstate`イベントで実装
+- **Browser back gesture support** - navigation through history.back() in the
+  FileViewer
+  - It goes diff -> changes list -> browser view -> terminal
+  - Implemented with `window.history.pushState` and the `popstate` event
 
 ### Fixed
 
-- **Biomeリント設定整備** - `biome.json`でa11y/style系ルールをwarnに設定
-  - `useButtonType`, `noSvgWithoutTitle`, `noStaticElementInteractions`等8つのa11yルールをwarn化
-  - `noExplicitAny`, `noNonNullAssertion`, `useExhaustiveDependencies`等もwarn化
-  - バックエンド16ファイル、フロントエンド14ファイルの自動修正可能なlintエラーを修正
-  - DesktopLayout.tsx: `useEffect`の変数宣言順序を修正
-  - FloatingKeyboard.tsx: `getDefaultPosition`をモジュールレベルに移動
+- **Biome lint configuration** - a11y and style rules set to warn in
+  `biome.json`
+  - Eight a11y rules (`useButtonType`, `noSvgWithoutTitle`,
+    `noStaticElementInteractions` and others) set to warn
+  - `noExplicitAny`, `noNonNullAssertion`, `useExhaustiveDependencies` and
+    others set to warn as well
+  - Auto-fixable lint errors corrected in 16 backend and 14 frontend files
+  - DesktopLayout.tsx: corrected the declaration order inside a `useEffect`
+  - FloatingKeyboard.tsx: `getDefaultPosition` moved to module level
 
 ## [0.0.28] - 2026-02-07
 
 ### Added
 
-- **ネットワーク遅延モニター** - ダッシュボードにリアルタイム遅延表示カードを追加
-  - WebSocket ping/pong（10秒間隔）とAPI ping（30秒間隔）の2種類を計測
-  - CSSベースのスパークラインで過去30データポイントの履歴を可視化
-  - 色分け表示: 緑(<50ms), 黄(50-150ms), 赤(>150ms)
-  - WS切断時は最後の計測値を薄く表示（20秒以内のpong受信で接続判定）
+- **A network latency monitor** - a real-time latency card on the dashboard
+  - Two measurements: WebSocket ping/pong (every 10 seconds) and an API ping
+    (every 30 seconds)
+  - A CSS-based sparkline visualizes the last 30 data points
+  - Color coded: green below 50ms, yellow 50-150ms, red above 150ms
+  - While the WS is down the last measurement is shown dimmed (a pong within 20
+    seconds counts as connected)
 
 ## [0.0.27] - 2026-02-07
 
 ### Performance
 
-- **Sessions API レイテンシ 48.6%削減** (70.84ms → 36.39ms)
-  - `capture-pane`の重複呼び出しを統合（2回→1回/セッション）
-  - `ps`コマンドをバッチ化（N回→1回で全TTYのClaude検出・プロセス状態チェック）
-  - `listSessions` 2秒TTLキャッシュ追加
-  - TTY→SessionIDマッピング 10秒TTLキャッシュ追加
-  - フロントエンド`useSessions`のfetchリクエスト重複排除
+- **Sessions API latency down 48.6%** (70.84ms -> 36.39ms)
+  - Duplicate `capture-pane` calls merged (two per session down to one)
+  - The `ps` command batched (N calls down to one for Claude detection and
+    process state across every TTY)
+  - A 2-second TTL cache on `listSessions`
+  - A 10-second TTL cache on the TTY-to-SessionID mapping
+  - Duplicate fetch requests removed from the frontend's `useSessions`
 
-- **ターミナルWebSocketホットパス最適化**
-  - デバッグhexログを除去（毎キーストロークで`Array.from`+`map`+`join`+`console.log`が走っていた）
-  - PTY切断時に30秒の猶予期間を追加（タブレットのスリープ復帰時に即座再接続）
+- **Terminal WebSocket hot path optimized**
+  - Removed the debug hex logging (an `Array.from` + `map` + `join` +
+    `console.log` ran on every keystroke)
+  - Added a 30-second grace period on PTY disconnect (so a tablet waking from
+    sleep reconnects immediately)
 
 ### Added
 
-- **ターミナルレイテンシベンチマークスイート** (`backend/tests/benchmark/`)
-  - Single char echo RTT、コマンド実行RTT、スループット、Sessions APIの4メトリクス計測
-  - p95/p99パーセンタイル統計
+- **A terminal latency benchmark suite** (`backend/tests/benchmark/`)
+  - Four metrics: single-character echo RTT, command execution RTT, throughput
+    and the Sessions API
+  - p95/p99 percentile statistics
 
 ## [0.0.26] - 2026-02-06
 
 ### Added
-- **オンボーディングウォークスルー** - 初回ユーザー向けスポットライト式ガイド
-  - デスクトップ/タブレット/モバイル各デバイス対応
-  - キーボード操作、分割ペイン、セッション一覧の使い方を順に説明
-  - `beforeAction`パターンで説明前にUIを自動操作（キーボード表示など）
+- **An onboarding walkthrough** - a spotlight-style guide for first-time users
+  - Supported on desktop, tablet and mobile
+  - It explains the keyboard, split panes and the session list in order
+  - A `beforeAction` pattern drives the UI automatically before an explanation
+    (showing the keyboard, for instance)
 
-- **ターミナルリフレッシュ機能** - 表示崩れ時の軽量リカバリー
-  - WebSocket経由で`tmux refresh-client -S`を送信
-  - WebSocket再接続時に自動リフレッシュ
+- **Terminal refresh** - a lightweight recovery when the display breaks
+  - Sends `tmux refresh-client -S` over the WebSocket
+  - Refreshes automatically on a WebSocket reconnect
 
-- **ペインごとの分割ボタン** - デスクトップモードで各ペインヘッダーに分割ボタンを配置
+- **A split button per pane** - a split button in each pane header in desktop
+  mode
 
 ### Changed
-- **ハンバーガーメニュー削除** - DesktopLayoutのサイドパネルオーバーレイを廃止（PaneContainer内のセッション一覧サイドバーに統合）
-- **サイドバーリサイズハンドル改善** - 透明なオーバーレイ方式に変更、タッチ領域拡大（タブレット24px）
-- **サイドバーがターミナル端に被さるレイアウト** - xterm文字幅端数による隙間を軽減
-- **タブナビゲーション自動フィット** - フォントサイズ縮小+truncateで狭いパネルでも1行表示
-- **リロードボタンをページ全体リロードに変更**
+- **The hamburger menu is gone** - DesktopLayout's side panel overlay was
+  dropped (merged into the session list sidebar inside PaneContainer)
+- **A better sidebar resize handle** - a transparent overlay with a larger touch
+  area (24px on a tablet)
+- **The sidebar overlaps the terminal's edge** - which reduces the gap caused by
+  xterm's fractional character width
+- **Tab navigation auto-fits** - a smaller font plus truncation keeps it on one
+  line in a narrow panel
+- **The reload button reloads the whole page**
 
 ### Fixed
-- モバイルターミナルスクロールの不自然な挙動（閾値調整、二重スクロール解消）
-- モバイルでキーボードオンボーディングが表示されない問題
-- オンボーディングツールチップがナビゲーションバーに隠れる問題
-- ペースト時にclipboard.readが空を返す際のフォールバック改善
-- 履歴一覧で長いプロジェクトパスが折り返される問題
+- Unnatural mobile terminal scrolling (thresholds adjusted, double scrolling
+  removed)
+- The keyboard onboarding did not appear on mobile
+- Onboarding tooltips were hidden behind the navigation bar
+- A better fallback when `clipboard.read` returns empty on paste
+- Long project paths wrapped in the history list
 
 ## [0.0.25] - 2026-02-05
 
 ### Added
-- **CLI国際化対応**: バックエンド/CLIメッセージの日本語・英語対応
-  - 環境変数 `LANG`/`LC_ALL`/`LC_MESSAGES` から言語を自動検出
-  - 日本語ロケール (`ja_*`) → 日本語出力、それ以外 → 英語出力
-  - シングルバイナリ対応のため翻訳データを埋め込み
+- **CLI internationalization**: Japanese and English for backend and CLI messages
+  - The language is detected from the `LANG` / `LC_ALL` / `LC_MESSAGES`
+    environment variables
+  - A Japanese locale (`ja_*`) produces Japanese output, everything else English
+  - The translation data is embedded for the single binary
 
 ### Changed
-- CLAUDE.md に国際化（i18n）セクションを追加
+- Added an internationalization (i18n) section to CLAUDE.md
 
 ## [0.0.24] - 2026-02-05
 
 ### Added
-- **フロントエンド国際化対応**: react-i18nextによる完全なi18n対応
-  - 全UIコンポーネントの日本語・英語翻訳
-  - i18next-browser-languagedetectorによるブラウザ言語自動検出
-  - 言語切替ボタン（EN/JA）をUIに追加
-  - 設定は localStorage (`cchub-language`) に保存
-  - 翻訳ファイル: `frontend/src/i18n/locales/{en,ja}.json`
+- **Frontend internationalization**: full i18n through react-i18next
+  - Japanese and English translations for every UI component
+  - Automatic browser language detection through
+    i18next-browser-languagedetector
+  - A language switch button (EN/JA) in the UI
+  - The setting is saved in localStorage (`cchub-language`)
+  - Translation files: `frontend/src/i18n/locales/{en,ja}.json`
 
 ### Changed
-- ダッシュボードのステータスメッセージをフロントエンドで生成（翻訳対応）
-- 全コンポーネントのハードコードされた日本語を翻訳キーに置換
+- Dashboard status messages are generated in the frontend (so they can be
+  translated)
+- Hardcoded Japanese in every component was replaced by translation keys
 
 ## [0.0.23] - 2026-02-05
 
 ### Added
-- **会話履歴の検索機能**
-  - 履歴タブに検索ボックスを追加
-  - プロジェクト名とユーザーメッセージで検索
-  - インクリメンタルサーチ（SSEストリーミング）
-  - 全文検索対応（全ユーザーメッセージを検索）
-  - マッチ箇所のスニペット表示
+- **Conversation history search**
+  - A search box in the History tab
+  - Searches project names and user messages
+  - Incremental search (SSE streaming)
+  - Full-text search (across every user message)
+  - Snippets around each match
 
 ## [0.0.22] - 2026-02-05
 
 ### Added
-- **VSCode風ツリービューファイラー**
-  - ディレクトリを展開/折りたたみで表示
-  - サブディレクトリの遅延読み込み
-  - 深さに応じたインデント表示
+- **A VSCode-style tree file browser**
+  - Directories expand and collapse
+  - Subdirectories load lazily
+  - Indentation by depth
 
-- **ファイラーのペインリサイズ機能**
-  - 左右ペイン間のディバイダーをドラッグでリサイズ可能
-  - マウス/タッチ両対応
+- **Pane resizing in the file browser**
+  - The divider between the left and right panes can be dragged
+  - Mouse and touch both supported
 
-- **テキスト選択機能**
-  - Markdownプレビューでテキスト選択可能
-  - 会話ビューアでテキスト選択可能
+- **Text selection**
+  - Text can be selected in the Markdown preview
+  - Text can be selected in the conversation viewer
 
 ### Fixed
-- 会話ビューアで画像が表示されない問題
-  - 認証不要の画像エンドポイント `/api/images/` を追加
-- HTMLプレビューの定期リフレッシュ問題
-  - blob URLをメモ化してiframe再読み込みを防止
-- ファイラー表示時にキーボードが前面に出る問題
-  - キーボードのz-indexを調整
-- デスクトップでの日本語IME入力が正しく動作しない問題
+- Images did not appear in the conversation viewer
+  - Added an unauthenticated image endpoint at `/api/images/`
+- The HTML preview refreshed periodically
+  - The blob URL is memoized to stop the iframe from reloading
+- The keyboard came to the front while the file browser was shown
+  - The keyboard's z-index was adjusted
+- Japanese IME input did not work correctly on desktop
 
 ## [0.0.21] - 2026-02-05
 
 ### Added
-- **セッション色テーマ機能**
-  - セッションごとに色テーマを設定可能（9色 + なし）
-  - セッション一覧で長押し → 色選択メニュー表示
-  - ターミナル背景色がテーマに応じて変化
-  - 設定は `~/.cchub/session-themes.json` に永続化
+- **Session color themes**
+  - A color theme per session (nine colors plus none)
+  - Long-press in the session list to open the color menu
+  - The terminal background follows the theme
+  - The setting persists in `~/.cchub/session-themes.json`
 
-- **会話ビューアの改善**
-  - システム生成サマリーを「System (Summary)」として区別表示
-  - 琥珀色のスタイルで実際のユーザーメッセージと区別
+- **Conversation viewer improvements**
+  - A system-generated summary is distinguished as "System (Summary)"
+  - Styled in amber so it is distinct from a real user message
 
 ### Changed
-- **モバイルキーボード改善**
-  - タップ/長押しでカスタムキーボードを表示
-  - OSソフトキーボードの起動を防止
-  - xterm内部textareaに`inputmode="none"`を設定
+- **Mobile keyboard improvements**
+  - A tap or long press shows the custom keyboard
+  - The OS soft keyboard is prevented from opening
+  - `inputmode="none"` is set on xterm's internal textarea
 
 ### Fixed
-- モバイルでセッションテーマ変更が即座に反映されない問題
+- A session theme change did not apply immediately on mobile
 
 ## [0.0.20] - 2026-02-05
 
 ### Added
-- **パスワード認証機能**
-  - `-P`オプションでサーバー起動時にパスワード認証を有効化
-  - 全APIエンドポイントに条件付き認証ミドルウェアを適用
-  - WebSocket接続時のトークン認証
-  - フロントエンドにログインフォーム追加
+- **Password authentication**
+  - The `-P` option enables password authentication at server startup
+  - Conditional auth middleware on every API endpoint
+  - Token authentication on the WebSocket connection
+  - A login form in the frontend
 
-- **HTMLファイルプレビュー**
-  - ファイルビューアでHTMLファイルをiframeでプレビュー表示
+- **HTML file preview**
+  - HTML files are previewed in an iframe in the file viewer
 
-- **開発用コマンド**
-  - `bun run dev:auth` - パスワード認証付きで開発環境起動（パスワード: devpass）
+- **A development command**
+  - `bun run dev:auth` - starts the dev environment with password
+    authentication (password: devpass)
 
 ### Security
-- JWT認証によるAPIアクセス制御
-- WebSocketトークン検証
-- `authFetch`ヘルパーで認証付きAPI呼び出しを一元化
+- API access control through JWT authentication
+- WebSocket token verification
+- An `authFetch` helper centralizes authenticated API calls
 
 ## [0.0.19] - 2026-02-04
 
 ### Added
-- **PC版長押し削除対応**
-  - デスクトップブラウザでセッション一覧の長押し削除が動作
-  - `onMouseDown`/`onMouseUp`/`onMouseLeave`イベントを追加
+- **Long-press deletion on desktop**
+  - Long-press deletion in the session list works in a desktop browser
+  - Added `onMouseDown` / `onMouseUp` / `onMouseLeave` events
 
 ### Changed
-- **Claude Code検出の改善**
-  - macOSとLinux両方で動作するTTYプロセスチェック方式を採用
-  - `ps -t`コマンドで`claude`プロセスを直接確認
-  - `pane_current_command`フォールバックを削除
+- **Better Claude Code detection**
+  - A TTY process check that works on both macOS and Linux
+  - `ps -t` confirms the `claude` process directly
+  - The `pane_current_command` fallback was removed
 
 ### Fixed
-- 未定義変数`pts`を`ttyName`に修正（セッションマッチングが失敗していた問題）
+- The undefined variable `pts` became `ttyName` (session matching had been
+  failing)
 
 ### UI
-- PC版のアイコンボタンサイズを拡大（w-3 h-3 → w-4 h-4）
-- ボタンのイベント伝播を修正
+- Desktop icon buttons enlarged (w-3 h-3 -> w-4 h-4)
+- Fixed event propagation on buttons
 
 ## [0.0.18] - 2026-02-04
 
 ### Added
-- **ダッシュボードにバージョン表示**
-  - CC Hubバージョンを画面下部に表示
+- **A version display on the dashboard**
+  - The CC Hub version appears at the bottom of the screen
 
 ### Changed
-- **バージョン管理の改善**
-  - package.jsonを正とするバージョン管理に変更
-  - ハードコードされたVERSION定数を削除
+- **Better version management**
+  - package.json is the source of truth for the version
+  - The hardcoded VERSION constant was removed
 
 ### UI
-- モバイル版の下部ナビゲーションバーの高さを増加（タッチターゲット改善）
+- The mobile bottom navigation bar is taller (better touch targets)
 
 ## [0.0.4] - 2026-02-01
 
 ### Added
-- **CLI強化**
-  - `--help` / `--version` オプション
-  - `-p, --port` / `-H, --host` / `-P, --password` オプション
-  - `cchub setup` - systemdサービス登録コマンド
-  - `cchub update` - 自動更新コマンド（GitHub Releases連携）
-  - `cchub status` - サービス状態確認コマンド
+- **A stronger CLI**
+  - `--help` and `--version` options
+  - `-p, --port` / `-H, --host` / `-P, --password` options
+  - `cchub setup` - registers the systemd service
+  - `cchub update` - automatic updates (through GitHub Releases)
+  - `cchub status` - shows the service state
 
-- **systemd連携**
-  - ユーザーサービスファイル自動生成
-  - 自動再起動（Restart=always）
-  - 毎日の自動更新チェック（timer）
+- **systemd integration**
+  - The user service file is generated automatically
+  - Automatic restart (`Restart=always`)
+  - A daily update check (a timer)
 
 ### Changed
-- Tailscale必須化（常にHTTPS）
-- 環境変数からCLI引数ベースの設定に変更
+- Tailscale is required (always HTTPS)
+- Configuration moved from environment variables to CLI arguments
 
 ### Removed
-- 自己署名証明書機能（TLS=1）
-- カスタム証明書機能（TLS_CERT/TLS_KEY）
-- 環境変数による設定（PORT, HOST, TLS）
+- Self-signed certificates (TLS=1)
+- Custom certificates (TLS_CERT/TLS_KEY)
+- Configuration through environment variables (PORT, HOST, TLS)
 
 ## [0.0.3] - 2026-02-01
 
 ### Added
-- **Dashboard機能**
-  - 使用量リミット表示（5時間/7日サイクル）
-  - リミット到達予測（現在のペースでの予測時間）
-  - 日別使用統計グラフ（メッセージ数・セッション数）
-  - モデル別トークン使用量（Opus/Sonnet比較）
-  - 推定コスト表示
+- **A dashboard**
+  - Usage limits (the 5-hour and 7-day cycles)
+  - A limit-hit estimate (when the current pace reaches it)
+  - Daily usage charts (message and session counts)
+  - Per-model token usage (Opus against Sonnet)
+  - An estimated cost
 
-- **セッション履歴機能**
-  - 過去のClaude Codeセッション一覧
-  - プロジェクト別グループ化
-  - 会話内容の表示
-  - セッション再開（`claude -r`）
+- **Session history**
+  - A list of past Claude Code sessions
+  - Grouped by project
+  - The conversation contents
+  - Resuming a session (`claude -r`)
 
-- **会話ビューア強化**
-  - Markdownレンダリング（テーブル、コードブロック対応）
-  - 画像表示サポート
-  - アクティブセッションの自動更新
+- **A stronger conversation viewer**
+  - Markdown rendering (tables and code blocks included)
+  - Image support
+  - Automatic refresh for an active session
 
-- **セッション管理強化**
-  - PTY-based session matching（同一ディレクトリでの複数セッション識別）
-  - セッション状態インジケーター（処理中/入力待ち/アイドル/完了）
-  - セッション再開ボタン
+- **Stronger session management**
+  - PTY-based session matching (identifying several sessions in one directory)
+  - A session state indicator (working / waiting for input / idle / done)
+  - A session resume button
 
 ### Fixed
-- 同じディレクトリで複数のClaude Codeセッション実行時に情報が混在する問題
+- Information from several Claude Code sessions in the same directory was mixed
+  together
 
 ## [0.0.2] - 2026-02-01
 
 ### Added
-- GitHub Releaseへのバイナリ自動アップロード
+- Binaries are uploaded to the GitHub Release automatically
 
 ## [0.0.1] - 2026-01-31
 
 ### Added
-- 初期リリース
-- マルチセッション管理
-- タブレット最適化UI
-- ファイルビューア
-- 変更追跡
-- TLS対応（自己署名証明書、Tailscale）
+- Initial release
+- Multi-session management
+- A tablet-optimized UI
+- A file viewer
+- Change tracking
+- TLS support (a self-signed certificate, Tailscale)

@@ -1,19 +1,23 @@
 /**
- * cchub glasses - エージェント自筆の連絡を G2 グラス relay チャンネルへ POST する (#504)。
+ * hrdle glasses - POSTs a note written by the agent itself to the G2 glasses
+ * relay channel (#504).
  *
- *   cchub glasses "テスト全緑。デプロイしていい?" --kind waiting --choices "デプロイ,中止"
- *   cchub glasses "ビルド完了" --kind info
+ *   hrdle glasses "Tests are green. Ship it?" --kind waiting --choices "ship,hold"
+ *   hrdle glasses "Build finished" --kind info
  *
- * セッション解決: cwd unique 一致 → 曖昧なら /proc の ppid 祖先と pane の
- * foreground pid 照合（worktree 対策）→ それでも駄目なら --session 必須エラー。
- * 送信は notify と同じく本番/dev 両叩き・静黙失敗（-p で単一宛）。
+ * Session resolution: a unique cwd match first; when that is ambiguous, the
+ * /proc ppid ancestry is matched against each pane's foreground pid (this is
+ * what makes worktrees work); failing both, --session becomes mandatory.
+ * Delivery follows notify: both the production and dev ports, failures stay
+ * silent (-p targets a single one).
  */
 
 import { readFileSync } from 'node:fs';
 import { IDENTITY } from '../../../shared/identity';
 
-// notify.ts と同じく identity 由来 (#459)。ベタ書きだと改名後も旧製品の
-// ポートへ送り続け、届いた側には解決できないセッションとして出る。
+// Derived from identity, same as notify.ts (#459). Hardcoding these would keep
+// posting to the old product's port after a rename, where the receiving side
+// only sees a session it cannot resolve.
 const PRODUCTION_PORT = IDENTITY.defaultPort;
 const DEV_PORT = IDENTITY.devPort;
 
@@ -124,7 +128,7 @@ export function resolveSessionTarget(
 
   return {
     error:
-      'session を特定できません（同一 cwd に複数セッション?）。`cchub glasses ... --session <id>` を指定してください',
+      'Cannot identify the session (more than one session on the same cwd?). Pass `hrdle glasses ... --session <id>`',
   };
 }
 
@@ -140,11 +144,11 @@ async function postRelay(port: number, body: Record<string, unknown>): Promise<v
 export async function runGlasses(options: GlassesCliOptions): Promise<void> {
   const text = options.text?.trim();
   if (!text) {
-    console.error('❌ 使い方: cchub glasses <text> [--kind waiting|info] [--choices "a,b"] [--session <id>]');
+    console.error('Usage: hrdle glasses <text> [--kind waiting|info] [--choices "a,b"] [--session <id>]');
     process.exit(1);
   }
 
-  // cchub serves HTTPS on localhost (Tailscale cert for the hostname, not
+  // hrdle serves HTTPS on localhost (Tailscale cert for the hostname, not
   // localhost) — same TLS-skip pattern as notify.ts.
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -163,12 +167,12 @@ export async function runGlasses(options: GlassesCliOptions): Promise<void> {
       if (sessions) break;
     }
     if (!sessions) {
-      console.error('❌ セッション一覧を取得できません（サーバー未起動 or 認証あり）。--session <id> を指定してください');
+      console.error('Cannot fetch the session list (server not running, or auth is enabled). Pass --session <id>');
       process.exit(1);
     }
     const resolved = resolveSessionTarget(sessions, process.cwd(), ancestorPids());
     if ('error' in resolved) {
-      console.error(`❌ ${resolved.error}`);
+      console.error(resolved.error);
       process.exit(1);
     }
     target = resolved.target;

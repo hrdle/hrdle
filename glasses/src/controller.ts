@@ -46,7 +46,7 @@ export const NOTICE_DISMISS_MS = 8000
 /**
  * How long the ring has to be still before the screen starts moving itself.
  *
- * "しばらく待つと" — the point is that a reader who is working the ring is
+ * The point is that a reader who is working the ring is
  * never fought for control. Long enough that a pause between gestures is not
  * mistaken for having finished reading.
  */
@@ -913,7 +913,7 @@ export class GlassesController {
   private canInterruptForNotice(item: GlassesRelayItem): boolean {
     if (this.state.mode === 'session_list') return true
     if (this.state.mode !== 'conversation') return false
-    // Not about what is already on screen. "この会話が終わりました" thrown over
+    // Not about what is already on screen. "This conversation is done" thrown over
     // the conversation itself tells the reader nothing they cannot see, and an
     // agent working in bursts would raise it again every turn.
     return item.sessionId !== this.currentSession()?.id

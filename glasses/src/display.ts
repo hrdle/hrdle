@@ -316,8 +316,8 @@ function relayLabel(state: AppState, item: GlassesRelayItem): string {
 function relayBannerLines(state: AppState): string[] {
   const top = state.relayWaiting[0]
   if (top) {
-    const choiceHint = top.choices?.length ? `(選択${top.choices.length})` : ''
-    const more = state.relayWaiting.length > 1 ? ` 他${state.relayWaiting.length - 1}件` : ''
+    const choiceHint = top.choices?.length ? `(${top.choices.length} choices)` : ''
+    const more = state.relayWaiting.length > 1 ? ` +${state.relayWaiting.length - 1} more` : ''
     const head = splitDisplayLines(`[!]${relayLabel(state, top)}${choiceHint}${more}`)[0] || ''
     // All of it, unwrapped; the strip windows what fits and the clock walks the
     // rest, re-wrapping at every step. Only the head is clamped — it is a
@@ -457,7 +457,7 @@ function listInfoBanner(state: AppState): string[] {
   const info = state.relayInfo[0]
   if (!info) return []
   // The count goes next to the label, not after the text: the text is what
-  // gets cut at the panel edge, and "他2件" is the part that must survive.
+  // gets cut at the panel edge, and "+2" is the part that must survive.
   const more = state.relayInfo.length > 1 ? `+${state.relayInfo.length - 1}` : ''
   const wrapped = splitDisplayLines(`[i]${relayLabel(state, info)}${more}: ${info.text}`)
   const line = wrapped[0] || ''
@@ -721,7 +721,7 @@ function conversationContent(state: AppState): {
   const scrolled = state.conversationOffset > 0 || state.conversationPage > 0
   const back = scrolled ? 'dbl:top' : 'dbl:back'
   const action = state.relayWaiting.length > 0
-    ? 'tap:対応  dbl:後で'
+    ? 'tap:respond  dbl:later'
     : waiting ? `tap:respond  ${back}` : back
   // Who is speaking is in the body — the user's turn carries `$` and the
   // agent's carries nothing — so repeating it here said nothing twice. The
@@ -854,7 +854,7 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
   const items = [...state.relayWaiting, ...state.relayInfo]
   const item = items.find((i) => i.id === state.overlayItemId) || items[0]
   if (!item) {
-    return { headerText: withClock('Relay'), bodyText: '(なし)', footerText: 'dbl:戻る' }
+    return { headerText: withClock('Relay'), bodyText: '(none)', footerText: 'dbl:back' }
   }
   const idx = items.indexOf(item)
   const badge = item.kind === 'waiting' ? '[!]' : '[i]'
@@ -872,14 +872,14 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
   const bodyText = lines.length > MAX_LINES
     ? [...lines.slice(0, MAX_LINES - 1), '…'].join('\n')
     : lines.join('\n')
-  const next = items.length > 1 ? '  swipe:次' : ''
-  // "後で" is an answer to a question. A notification is not asking anything,
+  const next = items.length > 1 ? '  swipe:next' : ''
+  // "later" is an answer to a question. A notification is not asking anything,
   // so the same gesture is just closing it.
   const footerText = item.kind === 'info'
-    ? `tap:開く  dbl:閉じる${next}`
+    ? `tap:open  dbl:close${next}`
     : item.choices?.length
-      ? `tap:選択へ  dbl:後で${next}`
-      : `tap:開く  dbl:後で${next}`
+      ? `tap:choices  dbl:later${next}`
+      : `tap:open  dbl:later${next}`
   return { headerText, bodyText, footerText }
 }
 
@@ -889,21 +889,21 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
   switch (state.voicePhase) {
     case 'recording':
       return {
-        headerText: withClock(`${name}  [録音中]`),
-        bodyText: '● 録音中\n\nマイクに向かって話してください',
-        footerText: 'tap:停止して認識  dbl:キャンセル',
+        headerText: withClock(`${name}  [recording]`),
+        bodyText: '● Recording\n\nSpeak into the microphone',
+        footerText: 'tap:stop and transcribe  dbl:cancel',
       }
     case 'transcribing':
       return {
-        headerText: withClock(`${name}  [認識中]`),
-        bodyText: '認識中…',
-        footerText: 'dbl:キャンセル',
+        headerText: withClock(`${name}  [transcribing]`),
+        bodyText: 'Transcribing...',
+        footerText: 'dbl:cancel',
       }
     default: // 'confirm'
       return {
-        headerText: withClock(`${name}  [確認]`),
-        bodyText: state.voiceText ? state.voiceText : '(認識できませんでした)',
-        footerText: state.voiceText ? 'tap:送信  dbl:キャンセル' : 'dbl:戻る',
+        headerText: withClock(`${name}  [confirm]`),
+        bodyText: state.voiceText ? state.voiceText : '(nothing was recognized)',
+        footerText: state.voiceText ? 'tap:send  dbl:cancel' : 'dbl:back',
       }
   }
 }
@@ -1149,7 +1149,7 @@ export function buildSetupGuide(): RebuildPageContainer {
     paddingLength: 6,
     containerID: 2, containerName: 'body',
     isEventCapture: 0,
-    content: `${__PRODUCT_NAME__}未接続\n\nスマホのEven Hubアプリからこのアプリを開いて${__PRODUCT_NAME__}のURLを設定してください\n\n1. PCで${__PRODUCT_NAME__}を起動\n2. スマホのアプリ画面でURL入力\n3. メガネから再度起動`,
+    content: `${__PRODUCT_NAME__} not connected\n\nOpen this app from the Even Hub app on your phone and set the ${__PRODUCT_NAME__} URL\n\n1. Start ${__PRODUCT_NAME__} on your PC\n2. Enter the URL in the phone app\n3. Launch it again from the glasses`,
   })
 
   const footer = new TextContainerProperty({

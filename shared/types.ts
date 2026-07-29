@@ -273,7 +273,7 @@ export type ResizeTerminalInput = z.infer<typeof ResizeTerminalSchema>;
 // Peer (multi-server) Types
 // =============================================================================
 
-// "self" は Hub 自身を指す疑似 URL。フロント側で window.origin に解決する
+// "self" is a pseudo URL meaning the hub itself; the frontend resolves it to window.origin
 export const SELF_PEER_URL = 'self' as const;
 export const LOCAL_PEER_ID = 'local' as const;
 
@@ -288,46 +288,46 @@ export type PeerStatus = 'online' | 'offline' | 'unauthorized' | 'unknown';
 
 export interface Peer {
   id: string;          // 'local' or 'p_xxxx'
-  nickname: string;    // ユーザー表示名（絵文字OK）
-  url: string;         // 'self' か 'https://host:port'
-  color: string;       // '#RRGGBB' バッジ色
-  order: number;       // 表示順
+  nickname: string;    // Display name (emoji allowed)
+  url: string;         // 'self' or 'https://host:port'
+  color: string;       // '#RRGGBB' badge color
+  order: number;       // Display order
 }
 
-// クライアントに払い出すペア情報（wsToken 含む）
+// Peer info handed to the client (includes wsToken)
 export interface PeerClientView extends Peer {
-  wsToken?: string;      // peer に直接WS接続するときの Bearer トークン (selfなら不要)
+  wsToken?: string;      // Bearer token for connecting a WS straight to the peer (not needed for self)
   status: PeerStatus;
   lastSeenAt?: string;   // ISO8601
-  latencyMs?: number;    // 直近のverify時のレイテンシ
-  errorMessage?: string; // unauthorized等の理由
+  latencyMs?: number;    // Latency measured by the most recent verify
+  errorMessage?: string; // Why it is unauthorized, offline, ...
 }
 
 export interface PeerListResponse {
   peers: PeerClientView[];
 }
 
-// マージされたセッション一覧の項目。peer情報は ExtendedSessionResponse に直接生やしてある
+// An entry of the merged session list. The peer fields live directly on ExtendedSessionResponse
 export type PeerSession = ExtendedSessionResponse & { peerId: string };
 
 export interface PeerSessionsResponse {
   sessions: PeerSession[];
-  // peer 毎のエラーがあれば返す（一部peerが落ちていても他は表示するため）
+  // Per-peer errors, so one peer being down still lets the rest render
   errors?: { peerId: string; message: string }[];
 }
 
 export interface DiscoveredPeer {
-  /** Tailscale が報告する短いホスト名 */
+  /** Short host name as Tailscale reports it */
   displayName: string;
-  /** Tailscale MagicDNS 名 */
+  /** Tailscale MagicDNS name */
   hostname: string;
-  /** 検出した URL (デフォルトポート) */
+  /** Discovered URL (default port) */
   url: string;
-  /** cchub バージョン */
+  /** hrdle version */
   version?: string;
-  /** 既に peers.json に登録済みか */
+  /** Whether it is already registered in peers.json */
   alreadyRegistered: boolean;
-  /** 登録済みなら nickname */
+  /** Its nickname, when already registered */
   registeredAs?: string;
 }
 
@@ -347,10 +347,10 @@ export const PeerCreateSchema = z.object({
         return false;
       }
     },
-    { message: 'peer URL は https である必要があります' },
+    { message: 'A peer URL must be https' },
   ),
-  // peer 側で auth が無効 (パスワード未設定) ならクライアントは password を
-  // 送らなくて良い。loginToPeer 側で 400 = "auth disabled" を空トークンで処理する
+  // When the peer has auth disabled (no password set) the client need not send
+  // one: loginToPeer reads 400 as "auth disabled" and returns an empty token
   password: z.string().optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
@@ -358,11 +358,11 @@ export const PeerCreateSchema = z.object({
 export const PeerUpdateSchema = z.object({
   nickname: z.string().min(1).max(64).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  password: z.string().min(1).optional(),  // 再認証用
+  password: z.string().min(1).optional(),  // For re-authentication
 });
 
 export const PeerOrderSchema = z.object({
-  order: z.array(z.string()),  // peer id の配列
+  order: z.array(z.string()),  // Array of peer ids
 });
 
 // Cross-peer session display order. Each entry is `${peerId}:${sessionId}`.
@@ -748,8 +748,8 @@ export interface ExtendedSessionResponse extends SessionResponse {
   durationMinutes?: number;
   firstMessageId?: string;
   metrics?: SessionMetrics;
-  // Multi-server: 所属 peer の情報。`/api/peers/sessions` から返るときに付く。
-  // 単一 peer (= local only) の通常運用では unset。
+  // Multi-server: which peer owns this session. Set when it comes back from
+  // `/api/peers/sessions`; unset in the usual single-peer (local only) setup.
   peerId?: string;
   peerNickname?: string;
   peerColor?: string;
@@ -784,7 +784,7 @@ export interface HistorySession {
   // Which agent produced this history entry. Drives the resume command
   // (`claude -r <id>` vs `codex resume <id>`) and the badge in the UI.
   agent?: AgentProvider;
-  // Multi-server: 履歴が属する peer の情報
+  // Multi-server: which peer this history belongs to
   peerId?: string;
   peerNickname?: string;
   peerColor?: string;
@@ -794,7 +794,7 @@ export interface HistorySessionsResponse {
   sessions: HistorySession[];
 }
 
-// Multi-server: 履歴プロジェクト (~/.claude/projects/ のディレクトリ単位)
+// Multi-server: a history project (one directory under ~/.claude/projects/)
 export interface PeerHistoryProject {
   dirName: string;
   projectPath: string;
@@ -1176,6 +1176,6 @@ export type MuxServerMessage =
   | { type: 'glasses-relay-snapshot'; items: GlassesRelayItem[] } // on subscribe: current blocked set
   // Screen mirror. `null` means no device is publishing — sent on subscribe
   // when nothing is live, and again when the publisher disconnects, so a demo
-  // audience sees "切断" rather than a frozen screen.
+  // audience sees "Disconnected" rather than a frozen screen.
   | { type: 'glasses-screen'; screen: GlassesScreen | null }
   | (ControlServerMessage & { sessionId: string });

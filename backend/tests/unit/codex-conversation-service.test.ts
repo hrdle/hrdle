@@ -25,52 +25,52 @@ describe('CodexConversationService', () => {
   test('parses user/agent messages in order', () => {
     writeRollout([
       { timestamp: '2026-05-07T09:47:05Z', type: 'session_meta', payload: {} },
-      { timestamp: '2026-05-07T09:47:30Z', type: 'event_msg', payload: { type: 'user_message', message: 'こんにちは' } },
-      { timestamp: '2026-05-07T09:47:35Z', type: 'event_msg', payload: { type: 'agent_message', message: 'やぁ', phase: 'commentary' } },
-      { timestamp: '2026-05-07T09:48:00Z', type: 'event_msg', payload: { type: 'user_message', message: '今日の予定は？' } },
-      { timestamp: '2026-05-07T09:48:05Z', type: 'event_msg', payload: { type: 'agent_message', message: '会議が二件です' } },
+      { timestamp: '2026-05-07T09:47:30Z', type: 'event_msg', payload: { type: 'user_message', message: 'Hello' } },
+      { timestamp: '2026-05-07T09:47:35Z', type: 'event_msg', payload: { type: 'agent_message', message: 'Hey', phase: 'commentary' } },
+      { timestamp: '2026-05-07T09:48:00Z', type: 'event_msg', payload: { type: 'user_message', message: 'What is on the schedule today?' } },
+      { timestamp: '2026-05-07T09:48:05Z', type: 'event_msg', payload: { type: 'agent_message', message: 'Two meetings' } },
     ]);
 
     const svc = new CodexConversationService();
     const messages = svc.parseRollout(rolloutPath);
     expect(messages).toEqual([
-      { role: 'user', content: 'こんにちは', timestamp: '2026-05-07T09:47:30Z' },
-      { role: 'assistant', content: 'やぁ', timestamp: '2026-05-07T09:47:35Z' },
-      { role: 'user', content: '今日の予定は？', timestamp: '2026-05-07T09:48:00Z' },
-      { role: 'assistant', content: '会議が二件です', timestamp: '2026-05-07T09:48:05Z' },
+      { role: 'user', content: 'Hello', timestamp: '2026-05-07T09:47:30Z' },
+      { role: 'assistant', content: 'Hey', timestamp: '2026-05-07T09:47:35Z' },
+      { role: 'user', content: 'What is on the schedule today?', timestamp: '2026-05-07T09:48:00Z' },
+      { role: 'assistant', content: 'Two meetings', timestamp: '2026-05-07T09:48:05Z' },
     ]);
   });
 
   test('attaches function_call/output as toolUse/toolResult', () => {
     writeRollout([
-      { timestamp: '2026-05-07T09:47:30Z', type: 'event_msg', payload: { type: 'user_message', message: 'lsして' } },
-      { timestamp: '2026-05-07T09:47:31Z', type: 'event_msg', payload: { type: 'agent_message', message: '一覧を取ります' } },
+      { timestamp: '2026-05-07T09:47:30Z', type: 'event_msg', payload: { type: 'user_message', message: 'run ls' } },
+      { timestamp: '2026-05-07T09:47:31Z', type: 'event_msg', payload: { type: 'agent_message', message: 'Listing them now' } },
       { timestamp: '2026-05-07T09:47:32Z', type: 'response_item', payload: { type: 'function_call', name: 'exec_command', arguments: '{"cmd":"ls"}', call_id: 'c1' } },
       { timestamp: '2026-05-07T09:47:33Z', type: 'response_item', payload: { type: 'function_call_output', call_id: 'c1', output: 'a\nb\nc' } },
-      { timestamp: '2026-05-07T09:47:34Z', type: 'event_msg', payload: { type: 'agent_message', message: 'a, b, c が見えました' } },
+      { timestamp: '2026-05-07T09:47:34Z', type: 'event_msg', payload: { type: 'agent_message', message: 'I can see a, b, c' } },
     ]);
 
     const svc = new CodexConversationService();
     const messages = svc.parseRollout(rolloutPath);
     expect(messages.map(m => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
-    expect(messages[0].content).toBe('lsして');
-    expect(messages[1].content).toBe('一覧を取ります');
+    expect(messages[0].content).toBe('run ls');
+    expect(messages[1].content).toBe('Listing them now');
     expect(messages[1].toolUse?.[0]).toEqual({ id: 'c1', name: 'exec_command', input: { cmd: 'ls' } });
     expect(messages[2].toolResult?.[0]).toEqual({ toolUseId: 'c1', toolName: 'exec_command', output: 'a\nb\nc' });
-    expect(messages[3].content).toBe('a, b, c が見えました');
+    expect(messages[3].content).toBe('I can see a, b, c');
   });
 
   test('joins consecutive agent_messages with a blank line', () => {
     writeRollout([
       { timestamp: '2026-05-07T09:47:30Z', type: 'event_msg', payload: { type: 'user_message', message: 'go' } },
-      { timestamp: '2026-05-07T09:47:31Z', type: 'event_msg', payload: { type: 'agent_message', message: '考えます' } },
-      { timestamp: '2026-05-07T09:47:32Z', type: 'event_msg', payload: { type: 'agent_message', message: '次のステップへ' } },
+      { timestamp: '2026-05-07T09:47:31Z', type: 'event_msg', payload: { type: 'agent_message', message: 'Thinking' } },
+      { timestamp: '2026-05-07T09:47:32Z', type: 'event_msg', payload: { type: 'agent_message', message: 'On to the next step' } },
     ]);
     const svc = new CodexConversationService();
     const messages = svc.parseRollout(rolloutPath);
     expect(messages).toHaveLength(2);
     expect(messages[1].role).toBe('assistant');
-    expect(messages[1].content).toBe('考えます\n\n次のステップへ');
+    expect(messages[1].content).toBe('Thinking\n\nOn to the next step');
   });
 
   test('returns empty array on missing file', () => {

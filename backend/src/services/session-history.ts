@@ -694,13 +694,13 @@ export class SessionHistoryService {
           // Format command-related messages for readability
           if (content) {
             content = content
-              .replace(/<command-name>([^<]*)<\/command-name>/g, '📌 コマンド: $1')
+              .replace(/<command-name>([^<]*)<\/command-name>/g, 'Command: $1')
               .replace(/<command-message>([^<]*)<\/command-message>/g, '$1')
               .replace(/<command-args>([^<]*)<\/command-args>/g, '')
-              .replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, '💬 $1')
-              .replace(/<task-notification>.*?<status>([^<]*)<\/status>.*?<summary>([^<]*)<\/summary>.*?<\/task-notification>.*/gs, '⚙️ タスク ($1): $2')
-              .replace(/<bash-notification>.*?<status>([^<]*)<\/status>.*?<summary>([^<]*)<\/summary>.*/gs, '🖥️ バックグラウンド ($1): $2')
-              .replace(/<bash-input>([^<]*)<\/bash-input>/g, '⌨️ 入力: $1')
+              .replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, '$1')
+              .replace(/<task-notification>.*?<status>([^<]*)<\/status>.*?<summary>([^<]*)<\/summary>.*?<\/task-notification>.*/gs, 'Task ($1): $2')
+              .replace(/<bash-notification>.*?<status>([^<]*)<\/status>.*?<summary>([^<]*)<\/summary>.*/gs, 'Background ($1): $2')
+              .replace(/<bash-input>([^<]*)<\/bash-input>/g, 'Input: $1')
               // Handle incomplete notification fragments
               .replace(/<status>([^<]*)<\/status>/g, '[$1]')
               .replace(/<summary>([^<]*)<\/summary>/g, '$1')

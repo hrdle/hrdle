@@ -230,7 +230,7 @@ function renderCodeBlock(lines: string[]): string[] {
   const fits = dedented.length <= MAX_CODE_LINES && dedented.every((l) => textWidth(l) <= BODY_WIDTH)
   // Still worth saying how much was withheld — `[code]` alone said only that
   // something was there.
-  return fits ? dedented : [`[code ${dedented.length}行]`]
+  return fits ? dedented : [`[code ${dedented.length} lines]`]
 }
 
 /**
@@ -273,7 +273,7 @@ export function sanitizeForG2(text: string): string {
 }
 
 /**
- * Conversation-top recap block (`要約: …` head + ≤maxLines-1 more + separator).
+ * Conversation-top recap block (`Summary: ...` head + <=maxLines-1 more + separator).
  * Empty when no recap. The glasses conversation view leads with the gist —
  * full history reading is the phone's job (real-device feedback, #504).
  */
@@ -289,7 +289,7 @@ export function recapBlockLines(recap: string | undefined, _maxLines = 2): strin
   // No rule at the end either: the recap is its own container now, and the
   // panel draws the line between them as a border. A dash row cost a full 27px
   // line out of the seven to do the same job.
-  return [`要約: ${lines[0]}`, ...lines.slice(1)]
+  return [`Summary: ${lines[0]}`, ...lines.slice(1)]
 }
 
 
@@ -397,7 +397,7 @@ export function formatMessage(m: ConversationMessage): string {
       toolParts.push(detail ? `[${tool.name}] ${detail}` : `[${tool.name}]`)
     }
     const hidden = m.toolUse.length - MAX_TOOL_LINES
-    if (hidden > 0) toolParts.push(`… 他${hidden}件`)
+    if (hidden > 0) toolParts.push(`… +${hidden} more`)
   }
 
   // Tool results (only if no text content — usually filtered out by filterConversation)

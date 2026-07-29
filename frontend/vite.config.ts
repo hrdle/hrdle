@@ -23,7 +23,7 @@ function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
     try {
       execSync('which tailscale', { stdio: 'pipe' });
     } catch {
-      console.warn('⚠️  tailscale command not found, running without HTTPS');
+      console.warn('warning: tailscale command not found, running without HTTPS');
       return undefined;
     }
 
@@ -32,7 +32,7 @@ function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
     const status = JSON.parse(statusResult.toString());
     const dnsName = status.Self?.DNSName;
     if (!dnsName) {
-      console.warn('⚠️  Tailscale DNSName not found, running without HTTPS');
+      console.warn('warning: Tailscale DNSName not found, running without HTTPS');
       return undefined;
     }
     const hostname = dnsName.replace(/\.$/, '');
@@ -55,32 +55,32 @@ function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
     }
 
     if (needsCert) {
-      console.log('🔐 Tailscale 証明書を生成中...');
+      console.log('Generating the Tailscale certificate...');
       fs.mkdirSync(certDir, { recursive: true, mode: 0o700 });
 
       try {
         execSync(`tailscale cert --cert-file "${certPath}" --key-file "${keyPath}" "${hostname}"`, {
           stdio: 'pipe',
         });
-        console.log(`📜 証明書を生成しました: ${certDir}`);
+        console.log(`Certificate generated: ${certDir}`);
       } catch (e: unknown) {
         const error = e as { stderr?: Buffer };
         const stderr = error.stderr?.toString() || '';
-        console.error('❌ Tailscale 証明書の生成に失敗しました');
+        console.error('error: failed to generate the Tailscale certificate');
         if (stderr.includes('Access denied') || stderr.includes('cert access denied')) {
-          console.error('💡 ヒント: sudo tailscale set --operator=$USER を実行してください');
+          console.error('Hint: run sudo tailscale set --operator=$USER');
         }
         return undefined;
       }
     }
 
-    console.log(`🔒 HTTPS: https://${hostname}:${IDENTITY.frontendDevPort}`);
+    console.log(`HTTPS: https://${hostname}:${IDENTITY.frontendDevPort}`);
     return {
       key: fs.readFileSync(keyPath),
       cert: fs.readFileSync(certPath),
     };
   } catch (e) {
-    console.warn('⚠️  Failed to setup Tailscale cert:', e);
+    console.warn('warning: failed to set up the Tailscale cert:', e);
     return undefined;
   }
 }

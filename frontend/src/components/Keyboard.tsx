@@ -13,7 +13,7 @@ interface KeyDef {
 	color?: "green" | "red" | "blue" | "default"; // Action button colors
 }
 
-// Top action bar for Claude Code specific actions (removed 'あ' - mode switching is now in header)
+// Top action bar for Claude Code specific actions (the IME toggle is gone - mode switching lives in the header)
 const ACTION_BAR: KeyDef[] = [
 	{ label: "ESC", key: "\x1b", type: "action" },
 	{ label: "TAB", key: "\t", type: "action" },
@@ -470,7 +470,7 @@ export function Keyboard({
 									: "text-zinc-600"
 							}`}
 						>
-							キーボード
+							Keyboard
 						</button>
 						<button
 							type="button"
@@ -481,7 +481,7 @@ export function Keyboard({
 									: "text-zinc-600"
 							}`}
 						>
-							入力
+							Input
 						</button>
 					</div>
 				)}

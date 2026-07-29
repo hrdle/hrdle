@@ -194,7 +194,7 @@ describe('conversation body', () => {
     // It used to end at `…`: the reader was told there was more and given no
     // way to reach it. The strip windows it and the clock walks the rest.
     const first = (screenText(state(longRecap)).notice ?? '').split('\n')
-    expect(first[0].startsWith('要約: ')).toBe(true)
+    expect(first[0].startsWith('Summary: ')).toBe(true)
     expect(first.length).toBeLessThanOrEqual(2)
     expect(first.join('')).not.toEndWith('…')
     expect(noticeScrollSteps(state(longRecap) as never)).toBeGreaterThan(1)
@@ -445,7 +445,7 @@ describe('recap lifetime', () => {
     relayInfo: [],
     overlayItemId: null,
   })
-  const hasRecap = (st: ReturnType<typeof state>) => (screenText(st).notice ?? '').startsWith('要約: ')
+  const hasRecap = (st: ReturnType<typeof state>) => (screenText(st).notice ?? '').startsWith('Summary: ')
 
   test('shows while nothing newer has arrived', () => {
     expect(hasRecap(state('2026-07-27T06:00:00.000Z', '2026-07-27T05:00:00.000Z'))).toBe(true)
@@ -592,12 +592,12 @@ describe('fenced code', () => {
 
   test('summarises a block whose lines will not fit', () => {
     const wide = 'x'.repeat(200)
-    expect(sanitizeForG2(`\`\`\`\n${wide}\n\`\`\``)).toBe('[code 1行]')
+    expect(sanitizeForG2(`\`\`\`\n${wide}\n\`\`\``)).toBe('[code 1 lines]')
   })
 
   test('summarises a block long enough to become the page', () => {
     const many = Array.from({ length: 6 }, (_, i) => `${i}行目`).join('\n')
-    expect(sanitizeForG2(`\`\`\`\n${many}\n\`\`\``)).toBe('[code 6行]')
+    expect(sanitizeForG2(`\`\`\`\n${many}\n\`\`\``)).toBe('[code 6 lines]')
   })
 
   test('an unterminated fence is still rendered', () => {
@@ -930,13 +930,13 @@ describe('notice dialog (overlay)', () => {
   })
 
   test('closing a notification is not answering it', () => {
-    // "後で" is a reply to a question. A notification asked nothing.
+    // "later" is a reply to a question. A notification asked nothing.
     const s = screenText(mk({
       relayInfo: [relayItem('info', 'i1', '応答が完了しました')],
       overlayItemId: 'i1',
     }))
-    expect(s.footer).toContain('dbl:閉じる')
-    expect(s.footer).not.toContain('後で')
+    expect(s.footer).toContain('dbl:close')
+    expect(s.footer).not.toContain('later')
   })
 
   test('a question keeps its own wording and mark', () => {
@@ -945,8 +945,8 @@ describe('notice dialog (overlay)', () => {
       overlayItemId: 'w1',
     }))
     expect(s.header).toContain('[!]')
-    expect(s.footer).toContain('dbl:後で')
-    expect(s.footer).toContain('tap:選択へ')
+    expect(s.footer).toContain('dbl:later')
+    expect(s.footer).toContain('tap:choices')
   })
 
   test('a queue of one drops the counter and the swipe hint', () => {
@@ -965,7 +965,7 @@ describe('notice dialog (overlay)', () => {
       overlayItemId: 'w1',
     }))
     expect(s.header).toContain('[!] 1/2')
-    expect(s.footer).toContain('swipe:次')
+    expect(s.footer).toContain('swipe:next')
   })
 
   test('the notification is second in that queue, not first', () => {
@@ -978,7 +978,7 @@ describe('notice dialog (overlay)', () => {
   })
 
   test('an emptied queue says so instead of rendering a blank panel', () => {
-    expect(screenText(mk({ overlayItemId: 'gone' })).body).toBe('(なし)')
+    expect(screenText(mk({ overlayItemId: 'gone' })).body).toBe('(none)')
   })
 
   test('the dialog gives the panel back on its own', () => {
@@ -1249,13 +1249,13 @@ describe('waiting shows what did not fit', () => {
       }],
     })
     const at = (o: number) => (screenText({ ...state, noticeWindow: o }).notice ?? '').split('\n')
-    const src = Array.from(`要約: ${prose}`)
+    const src = Array.from(`Summary: ${prose}`)
     const first = at(0)
     const second = at(1)
 
     // Two lines at a time, and the first of them opens the recap.
     expect(first.length).toBe(2)
-    expect(first[0].startsWith('要約: ')).toBe(true)
+    expect(first[0].startsWith('Summary: ')).toBe(true)
 
     // One step on, the top line begins a few characters into the one before it
     // — not at the line below it, which is what paging looked like.

@@ -234,9 +234,9 @@ function getSavedOpenSessionKeys(): string[] {
 }
 
 // Device type detection
-// - desktop: PC (非タッチデバイス) → ソフトキーボード不要
-// - tablet: タッチデバイスで width >= 640px && height >= 500px
-// - mobile: タッチデバイスでそれ以外
+// - desktop: a PC (non-touch device), so no soft keyboard is needed
+// - tablet: a touch device with width >= 640px && height >= 500px
+// - mobile: any other touch device
 type DeviceType = "mobile" | "tablet" | "desktop";
 
 function checkIsTouchDevice(): boolean {
@@ -246,14 +246,14 @@ function checkIsTouchDevice(): boolean {
 }
 
 function checkDeviceType(): DeviceType {
-	// 実タッチデバイス: 物理解像度の短辺で判定（向きに依存しない）
+	// Real touch device: decided by the shorter side of the physical resolution (orientation-independent)
 	if (checkIsTouchDevice()) {
 		const shortSide = Math.min(screen.width, screen.height);
 		const longSide = Math.max(screen.width, screen.height);
 		if (shortSide >= 500 && longSide >= 640) return "tablet";
 		return "mobile";
 	}
-	// 非タッチデバイス（PC + DevToolsエミュレーション含む）: ビューポート幅で判定
+	// Non-touch device (a PC, including DevTools emulation): decided by viewport width
 	const w = window.innerWidth;
 	if (w < 640) return "mobile";
 	if (w < 1024) return "tablet";
@@ -472,7 +472,7 @@ export function App() {
 		if (deviceType !== "mobile" || apiSessions.length === 0) return;
 		setOpenSessions((prev) =>
 			prev.map((session) => {
-				// id は peer 間で重複し得るので、同じ peer のセッションから更新する
+				// ids can collide across peers, so update from a session on the same peer
 				const apiSession = apiSessions.find(
 					(s) =>
 						s.id === session.id &&
@@ -562,9 +562,9 @@ export function App() {
 	}, [showSessionList, fileViewerVisible, showConversation]);
 
 	// Create initial session for first-time users
-	// 毎 render で新インスタンスが作られると fetchAndOpenSession の useEffect が
-	// 無限に再実行されて activeSessionId を localStorage から巻き戻す。
-	// useCallback で安定化し、t は ref 経由で参照する。
+	// A fresh instance on every render would re-run fetchAndOpenSession's useEffect
+	// forever and keep rewinding activeSessionId from localStorage. useCallback
+	// stabilizes it, and t is reached through a ref.
 	const createInitialSession = useCallback(async (): Promise<OpenSession | null> => {
 		try {
 			const response = await authFetch(`${API_BASE}/api/workspaces`, {
@@ -664,10 +664,10 @@ export function App() {
 		};
 
 		fetchAndOpenSession();
-		// `t` (useTranslation) は i18n の hydration で参照が変わることがあり、
-		// それで fetchAndOpenSession が再実行されると saveLastSession() より前の
-		// localStorage を読んで activeSessionId が意図せず巻き戻る。
-		// t は ref 経由で参照し、ここの deps からは外す。
+		// `t` (useTranslation) can change identity while i18n hydrates. If that
+		// re-runs fetchAndOpenSession it reads localStorage from before
+		// saveLastSession() and activeSessionId rewinds. So t is reached through a
+		// ref and kept out of these deps.
 	}, [createInitialSession, retryCount]);
 
 	// Save to localStorage when sessions change
@@ -1048,7 +1048,7 @@ export function App() {
 		</div>
 	) : null;
 
-	// Desktop layout: PC向け分割ペインレイアウト
+	// Desktop layout: split-pane layout for a PC
 	if (deviceType === "desktop") {
 		return (
 			<>
@@ -1142,7 +1142,7 @@ export function App() {
 							type="button"
 							onClick={() => setShowConversation(false)}
 							className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-							title="ターミナルに切替"
+							title="Switch to terminal"
 							aria-label="Switch to Terminal"
 							data-onboarding="conversation"
 						>
@@ -1153,7 +1153,7 @@ export function App() {
 							type="button"
 							onClick={handleShowConversation}
 							className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-							title="会話履歴に切替"
+							title="Switch to conversation history"
 							aria-label="Switch to Chat"
 							data-onboarding="conversation"
 						>
@@ -1187,7 +1187,7 @@ export function App() {
 						openFileViewer(activeSession?.currentPath || "/", peerId);
 					}}
 					className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-					title="ファイルブラウザ"
+					title="File browser"
 					data-onboarding="file-browser"
 				>
 					<FileText className="w-5 h-5" />
@@ -1196,7 +1196,7 @@ export function App() {
 					type="button"
 					onClick={() => setShowMobileDashboard(true)}
 					className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-					title="ダッシュボード"
+					title="Dashboard"
 				>
 					<BarChart3 className="w-5 h-5" />
 				</button>
@@ -1204,7 +1204,7 @@ export function App() {
 					type="button"
 					onClick={handleReload}
 					className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-					title="リロード"
+					title="Reload"
 					data-onboarding="reload"
 				>
 					<RotateCw className="w-5 h-5" />
@@ -1250,7 +1250,7 @@ export function App() {
 										type="button"
 										onClick={() => setShowConversation(false)}
 										className="p-1.5 text-zinc-500 hover:text-zinc-300 shrink-0"
-										title="ターミナルに切替"
+										title="Switch to terminal"
 										aria-label="Switch to Terminal"
 									>
 										<TerminalIcon className="w-5 h-5" />
@@ -1263,12 +1263,12 @@ export function App() {
 											{isProcessing && (
 												<span className="inline-flex items-center gap-1 text-[10px] text-blue-300 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
 													<span className="inline-block w-2 h-2 border border-blue-300 border-t-transparent rounded-full animate-spin" />
-													処理中
+													Working
 												</span>
 											)}
 											{!isProcessing && isWaitingInput && (
 												<span className="inline-flex items-center gap-1 text-[10px] text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded shrink-0">
-													入力待ち
+													Waiting for input
 												</span>
 											)}
 										</div>

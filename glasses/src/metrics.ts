@@ -186,11 +186,11 @@ export function stripUnrenderable(text: string): string {
 
 // ─── Line breaking ───
 
-/** 行頭禁則: characters that must not open a line. A lone `。` pushed onto the
+/** Kinsoku (line-start): characters that must not open a line. A lone `.` pushed onto the
  *  next line is the most visible artefact of a naive wrap. */
 const NO_LINE_START = '。、．，・：；！？!?)）］」』｝》〉”’…ー〜%％'
 
-/** 行末禁則: opening brackets must not be left dangling at the end of a line. */
+/** Kinsoku (line-end): opening brackets must not be left dangling at the end of a line. */
 const NO_LINE_END = '（(［[「『｛{《〈“‘'
 
 /** Blank space we will leave to keep an ASCII word whole. Beyond this the

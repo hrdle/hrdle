@@ -30,7 +30,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
           </div>
         </div>
         <p style="color: #aaa; font-size: 14px; line-height: 1.5; margin: 0;">
-          AIコーディングアシスタント Claude Code のセッションをスマートグラスからリアルタイムで確認・操作
+          Watch and drive your Claude Code sessions from smart glasses, in real time
         </p>
       </div>
 
@@ -39,49 +39,49 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
         <!-- What the server is (shown when not connected) -->
         <div id="about-section" style="display: ${isConnected ? 'none' : 'block'};">
           <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">${__PRODUCT_NAME__} とは？</h2>
+            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">What is ${__PRODUCT_NAME__}?</h2>
             <p style="font-size: 13px; color: #bbb; line-height: 1.7; margin: 0 0 12px;">
-              <a href="https://github.com/${__REPO__}" style="color: #4a9; text-decoration: none;">${__PRODUCT_NAME__}</a> は、
-              Claude Code セッションをWebブラウザからリモート管理するターミナルマネージャーです。
-              複数のClaude Codeセッションの同時実行・監視・操作ができます。
+              <a href="https://github.com/${__REPO__}" style="color: #4a9; text-decoration: none;">${__PRODUCT_NAME__}</a>
+              is a terminal manager that drives Claude Code sessions remotely from a web browser.
+              Run, watch and steer several Claude Code sessions at once.
             </p>
             <div style="font-size: 13px; color: #999; line-height: 1.6;">
               <div style="display: flex; gap: 8px; align-items: start; margin-bottom: 8px;">
                 <span style="color: #0f0; font-size: 16px;">◆</span>
-                <span>複数セッションの一括管理と切り替え</span>
+                <span>Manage and switch between several sessions at once</span>
               </div>
               <div style="display: flex; gap: 8px; align-items: start; margin-bottom: 8px;">
                 <span style="color: #0f0; font-size: 16px;">◆</span>
-                <span>処理状況のリアルタイム監視</span>
+                <span>Watch what each agent is doing, live</span>
               </div>
               <div style="display: flex; gap: 8px; align-items: start; margin-bottom: 8px;">
                 <span style="color: #0f0; font-size: 16px;">◆</span>
-                <span>承認・拒否操作をリモートで実行</span>
+                <span>Approve or reject a prompt remotely</span>
               </div>
               <div style="display: flex; gap: 8px; align-items: start;">
                 <span style="color: #0f0; font-size: 16px;">◆</span>
-                <span>会話履歴の閲覧</span>
+                <span>Read the conversation history</span>
               </div>
             </div>
           </div>
 
           <!-- Glasses features -->
           <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">メガネでできること</h2>
+            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">What the glasses can do</h2>
             <div style="font-size: 13px; color: #bbb; line-height: 1.7;">
-              <p style="margin: 0 0 8px;">リングの操作だけでClaude Codeを監視・操作:</p>
+              <p style="margin: 0 0 8px;">Watch and drive Claude Code with the ring alone:</p>
               <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
                 <tr style="border-bottom: 1px solid #222;">
-                  <td style="padding: 6px 0; color: #0f0; width: 100px;">スワイプ上下</td>
-                  <td style="padding: 6px 0; color: #ccc;">セッション切替 / スクロール</td>
+                  <td style="padding: 6px 0; color: #0f0; width: 100px;">Swipe up/down</td>
+                  <td style="padding: 6px 0; color: #ccc;">Switch session / scroll</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #222;">
-                  <td style="padding: 6px 0; color: #0f0;">タップ</td>
-                  <td style="padding: 6px 0; color: #ccc;">選択 / 承認確定</td>
+                  <td style="padding: 6px 0; color: #0f0;">Tap</td>
+                  <td style="padding: 6px 0; color: #ccc;">Select / confirm an approval</td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #0f0;">ダブルタップ</td>
-                  <td style="padding: 6px 0; color: #ccc;">戻る / 次のwaiting</td>
+                  <td style="padding: 6px 0; color: #0f0;">Double tap</td>
+                  <td style="padding: 6px 0; color: #ccc;">Back / next waiting item</td>
                 </tr>
               </table>
             </div>
@@ -89,12 +89,12 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
           <!-- Setup steps -->
           <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">セットアップ手順</h2>
+            <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">Setup</h2>
             <div style="font-size: 13px; color: #ccc; line-height: 1.8;">
               <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                 <div style="background: #0f0; color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">1</div>
                 <div>
-                  <div style="font-weight: 600; margin-bottom: 2px;">${__PRODUCT_NAME__} をインストール</div>
+                  <div style="font-weight: 600; margin-bottom: 2px;">Install ${__PRODUCT_NAME__}</div>
                   <div style="position: relative;">
                     <code id="install-cmd" style="background: #1a1a1a; padding: 8px; border-radius: 4px; font-size: 11px; color: #0f0; display: block; word-break: break-all; line-height: 1.5;">curl -fsSL https://raw.githubusercontent.com/${__REPO__}/main/install.sh | bash</code>
                     <button id="btn-copy-install" style="position: absolute; top: 4px; right: 4px; background: #333; border: none; color: #aaa; font-size: 11px; padding: 2px 8px; border-radius: 4px; cursor: pointer;">copy</button>
@@ -104,22 +104,22 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
               <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                 <div style="background: #0f0; color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">2</div>
                 <div>
-                  <div style="font-weight: 600; margin-bottom: 2px;">${__PRODUCT_NAME__} を起動</div>
+                  <div style="font-weight: 600; margin-bottom: 2px;">Start ${__PRODUCT_NAME__}</div>
                   <code style="background: #1a1a1a; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #0f0;">${__BINARY_NAME__}</code>
-                  <span style="color: #888; font-size: 12px; margin-left: 8px;">（デフォルトポート: ${__DEFAULT_PORT__}）</span>
+                  <span style="color: #888; font-size: 12px; margin-left: 8px;">(default port: ${__DEFAULT_PORT__})</span>
                 </div>
               </div>
               <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                 <div style="background: #0f0; color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">3</div>
                 <div>
-                  <div style="font-weight: 600; margin-bottom: 2px;">Tailscale で接続</div>
-                  <div style="color: #999; font-size: 12px;">PCとスマホに<a href="https://tailscale.com" style="color: #4a9; text-decoration: none;">Tailscale</a>をインストールし、同じネットワークに参加</div>
+                  <div style="font-weight: 600; margin-bottom: 2px;">Connect over Tailscale</div>
+                  <div style="color: #999; font-size: 12px;">Install <a href="https://tailscale.com" style="color: #4a9; text-decoration: none;">Tailscale</a> on the PC and the phone, and join the same network</div>
                 </div>
               </div>
               <div style="display: flex; gap: 10px;">
                 <div style="background: #0f0; color: #000; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;">4</div>
                 <div>
-                  <div style="font-weight: 600;">下のURLを入力して接続</div>
+                  <div style="font-weight: 600;">Enter the URL below and connect</div>
                 </div>
               </div>
             </div>
@@ -128,18 +128,18 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
         <!-- Connection -->
         <div style="background: #111; border: 1px solid ${isConnected ? '#1a3a1a' : '#222'}; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-          <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">${__PRODUCT_NAME__} 接続設定</h2>
-          <div style="font-size: 12px; color: #888; margin-bottom: 8px;">${__PRODUCT_NAME__} サーバーの Tailscale URL を入力してください</div>
+          <h2 style="font-size: 15px; color: #0f0; margin: 0 0 12px; font-weight: 600;">${__PRODUCT_NAME__} connection</h2>
+          <div style="font-size: 12px; color: #888; margin-bottom: 8px;">Enter the Tailscale URL of the ${__PRODUCT_NAME__} server</div>
           <input id="url-input" type="url" value="${savedUrl}"
             placeholder="https://hostname.tail*****.ts.net:${__DEFAULT_PORT__}"
             style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #eee; font-size: 14px; margin-bottom: 10px; box-sizing: border-box; font-family: monospace;"
           />
           <div style="display: flex; gap: 8px;">
             <button id="btn-connect" style="flex: 1; padding: 12px; border-radius: 8px; border: none; background: #0a0; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;">
-              接続
+              Connect
             </button>
             <button id="btn-disconnect" style="padding: 12px 16px; border-radius: 8px; border: 1px solid #444; background: transparent; color: #888; font-size: 14px; cursor: pointer; display: ${isConnected ? 'block' : 'none'};">
-              切断
+              Disconnect
             </button>
           </div>
           <div id="connect-status" style="margin-top: 8px; font-size: 13px;"></div>
@@ -149,23 +149,23 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
         <div id="connected-info" style="display: none; background: #0a1a0a; border: 1px solid #1a3a1a; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
             <div style="width: 10px; height: 10px; background: #0f0; border-radius: 50; animation: pulse 2s infinite;"></div>
-            <h2 style="font-size: 15px; color: #0f0; margin: 0; font-weight: 600;">接続中</h2>
+            <h2 style="font-size: 15px; color: #0f0; margin: 0; font-weight: 600;">Connected</h2>
           </div>
           <div id="server-info" style="font-size: 13px; color: #ccc; line-height: 1.8;"></div>
           <div id="ws-diag" style="margin-top: 12px; padding: 10px; background: #111; border-radius: 8px; border: 1px solid #333; font-family: monospace; font-size: 11px; color: #888; line-height: 1.6;"></div>
           <div style="margin-top: 16px; padding: 12px; background: #0a2a0a; border-radius: 8px; border: 1px solid #1a3a1a;">
-            <p style="font-size: 14px; color: #0f0; margin: 0 0 4px; font-weight: 600;">✓ メガネから操作できます</p>
-            <p style="font-size: 12px; color: #888; margin: 0;">G2のメガネメニューからこのアプリを起動してください</p>
+            <p style="font-size: 14px; color: #0f0; margin: 0 0 4px; font-weight: 600;">Ready to drive from the glasses</p>
+            <p style="font-size: 12px; color: #888; margin: 0;">Launch this app from the G2 glasses menu</p>
           </div>
         </div>
 
         <!-- Help -->
         <div style="background: #111; border: 1px solid #222; border-radius: 12px; padding: 16px; margin-bottom: 32px;">
-          <h2 style="font-size: 15px; color: #888; margin: 0 0 8px; font-weight: 600;">リンク</h2>
+          <h2 style="font-size: 15px; color: #888; margin: 0 0 8px; font-weight: 600;">Links</h2>
           <div style="font-size: 13px; line-height: 2;">
-            <a href="https://github.com/${__REPO__}" style="color: #4a9; text-decoration: none;">${__PRODUCT_NAME__} GitHub →</a><br>
-            <a href="https://github.com/${__REPO__}#installation" style="color: #4a9; text-decoration: none;">インストール手順 →</a><br>
-            <a href="https://tailscale.com/download" style="color: #4a9; text-decoration: none;">Tailscale ダウンロード →</a>
+            <a href="https://github.com/${__REPO__}" style="color: #4a9; text-decoration: none;">${__PRODUCT_NAME__} on GitHub -></a><br>
+            <a href="https://github.com/${__REPO__}#installation" style="color: #4a9; text-decoration: none;">Installation guide -></a><br>
+            <a href="https://tailscale.com/download" style="color: #4a9; text-decoration: none;">Download Tailscale -></a>
           </div>
         </div>
 
@@ -221,7 +221,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
   btnConnect.addEventListener('click', async () => {
     const url = normalizeUrl(urlInput.value)
     if (!url) {
-      connectStatus.innerHTML = '<span style="color: #f44;">URLを入力してください</span>'
+      connectStatus.innerHTML = '<span style="color: #f44;">Enter a URL</span>'
       return
     }
     urlInput.value = url
@@ -235,7 +235,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
     connectedInfo.style.display = 'none'
     btnDisconnect.style.display = 'none'
     aboutSection.style.display = 'block'
-    connectStatus.innerHTML = '<span style="color: #888;">切断しました</span>'
+    connectStatus.innerHTML = '<span style="color: #888;">Disconnected</span>'
   })
 
   // biome-ignore lint: dynamic import to avoid initialization order issues
@@ -269,18 +269,18 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       const choices = sub ? diagClient.getChoices(sub) : []
       const bufPreview = bufText.slice(-80).replace(/\n/g, '↵')
       diagEl.innerHTML = [
-        `<b>WS診断</b>`,
+        `<b>WS diagnostics</b>`,
         `WS: <span style="color:${wsState === 'OPEN' ? '#0f0' : '#f44'}">${wsState}</span>`,
         `Sub: ${sub || 'none'}`,
         `Buf: ${bufText.length}ch`,
         `Choices: [${choices.join(', ')}]`,
-        bufText ? `末尾: <span style="color:#aaa;">${bufPreview}</span>` : '',
+        bufText ? `tail: <span style="color:#aaa;">${bufPreview}</span>` : '',
       ].filter(Boolean).join('<br>')
     }, 1000)
   }
 
   async function tryConnect(url: string) {
-    connectStatus.innerHTML = '<span style="color: #ff0;">接続中...</span>'
+    connectStatus.innerHTML = '<span style="color: #ff0;">Connecting...</span>'
     btnConnect.setAttribute('disabled', '')
     try {
       setBaseUrl(url)
@@ -304,14 +304,14 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
 
       serverInfo.innerHTML = `
         <div style="display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;">
-          <span style="color: #888;">サーバー</span><span style="font-family: monospace; font-size: 12px;">${url}</span>
-          <span style="color: #888;">バージョン</span><span>v${version}</span>
-          <span style="color: #888;">セッション</span><span>${sessionCount} 個</span>
-          <span style="color: #888;">API使用率</span><span>${usage}</span>
+          <span style="color: #888;">Server</span><span style="font-family: monospace; font-size: 12px;">${url}</span>
+          <span style="color: #888;">Version</span><span>v${version}</span>
+          <span style="color: #888;">Sessions</span><span>${sessionCount}</span>
+          <span style="color: #888;">API usage</span><span>${usage}</span>
         </div>
       `
 
-      connectStatus.innerHTML = '<span style="color: #0f0;">✓ 接続成功</span>'
+      connectStatus.innerHTML = '<span style="color: #0f0;">Connected</span>'
       connectedInfo.style.display = 'block'
       btnDisconnect.style.display = 'block'
       aboutSection.style.display = 'none'
@@ -319,7 +319,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       // Start WS diagnostic
       startWsDiag(sessionsRes.sessions || [])
     } catch (e) {
-      connectStatus.innerHTML = `<span style="color: #f44;">接続失敗: ${(e as Error).message}</span>`
+      connectStatus.innerHTML = `<span style="color: #f44;">Connection failed: ${(e as Error).message}</span>`
       connectedInfo.style.display = 'none'
     } finally {
       btnConnect.removeAttribute('disabled')

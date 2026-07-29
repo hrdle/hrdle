@@ -511,7 +511,7 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
     SERVICE.systemctl,
   ]);
   if (enableResult.exitCode === 0) {
-    console.log(`✅ ${t('setup.serviceEnabled')}`);
+    console.log(`${t('setup.serviceEnabled')}`);
   } else {
     console.error(t('setup.serviceEnableFailed'));
     console.error(enableResult.stderr.toString());
@@ -529,7 +529,7 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
   }
 
   console.log('');
-  console.log(`📋 ${t('setup.commands')}`);
+  console.log(`${t('setup.commands')}`);
   console.log(`  systemctl --user status ${SERVICE.systemctl}    # Status`);
   console.log(`  ${t('setup.cmdRestart')}`);
   console.log(`  ${t('setup.cmdStop')}`);
@@ -539,18 +539,18 @@ async function setupSystemd(port: number, password?: string): Promise<void> {
   // Enable linger
   const lingerResult = Bun.spawnSync(['loginctl', 'show-user', process.env.USER || '', '--property=Linger']);
   if (!lingerResult.stdout.toString().includes('Linger=yes')) {
-    console.log(`🔄 ${t('setup.enablingAutostart')}`);
+    console.log(`${t('setup.enablingAutostart')}`);
     const result = Bun.spawnSync(['loginctl', 'enable-linger', process.env.USER || '']);
     if (result.exitCode === 0) {
-      console.log(`✅ ${t('setup.autostartEnabled')}`);
+      console.log(`${t('setup.autostartEnabled')}`);
     } else {
-      console.log(`⚠️  ${t('setup.autostartFailed')}`);
+      console.log(`warning: ${t('setup.autostartFailed')}`);
       console.log(`   ${t('setup.autostartCommand')}`);
     }
     console.log('');
   }
 
   if (!password) {
-    console.log(`⚠️  ${t('setup.passwordNotSetEnv')}`);
+    console.log(`warning: ${t('setup.passwordNotSetEnv')}`);
   }
 }

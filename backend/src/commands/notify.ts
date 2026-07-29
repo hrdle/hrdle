@@ -1,10 +1,11 @@
 /**
- * cchub notify - Claude Code / Codex hookイベントをCC Hubサーバーに送信する。
- * stdinからhookのJSON入力を読み取り、CC Hubの /api/notify エンドポイントにPOSTする。
- * デフォルトで本番と dev の両方に送信する（ポートは identity 由来・失敗は無視）。
+ * hrdle notify - forwards Claude Code / Codex hook events to the hrdle server.
+ * Reads the hook's JSON from stdin and POSTs it to hrdle's /api/notify endpoint.
+ * By default it posts to both the production and dev ports (both derived from
+ * identity); failures are ignored.
  *
- * 使い方（hook設定）:
- *   "command": "cchub notify"
+ * Usage (hook configuration):
+ *   "command": "hrdle notify"
  */
 
 import { IDENTITY } from '../../../shared/identity';

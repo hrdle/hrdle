@@ -16,8 +16,8 @@ interface UseMultiplexedTerminalOptions {
 	 * PC-only): CC Hub never opens a control stream, so the local herdr client
 	 * keeps ownership of the terminal. Other operations are unaffected. */
 	live?: boolean;
-	// Multi-server: アクティブな peer の WS base URL ("wss://host:port") を指定。
-	// 省略時は Hub (window.location.host) を使う。
+	// Multi-server: the WS base URL ("wss://host:port") of the active peer.
+	// Defaults to the hub (window.location.host).
 	peerWsBase?: string | null;
 	onPaneViewport?: (paneId: string, viewport: PaneViewport) => void;
 	onLayoutChange?: (
@@ -99,8 +99,8 @@ let sharedLastPongAt = 0;
 let subscribedSession: string | null = null;
 let subscribedSessionInstance: string | null = null;
 let wsReady = false;
-// Multi-server: 現在の WS 接続が向いている base URL。
-// 接続先が切り替わったら force close して新しい URL に再接続する。
+// Multi-server: the base URL the current WS connection points at.
+// When the target changes the socket is force closed and reconnected to the new URL.
 let currentWsBase: string | null = null;
 let currentWsToken: string | null = null;
 
@@ -221,7 +221,7 @@ function ensureConnection(token?: string | null, wsBase?: string | null) {
 	const desiredBase = wsBase ?? getWsBase();
 	const desiredToken = (token ?? getAuthToken()) || null;
 
-	// 接続先 (URL or token) が変わったら force close して再接続させる
+	// A changed target (URL or token) forces a close and a reconnect
 	const baseChanged =
 		(currentWsBase !== null && currentWsBase !== desiredBase) ||
 		(currentWsToken !== null && currentWsToken !== desiredToken);
@@ -685,8 +685,8 @@ export function useMultiplexedTerminal(
 	}, []);
 
 	useEffect(() => {
-		// peer 切替時は ensureConnection が force close + 再接続するので、
-		// 接続復帰後 (onopen/ready) で subscribeToSession が呼ばれる
+		// On a peer switch ensureConnection force closes and reconnects, so
+		// subscribeToSession runs once the connection is back (onopen/ready)
 		if (peerWsBase !== undefined) {
 			ensureConnection(token, peerWsBase);
 		}

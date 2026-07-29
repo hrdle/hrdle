@@ -1,7 +1,7 @@
 // Glasses relay item queue (#504) — domain layer, no I/O.
 //
-// The queue is the central UI model of the glasses app: "判断に必要な連絡"
-// (waiting items) always come first, info items (FYI with TTL) trail behind.
+// The queue is the central UI model of the glasses app: messages that need a
+// decision (waiting items) always come first, info items (FYI with TTL) trail behind.
 // It holds only ACTIVE items: dismissed upserts are dropped, and
 // `glasses-relay-remove` deletes outright.
 

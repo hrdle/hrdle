@@ -1,9 +1,9 @@
 /**
- * peer-auth: peer (Worker) への代理ログインを行うサービス。
+ * peer-auth: logs in to a peer (worker) on the user's behalf.
  *
- * - Hub が peer 追加時にユーザーから受け取ったパスワードで POST /api/auth/login
- * - 得られた JWT トークンを保存して以降の API/WS に使う
- * - 401 が返ってきたら "unauthorized" 状態として記録（ユーザーに再認証を促す）
+ * - When a peer is registered the hub POSTs the user's password to /api/auth/login
+ * - The JWT that comes back is stored and used for later API/WS calls
+ * - A 401 is recorded as the "unauthorized" state, prompting the user to re-authenticate
  */
 
 import { recordPeerFailure, recordPeerSuccess } from './peer-registry';
@@ -27,13 +27,13 @@ function normalizePeerUrl(url: string): string {
 // supplied URLs at creation and already-stored URLs). #235
 function assertSafePeerUrl(url: string): void {
   if (!isSafePeerUrl(url)) {
-    throw new PeerAuthError(0, 'peer URL は https かつ非ローカルなホストである必要があります');
+    throw new PeerAuthError(0, 'A peer URL must be https and point at a non-local host');
   }
 }
 
 /**
- * peer の /api/auth/required を叩いて、認証が有効か確認する。
- * 接続失敗時は throw する (PeerAuthError)。
+ * Calls the peer's /api/auth/required to see whether auth is enabled.
+ * Throws PeerAuthError when the peer cannot be reached.
  */
 async function isPeerAuthRequired(url: string): Promise<boolean> {
   assertSafePeerUrl(url);
@@ -48,37 +48,37 @@ async function isPeerAuthRequired(url: string): Promise<boolean> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new PeerAuthError(0, `peer に接続できません: ${msg}`);
+    throw new PeerAuthError(0, `Cannot reach the peer: ${msg}`);
   } finally {
     clearTimeout(timer);
   }
   if (!response.ok) {
-    throw new PeerAuthError(response.status, `peer 確認失敗: HTTP ${response.status}`);
+    throw new PeerAuthError(response.status, `Peer check failed: HTTP ${response.status}`);
   }
   const body = (await response.json().catch(() => ({}))) as { required?: boolean };
   return body.required === true;
 }
 
 /**
- * peer に対してパスワードログインを行い JWT トークンを取得する。
+ * Logs in to the peer with a password and returns a JWT.
  *
- * password が undefined/空文字の場合:
- *   - peer 側 auth 無効 → 空トークンを返す (OK)
- *   - peer 側 auth 有効 → "password 必須" エラー
+ * When password is undefined or empty:
+ *   - peer auth disabled -> returns an empty token (fine)
+ *   - peer auth enabled  -> "password required" error
  *
- * password が指定されている場合:
- *   - 通常通り /api/auth/login へ POST
- *   - peer 側 auth 無効なら 400 が返るので空トークンとして扱う
+ * When a password is given:
+ *   - POSTs to /api/auth/login as usual
+ *   - a peer with auth disabled answers 400, which is treated as an empty token
  */
 export async function loginToPeer(url: string, password?: string): Promise<string> {
   assertSafePeerUrl(url);
   const base = normalizePeerUrl(url);
 
-  // password 未指定: まず peer 側の auth 設定を確認
+  // No password given: check the peer's auth setting first
   if (!password) {
     const required = await isPeerAuthRequired(url);
     if (required) {
-      throw new PeerAuthError(401, 'この peer はパスワード認証が有効です。パスワードを入力してください');
+      throw new PeerAuthError(401, 'This peer has password auth enabled. Enter its password.');
     }
     return '';
   }
@@ -96,32 +96,32 @@ export async function loginToPeer(url: string, password?: string): Promise<strin
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new PeerAuthError(0, `peer に接続できません: ${msg}`);
+    throw new PeerAuthError(0, `Cannot reach the peer: ${msg}`);
   } finally {
     clearTimeout(timer);
   }
 
   if (response.status === 400) {
-    // peer 側で auth が無効。トークン不要で動く
+    // Auth is disabled on the peer: it works without a token
     return '';
   }
   if (response.status === 401) {
-    throw new PeerAuthError(401, 'パスワードが正しくありません');
+    throw new PeerAuthError(401, 'Incorrect password');
   }
   if (!response.ok) {
-    throw new PeerAuthError(response.status, `peer ログイン失敗: HTTP ${response.status}`);
+    throw new PeerAuthError(response.status, `Peer login failed: HTTP ${response.status}`);
   }
 
   const json = (await response.json().catch(() => ({}))) as { token?: string };
   if (!json.token) {
-    throw new PeerAuthError(500, 'peer の応答に token がありません');
+    throw new PeerAuthError(500, 'The peer response carried no token');
   }
   return json.token;
 }
 
 /**
- * peer に対して /api/auth/me (or /health) を叩いて到達性を確認する。
- * 結果は peer-registry に記録される。
+ * Probes the peer with /api/auth/me (or /health) to confirm it is reachable.
+ * The result is recorded in peer-registry.
  */
 export async function verifyPeer(
   peerId: string,
@@ -137,7 +137,7 @@ export async function verifyPeer(
   const start = Date.now();
   let response: Response;
   try {
-    // 認証無効 peer でも 200 を返す /health を使う
+    // /health answers 200 even on a peer with auth disabled
     response = await fetch(`${base}/health`, {
       method: 'GET',
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -164,8 +164,8 @@ export async function verifyPeer(
 }
 
 /**
- * peer に対して認証付きで任意の API パスを叩く。
- * 401 が返ったら failure を記録するので、呼び出し側はそれを見て unauthorized 扱いにできる。
+ * Calls an arbitrary API path on the peer with authentication.
+ * A 401 is recorded as a failure, so the caller can treat the peer as unauthorized.
  */
 export async function peerFetch(
   peerId: string,

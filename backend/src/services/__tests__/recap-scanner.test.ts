@@ -23,12 +23,12 @@ describe("parseRecapFromLines", () => {
 		const lines = jsonl({
 			type: "system",
 			subtype: "away_summary",
-			content: "進捗まとめ: PR2 を実装中。 (disable recaps in /config)",
+			content: "Progress: implementing PR2. (disable recaps in /config)",
 			timestamp: "2026-05-30T10:00:00Z",
 		});
 		const recap = parseRecapFromLines(lines);
 		expect(recap).toEqual({
-			content: "進捗まとめ: PR2 を実装中。",
+			content: "Progress: implementing PR2.",
 			timestamp: "2026-05-30T10:00:00Z",
 		});
 	});
@@ -49,7 +49,7 @@ describe("parseRecapFromLines", () => {
 		const withoutTrigger = jsonl({
 			type: "system",
 			subtype: "local_command",
-			content: "<local-command-stdout>別コマンドの出力</local-command-stdout>",
+			content: "<local-command-stdout>output of another command</local-command-stdout>",
 			timestamp: "2026-05-30T11:00:00Z",
 		});
 		expect(parseRecapFromLines(withoutTrigger)).toBeNull();
@@ -70,18 +70,18 @@ describe("parseRecapFromLines", () => {
 			{
 				type: "system",
 				subtype: "away_summary",
-				content: "古い自動 recap",
+				content: "older automatic recap",
 				timestamp: "2026-05-30T09:00:00Z",
 			},
 			userRecapTrigger,
 			{
 				type: "system",
 				subtype: "local_command",
-				content: "<local-command-stdout>新しい手動 recap</local-command-stdout>",
+				content: "<local-command-stdout>newer manual recap</local-command-stdout>",
 				timestamp: "2026-05-30T12:00:00Z",
 			},
 		);
-		expect(parseRecapFromLines(lines)?.content).toBe("新しい手動 recap");
+		expect(parseRecapFromLines(lines)?.content).toBe("newer manual recap");
 	});
 
 	test("a later away_summary overrides an earlier one", () => {
@@ -108,29 +108,29 @@ describe("parseRecapFromLines", () => {
 			{
 				type: "system",
 				subtype: "away_summary",
-				content: "自動まとめ",
+				content: "automatic summary",
 				timestamp: "2026-05-30T10:00:00Z",
 			},
 			{
 				type: "system",
 				subtype: "local_command",
-				content: "<local-command-stdout>trigger を奪われた出力</local-command-stdout>",
+				content: "<local-command-stdout>output whose trigger was taken</local-command-stdout>",
 				timestamp: "2026-05-30T11:00:00Z",
 			},
 		);
 		// The away_summary consumes the pending trigger, so the local_command is
 		// NOT treated as a recap; the away_summary itself is the latest recap.
-		expect(parseRecapFromLines(lines)?.content).toBe("自動まとめ");
+		expect(parseRecapFromLines(lines)?.content).toBe("automatic summary");
 	});
 
 	test("a non-/recap user entry clears a pending trigger", () => {
 		const lines = jsonl(
 			userRecapTrigger,
-			{ type: "user", message: { content: "ふつうの発言" } },
+			{ type: "user", message: { content: "an ordinary message" } },
 			{
 				type: "system",
 				subtype: "local_command",
-				content: "<local-command-stdout>これは recap ではない</local-command-stdout>",
+				content: "<local-command-stdout>this is not a recap</local-command-stdout>",
 				timestamp: "2026-05-30T11:00:00Z",
 			},
 		);
@@ -144,11 +144,11 @@ describe("parseRecapFromLines", () => {
 			JSON.stringify({
 				type: "system",
 				subtype: "away_summary",
-				content: "壊れた行のあとの recap",
+				content: "recap after a broken line",
 				timestamp: "2026-05-30T10:00:00Z",
 			}),
 		];
-		expect(parseRecapFromLines(lines)?.content).toBe("壊れた行のあとの recap");
+		expect(parseRecapFromLines(lines)?.content).toBe("recap after a broken line");
 	});
 
 	test("empty away_summary content does not produce a recap", () => {

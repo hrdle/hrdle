@@ -1,10 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Hrdle — 走査するスキャナー。
-       幾何: セグメント 11 枚 / 灯の位置 0.33（左寄り）/ 帯の折れ S×0.028
-       （中央が下がる浅い V）/ スリット 0.78×0.155S / 発光 rgb(255, 39, 24)。
-       icon-192.png と icon-512.png は同じ数値を Canvas で描いたもので、
-       ヘアライン・グレイン・ガラスの映り込みはそちらにだけ載せてある。
-       ここに載せないのは、16px では潰れて濁りにしかならないため。 -->
+  <!-- Hrdle - a scanner mid-sweep.
+       Geometry: 11 segments / lamp at 0.33 (left of center) / band folded by
+       S*0.028 (a shallow V dipping at the center) / slit 0.78 x 0.155S /
+       glow rgb(255, 39, 24).
+       icon-192.png and icon-512.png draw the same numbers on a Canvas, and the
+       hairline, grain and glass reflection live only there: at 16px they
+       collapse into mud rather than texture. -->
   <defs>
     <linearGradient id="case" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#26292c"/>
@@ -27,13 +28,13 @@
 
   <rect width="512" height="512" rx="112.64" fill="url(#case)"/>
 
-  <!-- 灯がパネルに回り込む。縦より横に伸びるのがこの意匠の顔 -->
+  <!-- The light spills onto the panel. Spreading wider than it is tall is what makes the mark -->
   <ellipse cx="188.11" cy="251.13" rx="184.32" ry="66.56" fill="url(#spill)"/>
 
-  <!-- 帯の奥の暗がり -->
+  <!-- The recess behind the band -->
   <path d="M56.32 201.98L256 216.32L455.68 201.98L455.68 281.34L256 295.68L56.32 281.34Z" fill="#160607"/>
 
-  <!-- ランプ。中央が白く飛ぶのは 1〜2 枚だけ -->
+  <!-- Lamps. Only one or two blow out to white at the center -->
   <g clip-path="url(#slit)">
     <path d="M58.86 202.17L90.08 204.41L90.08 283.77L58.86 281.53Z" fill="rgb(255,39,24)" opacity="0.06"/>
     <path d="M95.17 204.77L126.39 207.01L126.39 286.37L95.17 284.13Z" fill="rgb(255,39,24)" opacity="0.25"/>
@@ -47,7 +48,7 @@
     <path d="M276.69 214.83L307.92 212.59L307.92 291.95L276.69 294.19Z" fill="rgb(255,39,24)" opacity="0.09"/>
   </g>
 
-  <!-- 枠。上に光、下に影 -->
+  <!-- Frame: light on top, shadow below -->
   <path d="M43.01 188.67L256 203.01L468.99 188.67L468.99 294.66L256 308.99L43.01 294.66Z"
         fill="none" stroke="url(#frame)" stroke-width="3.58" stroke-linejoin="round"/>
 </svg>

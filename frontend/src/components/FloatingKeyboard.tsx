@@ -468,7 +468,7 @@ export const FloatingKeyboard = forwardRef<
 									: "text-zinc-600"
 							}`}
 						>
-							キーボード
+							Keyboard
 						</button>
 						<button
 							type="button"
@@ -479,7 +479,7 @@ export const FloatingKeyboard = forwardRef<
 									: "text-zinc-600"
 							}`}
 						>
-							入力
+							Input
 						</button>
 					</div>
 				</div>
@@ -565,7 +565,7 @@ export const FloatingKeyboard = forwardRef<
 							autoCorrect="off"
 							autoComplete="off"
 							spellCheck={false}
-							placeholder="日本語入力 - Enter×2で送信"
+							placeholder="Enter twice to send"
 							rows={Math.min(Math.max(inputValue.split("\n").length, 1), 5)}
 							className="w-full px-3 py-2 bg-[#0a0a0a] border border-white/[0.08] rounded-md text-[13px] text-white placeholder:text-zinc-700 focus:outline-none focus:border-blue-500/50 resize-none mb-1.5"
 							style={{ fontSize: "16px" }}

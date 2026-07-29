@@ -417,13 +417,13 @@ export function DesktopLayout({
 	const { sessions: apiSessions } = useWorkspaces();
 
 	// Merge prop sessions with API sessions to get latest theme info
-	// propSessionsにないセッションもapiSessionsから追加する（分割ペイン用）。
-	// `peerId` は session が属する host を表す不変属性なので、apiSessions 側を
-	// 真の値として常に採用する (propSession 側は古いキャッシュ/未設定のことがある)。
+	// Sessions missing from propSessions are added from apiSessions (for split panes).
+	// `peerId` is an immutable attribute naming the host a session belongs to, so the
+	// apiSessions value always wins (propSession can hold a stale or unset one).
 	const sessions =
 		apiSessions.length > 0
 			? apiSessions.map((apiSession) => {
-					// id (workspace 名) は peer 間で重複し得るので peer も一致させる
+					// The id (workspace name) can collide across peers, so match on peer too
 					const propSession = propSessions.find(
 						(p) =>
 							p.id === apiSession.id && samePeerId(p.peerId, apiSession.peerId),
@@ -647,7 +647,7 @@ export function DesktopLayout({
 		null,
 	);
 
-	// Multi-server: アクティブセッションが remote peer の場合、そっちの WS に切り替える
+	// Multi-server: when the active session lives on a remote peer, switch to that WS
 	const { peers } = usePeers();
 	const peerConn = usePeerConnection(
 		controlSessionId || "",
@@ -857,7 +857,7 @@ export function DesktopLayout({
 					peerConn.peerId,
 				);
 			}
-			// 全useWorkspaces インスタンスのindicatorStateを即座に更新
+			// Update indicatorState on every useWorkspaces instance immediately
 			updateCachedSessionsByHookEvent(event, sessionId);
 		},
 		onDisconnect: () => {},
@@ -888,7 +888,7 @@ export function DesktopLayout({
 		(op: "focus" | "split" | "close", body: Record<string, unknown>) => {
 			const sid = controlSessionIdRef.current;
 			if (!sid) return;
-			// sessionFetch は peerId しか見ない。複合キー由来の peer をそのまま渡す。
+			// sessionFetch only looks at peerId, so pass the peer from the composite key through
 			const session = { peerId: controlPeerIdRef.current };
 			sessionFetch(
 				session,
@@ -1825,7 +1825,7 @@ export function DesktopLayout({
 										if (dir) openFileViewer(dir, activeSession?.peerId);
 									}}
 									className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-									title="ファイル"
+									title="Files"
 								>
 									<FileText className="w-[18px] h-[18px]" />
 								</button>
@@ -1837,7 +1837,7 @@ export function DesktopLayout({
 											? "text-blue-400"
 											: "text-zinc-500 hover:text-zinc-300 active:text-zinc-200"
 									}`}
-									title="ダッシュボード"
+									title="Dashboard"
 								>
 									<BarChart3 className="w-[18px] h-[18px]" />
 								</button>
@@ -1851,7 +1851,7 @@ export function DesktopLayout({
 										type="button"
 										onClick={() => handleSplit("horizontal")}
 										className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-										title="縦分割"
+										title="Split vertically"
 									>
 										<SplitSquareHorizontal className="w-[18px] h-[18px]" />
 									</button>
@@ -1859,7 +1859,7 @@ export function DesktopLayout({
 										type="button"
 										onClick={() => handleSplit("vertical")}
 										className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-										title="横分割"
+										title="Split horizontally"
 									>
 										<SplitSquareVertical className="w-[18px] h-[18px]" />
 									</button>
@@ -1869,7 +1869,7 @@ export function DesktopLayout({
 									type="button"
 									onClick={handleGlobalReload}
 									className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-									title="リロード"
+									title="Reload"
 									data-onboarding="reload"
 								>
 									<RefreshCw className="w-[18px] h-[18px]" />
@@ -1882,7 +1882,7 @@ export function DesktopLayout({
 											? "text-blue-400"
 											: "text-zinc-500 hover:text-zinc-300 active:text-zinc-200"
 									}`}
-									title={showKeyboard ? "キーボードを隠す" : "キーボードを表示"}
+									title={showKeyboard ? "Hide keyboard" : "Show keyboard"}
 									data-onboarding="keyboard"
 								>
 									<Keyboard className="w-[18px] h-[18px]" />
@@ -2006,7 +2006,7 @@ export function DesktopLayout({
 							<div className="bg-th-surface rounded-md w-full max-w-md max-h-[80vh] flex flex-col">
 								<div className="flex items-center justify-between px-4 py-3 border-b border-th-border">
 									<span className="text-th-text font-medium">
-										URL一覧{" "}
+										URLs{" "}
 										{detectedUrls.length > 0 &&
 											`(${startIdx + 1}-${Math.min(startIdx + URL_PAGE_SIZE, detectedUrls.length)}/${detectedUrls.length})`}
 									</span>
@@ -2021,7 +2021,7 @@ export function DesktopLayout({
 								<div className="flex-1 overflow-y-auto p-2">
 									{detectedUrls.length === 0 ? (
 										<p className="text-th-text-muted text-center py-4">
-											URLが見つかりません
+											No URLs found
 										</p>
 									) : (
 										pageUrls.map((url, index) => (
@@ -2038,14 +2038,14 @@ export function DesktopLayout({
 													onClick={() => handleCopyUrl(url)}
 													className="px-2 py-1 text-xs bg-th-surface-active hover:bg-th-surface-hover text-th-text rounded"
 												>
-													コピー
+													Copy
 												</button>
 												<button
 													type="button"
 													onClick={() => handleOpenUrl(url)}
 													className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-th-text rounded-md"
 												>
-													開く
+													Open
 												</button>
 											</div>
 										))
@@ -2059,7 +2059,7 @@ export function DesktopLayout({
 											disabled={urlPage === 0}
 											className={`px-3 py-1 rounded ${urlPage === 0 ? "bg-th-surface-hover text-th-text-muted" : "bg-th-surface-active text-th-text hover:bg-th-surface-hover"}`}
 										>
-											前へ
+											Previous
 										</button>
 										<span className="text-th-text-secondary text-sm">
 											{urlPage + 1} / {totalPages}
@@ -2072,7 +2072,7 @@ export function DesktopLayout({
 											disabled={urlPage >= totalPages - 1}
 											className={`px-3 py-1 rounded ${urlPage >= totalPages - 1 ? "bg-th-surface-hover text-th-text-muted" : "bg-th-surface-active text-th-text hover:bg-th-surface-hover"}`}
 										>
-											次へ
+											Next
 										</button>
 									</div>
 								)}

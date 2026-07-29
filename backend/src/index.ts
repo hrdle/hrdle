@@ -261,7 +261,7 @@ const path = await import('node:path');
 // Check if tailscale command exists
 const whichResult = Bun.spawnSync(['which', 'tailscale']);
 if (whichResult.exitCode !== 0) {
-  console.error(`❌ ${t('server.tailscaleNotFound')}`);
+  console.error(`${t('server.tailscaleNotFound')}`);
   console.error('   Install: https://tailscale.com/download');
   process.exit(1);
 }
@@ -271,7 +271,7 @@ if (whichResult.exitCode !== 0) {
 // owns all pane PTYs, so cchub restarts don't kill running agents).
 const herdrPath = herdrBinaryPath();
 if (!herdrPath) {
-  console.error(`❌ ${t('server.herdrNotFound')}`);
+  console.error(`${t('server.herdrNotFound')}`);
   console.error(`   ${t('server.herdrInstallHint')}`);
   process.exit(1);
 }
@@ -325,16 +325,16 @@ if (!herdrPong) {
     herdrPong = await herdrPing();
   }
   if (!herdrPong) {
-    console.error(`❌ ${t('server.herdrStartFailed')}`);
+    console.error(`${t('server.herdrStartFailed')}`);
     console.error(`   socket: ${herdrSocketPath()}`);
     process.exit(1);
   }
-  console.log('✅ herdr server started');
+  console.log('herdr server started');
 }
-console.log(`🐑 herdr ${herdrPong.version ?? '?'} (protocol ${herdrPong.protocol ?? '?'})`);
+console.log(`herdr ${herdrPong.version ?? '?'} (protocol ${herdrPong.protocol ?? '?'})`);
 if (herdrPong.protocol !== undefined && herdrPong.protocol !== HERDR_TESTED_PROTOCOL) {
   console.warn(
-    `⚠️  herdr protocol ${herdrPong.protocol} differs from the tested protocol ${HERDR_TESTED_PROTOCOL}. ` +
+    `warning: herdr protocol ${herdrPong.protocol} differs from the tested protocol ${HERDR_TESTED_PROTOCOL}. ` +
       'Terminal features may misbehave — check the herdr changelog before relying on this setup.',
   );
 }
@@ -342,7 +342,7 @@ if (herdrPong.protocol !== undefined && herdrPong.protocol !== HERDR_TESTED_PROT
 // Get Tailscale hostname
 const statusResult = Bun.spawnSync(['tailscale', 'status', '--json']);
 if (statusResult.exitCode !== 0) {
-  console.error(`❌ ${t('server.tailscaleNotRunning')}`);
+  console.error(`${t('server.tailscaleNotRunning')}`);
   console.error(`   ${t('server.tailscaleCheckRunning')}`);
   process.exit(1);
 }
@@ -357,7 +357,7 @@ try {
   // Remove trailing dot if present
   tailscaleHostname = dnsName.replace(/\.$/, '');
 } catch (_e) {
-  console.error(`❌ ${t('server.tailscaleParseError')}`);
+  console.error(`${t('server.tailscaleParseError')}`);
   process.exit(1);
 }
 
@@ -381,7 +381,7 @@ if (!needsCert) {
 }
 
 if (needsCert) {
-  console.log('🔐 Tailscale 証明書を生成中...');
+  console.log('Generating the Tailscale certificate...');
   fs.mkdirSync(certDir, { recursive: true, mode: 0o700 });
 
   const certResult = Bun.spawnSync([
@@ -393,16 +393,16 @@ if (needsCert) {
 
   if (certResult.exitCode !== 0) {
     const stderr = certResult.stderr.toString();
-    console.error(`❌ ${t('server.tailscaleCertError')}`);
+    console.error(`${t('server.tailscaleCertError')}`);
     console.error(stderr);
     if (stderr.includes('Access denied') || stderr.includes('cert access denied')) {
       console.error('');
-      console.error('💡 Hint: Run this command once:');
+      console.error('Hint: Run this command once:');
       console.error('   sudo tailscale set --operator=$USER');
     }
     process.exit(1);
   }
-  console.log(`📜 Certificate generated: ${certDir}`);
+  console.log(`Certificate generated: ${certDir}`);
 }
 
 // Store password in environment for auth middleware. Priority:
@@ -427,9 +427,9 @@ if (resolvedPassword) {
   process.env.CCHUB_PASSWORD = resolvedPassword;
   const sourceLabel = passwordSource === 'keychain' ? ' (Keychain)' :
     passwordSource === 'env' ? ' (env)' : '';
-  console.log(`🔒 ${t('server.passwordEnabled')}${sourceLabel}`);
+  console.log(`${t('server.passwordEnabled')}${sourceLabel}`);
 } else {
-  console.log(`⚠️  ${t('server.passwordNotSet')}`);
+  console.log(`warning: ${t('server.passwordNotSet')}`);
 }
 
 // Resolve the JWT signing secret (generates + persists a random one on first
@@ -442,7 +442,7 @@ const port = args.port;
 const host = args.host;
 process.env.CCHUB_PORT = String(port);
 
-console.log(`🚀 ${IDENTITY.productName} v${VERSION}`);
+console.log(`${IDENTITY.productName} v${VERSION}`);
 console.log(`   URL: https://${tailscaleHostname}:${port}`);
 console.log(`   Static: ${EMBEDDED_MODE ? '(embedded)' : staticRoot}`);
 

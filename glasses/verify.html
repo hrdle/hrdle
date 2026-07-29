@@ -25,55 +25,55 @@
 <body>
   <!-- Phone UI (default) -->
   <div id="phone-ui">
-    <h1>Hrdle 確認ツール</h1>
+    <h1>Hrdle verification tool</h1>
 
     <!-- 1. Launch Source -->
     <div class="card">
-      <h2>1. 起動元</h2>
-      <div id="launch-source">検出中...</div>
+      <h2>1. Launch source</h2>
+      <div id="launch-source">Detecting...</div>
     </div>
 
     <!-- 2. Events -->
     <div class="card">
-      <h2>2. イベント (リング/テンプル)</h2>
-      <p class="small">タップ・ダブルタップ・スワイプを試してください</p>
-      <div class="log" id="event-log">イベント待ち...</div>
+      <h2>2. Events (ring / temple)</h2>
+      <p class="small">Try a tap, a double tap and a swipe</p>
+      <div class="log" id="event-log">Waiting for an event...</div>
       <div style="margin-top:8px">
-        <span>タップ: <span id="tap-count">0</span></span> |
-        <span>ダブルタップ: <span id="dbl-count">0</span></span> |
-        <span>スワイプ: <span id="swipe-count">0</span></span>
+        <span>Tap: <span id="tap-count">0</span></span> |
+        <span>Double tap: <span id="dbl-count">0</span></span> |
+        <span>Swipe: <span id="swipe-count">0</span></span>
       </div>
     </div>
 
     <!-- 3. HTTPS Test -->
     <div class="card">
-      <h2>3. HTTPS接続テスト</h2>
+      <h2>3. HTTPS connection test</h2>
       <input id="url-input" type="url" placeholder="https://hostname.tail*****.ts.net:5923" />
-      <button id="url-test">接続テスト</button>
+      <button id="url-test">Test the connection</button>
       <div id="url-result"></div>
     </div>
 
     <!-- 4. LocalStorage -->
     <div class="card">
-      <h2>4. LocalStorage 共有テスト</h2>
-      <input id="ls-key" type="text" value="hrdle-url" placeholder="キー" />
-      <input id="ls-value" type="text" placeholder="保存する値" />
-      <button id="ls-save">保存</button>
-      <button id="ls-load">読み取り</button>
+      <h2>4. LocalStorage sharing test</h2>
+      <input id="ls-key" type="text" value="hrdle-url" placeholder="key" />
+      <input id="ls-value" type="text" placeholder="value to store" />
+      <button id="ls-save">Save</button>
+      <button id="ls-load">Load</button>
       <div id="ls-result"></div>
     </div>
 
     <!-- 5. Form Input -->
     <div class="card">
-      <h2>5. フォーム入力テスト</h2>
-      <input id="form-test" type="text" placeholder="ここにテキスト入力..." />
+      <h2>5. Form input test</h2>
+      <input id="form-test" type="text" placeholder="Type here..." />
       <div id="form-result" class="small"></div>
     </div>
 
     <!-- 6. Device Info -->
     <div class="card">
-      <h2>6. デバイス情報</h2>
-      <div id="device-info">取得中...</div>
+      <h2>6. Device info</h2>
+      <div id="device-info">Loading...</div>
     </div>
   </div>
 
@@ -126,7 +126,7 @@
       ])
       log('Bridge OK')
     } catch (e) {
-      log('Bridge: ' + e.message + ' (ブラウザデバッグモード)')
+      log('Bridge: ' + e.message + ' (browser debug mode)')
     }
 
     // 1. Launch Source
@@ -158,9 +158,9 @@
         setResult('launch-source', `<span class="status ok"></span>${source}`)
         log('LaunchSource: ' + source)
       })
-      setResult('launch-source', '<span class="status pending"></span>Bridge OK, LaunchSource待ち...')
+      setResult('launch-source', '<span class="status pending"></span>Bridge OK, waiting for LaunchSource...')
     } else {
-      setResult('launch-source', '<span class="status pending"></span>SDKなし (ブラウザモード)')
+      setResult('launch-source', '<span class="status pending"></span>No SDK (browser mode)')
     }
 
     // 2. Events
@@ -228,22 +228,22 @@
     document.getElementById('url-test').addEventListener('click', async () => {
       const url = document.getElementById('url-input').value.trim()
       if (!url) {
-        setResult('url-result', '<span class="status fail"></span>URLを入力してください')
+        setResult('url-result', '<span class="status fail"></span>Enter a URL')
         return
       }
-      setResult('url-result', '<span class="status pending"></span>接続中...')
+      setResult('url-result', '<span class="status pending"></span>Connecting...')
       try {
         const res = await fetch(url + '/api/dashboard', { signal: AbortSignal.timeout(5000) })
         if (res.ok) {
           const data = await res.json()
           setResult('url-result',
-            `<span class="status ok"></span>接続成功! v${data.version || '?'}, セッション数取得中...`)
+            `<span class="status ok"></span>Connected. v${data.version || '?'}, counting sessions...`)
           // Try sessions
           const sRes = await fetch(url + '/api/sessions')
           if (sRes.ok) {
             const sData = await sRes.json()
             setResult('url-result',
-              `<span class="status ok"></span>接続成功! v${data.version || '?'}, ${sData.sessions?.length || 0}セッション`)
+              `<span class="status ok"></span>Connected. v${data.version || '?'}, ${sData.sessions?.length || 0} sessions`)
           }
         } else {
           setResult('url-result', `<span class="status fail"></span>HTTP ${res.status}`)
@@ -260,11 +260,11 @@
       if (bridge) {
         const ok = await bridge.setLocalStorage(key, value)
         setResult('ls-result', ok
-          ? `<span class="status ok"></span>保存OK: ${key} = "${value}"`
-          : `<span class="status fail"></span>保存失敗`)
+          ? `<span class="status ok"></span>Saved: ${key} = "${value}"`
+          : `<span class="status fail"></span>Save failed`)
       } else {
         localStorage.setItem(key, value)
-        setResult('ls-result', `<span class="status ok"></span>ブラウザlocalStorage保存: ${key} = "${value}"`)
+        setResult('ls-result', `<span class="status ok"></span>Browser localStorage saved: ${key} = "${value}"`)
       }
     })
 
@@ -273,19 +273,19 @@
       if (bridge) {
         const value = await bridge.getLocalStorage(key)
         setResult('ls-result', value
-          ? `<span class="status ok"></span>読み取り: ${key} = "${value}"`
-          : `<span class="status pending"></span>値なし (空文字)`)
+          ? `<span class="status ok"></span>Loaded: ${key} = "${value}"`
+          : `<span class="status pending"></span>No value (empty string)`)
       } else {
         const value = localStorage.getItem(key)
         setResult('ls-result', value
-          ? `<span class="status ok"></span>ブラウザlocalStorage: ${key} = "${value}"`
-          : `<span class="status pending"></span>値なし`)
+          ? `<span class="status ok"></span>Browser localStorage: ${key} = "${value}"`
+          : `<span class="status pending"></span>No value`)
       }
     })
 
     // 5. Form Input
     document.getElementById('form-test').addEventListener('input', (e) => {
-      setResult('form-result', `入力OK: "${e.target.value}"`)
+      setResult('form-result', `Input OK: "${e.target.value}"`)
     })
 
     // 6. Device Info
@@ -304,7 +304,7 @@
         setResult('device-info', 'Error: ' + e.message)
       }
     } else {
-      setResult('device-info', `UserAgent: ${navigator.userAgent.slice(0, 80)}<br>SDKなし (ブラウザモード)`)
+      setResult('device-info', `UserAgent: ${navigator.userAgent.slice(0, 80)}<br>No SDK (browser mode)`)
     }
 
     // Glasses UI — character limit test
