@@ -1,6 +1,14 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
+import { IDENTITY } from '../shared/identity'
+
+// Where the simulator proxies API and WS traffic during development. Both the
+// override variable and the fallback port come from identity (#459): spelled
+// out, they keep pointing at the previous product's dev server after a rename.
+const OVERRIDE_ENV = `${IDENTITY.binaryName.toUpperCase()}_URL`
+const BACKEND_URL =
+  process.env[OVERRIDE_ENV] || `https://localhost:${IDENTITY.devPort}`
 
 // The ehpk version, from the one file that decides it. Twice today the
 // question "which build is on the device?" had to be answered by comparing a
@@ -55,12 +63,12 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: true,
     proxy: {
       '/api': {
-        target: process.env.CCHUB_URL || 'https://localhost:3456',
+        target: BACKEND_URL,
         secure: false,
         changeOrigin: true,
       },
       '/ws/mux': {
-        target: process.env.CCHUB_URL || 'https://localhost:3456',
+        target: BACKEND_URL,
         secure: false,
         ws: true,
         changeOrigin: true,

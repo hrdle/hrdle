@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { IDENTITY } from '../../../shared/identity';
 
 // Regression test: switching files in the FileViewer must
 //   (a) keep the file-list scroll position
@@ -7,8 +8,8 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 // in useFileViewer, which unmounted the file tree (replaced with a "読み込み中…"
 // placeholder) and reset scroll to the top on next mount.
 
-const FRONTEND_URL = 'https://localhost:5173';
-const BACKEND_URL = 'https://localhost:3456';
+const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
+const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
 
 test.use({
   ignoreHTTPSErrors: true,

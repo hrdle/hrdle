@@ -74,7 +74,7 @@ function getTailscaleCert(): { key: Buffer; cert: Buffer } | undefined {
       }
     }
 
-    console.log(`🔒 HTTPS: https://${hostname}:5173`);
+    console.log(`🔒 HTTPS: https://${hostname}:${IDENTITY.frontendDevPort}`);
     return {
       key: fs.readFileSync(keyPath),
       cert: fs.readFileSync(certPath),
@@ -177,7 +177,7 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5173,
+    port: IDENTITY.frontendDevPort,
     host: '0.0.0.0',
     allowedHosts: true,
     https: httpsConfig,
@@ -195,7 +195,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://localhost:3456',
+        target: `https://localhost:${IDENTITY.devPort}`,
         changeOrigin: true,
         secure: false,
         // Allow long uploads (videos etc.)
@@ -213,7 +213,7 @@ export default defineConfig({
         },
       },
       '/ws': {
-        target: 'wss://localhost:3456',
+        target: `wss://localhost:${IDENTITY.devPort}`,
         ws: true,
         secure: false,
       },

@@ -165,9 +165,23 @@ upstream は1日に数回リリースが走るくらい動いている。
 ```bash
 # hrdle 側
 HERDR_SESSION=hrdle  # 別 herdr セッション（別サーバー・別ワークスペース・別 session.json）
-port 5924
+port 5924            # dev は 3457 / 5174（cchub の 3456 / 5173 から1つずらし）
 ~/.hrdle             # 別データディレクトリ
 ```
+
+**ポート番号を identity に通していない箇所が複数あった。**改名で最も静かに壊れる種類のもの:
+
+- `backend/src/cli.ts` の `DEFAULT_PORT = isDev ? 3456 : 5923` — `--help` は identity から
+  5924 と表示する一方、実際には **5923 を bind しに行く**。つまり改名ビルドが cchub の
+  ポートを奪いに行き、両方入っているマシンでは EADDRINUSE で落ちる。
+  `-p` を明示している限り顕在化しないので、検証中ずっと気づかなかった
+- `backend/src/commands/glasses.ts` の `PRODUCTION_PORT = 5923` / `DEV_PORT = 3456` —
+  `hrdle glasses` のメモが cchub へ飛ぶ
+- `frontend/playwright.config.ts` の `webServer.url` — vite の port と食い違うとテストは
+  失敗せず、120秒待って「サーバーが起動しなかった」と報告する
+
+`identity-operational` のスキャンは**ポート番号を見ていない**（数字なので誤検知しやすい）。
+この層は今のところ人力で探すしかない。
 
 **先に `rm -rf ~/.hrdle`**（上記の汚染で偽セッション20件が入っている場合）。
 
@@ -182,7 +196,10 @@ port 5924
 ### 4. 切替（promote）
 
 - `HERDR_SESSION` を**外して**再起動 → default セッション（＝既存の全ワークスペース）を引き継ぐ
-- port を 5924 → 5923 へ（`identity.json` の `defaultPort`）
+- **port は 5924 のまま**。5923 を空けておけば、何かあったとき cchub を enable するだけで戻せる。
+  ポートが衝突しないので両方同時に起動でき、rollback が一段確実になる。
+  この判断のせいで `peer-discovery.ts` の `DEFAULT_PORT = 5923` は「移行期の小問題」ではなく
+  **恒久的な問題**になった（他マシンの hrdle を永久に発見できない）ので、identity 化が必須
 - cchub は uninstall せず disable で数週間残す（rollback 用）
 - 引き継ぎたい設定があれば `cp -r ~/.cc-hub ~/.hrdle` を1回。**コードの fallback は作らない**
   （並走期に split-brain を作り、切替後は確実に死ぬコードになるため）

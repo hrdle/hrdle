@@ -28,6 +28,7 @@ export const IDENTITY = {
   assetPrefix: raw.assetPrefix,
   defaultPort: raw.defaultPort,
   devPort: raw.devPort,
+  frontendDevPort: raw.frontendDevPort,
   dataDirName: raw.dataDirName,
   dataDirEnv: raw.dataDirEnv,
   configDirName: raw.configDirName,
