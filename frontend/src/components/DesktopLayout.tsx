@@ -506,10 +506,6 @@ export function DesktopLayout({
 	});
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [isUploading, setIsUploading] = useState(false);
-	const [detectedUrls, setDetectedUrls] = useState<string[]>([]);
-	const [showUrlMenu, setShowUrlMenu] = useState(false);
-	const [urlPage, setUrlPage] = useState(0);
-	const URL_PAGE_SIZE = 5;
 
 	// Keyboard elevation for onboarding (raises z-index above overlay)
 	const [keyboardElevated, setKeyboardElevated] = useState(false);
@@ -1558,32 +1554,6 @@ export function DesktopLayout({
 		[getActivePeerId],
 	);
 
-	const handleUrlExtract = useCallback(() => {
-		if (showUrlMenu) {
-			setShowUrlMenu(false);
-			return;
-		}
-		const ref = terminalRefs.current?.get(activePaneRef.current);
-		const urls = ref?.extractUrls() || [];
-		setDetectedUrls(urls);
-		setUrlPage(0);
-		setShowUrlMenu(true);
-	}, [showUrlMenu]);
-
-	const handleCopyUrl = useCallback((url: string) => {
-		navigator.clipboard
-			.writeText(url)
-			.then(() => {
-				setShowUrlMenu(false);
-			})
-			.catch(console.error);
-	}, []);
-
-	const handleOpenUrl = useCallback((url: string) => {
-		window.open(url, "_blank");
-		setShowUrlMenu(false);
-	}, []);
-
 	const handleFocusPane = useCallback((paneId: string) => {
 		// Clear selection in all terminals to prevent stale selection on other panes
 		for (const [, ref] of terminalRefs.current) {
@@ -1983,103 +1953,12 @@ export function DesktopLayout({
 						onClose={() => setShowKeyboard(false)}
 						onSend={handleKeyboardSend}
 						onFilePicker={handleFilePicker}
-						onUrlExtract={handleUrlExtract}
 						isUploading={isUploading}
 						elevated={keyboardElevated}
 					/>
 				</>
 			)}
 
-			{/* URL menu (tablet only) */}
-			{isTablet &&
-				showUrlMenu &&
-				(() => {
-					const totalPages = Math.ceil(detectedUrls.length / URL_PAGE_SIZE);
-					const startIdx = urlPage * URL_PAGE_SIZE;
-					const pageUrls = detectedUrls.slice(
-						startIdx,
-						startIdx + URL_PAGE_SIZE,
-					);
-
-					return (
-						<div className="fixed inset-0 z-50 bg-[var(--color-overlay)] flex items-center justify-center p-4">
-							<div className="bg-th-surface rounded-md w-full max-w-md max-h-[80vh] flex flex-col">
-								<div className="flex items-center justify-between px-4 py-3 border-b border-th-border">
-									<span className="text-th-text font-medium">
-										URLs{" "}
-										{detectedUrls.length > 0 &&
-											`(${startIdx + 1}-${Math.min(startIdx + URL_PAGE_SIZE, detectedUrls.length)}/${detectedUrls.length})`}
-									</span>
-									<button
-										type="button"
-										onClick={() => setShowUrlMenu(false)}
-										className="p-1 text-th-text-secondary hover:text-th-text"
-									>
-										✕
-									</button>
-								</div>
-								<div className="flex-1 overflow-y-auto p-2">
-									{detectedUrls.length === 0 ? (
-										<p className="text-th-text-muted text-center py-4">
-											No URLs found
-										</p>
-									) : (
-										pageUrls.map((url, index) => (
-											<div
-												// biome-ignore lint/suspicious/noArrayIndexKey: URLs may repeat across pagination; composite key keeps uniqueness
-												key={`${url}-${startIdx + index}`}
-												className="flex items-center gap-2 p-2 hover:bg-th-surface-hover rounded"
-											>
-												<span className="flex-1 text-th-text text-sm truncate">
-													{url}
-												</span>
-												<button
-													type="button"
-													onClick={() => handleCopyUrl(url)}
-													className="px-2 py-1 text-xs bg-th-surface-active hover:bg-th-surface-hover text-th-text rounded"
-												>
-													Copy
-												</button>
-												<button
-													type="button"
-													onClick={() => handleOpenUrl(url)}
-													className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-th-text rounded-md"
-												>
-													Open
-												</button>
-											</div>
-										))
-									)}
-								</div>
-								{totalPages > 1 && (
-									<div className="flex items-center justify-center gap-4 px-4 py-3 border-t border-th-border">
-										<button
-											type="button"
-											onClick={() => setUrlPage((p) => Math.max(0, p - 1))}
-											disabled={urlPage === 0}
-											className={`px-3 py-1 rounded ${urlPage === 0 ? "bg-th-surface-hover text-th-text-muted" : "bg-th-surface-active text-th-text hover:bg-th-surface-hover"}`}
-										>
-											Previous
-										</button>
-										<span className="text-th-text-secondary text-sm">
-											{urlPage + 1} / {totalPages}
-										</span>
-										<button
-											type="button"
-											onClick={() =>
-												setUrlPage((p) => Math.min(totalPages - 1, p + 1))
-											}
-											disabled={urlPage >= totalPages - 1}
-											className={`px-3 py-1 rounded ${urlPage >= totalPages - 1 ? "bg-th-surface-hover text-th-text-muted" : "bg-th-surface-active text-th-text hover:bg-th-surface-hover"}`}
-										>
-											Next
-										</button>
-									</div>
-								)}
-							</div>
-						</div>
-					);
-				})()}
 		</div>
 	);
 }

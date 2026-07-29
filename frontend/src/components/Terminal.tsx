@@ -100,7 +100,6 @@ interface TerminalProps {
 export interface TerminalRef {
 	sendInput: (char: string) => void;
 	focus: () => void;
-	extractUrls: () => string[];
 	getSelection: () => string;
 	clearSelection: () => void;
 	refreshTerminal: () => void;
@@ -237,22 +236,6 @@ export const TerminalComponent = memo(
 				getSelection: () => selectionRef.current,
 				clearSelection: () => terminalRef.current?.clearSelection(),
 				refreshTerminal: () => refreshRef.current(),
-				extractUrls: () => {
-					const term = terminalRef.current;
-					if (!term) return [];
-					const urls: string[] = [];
-					const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
-					const buffer = term.buffer.active;
-					for (let i = 0; i < buffer.length; i++) {
-						const line = buffer.getLine(i);
-						if (line) {
-							const text = line.translateToString();
-							const matches = text.match(urlRegex);
-							if (matches) urls.push(...matches);
-						}
-					}
-					return [...new Set(urls)].reverse();
-				},
 				showKeyboard: () => showKeyboardRef.current(),
 				hideKeyboard: () => closeInputBarRef.current(),
 				getCellDimensions: () => {

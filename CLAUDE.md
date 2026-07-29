@@ -31,7 +31,7 @@ Japanese stays only where it is data, not prose written by us:
 No emoji in comments, log output, CLI output, `CHANGELOG.md` or commit messages. Status is carried by the words themselves (`error:`, `warning:`, `done`), not by a glyph. Two exceptions, both functional rather than decorative:
 
 - `glasses/src/metrics.ts` — the emoji-to-G2-symbol substitution table; the emoji are input data the firmware cannot render
-- Emoji used as a control's own label where it is the affordance (for example the file-picker and URL keys in `frontend/src/components/Keyboard.tsx`)
+- Emoji used as a control's own label where it is the affordance (the file-picker key in `frontend/src/components/Keyboard.tsx`)
 
 ## Commands
 

@@ -57,7 +57,6 @@ interface FloatingKeyboardProps {
 	onClose: () => void;
 	onSend: (char: string) => boolean | undefined;
 	onFilePicker?: () => void;
-	onUrlExtract?: () => void;
 	isUploading?: boolean;
 	elevated?: boolean; // Raise z-index above onboarding overlay
 }
@@ -71,7 +70,6 @@ export const FloatingKeyboard = forwardRef<
 		onClose,
 		onSend,
 		onFilePicker,
-		onUrlExtract,
 		isUploading = false,
 		elevated = false,
 	},
@@ -525,7 +523,6 @@ export const FloatingKeyboard = forwardRef<
 					<Keyboard
 						onSend={onSend}
 						onFilePicker={onFilePicker}
-						onUrlExtract={onUrlExtract}
 						isUploading={isUploading}
 						compact={true}
 						transparent={transparent}

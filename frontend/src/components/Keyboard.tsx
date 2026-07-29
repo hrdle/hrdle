@@ -21,7 +21,6 @@ const ACTION_BAR: KeyDef[] = [
 	{ label: "^E", key: "\x05", type: "action" }, // Ctrl+E: end of line
 	{ label: "^O", key: "\x0f", type: "action" }, // Ctrl+O
 	{ label: "📁", key: "FILE_PICKER", type: "special" },
-	{ label: "🔗", key: "URL_EXTRACT", type: "special" },
 ];
 
 // Main layer: QWERTY with cursors
@@ -140,7 +139,6 @@ type Layer = "main" | "num";
 interface KeyboardProps {
 	onSend: (char: string) => void;
 	onFilePicker?: () => void;
-	onUrlExtract?: () => void;
 	onModeSwitch?: () => void;
 	isUploading?: boolean;
 	compact?: boolean;
@@ -154,7 +152,6 @@ interface KeyboardProps {
 export function Keyboard({
 	onSend,
 	onFilePicker,
-	onUrlExtract,
 	onModeSwitch,
 	isUploading = false,
 	compact = false,
@@ -397,8 +394,6 @@ export function Keyboard({
 		const handleClick = () => {
 			if (keyDef.key === "FILE_PICKER") {
 				onFilePicker?.();
-			} else if (keyDef.key === "URL_EXTRACT") {
-				onUrlExtract?.();
 			} else if (keyDef.key === "MODE_SWITCH") {
 				onModeSwitch?.();
 			} else if (keyDef.key === "\t" && shiftPressed) {
@@ -436,7 +431,6 @@ export function Keyboard({
 		// Add data-onboarding attributes for special buttons
 		const getOnboardingAttr = () => {
 			if (keyDef.key === "FILE_PICKER") return "image-upload";
-			if (keyDef.key === "URL_EXTRACT") return "url-extract";
 			return undefined;
 		};
 
