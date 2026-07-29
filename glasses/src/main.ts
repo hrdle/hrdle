@@ -6,7 +6,7 @@
 // Groq STT) and the LocalStorage URL setup flow.
 
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
-import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, startMic, stopMic } from './display.ts'
+import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, invalidatePanel, startMic, stopMic } from './display.ts'
 import type { AppState } from './display.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
@@ -179,12 +179,31 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   trace('ws connect issued')
   platform.render(controller.state)
 
+  /**
+   * Front or back, as far as the host has told us.
+   *
+   * The transitions were already traced, but only as events — so a death with
+   * no transition before it was unreadable: it could have been the foreground
+   * dying, or the background dying long after the last logged transition, and
+   * pairing them up after the fact turned out to depend entirely on how the
+   * pairing was written. Carried on the heartbeat and on the exit line
+   * instead, every death states which one it was.
+   *
+   * Starts true: the host launches the app into the foreground.
+   */
+  let foreground = true
+
   setupEvents(bridge, {
     onForegroundEnter() {
+      foreground = true
       trace('foreground: entered — reconnecting after suspend')
+      // The panel may not be ours any more; draw the next frame in full rather
+      // than trusting a record of what it showed before the suspend.
+      invalidatePanel()
       controller.onForegroundEnter()
     },
     onForegroundExit() {
+      foreground = false
       trace('foreground: exited — saving resume point')
       controller.onForegroundExit()
     },
@@ -192,7 +211,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       // The host says why it is stopping us. Worth its own line: it is the
       // difference between "backgrounded" and "killed", which no amount of
       // guessing from inside the page could settle.
-      trace(`host exit: ${kind}`, 'error')
+      trace(`host exit: ${kind} fg=${foreground ? 1 : 0}`, 'error')
       controller.onHostExit(kind)
     },
     onSwipeDown: () => controller.swipeDown(),
@@ -231,7 +250,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   const bootAt = Date.now()
   setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} ws=${controller.ws.getState()}${heapNote()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}`,
     )
   }, HEARTBEAT_MS)
 }
