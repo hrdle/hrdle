@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3] - 2026-07-30
+
+### Fixed
+- **音声の返信が、返信先とは別のワークスペースのペインに宛てられていた**。`selectedPaneId`
+  は一覧カーソルが最後に止まった場所で、`sessionIndex` だけを動かす経路が複数ある
+  （一覧の並び替え、relay item からの会話オープン、resume）。結果 `hrdle-work-1` に
+  `life` のペイン `%6` を送るような状態になり、サーバは正しく 404 を返し、グラス側は
+  それを握りつぶしていた — item は「答えた」ことにされ画面は会話に戻るので、**届かな
+  かった返信が届いた返信と同じ見た目**をしていた。返信先は開いているワークスペースに
+  対して解決するようにし（属さない id は落ちて「アクティブペイン」になる）、送信に
+  失敗したら確認画面に留まってタップで再送できるようにした。`%1` はどのワークスペースにも
+  あるため、複数ペインのワークスペースで2番目以降を選ぶまでは偶然動いていた
+- **Codex の会話がグラス／履歴から読めなかった**。transcript に至る2経路はどちらも herdr が
+  報告する id を経由するが、その id が `threads` テーブルにも rollout ファイル名にも
+  存在しなかった。herdr は Codex integration が渡す `SessionStart` hook の `session_id` を
+  そのまま報告し、**別の Codex プロセスが自分の `SessionStart` を出すと pane の保存 id を
+  奪う**（[ogulcancelik/herdr#1789](https://github.com/ogulcancelik/herdr/issues/1789)。
+  master で修正済み・preview 配布済みだが 0.7.4 には未収録）。正確な2経路が外れたときだけ
+  動く3番目として、herdr にその session の cwd を尋ね同じディレクトリの最新 rollout を
+  読む経路を足した。**herdr の修正が安定版に降りたら削除する前提**で、消すべきものを
+  コードの TODO に列挙してある
+
+### Changed
+- **グラスアプリを EVEN Hub に `Hrdle`（`com.hrdle.glasses`）として登録し直した**。Hub は
+  `package_id` を変更不可として扱うため、改名は新規プロジェクトの作成でしか行えない。
+  ビルド履歴・Testing group・Store listing は引き継がれず、バージョンは v0.0.1 から
+  やり直し（現在 v0.0.3 が Beta）。旧 `com.m0a.cchubglasses` は Private のまま退避先として残す
+- リポジトリのスキルを `hrdle-*` に改名し、コピーを1つに揃えた。`cchub-test` は
+  リネームで移動したはずの dev ポート（3456/5173）と旧作業ディレクトリを、
+  `cchub-profile` は停止済みの `cchub.service` を操作していた。`AGENTS.md` が禁じている
+  `.agents/skills/` の並行コピーは削除（`.Codex/` という存在しないパスを指していた）
+- STT の override 環境変数を `HRDLE_STT_PROMPT` に改名。`identity.json` の `binaryName` から
+  組み立てる `envVar()` を追加したので、次のリネームでは自動的に追従する
+- グラス実装時の決まりを `CLAUDE.md` に追加（シミュレータへの対応を実装に含め、
+  リリース前にシミュレータで確認する）。2日で4回シミュレータと実機が食い違っており、
+  いずれも「直った」と判断したあとに実機で見つかっている
+
 ## [0.3.2] - 2026-07-29
 
 ### Fixed
