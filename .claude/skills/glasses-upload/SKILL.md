@@ -1,77 +1,86 @@
 ---
 name: glasses-upload
-description: G2グラスアプリをビルドしてEVEN Hubにアップロードする。「/glasses-upload」「グラスアップロード」「ehpkアップロード」「グラスデプロイ」などで起動する。
+description: Build the G2 glasses app and upload it to EVEN Hub. Triggers on "/glasses-upload", "upload the glasses app", "グラスアップロード", "ehpkアップロード", "グラスデプロイ".
 ---
 
 # G2 Glasses EVEN Hub Upload
 
-EVEN Hub 上のアプリは **Hrdle**（Plugin ID `com.hrdle.glasses`）。表示名は本体と同じで、
-「Glasses」が付くのはリポジトリ内で区別するときだけ。
+The app on EVEN Hub is **Hrdle** (Plugin ID `com.hrdle.glasses`). Its display
+name is the same as the server's; "Glasses" only exists to tell them apart inside
+the repository.
 
-**Plugin ID は変更できない。** Console の Store listing → Project details に表示専用で
-出るだけで、Edit があるのは App name / tagline / icon / description / privacy のみ。ID を
-変えるには ehpk を「Upload package」に落として**別プロジェクトを新規作成**するしかなく、
-ビルド履歴・Testing group・Store listing は引き継がれない（2026-07-29 に hrdle →
-hrdle でこれを実施済み。旧 `com.m0a.hrdleglasses` は Private のまま退避先として残置）。
+**The Plugin ID cannot be changed.** It appears read-only under Store listing ->
+Project details in the Console, and only App name / tagline / icon / description /
+privacy have an Edit. Changing the ID means taking the ehpk to "Upload package"
+and **creating a new project**, which carries over neither the build history, nor
+the testing group, nor the store listing. (Done on 2026-07-29 for the cchub ->
+hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
 
 ## Workflow
 
-1. **バージョンバンプ**: `glasses/app.json` の `version` をpatchインクリメント
+1. **Bump the version**: increment `version` in `glasses/app.json` (patch)
 
-2. **ビルド**:
+2. **Build**:
    ```bash
-   cd <repo>/glasses      # 例: /home/m0a/repos/hrdle-work-1/glasses
+   cd <repo>/glasses      # e.g. /home/m0a/repos/hrdle-work-1/glasses
    bun run build
    ```
-   ※ ルートが bun workspaces なので `npm run build` ではなく `bun run build` を使う
-   ※ ワークスペースは複数ある（hrdle-work-1/2/3）ので、作業中のリポジトリの `glasses/` を使う
+   - The root is a bun workspace, so use `bun run build` rather than
+     `npm run build`
+   - There are several worktrees (hrdle-work-1/2/3) — use the `glasses/` of the
+     repository you are working in
 
-3. **ehpkパック**:
+3. **Pack the ehpk**:
    ```bash
    bun run pack
    ```
-   → `out.ehpk` が生成される。**版数が `app.json` とバンドルで一致していなければ止まる** —
-   バンプしてビルドを忘れると、Hub は新しい番号を表示するのに実機は古い番号を名乗る、
-   という一番たちの悪いずれ方をするため（`glasses/scripts/pack.ts`）
-   ※ `npx @evenrealities/evenhub-cli pack` は npm が workspace の package.json を見てしまい "Missing script" で失敗する。`bunx evenhub` の形が確実
+   This produces `out.ehpk`. **It stops when the version in `app.json` and the
+   one in the bundle disagree** — bumping without rebuilding produces the worst
+   kind of drift, where Hub shows the new number while the device calls itself
+   the old one (`glasses/scripts/pack.ts`).
+   - `npx @evenrealities/evenhub-cli pack` fails with "Missing script" because
+     npm reads the workspace's package.json. Use the `bunx evenhub` form.
 
-4. **コミット** & PR (必要に応じて main にマージ):
+4. **Commit** and open a PR (merge to main if appropriate):
    ```bash
    git checkout -b chore/glasses-build-vX.X.X origin/main
    git add glasses/app.json glasses/out.ehpk glasses/src/
    git commit -m "chore(glasses): build vX.X.X ehpk ..."
    git push -u origin chore/glasses-build-vX.X.X
-   gh pr create --base main --title "..." --body "..."
-   gh pr merge --merge
+   gh pr create --repo hrdle/hrdle --base main --title "..." --body "..."
+   gh pr merge <number> --repo hrdle/hrdle --merge
    ```
 
-5. **EVEN Hubにログイン**（agent-browser使用）:
+5. **Log in to EVEN Hub** (through agent-browser):
    ```bash
    agent-browser --session-name evenhub open https://hub.evenrealities.com/hub
    agent-browser --session-name evenhub wait --load networkidle
-   agent-browser --session-name evenhub set viewport 1280 800  # ← 必須: デフォルトは 393x852 (mobile) でレイアウト要素が viewport 外に出てしまい click が無視される
+   agent-browser --session-name evenhub set viewport 1280 800  # required: the default 393x852 (mobile) puts layout elements outside the viewport and clicks are ignored
    agent-browser --session-name evenhub snapshot -i
    ```
-   - ログイン済みセッションがあればスキップ
-   - 未ログインの場合: 「Email」textbox に `$EVENHUB_EMAIL` を fill → 「Continue」 → 「Password」textbox に `$EVENHUB_PASSWORD` を fill → 「Continue」 (**2画面の段階フロー**)
-   - クレデンシャルは環境変数から読み取る
+   - Skip this if the session is already logged in
+   - Otherwise: fill the "Email" textbox with `$EVENHUB_EMAIL`, press
+     "Continue", fill the "Password" textbox with `$EVENHUB_PASSWORD`, press
+     "Continue" (**a two-step flow**)
+   - The credentials come from environment variables
 
-6. **アプリ詳細ページに移動**:
+6. **Open the app's detail page**:
    ```bash
-   # "Hrdle" をクリック (viewport が 1280x800 以上ないと URL 遷移しないので注意)
-   agent-browser --session-name evenhub click @eXX  # snapshot結果の Hrdle の ref
+   # click "Hrdle" (the URL does not change below a 1280x800 viewport)
+   agent-browser --session-name evenhub click @eXX  # the ref for Hrdle in the snapshot
    agent-browser --session-name evenhub wait --load networkidle
    ```
 
-7. **ビルドアップロード**:
+7. **Upload the build**:
    ```bash
-   agent-browser --session-name evenhub click @eXX  # "Upload a build" のref
+   agent-browser --session-name evenhub click @eXX  # the ref for "Upload a build"
    sleep 3
    ```
 
-   ファイル入力はCDP経由で設定する（modal は drag & drop ベースで通常の click では動作しない）。Page WS URL の取得:
+   The file input is set through CDP (the modal is drag-and-drop based and an
+   ordinary click does nothing). Getting the page's WS URL:
    ```bash
-   # /json/list を一度ファイルに落とす (シェルラッパで stdout 切り詰めが起きるため pipe で直接渡さない)
+   # write /json/list to a file first (a shell wrapper can truncate stdout, so do not pipe it directly)
    rtk proxy curl -s http://127.0.0.1:<port>/json/list > /tmp/cdp-list.json
    python3 -c "
    import json
@@ -82,10 +91,10 @@ hrdle でこれを実施済み。旧 `com.m0a.hrdleglasses` は Private のま�
            print(t['webSocketDebuggerUrl'])
            break
    "
-   # port は `agent-browser --session-name evenhub get cdp-url` の出力から
+   # the port comes from `agent-browser --session-name evenhub get cdp-url`
    ```
 
-   取得した PAGE_WS で setFileInputFiles:
+   Then setFileInputFiles over that PAGE_WS:
    ```python
    python3 << 'EOF'
    import json, asyncio, websockets
@@ -118,22 +127,24 @@ hrdle でこれを実施済み。旧 `com.m0a.hrdleglasses` は Private のま�
    EOF
    ```
 
-8. **チェンジログ入力 & 送信**:
+8. **Enter the changelog and submit**:
    ```bash
    sleep 3
    agent-browser --session-name evenhub snapshot -i
-   agent-browser --session-name evenhub fill @eXX "変更内容"  # Change log
-   agent-browser --session-name evenhub click @eXX           # "Add build"
+   agent-browser --session-name evenhub fill @eXX "what changed"  # Change log
+   agent-browser --session-name evenhub click @eXX                # "Add build"
    agent-browser --session-name evenhub wait --load networkidle
    ```
 
-9. **確認**: snapshot で新バージョンが `"vX.X.X Uploaded N seconds ago Private"` として表示されること
+9. **Confirm**: the snapshot should show the new version as
+   `"vX.X.X Uploaded N seconds ago Private"`
 
-10. **Beta切り替え**:
+10. **Switch Beta over**:
 
-    **Step A: 既存 Beta ビルドを Private に戻す**
-    - ビルドリストで現 Beta ビルド (`"... Published ... Beta"`) を `agent-browser click` で展開
-    - 展開パネル内の Beta バッジの位置を動的に取得:
+    **Step A: put the current Beta build back to Private**
+    - Expand the current Beta build (`"... Published ... Beta"`) in the build
+      list with `agent-browser click`
+    - Find the Beta badge inside the expanded panel dynamically:
       ```bash
       agent-browser --session-name evenhub eval '(() => {
         const badges = Array.from(document.querySelectorAll("*"))
@@ -144,33 +155,48 @@ hrdle でこれを実施済み。旧 `com.m0a.hrdleglasses` は Private のま�
         }));
       })()'
       ```
-      返ってきた座標のうち、**panel 内のもの (x が 800 前後 = 中央付近)** を選ぶ (panel 外の collapsed row 内バッジは x=1200 付近)
-    - 中心座標 (x+w/2, y+h/2) に対して `document.elementFromPoint(...)?.click()`:
+      Of the coordinates returned, take the one **inside the panel** (x around
+      800, near the center); a badge in a collapsed row sits around x=1200
+    - Click the center (x+w/2, y+h/2) through
+      `document.elementFromPoint(...)?.click()`:
       ```bash
       agent-browser --session-name evenhub eval '(() => { document.elementFromPoint(826, 292)?.click(); return "clicked"; })()'
       ```
-    - snapshot → 「Private」ref を click → 「Confirm」ref を click
+    - snapshot, click the "Private" ref, then click "Confirm"
 
-    **Step B: 新ビルドを Beta に昇格**
-    - リロードは**不要**（A 完了後そのまま続行可能）
-    - 新ビルドを click で展開
-    - 同じ要領で展開パネル内の `"Private"` バッジ座標を取得 → `elementFromPoint` で click
-    - snapshot → 「Beta」ref を click → 「Promote to Beta」ref を click
+    **Step B: promote the new build to Beta**
+    - No reload is needed (continue straight on from A)
+    - Expand the new build with a click
+    - The same way, get the `"Private"` badge's coordinates inside the expanded
+      panel and click through `elementFromPoint`
+    - snapshot, click the "Beta" ref, then click "Promote to Beta"
 
-    ※ snapshot ref ではバッジ click が効かないので必ず `elementFromPoint()` を使う
-    ※ 座標は viewport やビルド件数で変わるので **必ず動的に取得** (固定座標はハードコードしない)
+    - A snapshot ref cannot click these badges — always use `elementFromPoint()`
+    - The coordinates move with the viewport and the number of builds, so
+      **always look them up dynamically** (never hardcode them)
 
-11. **ブラウザ終了**:
+11. **Close the browser**:
     ```bash
     agent-browser --session-name evenhub close
     ```
 
 ## Important Notes
 
-- **viewport 設定が必須**: agent-browser のデフォルトは 393x852 (mobile)。Hrdle 詳細ページに遷移できなかったり、Beta バッジが viewport の外 (x=1200+) に出る。先頭で必ず `set viewport 1280 800`
-- **bun を使う**: ルートが bun workspaces なので、`npm run build` / `npx evenhub pack` は workspace package.json と干渉して失敗する。`bun run build` / `bun run pack` を使う（`pack` は版数一致を検査してから evenhub CLI に渡す）
-- **EVEN Hub CLI にアップロードコマンドはない**: ブラウザ自動化が必要
-- **session-name evenhub でセッション永続化**: 一度ログインすれば再実行時はスキップできる
-- **Beta バッジは snapshot ref では操作できない**: `elementFromPoint(x, y)?.click()` を使う。座標はバッジを `querySelectorAll` + `getBoundingClientRect` で動的取得
-- **CDP `/json/list` の curl は file 経由で**: シェルラッパが stdout を `...(N bytes total)` に切り詰めることがある。直接 pipe ではなく `> /tmp/cdp-list.json` してから python3 で読む
-- **EVEN Hub は public web (`hub.evenrealities.com`)** — Tailscale IP は不要 (Hrdle 本体の話と混同しないこと)
+- **Setting the viewport is required**: agent-browser defaults to 393x852
+  (mobile), where the Hrdle detail page will not open and the Beta badge sits
+  outside the viewport (x=1200+). Always `set viewport 1280 800` first
+- **Use bun**: the root is a bun workspace, so `npm run build` and
+  `npx evenhub pack` collide with the workspace package.json and fail. Use
+  `bun run build` / `bun run pack` (`pack` checks the versions agree before
+  handing off to the evenhub CLI)
+- **The EVEN Hub CLI has no upload command**: browser automation is required
+- **`--session-name evenhub` persists the session**: log in once and later runs
+  skip it
+- **The Beta badge cannot be driven by a snapshot ref**: use
+  `elementFromPoint(x, y)?.click()`, with the coordinates found through
+  `querySelectorAll` + `getBoundingClientRect`
+- **Fetch CDP `/json/list` through a file**: a shell wrapper can truncate stdout
+  to `...(N bytes total)`. Redirect to `/tmp/cdp-list.json` and read it with
+  python3 rather than piping
+- **EVEN Hub is the public web (`hub.evenrealities.com`)** — no Tailscale IP is
+  involved (do not confuse it with the Hrdle server itself)

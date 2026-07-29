@@ -374,36 +374,72 @@ hrdle --version
 - herdr must be installed (`curl -fsSL https://herdr.dev/install.sh | sh` or `brew install herdr`); hrdle auto-starts `herdr server` if it isn't running, but a supervised setup (systemd user unit with `Restart=always` + `~/.config/herdr/config.toml` with `resume_agents_on_restore = true`) is strongly recommended so agent sessions survive server restarts
 - For native session identity/restore, install the herdr integrations once: `herdr integration install claude` / `codex` / `kimi` (`hrdle setup` installs all initialized ones)
 
-## Claude Code / Codex / Grok / Kimi Hook通知連携
+## Hook notifications from Claude Code / Codex / Grok / Kimi
 
-Claude Code・Codex・Grok Build・Kimi Code のhookイベント（応答完了、ユーザー入力待ち等）をHrdle経由でブラウザのOS通知として受け取れる。
+Hook events from Claude Code, Codex, Grok Build and Kimi Code (a response
+finished, an agent is waiting for input, and so on) reach the browser as OS
+notifications through Hrdle.
 
-Grok Build は `~/.claude/settings.json` の hooks を互換レイヤでデフォルト読み込みするため、Claude 用の `hrdle notify` 設定がそのまま発火する（追加設定不要）。ただし stdin JSON は camelCase 独自形式（`hookEventName: "stop"`, `sessionId`, `transcriptPath`）なので、`/api/notify` 側で Claude 形式に正規化している（`routes/notify.ts` の `normalizeHookBody`）。
+Grok Build reads `~/.claude/settings.json`'s hooks by default through a
+compatibility layer, so the `hrdle notify` entry written for Claude fires as it
+is, with nothing extra to configure. Its stdin JSON is its own camelCase shape
+though (`hookEventName: "stop"`, `sessionId`, `transcriptPath`), so `/api/notify`
+normalizes it to Claude's (`normalizeHookBody` in `routes/notify.ts`).
 
-Kimi Code は `~/.kimi-code/config.toml` の `[[hooks]]` に設定する（例: `event = "Stop"`, `command = "hrdle notify"`）。stdin JSON は Claude 互換の snake_case（`hook_event_name`, `session_id`, ...）なので正規化は不要。
+Kimi Code is configured under `[[hooks]]` in `~/.kimi-code/config.toml` (for
+example `event = "Stop"`, `command = "hrdle notify"`). Its stdin JSON is
+Claude-compatible snake_case (`hook_event_name`, `session_id`, ...), so no
+normalization is needed.
 
-### 仕組み
+### How it works
 
 ```
-Hook → hrdle notify (stdin JSON) → POST /api/notify → WebSocket broadcast → ブラウザ Notification API
-                                                    ↘ グラス起動中は relay info アイテム → G2 画面
+Hook -> hrdle notify (stdin JSON) -> POST /api/notify -> WebSocket broadcast -> browser Notification API
+                                                      \-> while the glasses are up: a relay info item -> the G2 screen
 ```
 
-グラスアプリ（`subscribe-glasses-relay` の購読者）が居る間は、通知はブラウザではなく G2 に出す。`/api/notify` が hook の `session_id`（agent セッションid）または `cwd` から herdr の workspace/pane を解決し（`resolveHookTarget`）、90 秒 TTL の `info` リレーアイテムを作る（`postHookRelay`）。実際にアイテムが載ったときだけ `hook-event` に `deliveredToGlasses: true` を付け、フロント側はこのフラグが立っている時だけ `fireHookNotification` を呼ばない。グラスが居ない・セッションが解決できない・レート制限に当たった場合はフラグが立たず従来どおりブラウザ通知が出る（通知が消えるより二重に出るほうがマシ）。インジケータ更新はフラグに関係なく常に走る。
+While the glasses app is present (a subscriber of `subscribe-glasses-relay`), a
+notification goes to the G2 rather than the browser. `/api/notify` resolves the
+herdr workspace/pane from the hook's `session_id` (the agent session id) or its
+`cwd` (`resolveHookTarget`) and creates an `info` relay item with a 90-second TTL
+(`postHookRelay`). `hook-event` carries `deliveredToGlasses: true` only when an
+item actually landed, and the frontend skips `fireHookNotification` only when
+that flag is set. With no glasses, an unresolvable session or a rate limit, the
+flag stays down and the browser notification goes out as before (a duplicate
+notification beats a lost one). Indicator updates always run regardless of the
+flag.
 
-herdr が `blocked` を報告して waiting アイテムがある間は、hook 由来の info は作らない（同じ状況を二重に言うだけなので）。逆に hook が先に届いていた場合、waiting 成立時に hook 由来の info（`source: 'auto'`）は消される。エージェント自身の `hrdle glasses` メモ（`source: 'agent'`）は無関係なので残る。
+While herdr reports `blocked` and a waiting item exists, no hook-derived info is
+created (it would only say the same thing twice). Conversely, if a hook arrived
+first, the hook-derived info (`source: 'auto'`) is removed once the waiting item
+appears. An agent's own `hrdle glasses` note (`source: 'agent'`) is unrelated and
+stays.
 
-### グラスの音声入力（STT）
+### Speech to text on the glasses
 
-G2 の SDK は生の PCM しか出さないため、書き起こしは `POST /api/glasses/stt`（`routes/glasses.ts`）でサーバ側が行う（Groq `whisper-large-v3-turbo`、`GROQ_API_KEY` はこのホストから出ない）。
+The G2's SDK only hands over raw PCM, so transcription happens on the server at
+`POST /api/glasses/stt` (`routes/glasses.ts`) through Groq
+`whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
-語彙バイアスの `prompt` を `services/stt-prompt.ts` が組み立てて送る。中身は **ユーザーのカスタムタイトル → 用語集 → herdr のラベル** の順で、Whisper の 224 トークン上限に収まるところまで（190文字）。この順序が仕様の要で、ワークスペースが増えると名前だけで予算を食い潰し、`リリース`（日に何度も言う語）が落ちる。ラベルはラテン文字で元から化けにくいので最後。`HRDLE_STT_PROMPT=off` で無効化、任意の文字列を入れればそれを使う（A/B 用。変数名は `envVar()` が `identity.json` の `binaryName` から組み立てる）。
+`services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
+**the user's custom titles, then the glossary, then herdr's labels**, filled up
+to what fits Whisper's 224-token ceiling (190 characters). That order is the
+point of the design: as workspaces multiply, names alone eat the budget and
+`release` - a word said several times a day - falls out. Labels go last because
+Latin-script names were never the ones being misheard. `HRDLE_STT_PROMPT=off`
+disables it, and any other value replaces it (for A/B testing; the variable name
+is composed by `envVar()` from `binaryName` in `identity.json`).
 
-なお**無音や極端に短いクリップでは幻聴が出る**（「ご視聴ありがとうございました」等）。prompt では消えないので、長さ・音量での足切りは別途必要。
+Note that **silence and very short clips produce hallucinations** (a stock
+sign-off phrase, typically). The prompt does not remove them, so a length and
+volume floor is needed separately.
 
-### セットアップ手順
+### Setup
 
-1. Claude Code は `~/.claude/settings.json` の `hooks` に `hrdle notify` を追加する。Codex は `~/.codex/hooks.json` に追加する（`config.toml` と併用するとCodexが警告するため、`hrdle setup` が既存のHrdle hookをJSONへ移行する）:
+1. For Claude Code, add `hrdle notify` to `hooks` in `~/.claude/settings.json`.
+   For Codex, add it to `~/.codex/hooks.json` (Codex warns when it is configured
+   in `config.toml` as well, so `hrdle setup` migrates an existing Hrdle hook
+   into the JSON):
 
 ```json
 {
@@ -417,31 +453,47 @@ G2 の SDK は生の PCM しか出さないため、書き起こしは `POST /ap
 }
 ```
 
-`PreToolUse` / `UserPromptSubmit` はもう不要（v0.2.2〜）。インジケータの状態遷移は herdr の `pane.agent_status_changed` から取るようになったため、hook は herdr が持たない情報（通知本文・質問のツール名）だけを運ぶ。既に登録済みでも害はない。
+`PreToolUse` and `UserPromptSubmit` are no longer needed (since v0.2.2). The
+indicator's state transitions come from herdr's `pane.agent_status_changed`, so a
+hook only carries what herdr does not have: the notification body and the
+question's tool name. Leaving them registered does no harm.
 
-2. `hrdle` バイナリにPATHが通っていることを確認（hookはClaude Code / Codex のプロセスから実行される）。hook は**非対話シェル**で走るため `.zshrc` は読まれない。`~/bin` / `~/.local/bin` への PATH 追加を `.zshrc` に書いている構成ではベア名が解決できず `command not found` になる（#538）。その場合は絶対パス（`/home/you/bin/hrdle notify`）を書く。hrdle 自身が書き込む側（`migrateCodexHooksToJson` / UI の hook 設定プロンプト）は `resolveNotifyCommand()`（`services/notify-command.ts`）で解決済みパスを使う
+2. Make sure the `hrdle` binary is on PATH (hooks run from the Claude Code /
+   Codex process). A hook runs in a **non-interactive shell**, so `.zshrc` is not
+   read: a setup that adds `~/bin` or `~/.local/bin` to PATH from `.zshrc` cannot
+   resolve the bare name and fails with `command not found` (#538). Write the
+   absolute path there instead (`/home/you/bin/hrdle notify`). Where hrdle writes
+   the command itself (`migrateCodexHooksToJson`, the hook setup prompt in the
+   UI), it uses the resolved path from `resolveNotifyCommand()`
+   (`services/notify-command.ts`).
 
-3. Hrdleサーバーがデフォルトポート（5924）で起動していること。カスタムポートの場合は `hrdle notify -p <port>` を指定
+3. The Hrdle server must be running on the default port (5924). For a custom
+   port, pass `hrdle notify -p <port>`.
 
-4. ブラウザで初回アクセス時に通知権限を許可する
+4. Allow notification permission in the browser on first visit.
 
-### 対応イベント
+### Events
 
-| hookイベント | 通知メッセージ |
+| Hook event | Notification |
 |-------------|-------------|
-| `Stop` | Claudeの応答が完了しました |
-| `PostToolUse` (AskUserQuestion) | Claudeがユーザー入力を待っています |
-| `SubagentStop` | サブエージェントが完了しました |
-| `TaskCompleted` | タスクが完了しました |
-| その他 | Hook: {イベント名} |
+| `Stop` | Response complete |
+| `PostToolUse` (AskUserQuestion) | Waiting for your input |
+| `SubagentStop` | Subagent finished |
+| `TaskCompleted` | Task complete |
+| anything else | Hook: {event name} |
 
-### 注意事項
+### Notes
 
-- `hrdle notify` はstdinからClaude Code / Codex のhook JSON入力を読み取る
-- `/api/notify` エンドポイントは認証不要（ローカルhookから呼ばれるため）
-- 既存のhookスクリプト（smart-notify.py等）と併用可能（同じイベントに複数hook登録）
-- 複数のWebSocket接続がある場合でもデバウンスにより通知は1回のみ
-- グラスは接続している1台のHrdleの通知しか表示しないので、`deliveredToGlasses` はイベントを起こしたサーバーだけが立てる。peer の通知は peer 側にグラスが繋がっていない限り従来どおりブラウザに出る
+- `hrdle notify` reads the Claude Code / Codex hook JSON from stdin
+- `/api/notify` is unauthenticated (local hooks call into it)
+- It coexists with existing hook scripts (several hooks can be registered for one
+  event)
+- Several WebSocket connections still produce one notification, thanks to the
+  debounce
+- The glasses only show notifications from the one Hrdle they are connected to,
+  so `deliveredToGlasses` is set only by the server where the event happened. A
+  peer's notification appears in the browser as before unless glasses are
+  connected to that peer
 
 ## Internationalization (i18n)
 
@@ -467,41 +519,72 @@ Types are defined in `shared/types.ts` with Zod schemas for validation. Import f
 
 Key types: `ControlClientMessage`, `ControlServerMessage` (per-session terminal I/O), `MuxClientMessage`, `MuxServerMessage` (multiplexed WebSocket protocol), `PaneViewport` / `PaneCursor` / `PaneModes` (viewport frames), `SessionResponse`, `PaneInfo`, `TabInfo` (a workspace's tabs; `SessionResponse.tabs`/`activeTabId`, only when >1 tab), `TmuxLayoutNode`.
 
-## グラスアプリ（`glasses/`）の実装ルール
+## Rules for working on the glasses app (`glasses/`)
 
-**シミュレータは実装対象であって、おまけではない。実機だけ直して終わりにしない。**
+**The simulator is part of the implementation, not a bonus. Fixing only the
+device does not count as done.**
 
-`src/debug-ui.ts` のブラウザシミュレータは実機と同じ `GlassesController` と `screenText()` を通るので、折り返し・7行クランプ・ページングは一致する。だが一致**しない**ところが繰り返し見つかっている（文字幅が1文字ぶんズレる / ページングで実機だけ前の行が被る / 実機だけ豆腐になる / 要約がシミュレータだけ出ない — いずれも 2026-07-27〜28 に発覚）。したがって **シミュレータで確認 → リリース → 実機で確認** の順で進め、シミュレータだけで完了としない。
+The browser simulator in `src/debug-ui.ts` goes through the same
+`GlassesController` and `screenText()` the device does, so wrapping, the 7-line
+clamp and paging all match. And yet the places where they do **not** match keep
+turning up: character widths off by one, paging repeating the previous line on
+the device only, tofu on the device only, a recap missing in the simulator only -
+all four found on 2026-07-27 and 28. So the order is **check on the simulator,
+release, check on the device**, and the simulator alone is never the finish line.
 
-実装時:
+While implementing:
 
-- プラットフォーム機能を足したら**実機（`main.ts`）とシミュレータ（`debug-ui.ts`）の両方に実装する**。共通面は `controller.ts` の `GlassesPlatform`。片方だけだと「実機でしか再現しない」症状を自分で作ることになる
-- 画面の文言・レイアウトは `display.ts` の `screenText()` に集約する。描画側に直接書くと片方にしか出ない
-- 記号を出すなら `metrics.ts` の `SUBSTITUTES` に代替を足す（✅→○ のように意味を保つ）。無いものは `stripUnrenderable()` が落とし、これはシミュレータでも走る
-- localStorage は `storage.ts` 経由（キーは `identity.json` の `storagePrefix` 由来、旧キーは読むときだけ見る）。製品名・ポート・リポジトリは `vite.config.ts` の define 経由で、`glasses/src` にリテラルを書かない
+- When you add a platform capability, **implement it on both the device
+  (`main.ts`) and the simulator (`debug-ui.ts`)**. The shared surface is
+  `GlassesPlatform` in `controller.ts`. Doing one side is how you manufacture a
+  symptom that only reproduces on the device
+- Wording and layout belong in `screenText()` in `display.ts`. Written straight
+  into a renderer, they appear on one side only
+- To show a symbol, add a substitute to `SUBSTITUTES` in `metrics.ts` (preserving
+  the meaning, as a check mark becomes a circle). Anything without one is dropped
+  by `stripUnrenderable()`, which also runs in the simulator
+- localStorage goes through `storage.ts` (keys derive from `storagePrefix` in
+  `identity.json`, and older keys are consulted only when reading). The product
+  name, port and repository come through `define` in `vite.config.ts` - no
+  literals in `glasses/src`
 
-シミュレータ:
+The simulator:
 
 ```
-https://<host>:5924/glasses          # 本番が配信
-bun run --filter glasses dev         # vite dev → :8391
+https://<host>:5924/glasses          # served by production
+bun run --filter glasses dev         # vite dev -> :8391
 ```
 
-`?hub=<url>` で別サーバ、`?bg=<画像URL>` で背景。**マイクは本物** — `getUserMedia` → `/api/glasses/stt`（Groq）を実際に叩くので、音声認識の検証にグラスは要らない。「STT result」欄に文字を入れると転写を短絡できる。
+`?hub=<url>` points at another server and `?bg=<image URL>` replaces the
+background. **The microphone is real** - it calls `getUserMedia` and hits
+`/api/glasses/stt` (Groq) for real, so verifying speech recognition needs no
+glasses. Typing into the "STT result" field short-circuits the transcription.
 
-画面の取り方は2通りあり、**見えるものが違う**ので使い分ける。片方だけ見て済ませない:
+There are three ways to capture the screen and **they show different things**, so
+pick deliberately rather than settling for one:
 
-| 取り方 | 分かること / 用途 |
+| How | What it tells you |
 |---|---|
-| **「画面をコピー」**（枠付きテキスト） | 折り返し位置・行数・文字の欠け。diff が取れて issue に貼れる。軽い |
-| **`agent-browser screenshot "#lens" <path>`** | 映り込み・背景との重なり・実際の可読性。**テキストでは原理的に分からない** |
-| **「PNGを保存」ボタン** | **EVEN Hub のストア提出用**。背景なしの透過 PNG（576×288） |
+| **"Copy screen"** (framed text) | Wrapping, line count, clipped characters. Diffable, pasteable into an issue, cheap |
+| **`agent-browser screenshot "#lens" <path>`** | Reflections, how it sits against the background, real legibility. **Text cannot answer this in principle** |
+| **The "Save PNG" button** | **For submitting to the EVEN Hub store**. A transparent PNG with no background (576x288) |
 
-2番目が要るのは、G2 が透過ディスプレイだから。明るい壁やスクリーンに緑文字が重なると読めなくなるが、テキストで見ている限り「出ている」としか分からない。
+The second exists because the G2 is a see-through display. Green text over a
+bright wall or a screen becomes unreadable, and text-only capture can only ever
+tell you it was drawn.
 
-3番目は用途が違う。**EVEN Hub の Store listing は背景を自前で持っている** — Environment（Home / Office / Store / Cafe）を選ぶと、その部屋の写真にこちらの描画が合成される。したがって提出する画像は**描画だけ**でなければならず、`screenshot "#lens"` はシミュレータの背景を焼き込んでしまうので使えない。`#g2-canvas` は元から 576×288・背景 alpha 0・点灯ピクセルが緑 + alpha 16階調なので、ボタンは変換ではなく保存をしているだけ。ファイル名にモードが入る（`hrdle-glasses-conversation-….png`）。
+The third has a different purpose. **The EVEN Hub store listing brings its own
+background**: choosing an Environment (Home / Office / Store / Cafe) composites
+our drawing onto a photo of that room. A submitted image must therefore be the
+drawing and nothing else, which rules out `screenshot "#lens"` - it bakes in the
+simulator's background. `#g2-canvas` is already 576x288 with a transparent
+background and lit pixels in green across 16 alpha levels, so the button saves
+rather than converts. The file name carries the mode
+(`hrdle-glasses-conversation-....png`).
 
-ヘッドレスでマイクを使うときは `getUserMedia` を差し替える（そのままだと `startMicCapture` が失敗し、いきなり「(認識できませんでした)」になる）:
+To use the microphone headlessly, substitute `getUserMedia` (without it
+`startMicCapture` fails and the screen jumps straight to "(nothing was
+recognized)"):
 
 ```js
 navigator.mediaDevices.getUserMedia = async () => {
@@ -510,7 +593,9 @@ navigator.mediaDevices.getUserMedia = async () => {
 };
 ```
 
-サーバ側（`backend/`）だけの変更なら ehpk の再ビルドは不要（STT やリレーの挙動はサーバにある）。ビルドと EVEN Hub へのアップロードは `/glasses-upload` スキル。
+A change confined to the server (`backend/`) needs no ehpk rebuild - STT and
+relay behavior live there. Building and uploading to EVEN Hub is the
+`/glasses-upload` skill.
 
 ## Linting
 

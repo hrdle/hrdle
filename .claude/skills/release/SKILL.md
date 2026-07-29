@@ -1,67 +1,82 @@
 ---
 name: release
-description: Hrdle のリリース手順を実行する。バージョンバンプ、release PR、tag push、GitHub Release確認、CI完了待ち、hrdle update を自動化する。「/release」「リリースして」「リリース」「バージョンアップ」「release」などのコマンドで起動する。
+description: Run the Hrdle release procedure - version bump, release PR, tag push, GitHub Release check, waiting for CI, and `hrdle update`. Triggers on "/release", "release", "リリースして", "リリース", "バージョンアップ".
 ---
 
 # Hrdle Release
 
 ## Release Workflow
 
-1. **最新化確認**: `git fetch origin` で最新を取得し、現在のブランチが origin/main の真上にあることを確認
-2. **リリースブランチ作成**: `git checkout -b release/vX.X.X` で専用ブランチを切る（work-1 などの作業ブランチを直接 push しない）
-3. **CHANGELOG.md 更新**: 新バージョンのエントリを先頭に追加（Added/Fixed/Changed セクション）
-4. **バージョンバンプ**: ルートの `package.json` の `version` フィールドをインクリメント（patch）
-5. **アーキテクチャドキュメント更新**: `python3 scripts/build-architecture-html.py` を実行
-   - `architecture.json` の `version` / `generated` を `package.json` と同期
-   - `architecture.html` に JSON を再埋め込み
-   - 出力を `architecture.json architecture.html` として一緒にステージングする
-6. **コミット & Push**:
+1. **Confirm you are current**: `git fetch origin`, and check the current branch
+   sits directly on top of origin/main
+2. **Create the release branch**: `git checkout -b release/vX.X.X` (never push a
+   working branch such as `work-1` directly)
+3. **Update CHANGELOG.md**: add the new version's entry at the top
+   (Added/Fixed/Changed sections)
+4. **Bump the version**: increment the `version` field in the root
+   `package.json` (patch)
+5. **Update the architecture docs**: run
+   `python3 scripts/build-architecture-html.py`
+   - syncs `version` / `generated` in `architecture.json` with `package.json`
+   - re-embeds the JSON into `architecture.html`
+   - stage both outputs together as `architecture.json architecture.html`
+6. **Commit and push**:
    ```bash
    git add package.json CHANGELOG.md architecture.json architecture.html
    git commit -m "chore: bump version to X.X.X"
    git push -u origin release/vX.X.X
    ```
-7. **PR 作成 & マージ**:
+7. **Open and merge the PR**:
    ```bash
-   gh pr create --base main --title "Release vX.X.X" --body "..."
-   gh pr merge --merge  # 履歴を保ったままマージ（必要なら --squash）
+   gh pr create --repo hrdle/hrdle --base main --head release/vX.X.X --title "Release vX.X.X" --body "..."
+   gh pr merge <number> --repo hrdle/hrdle --merge  # keeps history; --squash if needed
    ```
-   マージ完了を確認してから次へ進む（`gh pr view --json state`）
-8. **tag 作成 & Push**:
+   Confirm the merge before moving on (`gh pr view --json state`)
+8. **Tag and push**:
    ```bash
    git fetch origin --prune
    git merge --ff-only origin/main
    git tag vX.X.X
    git push origin vX.X.X
    ```
-9. **GitHub Release 確認**:
-   tag push により Release workflow が GitHub Release を自動作成する。まず既存 Release を確認し、存在しない場合のみ手動作成する。
+9. **Check the GitHub Release**:
+   pushing the tag makes the Release workflow create the GitHub Release. Check
+   for an existing one first and create it by hand only if it is missing.
    ```bash
-   gh release view vX.X.X --json url,name,tagName,isDraft,isPrerelease,publishedAt
-   # Release が存在しない場合のみ:
-   gh release create vX.X.X --title "vX.X.X" --notes "リリースノート"
+   gh release view vX.X.X --repo hrdle/hrdle --json url,name,tagName,isDraft,isPrerelease,publishedAt
+   # only if no release exists:
+   gh release create vX.X.X --repo hrdle/hrdle --title "vX.X.X" --notes "release notes"
    ```
-10. **CI 完了待ち**: `gh run list --limit 3` でワークフロー状況を確認。バイナリビルドは CI が自動で行うため、ローカルでの `bun run build:binary` は **絶対に不要**
-11. **本番更新**: `hrdle update` を実行
-12. **ブランチクリーンアップ**: 現在の worktree 用ブランチ（例: `work-2`）へ戻し、`git merge --ff-only origin/main` で最新化する。`work-1` など別 worktree のブランチ名を固定しない。
+10. **Wait for CI**: `gh run list --repo hrdle/hrdle --limit 3`. CI builds the
+    binaries, so `bun run build:binary` locally is **never** needed
+11. **Update production**: run `hrdle update`
+12. **Clean up the branch**: return to this worktree's branch (`work-2`, for
+    example) and bring it current with `git merge --ff-only origin/main`. Do not
+    hardcode another worktree's branch name such as `work-1`.
 
 ## Important Rules
 
-- **ローカルでバイナリビルドしない** — CI が自動でビルドしてリリースにアタッチする
-- バージョンは semver patch を基本とする（例: 0.0.41 → 0.0.42）
-- major/minor バンプはユーザーに確認してから行う
-- リリースノートは変更内容を簡潔に記載する
+- **Never build the binary locally** — CI builds it and attaches it to the
+  release
+- **Always pass `--repo hrdle/hrdle` to `gh`.** This checkout also has an
+  `upstream` remote pointing at `m0a/cc-hub`, which is archived and read-only.
+  Without `--repo`, `gh pr create` resolves there and fails with "Repository was
+  archived so is read-only", and `gh pr list` shows that repository's PRs
+- Versions are semver patch by default (0.0.41 -> 0.0.42)
+- Ask the user before a major or minor bump
+- Keep the release notes short and factual
 
 ## Release Notes Format
 
 ```
 ## Changes
-- feat: 新機能の説明
-- fix: バグ修正の説明
-- chore: その他の変更
+- feat: what the new feature does
+- fix: what the bug was
+- chore: everything else
 
 ## Notes
-特記事項があれば記載
+Anything worth calling out
 ```
 
-最近のコミットログ (`git log --oneline origin/main~10..origin/main`) を参照してリリースノートを作成する。
+Write the notes from the recent commit log
+(`git log --oneline origin/main~10..origin/main`).
