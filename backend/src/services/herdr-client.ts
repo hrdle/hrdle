@@ -355,6 +355,37 @@ export async function listPanes(workspaceId?: string): Promise<HerdrPane[]> {
   return res.panes ?? [];
 }
 
+/**
+ * The working directory herdr reports for an agent session id.
+ *
+ * Exists because the id is not always usable on its own. herdr forwards
+ * whatever an agent's integration hands it — for Codex that is the
+ * `SessionStart` hook's `session_id`, and a second Codex process emitting its
+ * own `SessionStart` replaces the pane's saved id with one the owning TUI
+ * never wrote a transcript under (ogulcancelik/herdr#1789, fixed on the
+ * preview channel but not in 0.7.4). The cwd survives that: both sides agree
+ * on it, so it is the way back to a transcript when the id leads nowhere.
+ *
+ * Undefined when herdr is unreachable or does not know the id — a caller
+ * asking this question already has no answer, so failure is not exceptional.
+ *
+ * TODO(herdr#1789): delete with its only caller once the fix is in a stable
+ * herdr release. See the note on `CodexHistoryService.getConversation`.
+ */
+export async function agentSessionCwd(agentSessionId: string): Promise<string | undefined> {
+  try {
+    const res = await herdrRpc<{
+      agents?: Array<{ cwd?: string; agent_session?: { kind?: string; value?: string } }>;
+    }>('agent.list', {});
+    const hit = (res.agents ?? []).find(
+      (a) => a.agent_session?.kind === 'id' && a.agent_session.value === agentSessionId,
+    );
+    return hit?.cwd || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Tabs of a workspace (herdr workspace > tab > pane), with labels + counts. */
 export async function listTabs(workspaceId: string): Promise<HerdrTab[]> {
   try {

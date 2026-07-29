@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import type { ConversationMessage, HistorySession } from '../../../shared/types';
 import { claudeProjectDirName } from '../utils/claude-project-path';
 import { CodexConversationService } from './codex-conversation';
+import { agentSessionCwd } from './herdr-client';
 import type { ProjectInfo } from './session-history';
+
+/** Resolves the working directory herdr reports for an agent session id.
+ *  Injected so the id-less fallback can be tested without a herdr server. */
+export type CwdResolver = (agentSessionId: string) => Promise<string | undefined>;
 
 interface RolloutInfo {
   rolloutPath: string;
@@ -40,12 +45,16 @@ export class CodexHistoryService {
   private conversationService: CodexConversationService;
   private cache = new Map<string, { mtimeMs: number; info: RolloutInfo | null }>();
 
+  private readonly resolveCwd: CwdResolver;
+
   constructor(
     sessionsDir = join(homedir(), '.codex', 'sessions'),
     conversationService = new CodexConversationService(),
+    resolveCwd: CwdResolver = agentSessionCwd,
   ) {
     this.sessionsDir = sessionsDir;
     this.conversationService = conversationService;
+    this.resolveCwd = resolveCwd;
   }
 
   /** Walk the date-partitioned tree and return absolute paths of all rollout files. */
@@ -210,6 +219,33 @@ export class CodexHistoryService {
     return matches;
   }
 
+  /**
+   * The conversation for a session id, by whichever route can still find it.
+   *
+   * Three, because the first two both trust the id and the id is not always
+   * Codex's. herdr forwards the `SessionStart` hook's `session_id`, and a
+   * second Codex process emitting its own `SessionStart` takes the pane's
+   * saved id with it (ogulcancelik/herdr#1789 — fixed on the preview channel,
+   * not in 0.7.4). Observed here as a pane holding `019fae87-b417…` while its
+   * TUI was writing a rollout under `019fae5d-dd9c…`: absent from the threads
+   * table, absent from every rollout filename, so both id routes returned
+   * nothing and the pane's conversation read as empty.
+   *
+   * The cwd is the thing both sides still agree on, so it is the third route.
+   * It is last because it is the least precise: two Codex sessions in one
+   * directory make "the most recent" a guess. A guess beats a blank screen,
+   * and only after the two exact answers have already failed.
+   *
+   * TODO(herdr#1789): delete the third route once the fix is in a stable herdr
+   * release. It is compensating for someone else's bug and guesses to do it,
+   * so it should not outlive the bug. Check with `herdr --version` against the
+   * release notes for #1789 (fixed on master, shipped to the preview channel
+   * as preview-2026-07-29-44b3adb12552, absent from 0.7.4). When it lands:
+   * remove this branch, `resolveCwd`/`CwdResolver`, `agentSessionCwd` in
+   * herdr-client.ts, and tests/unit/codex-history-cwd-fallback.test.ts. The
+   * signal that it is safe is the first two routes answering on their own —
+   * if they do, this one is already never reached.
+   */
   async getConversation(sessionId: string): Promise<ConversationMessage[]> {
     // First try the active-thread path (state_5.sqlite → rollout_path).
     const viaDb = await this.conversationService.getConversation(sessionId);
@@ -218,8 +254,16 @@ export class CodexHistoryService {
     // locate the rollout file by id and parse directly.
     const rollouts = await this.listRollouts();
     const hit = rollouts.find((r) => r.sessionId === sessionId);
-    if (!hit) return [];
-    return this.conversationService.parseRollout(hit.rolloutPath);
+    if (hit) return this.conversationService.parseRollout(hit.rolloutPath);
+    // Neither route knew the id. Ask herdr where that session is working and
+    // take the newest rollout from the same directory.
+    const cwd = await this.resolveCwd(sessionId);
+    if (!cwd) return [];
+    const sameDir = rollouts
+      .filter((r) => r.cwd === cwd)
+      .sort((a, b) => b.modified.localeCompare(a.modified));
+    if (sameDir.length === 0) return [];
+    return this.conversationService.parseRollout(sameDir[0].rolloutPath);
   }
 
   private toHistorySession(r: RolloutInfo): HistorySession {
