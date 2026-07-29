@@ -1,12 +1,14 @@
-# CC Hub
+# Hrdle
 
 [日本語](README.ja.md) | English
 
-A web-based terminal manager for remotely managing Claude Code sessions. Control Claude Code from your tablet or smartphone.
+A web-based terminal manager for coding agent sessions. Run Claude Code, Codex, Grok and Kimi on a server and drive them from your tablet or smartphone.
+
+> **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here — the name said Claude Code, and this had long since stopped being only that. Existing installs keep working: that repository stays readable, so its releases and `install.sh` remain available and `cchub update` still resolves. Hrdle installs alongside rather than over it (separate binary, service, port and herdr session), so both can run on one machine.
 
 ## Screenshot
 
-![CC Hub on tablet — multi-pane terminal, floating keyboard, and dashboard](docs/images/tablet-mode.jpg)
+![Hrdle on tablet — multi-pane terminal, floating keyboard, and dashboard](docs/images/tablet-mode.jpg)
 
 Tablet mode showing multi-pane terminal, floating keyboard, and the dashboard panel (usage limits, daily activity, model usage).
 
@@ -20,8 +22,8 @@ Left: session list adapts to a single-column layout on smartphones. Right: termi
 
 ## Features
 
-- **Multi-session Management** - Run and switch between multiple Claude Code sessions
-- **Multi-pane Terminals** - Split panes horizontally/vertically with real-time layout sync across all clients (herdr-backed panes, CC Hub-managed layout)
+- **Multi-session Management** - Run and switch between multiple agent sessions (Claude Code, Codex, Grok, Kimi)
+- **Multi-pane Terminals** - Split panes horizontally/vertically with real-time layout sync across all clients (herdr-backed panes, Hrdle-managed layout)
 - **Pane Operations** - Zoom, resize, focus, close panes via keyboard shortcuts or session modal UI
 - **Team Agent Display** - Shows agent names and colors in pane list and mobile tab bar
 - **Session Color Themes** - Assign colors to sessions for visual distinction
@@ -43,8 +45,8 @@ Left: session list adapts to a single-column layout on smartphones. Right: termi
 - **Hook Notifications** - Browser push notifications for Claude Code events (response complete, user input needed)
 - **Codex Support** - Run Codex CLI sessions alongside Claude Code (conversation view, usage tracking)
 - **Chat View** - Conversation-style view of the current session as an alternative to the terminal
-- **Peer Servers** - Connect multiple CC Hub servers over Tailscale (auto-discovery, aggregated sessions/history/dashboard)
-- **Remote Pane Control** - `cchub send` / `cchub peek` to drive panes on local or peer servers from the CLI
+- **Peer Servers** - Connect multiple Hrdle servers over Tailscale (auto-discovery, aggregated sessions/history/dashboard)
+- **Remote Pane Control** - `hrdle send` / `hrdle peek` to drive panes on local or peer servers from the CLI
 - **i18n** - English and Japanese UI with automatic language detection
 - **Onboarding Walkthrough** - Spotlight-style guide for first-time users
 
@@ -53,20 +55,20 @@ Left: session list adapts to a single-column layout on smartphones. Right: termi
 ### One-line Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/m0a/cc-hub/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 ```
 
 ### Manual Installation
 
-1. Download the appropriate binary from [Releases](https://github.com/m0a/cc-hub/releases/latest)
-   - Linux x64: `cchub-linux-x64`
-   - macOS ARM64: `cchub-macos-arm64`
+1. Download the appropriate binary from [Releases](https://github.com/hrdle/hrdle/releases/latest)
+   - Linux x64: `hrdle-linux-x64`
+   - macOS ARM64: `hrdle-macos-arm64`
 
 2. Make executable and place in PATH
 
 ```bash
-chmod +x cchub-linux-x64
-mv cchub-linux-x64 ~/bin/cchub
+chmod +x hrdle-linux-x64
+mv hrdle-linux-x64 ~/bin/hrdle
 ```
 
 3. Add to PATH (if not already configured)
@@ -90,55 +92,55 @@ source ~/.bashrc
 # 1. Allow Tailscale certificate generation (first time only)
 sudo tailscale set --operator=$USER
 
-# 2. Start CC Hub
-cchub
+# 2. Start Hrdle
+hrdle
 # Or with password
-cchub -P mypassword
+hrdle -P mypassword
 
 # 3. Access in browser
-#    https://<your-hostname>:5923
+#    https://<your-hostname>:5924
 ```
 
 ### Register as Service
 
 ```bash
-cchub setup -P mypassword
+hrdle setup -P mypassword
 ```
 
 This enables:
 - Auto-start on system boot (systemd on Linux, launchd on macOS)
 - Auto-restart on crash
-- Auto-update via `cchub update`
+- Auto-update via `hrdle update`
 
 ## Commands
 
 ```bash
 # Start server
-cchub                        # Start on port 5923
-cchub -p 8080                # Specify port
-cchub -P mypassword          # Start with password
+hrdle                        # Start on port 5924
+hrdle -p 8080                # Specify port
+hrdle -P mypassword          # Start with password
 
 # Register service (auto-restart, auto-update)
-cchub setup -P mypassword
-cchub uninstall              # Remove service registration
+hrdle setup -P mypassword
+hrdle uninstall              # Remove service registration
 
 # Update
-cchub update                 # Update to latest
-cchub update --check         # Check for updates only
-cchub update --auto          # Auto-update mode (for timer)
+hrdle update                 # Update to latest
+hrdle update --check         # Check for updates only
+hrdle update --auto          # Auto-update mode (for timer)
 
 # Hook notification (used by Claude Code hooks)
-cchub notify                 # Send hook event (reads JSON from stdin)
+hrdle notify                 # Send hook event (reads JSON from stdin)
 
 # Status
-cchub status
+hrdle status
 
 # Remote pane control (target: <peer>:<session>:<paneId>)
-cchub send <target> [text]   # Send input to a pane on a local or peer server
-cchub peek <target>          # Snapshot a pane's current viewport
+hrdle send <target> [text]   # Send input to a pane on a local or peer server
+hrdle peek <target>          # Snapshot a pane's current viewport
 
 # Debugging
-cchub debug <sub>            # Bun inspector on the running service
+hrdle debug <sub>            # Bun inspector on the running service
                              # sub: enable | disable | profile | status
 ```
 
@@ -146,13 +148,13 @@ cchub debug <sub>            # Bun inspector on the running service
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-p, --port` | Port number | 5923 |
+| `-p, --port` | Port number | 5924 |
 | `-H, --host` | Bind address | 0.0.0.0 |
 | `-P, --password` | Auth password | none |
 | `-h, --help` | Show help | - |
 | `-v, --version` | Show version | - |
 
-**`cchub send` options** — `<target>` is `<peer>:<session>:<paneId>` where peer is `local`, a peer id, or a nickname:
+**`hrdle send` options** — `<target>` is `<peer>:<session>:<paneId>` where peer is `local`, a peer id, or a nickname:
 
 | Option | Description |
 |--------|-------------|
@@ -162,9 +164,9 @@ cchub debug <sub>            # Bun inspector on the running service
 | `--base64` | Treat payload as base64 (binary-safe) |
 | `--wait` | After sending, snapshot the pane viewport with detected state (idle / processing / permission_prompt / ask_user_question) |
 | `--wait-ms <n>` | Delay before snapshot when `--wait` is set (default 800) |
-| `--lines <n>` | Trailing rows to include in the viewport (default 20, also for `cchub peek`) |
+| `--lines <n>` | Trailing rows to include in the viewport (default 20, also for `hrdle peek`) |
 
-**`cchub debug` options**: `--seconds <n>` (for `profile`: enable for N seconds then auto-disable).
+**`hrdle debug` options**: `--seconds <n>` (for `profile`: enable for N seconds then auto-disable).
 
 ### Tailscale Configuration
 
@@ -178,22 +180,22 @@ sudo tailscale set --operator=$USER
 
 ### herdr Backend
 
-CC Hub runs every session as a [herdr](https://herdr.dev/) workspace. `cchub setup` provisions everything: a supervised `herdr server` (systemd on Linux, launchd on macOS), `~/.config/herdr/config.toml` with `resume_agents_on_restore = true` (agent conversations survive server restarts), and the Claude/Codex integration hooks (native session identity).
+Hrdle runs every session as a [herdr](https://herdr.dev/) workspace. `hrdle setup` provisions everything: a supervised `herdr server` (systemd on Linux, launchd on macOS), `~/.config/herdr/config.toml` with `resume_agents_on_restore = true` (agent conversations survive server restarts), and the Claude/Codex integration hooks (native session identity).
 
-To update herdr later: `herdr update`, then restart the supervised server (`systemctl --user restart herdr`). The update replaces the binary but leaves the running server on the old version, so the restart is what actually applies it — CC Hub notices that gap and shows a warning on the dashboard, with a button that does both steps for you. Restarting re-creates every pane: agent conversations come back automatically, but commands running in a pane do not, so it waits for you to press it.
+To update herdr later: `herdr update`, then restart the supervised server (`systemctl --user restart herdr`). The update replaces the binary but leaves the running server on the old version, so the restart is what actually applies it — Hrdle notices that gap and shows a warning on the dashboard, with a button that does both steps for you. Restarting re-creates every pane: agent conversations come back automatically, but commands running in a pane do not, so it waits for you to press it.
 
 Do **not** use `herdr update --handoff` under systemd/launchd — the handed-off server escapes supervision.
 
 ## Usage
 
-1. Open CC Hub in browser
+1. Open Hrdle in browser
 2. Create a Claude Code session with "New Session"
 3. Operate Claude Code in the terminal
 4. Open file viewer with the file icon
 
 ### Keyboard Shortcuts
 
-CC Hub streams pane frames from herdr and owns the split layout server-side. All connected clients see the same pane layout.
+Hrdle streams pane frames from herdr and owns the split layout server-side. All connected clients see the same pane layout.
 
 **Pane & Session Operations**:
 | Shortcut | Action |
@@ -277,26 +279,26 @@ Browse past Claude Code sessions in the "History" tab:
 
 ### Hook Notifications
 
-Receive browser push notifications when Claude Code completes a response or needs input. Add `cchub notify` to your Claude Code hooks:
+Receive browser push notifications when Claude Code completes a response or needs input. Add `hrdle notify` to your Claude Code hooks:
 
 ```json
 {
   "hooks": {
-    "Stop": [{ "hooks": [{ "type": "command", "command": "cchub notify" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "hrdle notify" }] }],
     "PostToolUse": [{
       "matcher": "AskUserQuestion",
-      "hooks": [{ "type": "command", "command": "cchub notify" }]
+      "hooks": [{ "type": "command", "command": "hrdle notify" }]
     }]
   }
 }
 ```
 
-Add this to `~/.claude/settings.json`. The CC Hub server must be running. Allow browser notification permissions on first access.
+Add this to `~/.claude/settings.json`. The Hrdle server must be running. Allow browser notification permissions on first access.
 
-Hooks run in a **non-interactive** shell, which never sources `.zshrc`/`.bashrc`. If your PATH additions live there (a `~/bin` or `~/.local/bin` install), the bare name won't resolve and the hook dies with `command not found`. Use the absolute path in that case — `which cchub` gives it, and CC Hub's own "set up hooks" button already writes the resolved path:
+Hooks run in a **non-interactive** shell, which never sources `.zshrc`/`.bashrc`. If your PATH additions live there (a `~/bin` or `~/.local/bin` install), the bare name won't resolve and the hook dies with `command not found`. Use the absolute path in that case — `which hrdle` gives it, and Hrdle's own "set up hooks" button already writes the resolved path:
 
 ```json
-{ "type": "command", "command": "/home/you/bin/cchub notify" }
+{ "type": "command", "command": "/home/you/bin/hrdle notify" }
 ```
 
 Session indicators (working / waiting / done) need no hooks at all — herdr reports agent status itself. These two hooks only carry what herdr can't see: the notification text and the name of the tool that asked a question.
@@ -320,7 +322,7 @@ Open http://localhost:5174 in browser (development mode).
 ```bash
 # Build as single binary
 bun run build:binary
-./dist/cchub
+./dist/hrdle
 ```
 
 ### Development Commands
@@ -343,7 +345,7 @@ bun run lint            # Lint all packages
 
 An interactive overview of backend services, API routes, frontend components, hooks, WebSocket protocol, shared types and the major data flows lives in [`architecture.html`](architecture.html) (data: [`architecture.json`](architecture.json)).
 
-- Render in your browser via [raw.githack](https://raw.githack.com/m0a/cc-hub/main/architecture.html) — JSON is embedded, no external fetch required.
+- Render in your browser via [raw.githack](https://raw.githack.com/hrdle/hrdle/main/architecture.html) — JSON is embedded, no external fetch required.
 - Edit `architecture.json` and run `python3 scripts/build-architecture-html.py` to refresh the embed.
 
 ## License

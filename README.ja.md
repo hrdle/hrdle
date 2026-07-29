@@ -1,12 +1,14 @@
-# CC Hub
+# Hrdle
 
 日本語 | [English](README.md)
 
-Claude Codeセッションをリモート管理するWebベースのターミナルマネージャー。タブレットやスマートフォンからClaude Codeを操作できます。
+コーディングエージェントのセッションをリモート管理するWebベースのターミナルマネージャー。Claude Code / Codex / Grok / Kimi をサーバーで動かし、タブレットやスマートフォンから操作できます。
+
+> **旧称 CC Hub。** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) は v0.2.98 でアーカイブされ、開発はこちらに移りました — 名前が Claude Code を指していましたが、実際にはとうにそれだけではなくなっていたためです。既存のインストールはそのまま動きます: あちらは読み取り可能なまま残るので、リリース資産と `install.sh` は利用でき、`cchub update` も解決し続けます。Hrdle は上書きではなく**並べて**インストールされる（別バイナリ・別サービス・別ポート・別 herdr セッション）ので、1台で両方動かせます。
 
 ## スクリーンショット
 
-![CC Hub をタブレットで使用 — マルチペインターミナル、フローティングキーボード、ダッシュボード](docs/images/tablet-mode.jpg)
+![Hrdle をタブレットで使用 — マルチペインターミナル、フローティングキーボード、ダッシュボード](docs/images/tablet-mode.jpg)
 
 タブレットモード。マルチペインターミナル、フローティングキーボード、ダッシュボードパネル（使用量リミット、日別アクティビティ、Model Usage）を一画面で表示。
 
@@ -20,7 +22,7 @@ Claude Codeセッションをリモート管理するWebベースのターミナ
 
 ## 機能
 
-- **マルチセッション管理** - 複数のClaude Codeセッションを同時に実行・切り替え
+- **マルチセッション管理** - 複数のエージェントセッション（Claude Code / Codex / Grok / Kimi）を同時に実行・切り替え
 - **マルチペインターミナル** - herdrバックエンドによるペイン分割・リアルタイムレイアウト同期（全クライアント共有）
 - **ペイン操作** - ズーム、リサイズ、フォーカス、クローズをキーボードショートカットまたはセッションモーダルUIから操作
 - **チームエージェント表示** - ペイン一覧やモバイルタブバーにエージェント名と色を表示
@@ -43,8 +45,8 @@ Claude Codeセッションをリモート管理するWebベースのターミナ
 - **Hook通知** - Claude Codeイベント（応答完了、入力待ち等）のブラウザプッシュ通知
 - **Codex対応** - Claude Codeと並行してCodex CLIセッションを実行（会話ビュー、使用量トラッキング）
 - **チャットビュー** - ターミナルの代わりに現在のセッションを会話形式で表示
-- **Peerサーバー** - 複数のCC HubサーバーをTailscale経由で連携（自動検出、セッション/履歴/ダッシュボードの集約）
-- **リモートペイン制御** - `cchub send` / `cchub peek` でローカル・peerサーバーのペインをCLIから操作
+- **Peerサーバー** - 複数のHrdleサーバーをTailscale経由で連携（自動検出、セッション/履歴/ダッシュボードの集約）
+- **リモートペイン制御** - `hrdle send` / `hrdle peek` でローカル・peerサーバーのペインをCLIから操作
 - **多言語対応** - 英語・日本語UIの自動言語検出
 - **オンボーディング** - 初回ユーザー向けスポットライト式操作ガイド
 
@@ -53,20 +55,20 @@ Claude Codeセッションをリモート管理するWebベースのターミナ
 ### ワンラインインストール（推奨）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/m0a/cc-hub/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 ```
 
 ### 手動インストール
 
-1. [Releases](https://github.com/m0a/cc-hub/releases/latest) から対応するバイナリをダウンロード
-   - Linux x64: `cchub-linux-x64`
-   - macOS ARM64: `cchub-macos-arm64`
+1. [Releases](https://github.com/hrdle/hrdle/releases/latest) から対応するバイナリをダウンロード
+   - Linux x64: `hrdle-linux-x64`
+   - macOS ARM64: `hrdle-macos-arm64`
 
 2. 実行権限を付与して配置
 
 ```bash
-chmod +x cchub-linux-x64
-mv cchub-linux-x64 ~/bin/cchub
+chmod +x hrdle-linux-x64
+mv hrdle-linux-x64 ~/bin/hrdle
 ```
 
 3. PATHに追加（未設定の場合）
@@ -90,55 +92,55 @@ source ~/.bashrc
 # 1. Tailscale証明書生成を許可（初回のみ）
 sudo tailscale set --operator=$USER
 
-# 2. CC Hub起動
-cchub
+# 2. Hrdle起動
+hrdle
 # または パスワード付き
-cchub -P mypassword
+hrdle -P mypassword
 
 # 3. ブラウザでアクセス
-#    https://<your-hostname>:5923
+#    https://<your-hostname>:5924
 ```
 
 ### サービスとして登録
 
 ```bash
-cchub setup -P mypassword
+hrdle setup -P mypassword
 ```
 
 これにより以下が有効になります：
 - システム起動時に自動起動（LinuxはsystemD、macOSはlaunchd）
 - クラッシュ時の自動再起動
-- `cchub update` による自動更新
+- `hrdle update` による自動更新
 
 ## コマンド
 
 ```bash
 # サーバー起動
-cchub                        # ポート5923で起動
-cchub -p 8080                # ポート指定
-cchub -P mypassword          # パスワード付きで起動
+hrdle                        # ポート5924で起動
+hrdle -p 8080                # ポート指定
+hrdle -P mypassword          # パスワード付きで起動
 
 # サービス登録（自動再起動・自動更新）
-cchub setup -P mypassword
-cchub uninstall              # サービス登録を解除
+hrdle setup -P mypassword
+hrdle uninstall              # サービス登録を解除
 
 # 更新
-cchub update                 # 最新版に更新
-cchub update --check         # 更新確認のみ
-cchub update --auto          # 自動更新モード（タイマー用）
+hrdle update                 # 最新版に更新
+hrdle update --check         # 更新確認のみ
+hrdle update --auto          # 自動更新モード（タイマー用）
 
 # Hook通知（Claude Code hookから使用）
-cchub notify                 # hookイベント送信（stdinからJSON読み取り）
+hrdle notify                 # hookイベント送信（stdinからJSON読み取り）
 
 # 状態確認
-cchub status
+hrdle status
 
 # リモートペイン制御（target: <peer>:<session>:<paneId>）
-cchub send <target> [text]   # ローカル/peerサーバーのペインに入力を送信
-cchub peek <target>          # ペインの現在のビューポートを取得
+hrdle send <target> [text]   # ローカル/peerサーバーのペインに入力を送信
+hrdle peek <target>          # ペインの現在のビューポートを取得
 
 # デバッグ
-cchub debug <sub>            # 稼働中サービスのBunインスペクタ操作
+hrdle debug <sub>            # 稼働中サービスのBunインスペクタ操作
                              # sub: enable | disable | profile | status
 ```
 
@@ -146,13 +148,13 @@ cchub debug <sub>            # 稼働中サービスのBunインスペクタ操�
 
 | オプション | 説明 | デフォルト |
 |-----------|------|-----------|
-| `-p, --port` | ポート番号 | 5923 |
+| `-p, --port` | ポート番号 | 5924 |
 | `-H, --host` | バインドアドレス | 0.0.0.0 |
 | `-P, --password` | 認証パスワード | なし |
 | `-h, --help` | ヘルプ表示 | - |
 | `-v, --version` | バージョン表示 | - |
 
-**`cchub send` オプション** — `<target>` は `<peer>:<session>:<paneId>`（peer は `local`、peer ID、ニックネームのいずれか）:
+**`hrdle send` オプション** — `<target>` は `<peer>:<session>:<paneId>`（peer は `local`、peer ID、ニックネームのいずれか）:
 
 | オプション | 説明 |
 |-----------|------|
@@ -162,9 +164,9 @@ cchub debug <sub>            # 稼働中サービスのBunインスペクタ操�
 | `--base64` | ペイロードをbase64として扱う（バイナリセーフ） |
 | `--wait` | 送信後にペインのビューポートと検出状態（idle / processing / permission_prompt / ask_user_question）を表示 |
 | `--wait-ms <n>` | `--wait` 時のスナップショットまでの遅延（デフォルト 800） |
-| `--lines <n>` | ビューポートに含める末尾行数（デフォルト 20、`cchub peek` でも使用可） |
+| `--lines <n>` | ビューポートに含める末尾行数（デフォルト 20、`hrdle peek` でも使用可） |
 
-**`cchub debug` オプション**: `--seconds <n>`（`profile` 用: N秒後に自動無効化）
+**`hrdle debug` オプション**: `--seconds <n>`（`profile` 用: N秒後に自動無効化）
 
 ### Tailscale設定
 
@@ -178,24 +180,24 @@ sudo tailscale set --operator=$USER
 
 ### herdrバックエンド
 
-CC Hubは全セッションを [herdr](https://herdr.dev/) のワークスペースとして実行します。`cchub setup` が必要な設定を一通り行います：常駐する `herdr server`（Linux: systemd / macOS: launchd）、`~/.config/herdr/config.toml` の `resume_agents_on_restore = true`（サーバー再起動をまたいでエージェントの会話が復元される）、Claude Code integration hook（ネイティブなセッションID連携）。
+Hrdleは全セッションを [herdr](https://herdr.dev/) のワークスペースとして実行します。`hrdle setup` が必要な設定を一通り行います：常駐する `herdr server`（Linux: systemd / macOS: launchd）、`~/.config/herdr/config.toml` の `resume_agents_on_restore = true`（サーバー再起動をまたいでエージェントの会話が復元される）、Claude Code integration hook（ネイティブなセッションID連携）。
 
-セッションはherdrサーバーのプロセス内にあるため、**cchubの再起動・更新ではセッションは落ちません**。
+セッションはherdrサーバーのプロセス内にあるため、**hrdleの再起動・更新ではセッションは落ちません**。
 
-herdrを後から更新する場合は `herdr update` → `systemctl --user restart herdr`。`herdr update` はバイナリを置き換えるだけで稼働中のサーバーは旧版のまま動き続けるため、反映には再起動が必要です。CC Hubはこのズレを検知してダッシュボードに警告を出し、ボタンから両方を代行できます（再起動すると全ペインが張り直され、エージェントの会話は自動復元されますが実行中のコマンドは失われるため、実行はユーザーが押したときだけです）。
+herdrを後から更新する場合は `herdr update` → `systemctl --user restart herdr`。`herdr update` はバイナリを置き換えるだけで稼働中のサーバーは旧版のまま動き続けるため、反映には再起動が必要です。Hrdleはこのズレを検知してダッシュボードに警告を出し、ボタンから両方を代行できます（再起動すると全ペインが張り直され、エージェントの会話は自動復元されますが実行中のコマンドは失われるため、実行はユーザーが押したときだけです）。
 
 > systemd/launchd配下では `herdr update --handoff` を使わないでください。ハンドオフ先のサーバーが監視外に出てしまいます。
 
 ## 使い方
 
-1. ブラウザでCC Hubを開く
+1. ブラウザでHrdleを開く
 2. 「新規セッション」でClaude Codeセッションを作成
 3. ターミナルでClaude Codeを操作
 4. ファイルアイコンでファイルビューアを開く
 
 ### キーボードショートカット
 
-CC Hubはペインレイアウトをリアルタイムで同期します。接続中の全クライアントが同じペインレイアウトを共有します。
+Hrdleはペインレイアウトをリアルタイムで同期します。接続中の全クライアントが同じペインレイアウトを共有します。
 
 **ペイン・セッション操作**:
 | ショートカット | 操作 |
@@ -284,20 +286,20 @@ Claude Codeが応答完了・入力待ち状態になった時にブラウザプ
 ```json
 {
   "hooks": {
-    "Stop": [{ "hooks": [{ "type": "command", "command": "cchub notify" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "hrdle notify" }] }],
     "PostToolUse": [{
       "matcher": "AskUserQuestion",
-      "hooks": [{ "type": "command", "command": "cchub notify" }]
+      "hooks": [{ "type": "command", "command": "hrdle notify" }]
     }]
   }
 }
 ```
 
-CC Hubサーバーが起動している必要があります。初回アクセス時にブラウザの通知権限を許可してください。
+Hrdleサーバーが起動している必要があります。初回アクセス時にブラウザの通知権限を許可してください。
 
 セッションのインジケータ（処理中・入力待ち・完了）にhookは不要です — herdrがエージェントの状態を自身で検出します。上記2つのhookは、herdrからは見えない情報だけを運びます：通知の本文（`Stop`）と、質問を出したツール名（`PostToolUse`/`AskUserQuestion`）。
 
-> v0.2.2より前は `PreToolUse` / `UserPromptSubmit` も必要でしたが、今は不要です。設定済みのまま残しても害はありませんが、`PreToolUse` はツール呼び出しのたびに `cchub notify` プロセスを起動するので、外すと無駄が減ります。
+> v0.2.2より前は `PreToolUse` / `UserPromptSubmit` も必要でしたが、今は不要です。設定済みのまま残しても害はありませんが、`PreToolUse` はツール呼び出しのたびに `hrdle notify` プロセスを起動するので、外すと無駄が減ります。
 
 ## 開発環境セットアップ
 
@@ -318,7 +320,7 @@ bun run dev
 ```bash
 # シングルバイナリとしてビルド
 bun run build:binary
-./dist/cchub
+./dist/hrdle
 ```
 
 ### 開発コマンド
@@ -341,7 +343,7 @@ bun run lint            # リント
 
 バックエンドサービス・API ルート・フロントエンドコンポーネント・hooks・WebSocket プロトコル・共有型・主要データフローを 1 画面で確認できるインタラクティブなビューアを [`architecture.html`](architecture.html)（データソース: [`architecture.json`](architecture.json)）に同梱しています。
 
-- ブラウザでレンダリングしたい場合は [raw.githack 経由](https://raw.githack.com/m0a/cc-hub/main/architecture.html)。JSON は HTML に埋め込み済みで追加 fetch 不要です。
+- ブラウザでレンダリングしたい場合は [raw.githack 経由](https://raw.githack.com/hrdle/hrdle/main/architecture.html)。JSON は HTML に埋め込み済みで追加 fetch 不要です。
 - `architecture.json` を編集したら `python3 scripts/build-architecture-html.py` で埋め込みを更新してください。
 
 ## ライセンス
