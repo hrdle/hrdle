@@ -193,6 +193,55 @@ port 5924            # dev は 3457 / 5174（cchub の 3456 / 5173 から1つず
   — herdr セッションが分かれているので理論上は起きないはず
 - peer discovery が 5923/5924 をどう見るか
 
+### 3.5 再起動検証（supervised 構成の答え合わせ）
+
+2026-07-29 に systemd 構成を組み直した。**再起動しないと確かめられない部分が残っている。**
+
+組んだもの:
+
+```
+herdr.service         inactive/enabled   default セッション（cchub 用）
+herdr-hrdle.service   inactive/enabled   hrdle セッション（新規作成）
+cchub.service         Wants/After=herdr.service
+hrdle.service         Wants/After=herdr-hrdle.service, EnvironmentFile に HERDR_SESSION=hrdle
+```
+
+依存を足したのは、**cchub が herdr より先に起動すると herdr を systemd の外に spawn し、
+`herdr.service` が「already running」で無限に失敗する**ため。実際 7/26 から 3 日間、
+2 秒ごとに 114,629 回失敗し続けていた（`systemctl --user stop herdr` で停止済み・
+**disable はしていない**。次回起動で systemd に先を取らせるため）。
+
+#### 再起動前スナップショット（2026-07-29 20:28）
+
+```
+port 5923 (cchub): 19 sessions (working 1 / lost 8)
+port 5924 (hrdle):  2 sessions (Welcome, parallel-check)
+default のワークスペース: hrdle, cchub-work-3, cchub-work-1, cchub-work-2, wheel-leg-bot,
+                          life, linux, pixel-customrom, repos, lifestyle-app-work-1, 汎用質問
+```
+
+#### 再起動後に確認すること
+
+```bash
+# 1. herdr が systemd 管理下で上がったか（両方 active なら成功）
+systemctl --user is-active herdr herdr-hrdle cchub hrdle
+
+# 2. ループが再発していないか（No entries なら成功）
+journalctl --user -u herdr --since '2 minutes ago' | tail -5
+
+# 3. セッションが復元されたか
+curl -sk https://localhost:5923/api/sessions | jq '.sessions | length'   # 19 期待
+curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'   # 下記参照
+```
+
+**hrdle セッションは復元されない可能性が高い。**`~/.config/herdr/sessions/hrdle/` に
+`session.json` が無い（default 側にはある）。named session が復元情報を書かないのか、
+書くタイミングが来ていないだけなのかは未確認。**再起動がその答え合わせになる。**
+復元されなくても hrdle 側は検証用の 2 セッションだけなので実害はないが、
+**切替後は hrdle が全ワークスペースを持つので、ここが復元されないなら切替を止める理由になる。**
+
+失敗時の復旧: `systemctl --user start herdr` で default セッションは `session.json` から復元される。
+
 ### 4. 切替（promote）
 
 - `HERDR_SESSION` を**外して**再起動 → default セッション（＝既存の全ワークスペース）を引き継ぐ
