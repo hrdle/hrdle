@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6] - 2026-07-30
+
+### Changed
+- **The code speaks English, and stops using emoji**. Comments, log lines, CLI
+  output, test names and this file were half Japanese and half English, so every
+  reader had to know both, and status was carried by glyphs - a checkmark, a
+  warning sign - that say nothing to a `grep` over a log. All of it is English
+  now, and status is a word: `warning:`, `error:`, `Hint:`
+- **Hardcoded UI strings that never went through i18n were translated too** -
+  PeerManager, the glasses simulator and its phone page, the G2 display footers
+  and the fallback page in `index.html`. The Japanese product surface is now
+  exactly the `ja` locale and nothing else, rather than the locale plus whatever
+  happened to be typed inline
+- **What stays Japanese is data rather than prose we wrote**: the `ja` i18n
+  catalogs, the STT glossary in `stt-prompt.ts`, and the fixtures whose Japanese
+  is the thing under test (CJK wrapping, kinsoku, UTF-8 splitting across chunks).
+  Two emoji tables stay because they are functional: the substitution map in
+  `glasses/src/metrics.ts` that turns emoji into glyphs the G2 firmware has, and
+  the file-picker and URL keys whose emoji *is* the label
+- **`CLAUDE.md` states the rule** under "Language and Style Rules", exceptions
+  listed, so the next change does not have to rediscover them. It covers commit
+  messages and PR bodies as well
+
+### Notes
+- Tests were updated where they asserted on a string that moved (the relay
+  fallbacks, the `--base64` error, the G2 footers, `Summary:` and
+  `[code N lines]`). 779 tests pass, lint and typecheck are clean, and the dev
+  server was checked against a real herdr: 14 workspaces listed, the dashboard
+  answering, `/glasses` served
+- The Japanese documentation is untouched on purpose - `README.ja.md`,
+  `architecture.json`, `specs/`, `HANDOFF.md` and the skill files are documents
+  rather than code, and `README.ja.md` exists to be Japanese
+
 ## [0.3.5] - 2026-07-30
 
 ### Added
