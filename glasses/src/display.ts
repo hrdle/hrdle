@@ -1169,6 +1169,15 @@ export function buildSetupGuide(): RebuildPageContainer {
 
 // ─── Display controller ───
 
+/** `StartUpPageCreateResult`, spelled out rather than read off the enum: it is
+ *  declared in the SDK's .d.ts and its runtime shape is not ours to rely on. */
+const CREATE_RESULT_NAMES: Record<number, string> = {
+  0: 'success',
+  1: 'invalid',
+  2: 'oversize',
+  3: 'outOfMemory',
+}
+
 let currentMode: Mode | null = null
 /** Notice-strip height last sent, so a change in it triggers the rebuild the
  *  new geometry needs. */
@@ -1205,10 +1214,18 @@ export async function initDisplay(): Promise<Bridge | null> {
       ],
     })
 
-    await Promise.race([
+    const created = await Promise.race([
       bridge.createStartUpPageContainer(initial),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('createStartUp timeout')), 3000)),
     ])
+    // The host answers this one with a reason, and `outOfMemory` is the answer
+    // that would explain a run dying sooner than the one before it. It was
+    // being discarded, so every theory about why the app stops had to be built
+    // from symptoms instead of from what the host actually said.
+    traceSink?.(
+      `page container created: ${CREATE_RESULT_NAMES[created as number] ?? `unknown(${created})`}`,
+      created === 0 ? 'info' : 'error',
+    )
     return bridge
   } catch (e) {
     console.log('[display] Even Hub SDK not available — debug mode', e)
@@ -1251,6 +1268,46 @@ export function panelWrites(): number {
   return writes
 }
 
+/**
+ * What the host said about the writes we sent it.
+ *
+ * Every draw call in the SDK returns a boolean, and every one of them was
+ * being thrown away. That cost more than a missing log line: `drawn` cached
+ * refused content as if it were on screen, so the retry the record above
+ * promises never happened — a dropped write became a permanently stale
+ * container. Only an explicit `false` counts as a refusal; the SDK's stubs
+ * resolve with nothing, and reading that as a drop would stop the panel
+ * updating at all.
+ */
+let drops = 0
+export function panelDrops(): number {
+  return drops
+}
+
+/**
+ * Where display-layer traces go.
+ *
+ * `trace` lives in main.ts and importing it here would close an import cycle,
+ * so main injects it instead. Unset in the simulator and in tests, where the
+ * counters above are read directly.
+ */
+let traceSink: ((message: string, level?: string) => void) | null = null
+export function setPanelTrace(fn: (message: string, level?: string) => void): void {
+  traceSink = fn
+}
+
+/** First few drops are reported as they happen; after that the heartbeat's
+ *  running count is enough, and a refusing host would otherwise fill the log. */
+const TRACED_DROPS_MAX = 5
+let tracedDrops = 0
+
+function noteDrop(what: string): void {
+  drops++
+  if (tracedDrops >= TRACED_DROPS_MAX) return
+  tracedDrops++
+  traceSink?.(`host refused ${what} (drop #${drops})`, 'error')
+}
+
 /** Send a container's new content, or nothing if that is what it already
  *  shows. Returns null when there was nothing to send. */
 function upgrade(
@@ -1262,7 +1319,11 @@ function upgrade(
   if (drawn.get(containerID) === content) return null
   return Promise.resolve(
     bridge.textContainerUpgrade(new TextContainerUpgrade({ containerID, containerName, content })),
-  ).then(() => {
+  ).then((ok) => {
+    if (ok === false) {
+      noteDrop(`upgrade ${containerName}`)
+      return
+    }
     writes++
     drawn.set(containerID, content)
   })
@@ -1331,7 +1392,15 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       case 'voice': container = buildVoice(state); break
       case 'overlay': container = buildOverlay(state); break
     }
-    await bridge.rebuildPageContainer(container)
+    const ok = await bridge.rebuildPageContainer(container)
+    if (ok === false) {
+      noteDrop('rebuild')
+      // The mode was recorded above on the assumption this would land. Undo
+      // that, or the next render sees the geometry as already sent and skips
+      // the rebuild — leaving the panel showing the previous screen for good.
+      invalidatePanel()
+      return
+    }
     recordRebuild(container)
     return
   }
