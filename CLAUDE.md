@@ -442,6 +442,30 @@ Types are defined in `shared/types.ts` with Zod schemas for validation. Import f
 
 Key types: `ControlClientMessage`, `ControlServerMessage` (per-session terminal I/O), `MuxClientMessage`, `MuxServerMessage` (multiplexed WebSocket protocol), `PaneViewport` / `PaneCursor` / `PaneModes` (viewport frames), `SessionResponse`, `PaneInfo`, `TabInfo` (a workspace's tabs; `SessionResponse.tabs`/`activeTabId`, only when >1 tab), `TmuxLayoutNode`.
 
+## グラスアプリ（`glasses/`）の実装ルール
+
+**シミュレータは実装対象であって、おまけではない。実機だけ直して終わりにしない。**
+
+`src/debug-ui.ts` のブラウザシミュレータは実機と同じ `GlassesController` と `screenText()` を通るので、折り返し・7行クランプ・ページングは一致する。だが一致**しない**ところが繰り返し見つかっている（文字幅が1文字ぶんズレる / ページングで実機だけ前の行が被る / 実機だけ豆腐になる / 要約がシミュレータだけ出ない — いずれも 2026-07-27〜28 に発覚）。したがって **シミュレータで確認 → リリース → 実機で確認** の順で進め、シミュレータだけで完了としない。
+
+実装時:
+
+- プラットフォーム機能を足したら**実機（`main.ts`）とシミュレータ（`debug-ui.ts`）の両方に実装する**。共通面は `controller.ts` の `GlassesPlatform`。片方だけだと「実機でしか再現しない」症状を自分で作ることになる
+- 画面の文言・レイアウトは `display.ts` の `screenText()` に集約する。描画側に直接書くと片方にしか出ない
+- 記号を出すなら `metrics.ts` の `SUBSTITUTES` に代替を足す（✅→○ のように意味を保つ）。無いものは `stripUnrenderable()` が落とし、これはシミュレータでも走る
+- localStorage は `storage.ts` 経由（キーは `identity.json` の `storagePrefix` 由来、旧キーは読むときだけ見る）。製品名・ポート・リポジトリは `vite.config.ts` の define 経由で、`glasses/src` にリテラルを書かない
+
+シミュレータ:
+
+```
+https://<host>:5924/glasses          # 本番が配信
+bun run --filter glasses dev         # vite dev → :8391
+```
+
+`?hub=<url>` で別サーバ、`?bg=<画像URL>` で背景。**「画面をコピー」で枠付きテキストが取れる**ので、指摘や issue にはスクリーンショットよりこれを貼る。**マイクは本物** — `getUserMedia` → `/api/glasses/stt`（Groq）を実際に叩くので、音声認識の検証にグラスは要らない。「STT result」欄に文字を入れると転写を短絡できる。
+
+サーバ側（`backend/`）だけの変更なら ehpk の再ビルドは不要（STT やリレーの挙動はサーバにある）。ビルドと EVEN Hub へのアップロードは `/glasses-upload` スキル。
+
 ## Linting
 
 Uses [Biome](https://biomejs.dev/) for linting. Configuration in `biome.json` at project root.
