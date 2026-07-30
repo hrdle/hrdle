@@ -92,20 +92,37 @@ export async function sendPaneInput(sessionId: string, paneId: string, data: str
  *  The glasses run inside a WebView whose console nobody can reach, so an
  *  uncaught exception kills the app with no trace at all. This is the only way
  *  to see why. Best effort: never throws, never blocks the caller. */
-export async function reportLog(level: string, message: string, stack?: string): Promise<void> {
-  if (!baseUrl) return
-  try {
-    await fetch(`${baseUrl}/api/logs`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        level,
-        message: `[glasses] ${message}`,
-        timestamp: new Date().toISOString(),
-        stack,
-      }),
-    })
-  } catch { /* the log channel must never be the thing that breaks the app */ }
+/**
+ * Posts are chained so the log arrives in the order it was written.
+ *
+ * They used to go out concurrently, and the file showed it: `page container
+ * created` printed before the `main:` line of the same run, startup milestones
+ * out of sequence. A log whose order cannot be trusted cannot answer "what
+ * happened just before it died", which is the only question being asked of it.
+ *
+ * One in-flight request at a time. The queue is a promise chain rather than an
+ * array because nothing here needs to inspect or drop entries — and a failure
+ * must not break the chain, hence the swallow inside the link.
+ */
+let logChain: Promise<void> = Promise.resolve()
+
+export function reportLog(level: string, message: string, stack?: string): Promise<void> {
+  if (!baseUrl) return Promise.resolve()
+  logChain = logChain.then(async () => {
+    try {
+      await fetch(`${baseUrl}/api/logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level,
+          message: `[glasses] ${message}`,
+          timestamp: new Date().toISOString(),
+          stack,
+        }),
+      })
+    } catch { /* the log channel must never be the thing that breaks the app */ }
+  })
+  return logChain
 }
 
 /** Dismiss a relay item ("later / on PC"). The server marks it dismissed and
