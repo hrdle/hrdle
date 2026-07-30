@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
-import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, listRows, noticeScrollSteps, rowCursor } from './display.ts'
+import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, noticeScrollSteps, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { WsClient } from './ws-client.ts'
@@ -637,7 +637,7 @@ export class GlassesController {
    *  between workspaces and into them without a second control. */
   private moveListCursor(step: number): void {
     const st = this.state
-    const rows = listRows(st.sessions)
+    const rows = listRows(st.sessions, hasNotificationRow(st))
     if (!rows.length) return
     // Step over headings: a multi-pane workspace's name has nothing to open.
     let i = rowCursor(st)
@@ -645,8 +645,15 @@ export class GlassesController {
       i += step
     } while (i >= 0 && i < rows.length && rows[i].header)
     if (i < 0 || i >= rows.length) return
-    st.sessionIndex = rows[i].sessionIndex
-    st.selectedPaneId = rows[i].paneId
+    const row = rows[i]
+    // The notices row is neither a session nor a pane, so where the cursor is
+    // cannot be expressed by those two alone. Leaving the session fields as they
+    // were is deliberate: swiping onto the notices and back off again returns to
+    // the row the reader came from rather than to the top of the list.
+    st.listOnNotifications = row.notifications === true
+    if (row.notifications) return
+    st.sessionIndex = row.sessionIndex
+    st.selectedPaneId = row.paneId
   }
 
   private async onSessionListAction(action: RingAction): Promise<void> {
@@ -661,6 +668,13 @@ export class GlassesController {
         this.render()
         return
       case 'tap': {
+        // The way in to the relay items. The overlay has always been able to
+        // walk all of them — `swipe:next`, with a counter — and until now the
+        // only thing that could open it was a question arriving.
+        if (st.listOnNotifications && hasNotificationRow(st)) {
+          this.enterOverlay()
+          return
+        }
         const s = this.currentSession()
         if (!s) return
         this.ws.subscribe(s.id)
