@@ -98,29 +98,33 @@ source ~/.bashrc
 
 ## Quick Start
 
-```bash
-# 1. Allow Tailscale certificate generation (first time only)
-sudo tailscale set --operator=$USER
-
-# 2. Start Hrdle
-hrdle
-# Or with password
-hrdle -P mypassword
-
-# 3. Access in browser
-#    https://<your-hostname>:5924
-```
-
-### Register as Service
+With Tailscale already installed, the one-line install above is the whole of it.
+It installs herdr if it is missing, allows certificate generation, registers the
+service, and finishes by printing the server's address as a QR code for the
+phone app to scan.
 
 ```bash
-hrdle setup -P mypassword
+curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 ```
 
-This enables:
+Two things it cannot do for you:
+
+- **`sudo tailscale set --operator=$USER`** — sudo cannot prompt for a password
+  from a piped script, so if no cached credential is available the installer
+  prints this line and stops short of the service. Run it, then `hrdle setup`.
+- **A password.** As installed, anything signed in to your tailnet can open it.
+  To be asked for one in the browser, run `hrdle setup -P mypassword`.
+
+Set `HRDLE_NO_SERVICE=1` to install the binary only, or `HRDLE_SKIP_HERDR=1` to
+install herdr yourself.
+
+### The service
+
+`hrdle setup` enables:
 - Auto-start on system boot (systemd on Linux, launchd on macOS)
 - Auto-restart on crash
 - Auto-update via `hrdle update`
+- A supervised herdr server, with agent conversations resumed on restart
 
 ## Commands
 
@@ -144,6 +148,9 @@ hrdle notify                 # Send hook event (reads JSON from stdin)
 
 # Status
 hrdle status
+
+# Print this server's address as a QR code, for the phone app's Connect step
+hrdle qr
 
 # Remote pane control (target: <peer>:<session>:<paneId>)
 hrdle send <target> [text]   # Send input to a pane on a local or peer server

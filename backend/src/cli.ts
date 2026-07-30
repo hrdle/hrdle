@@ -24,7 +24,7 @@ const VERSION = pkg.version;
 const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface CliOptions {
-  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses';
+  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'qr';
   port: number;
   host: string;
   password?: string;
@@ -59,6 +59,8 @@ ${t('cli.usage')}
   ${IDENTITY.binaryName} uninstall           Remove service registration
   ${IDENTITY.binaryName} update [options]    Check and apply updates
   ${IDENTITY.binaryName} status              Show service status
+  ${IDENTITY.binaryName} qr                  Print this server's URL as a QR code, for the
+                            phone app's Connect step
   ${IDENTITY.binaryName} notify              Send hook event (reads JSON from stdin)
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
@@ -135,6 +137,9 @@ export function parseArgs(args: string[]): CliOptions {
         break;
       case 'status':
         options.command = 'status';
+        break;
+      case 'qr':
+        options.command = 'qr';
         break;
       case 'notify':
         options.command = 'notify';
@@ -328,6 +333,10 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
       await runStatus();
       return 'exit';
 
+    case 'qr':
+      await runQr(options.port);
+      return 'exit';
+
     case 'notify':
       await runNotify(options);
       return 'exit';
@@ -434,6 +443,11 @@ async function runPeek(options: CliOptions): Promise<void> {
 async function runStatus(): Promise<void> {
   const { showStatus } = await import('./commands/status');
   await showStatus();
+}
+
+async function runQr(port: number): Promise<void> {
+  const { showQr } = await import('./commands/qr');
+  await showQr(port);
 }
 
 async function runDebug(options: CliOptions): Promise<void> {
