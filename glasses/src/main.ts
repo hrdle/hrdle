@@ -230,50 +230,72 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
    * finish synchronously, and an exit is exactly when the answer matters most.
    * A beat old is close enough for a state that changes when someone moves.
    */
-  let deviceNote = ''
   /**
-   * Whether the host's first answer has been recorded verbatim.
+   * The device's own state, as the host pushes it.
    *
-   * The typed shape and the delivered one disagree: `DeviceConnectType` spells
-   * its connected state `connected`, the device sends `connect`, and
-   * `batteryLevel` / `isWearing` arrived undefined — which is the difference
-   * between "the glasses were taken off" being answerable and not. So the raw
-   * object goes into the log once per run, because the type definition turned
-   * out not to be evidence of anything.
+   * Read from `onDeviceStatusChanged`, not from `getDeviceInfo()`. That was the
+   * first attempt and it reported `isWearing: false` on all 63 samples taken
+   * while the glasses were being worn continuously — because `getDeviceInfo()`
+   * hands back the bridge's cached record, and the SDK is explicit that the
+   * bridge updates that record and then fires `deviceStatusChanged` for pages
+   * to listen to. Polling the cache reads whatever it was initialised with;
+   * `batteryLevel` moved because something else refreshes it, which is what made
+   * the stale field look live.
+   *
+   * The whole point is telling "the glasses came off" apart from "something
+   * killed us", so a field that is always false is worse than no field at all —
+   * it reads as an answer. Hence the event, and hence the first status being
+   * logged verbatim: the shape delivered has already turned out not to match
+   * the shape declared.
    */
-  let deviceProbed = false
-  async function refreshDeviceNote(): Promise<void> {
+  let deviceNote = ''
+  let statusProbed = false
+  function applyDeviceStatus(s: {
+    connectType?: string
+    isWearing?: boolean
+    batteryLevel?: number
+    isCharging?: boolean
+    isInCase?: boolean
+    toJson?: () => unknown
+  } | undefined): void {
+    if (!s) {
+      deviceNote = ''
+      return
+    }
+    if (!statusProbed) {
+      statusProbed = true
+      try {
+        trace(`device status first event: ${JSON.stringify(s.toJson?.() ?? s)}`)
+      } catch {
+        trace('device status first event: (not serialisable)')
+      }
+    }
+    const flags = [
+      s.isWearing === false ? 'off-head' : '',
+      s.isInCase ? 'in-case' : '',
+      s.isCharging ? 'charging' : '',
+    ].filter(Boolean)
+    deviceNote =
+      ` dev=${s.connectType ?? '?'}${flags.length ? `,${flags.join(',')}` : ''}` +
+      (s.batteryLevel === undefined ? '' : ` batt=${s.batteryLevel}%`)
+  }
+
+  // Static identity once, live state by subscription. `model` and `sn` never
+  // change; everything that does arrives on the event.
+  void (async () => {
     try {
       const info = await bridge.getDeviceInfo()
-      if (!deviceProbed) {
-        deviceProbed = true
-        const raw = (() => {
-          try {
-            return JSON.stringify(info?.toJson?.() ?? info)
-          } catch {
-            return String(info)
-          }
-        })()
-        trace(`device probe: ${raw}`)
-      }
-      const s = info?.status
-      if (!s) {
-        deviceNote = ''
-        return
-      }
-      const flags = [
-        s.isWearing === false ? 'off-head' : '',
-        s.isInCase ? 'in-case' : '',
-        s.isCharging ? 'charging' : '',
-      ].filter(Boolean)
-      deviceNote =
-        ` dev=${s.connectType}${flags.length ? `,${flags.join(',')}` : ''}` +
-        (s.batteryLevel === undefined ? '' : ` batt=${s.batteryLevel}%`)
-    } catch {
-      // The host may answer nothing at all; a heartbeat that fails to describe
-      // the device is still a heartbeat.
-      deviceNote = ''
+      trace(`device: model=${info?.model ?? '?'} sn=${info?.sn ?? '?'}`)
+    } catch (err) {
+      trace(`getDeviceInfo failed: ${err}`, 'error')
     }
+  })()
+  try {
+    bridge.onDeviceStatusChanged((status) => applyDeviceStatus(status))
+  } catch (err) {
+    // Without this the exit line simply carries no device state, which is the
+    // situation before it existed — worth saying so rather than looking flat.
+    trace(`onDeviceStatusChanged failed: ${err}`, 'error')
   }
 
   setupEvents(bridge, {
@@ -345,9 +367,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   // too: the interval stretched from 30s to 65s before eight of twenty deaths,
   // which is the engine being throttled rather than the app failing.
   const bootAt = Date.now()
-  void refreshDeviceNote() // so a death before the first beat has something to say
   setInterval(() => {
-    void refreshDeviceNote()
     trace(
       `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${deviceNote}`,
     )
