@@ -231,9 +231,31 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
    * A beat old is close enough for a state that changes when someone moves.
    */
   let deviceNote = ''
+  /**
+   * Whether the host's first answer has been recorded verbatim.
+   *
+   * The typed shape and the delivered one disagree: `DeviceConnectType` spells
+   * its connected state `connected`, the device sends `connect`, and
+   * `batteryLevel` / `isWearing` arrived undefined — which is the difference
+   * between "the glasses were taken off" being answerable and not. So the raw
+   * object goes into the log once per run, because the type definition turned
+   * out not to be evidence of anything.
+   */
+  let deviceProbed = false
   async function refreshDeviceNote(): Promise<void> {
     try {
       const info = await bridge.getDeviceInfo()
+      if (!deviceProbed) {
+        deviceProbed = true
+        const raw = (() => {
+          try {
+            return JSON.stringify(info?.toJson?.() ?? info)
+          } catch {
+            return String(info)
+          }
+        })()
+        trace(`device probe: ${raw}`)
+      }
       const s = info?.status
       if (!s) {
         deviceNote = ''

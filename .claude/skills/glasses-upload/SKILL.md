@@ -136,6 +136,14 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
    agent-browser --session-name evenhub wait --load networkidle
    ```
 
+   **Write it in English, and get it right the first time.** Everything typed
+   into EVEN Hub — the changelog, the store description, the tagline — is prose
+   we author for an audience that is not only us, so the same rule as commit
+   messages and PR bodies applies (see CLAUDE.md). And it is **not editable
+   after the build is added**: the panel renders the changelog as plain text
+   with no textarea and no Edit control, so a wrong one stays on that build
+   forever. v0.0.5 went up in Japanese and had to be left that way.
+
 9. **Confirm**: the snapshot should show the new version as
    `"vX.X.X Uploaded N seconds ago Private"`
 
