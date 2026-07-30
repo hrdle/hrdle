@@ -2,6 +2,71 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.14] - 2026-07-31
+
+Aimed at one thing: nothing typed by hand that a machine could have handed over.
+
+### Added
+- **`hrdle qr` prints this server's address as a QR code**, for the glasses
+  app's Connect screen to read. The address is a Tailscale FQDN with a
+  random-looking tailnet in the middle of it, and until now the way it reached a
+  phone was somebody reading it off one screen and typing it into another. The
+  name comes from the same `tailscale status` the server uses to pick its
+  certificate, so the code necessarily carries the host that certificate was
+  issued for — deriving it any other way produces an address that resolves and
+  then fails TLS (`backend/src/commands/qr.ts`)
+- **The setup wizard reads that code with the camera** (`glasses/src/qr-scan.ts`).
+  One still image through the host's own camera UI (`captureImageFromCamera`),
+  decoded with jsQR — no `getUserMedia`, no permission prompt of ours, nothing to
+  tear down. Reading it fills the address field and connects, with no second
+  press to confirm something nobody typed. The browser build uses a file input so
+  the screen is still testable at `?phone`
+
+### Changed
+- **`install.sh` finishes the job instead of printing homework.** It used to copy
+  the binary and leave four numbered instructions; every one of them was
+  something it was standing right next to. It now allows certificate generation,
+  registers the service, and ends by printing the QR code — so the last thing the
+  installer does is put the address in front of a camera
+  - The sudo line is the deliberate exception: `curl ... | bash` leaves stdin
+    pointing at the pipe the script arrived through, so a password prompt has
+    nowhere to read an answer from. `sudo -n` goes through silently with a cached
+    credential and prints the line to type without one
+  - `HRDLE_NO_SERVICE=1` installs the binary only
+- **The wizard is seven screens rather than nine.** Two of them existed only
+  because something else was missing
+  - *Phone on the tailnet* could not be checked at all: a WebView cannot see
+    whether Tailscale is installed, and reaching anything inside the tailnet
+    needs the very address the next screen asks for. Measured rather than
+    assumed — Chrome refuses plain HTTP to `100.100.100.100` and to tailnet IPs,
+    while HTTPS to the server goes through. Connecting *is* the check, so it is
+    one screen with it
+  - *Start the server* was a screen because the installer stopped short of doing
+    it
+  - Both retired step ids map onto their replacements, so a setup in progress
+    when this lands resumes where it was instead of restarting
+- **The wizard's theme is red**, from the app icon. Brand and state are kept
+  apart: the mark, progress bar, headings and buttons are red, while "Connected"
+  and the WebSocket `OPEN` stay green — painting a success indicator in the brand
+  colour would make it the same colour as "Could not connect". The voice-input
+  panel is shared with the browser simulator, so its accent is a CSS variable and
+  the simulator keeps the green the G2 actually draws in
+- **`hrdle setup` is shown without `-P` first.** The password is optional, and a
+  tailnet is usually one person's own devices; asking for one is now the
+  alternative rather than the instruction
+- **The Tailscale links are App Store and Google Play buttons.** A coloured
+  phrase inside a paragraph does not read as something to press on a phone, and
+  was reported from the device as "where is the install link?"
+
+### Fixed
+- **The copy button on the setup screens copied its own label.** It read the
+  command back off the surrounding box, which includes the button — and the
+  button says `copied` for a second and a half after a press, which is exactly
+  when someone taps it again
+- **The last setup screen's footer sat on top of the voice-input fields.** The
+  sticky action bar has nothing to advance to there, so it is gone and Disconnect
+  lives in the page
+
 ## [0.3.13] - 2026-07-30
 
 ### Added
