@@ -119,9 +119,11 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   let renders = 0
   let pending: { state: AppState; headerOnly: boolean } | null = null
   let draining = false
+  /** Set once the host has taken the app down; see `releaseHostResources`. */
+  let stopped = false
 
   async function drainRenders(): Promise<void> {
-    while (pending) {
+    while (pending && !stopped) {
       const { state, headerOnly } = pending
       pending = null
       try {
@@ -134,6 +136,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   }
 
   function enqueue(state: AppState, headerOnly: boolean): void {
+    if (stopped) return
     // A full render supersedes a spinner tick waiting behind it — it draws the
     // header too, and drawing it twice would be the overlap this queue exists
     // to prevent.
@@ -344,15 +347,52 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       trace(`getDeviceInfo failed: ${err}`, 'error')
     }
   })()
+  // Held, not discarded: the SDK returns an unsubscribe function from every
+  // subscription and this one was throwing it away, so the handler outlived the
+  // app it was reporting to.
+  let unsubDeviceStatus: (() => void) | null = null
   try {
-    bridge.onDeviceStatusChanged((status) => applyDeviceStatus(status))
+    unsubDeviceStatus = bridge.onDeviceStatusChanged((status) => applyDeviceStatus(status))
   } catch (err) {
     // Without this the exit line simply carries no device state, which is the
     // situation before it existed — worth saying so rather than looking flat.
     trace(`onDeviceStatusChanged failed: ${err}`, 'error')
   }
 
-  setupEvents(bridge, {
+  let unsubEvents: (() => void) | null = null
+  let heartbeat: ReturnType<typeof setInterval> | null = null
+
+  /**
+   * Hand back everything this file took from the host.
+   *
+   * Runs only from the exit events, never from `requestExit` — that one asks the
+   * host for its confirmation dialogue, which the wearer is free to cancel, and
+   * tearing down at the point of asking would leave a live app with no clocks
+   * and no subscriptions.
+   *
+   * The controller's own release (sockets, its two clocks, the microphone) is
+   * `controller.onHostExit`; this is the part main.ts owns. Both together are
+   * what the metric asks for: not one line in the log carrying this run's id
+   * after its `host exit`.
+   */
+  function releaseHostResources(): void {
+    if (stopped) return
+    stopped = true
+    pending = null
+    if (heartbeat) {
+      clearInterval(heartbeat)
+      heartbeat = null
+    }
+    for (const unsub of [unsubEvents, unsubDeviceStatus]) {
+      try {
+        unsub?.()
+      } catch { /* on the way out; a failed unsubscribe is not worth reporting */ }
+    }
+    unsubEvents = null
+    unsubDeviceStatus = null
+  }
+
+  unsubEvents = setupEvents(bridge, {
     onForegroundEnter() {
       foreground = true
       trace('foreground: entered — reconnecting after suspend')
@@ -382,7 +422,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
         `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${deviceNote}${detail ?? ''}`,
         'error',
       )
+      // Traced first, released second: this is the last line the run gets to
+      // write, and the release stops the clock that would otherwise date it.
       controller.onHostExit(kind)
+      releaseHostResources()
     },
     // `display.ts` has always built this string and `main.ts` has never taken
     // it, so every event's shape was being stringified and dropped. Audio and
@@ -425,7 +468,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   // too: the interval stretched from 30s to 65s before eight of twenty deaths,
   // which is the engine being throttled rather than the app failing.
   const bootAt = Date.now()
-  setInterval(() => {
+  heartbeat = setInterval(() => {
     trace(
       `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${deviceNote}`,
     )
@@ -467,8 +510,13 @@ async function main(): Promise<void> {
   trace(`bridge=${bridge ? 'ready' : 'null'}`)
 
   if (bridge) {
-    // Even Hub environment — check launch source
-    bridge.onLaunchSource((source) => {
+    // Even Hub environment — check launch source.
+    //
+    // One launch, one answer: the subscription is released as soon as it
+    // arrives rather than left open for the life of the app, which is what the
+    // SDK asks for and what nothing here was doing.
+    let unsubLaunch: (() => void) | null = null
+    unsubLaunch = bridge.onLaunchSource((source) => {
       // Which path was taken matters: launching from the phone runs the
       // companion UI AND the glasses mode at once, and only that case has
       // been reported as dying seconds after startup.
@@ -479,6 +527,10 @@ async function main(): Promise<void> {
           .catch((err) => trace(`phone UI failed: ${err}`, 'error', (err as Error)?.stack))
       }
       // glassesMenu: already started below
+      try {
+        unsubLaunch?.()
+      } catch { /* nothing left to release */ }
+      unsubLaunch = null
     })
     // Always start glasses mode (bridge exists = Even Hub)
     await startGlassesMode(bridge)

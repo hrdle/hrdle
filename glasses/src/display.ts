@@ -1301,11 +1301,53 @@ export function setPanelTrace(fn: (message: string, level?: string) => void): vo
 const TRACED_DROPS_MAX = 5
 let tracedDrops = 0
 
+/**
+ * Give up on a panel that keeps saying no.
+ *
+ * The exit handlers are the intended way to stop drawing; this is the backstop
+ * for when they do not run. One recorded case had the refusals start *before*
+ * the exit event arrived — the host revoked the container first and said so
+ * afterwards — and another produced 541 refused writes in eight minutes with no
+ * exit event at all. Both look identical from here: every write refused, one
+ * after another, for as long as the app is left running.
+ *
+ * A run of refusals is not a transient failure. The panel is gone, and the only
+ * thing continuing to draw achieves is BLE traffic and a log nobody can read.
+ * Ten in a row is well past any plausible hiccup and still cheap.
+ *
+ * Cleared by `invalidatePanel`, which is what a foreground re-entry calls: a
+ * host that refused us while another app held the display may well accept the
+ * next write, and the app should come back rather than stay blind for good.
+ */
+const CONSECUTIVE_DROPS_GIVE_UP = 10
+let consecutiveDrops = 0
+let gaveUp = false
+
+export function panelGaveUp(): boolean {
+  return gaveUp
+}
+
 function noteDrop(what: string): void {
   drops++
-  if (tracedDrops >= TRACED_DROPS_MAX) return
-  tracedDrops++
-  traceSink?.(`host refused ${what} (drop #${drops})`, 'error')
+  consecutiveDrops++
+  if (tracedDrops < TRACED_DROPS_MAX) {
+    tracedDrops++
+    traceSink?.(`host refused ${what} (drop #${drops})`, 'error')
+  }
+  if (consecutiveDrops >= CONSECUTIVE_DROPS_GIVE_UP && !gaveUp) {
+    gaveUp = true
+    traceSink?.(
+      `host refused ${consecutiveDrops} writes in a row — no longer drawing (drops=${drops})`,
+      'error',
+    )
+  }
+}
+
+/** A write the host took. Reaching the panel is what proves it is still ours,
+ *  so this is the only thing that resets the run of refusals. */
+function noteWrite(count: number): void {
+  writes += count
+  consecutiveDrops = 0
 }
 
 /** Send a container's new content, or nothing if that is what it already
@@ -1324,7 +1366,7 @@ function upgrade(
       noteDrop(`upgrade ${containerName}`)
       return
     }
-    writes++
+    noteWrite(1)
     drawn.set(containerID, content)
   })
 }
@@ -1339,7 +1381,7 @@ function upgrade(
 function recordRebuild(container: RebuildPageContainer): void {
   drawn.clear()
   const objects = (container.textObject ?? []) as Array<{ containerID?: number; content?: string }>
-  writes += objects.length
+  noteWrite(objects.length)
   for (const t of objects) {
     if (typeof t.containerID === 'number') drawn.set(t.containerID, t.content ?? '')
   }
@@ -1354,14 +1396,28 @@ function recordRebuild(container: RebuildPageContainer): void {
  * to put it back — a blank screen that no amount of waiting fixes, which is a
  * far worse failure than the one rebuild this costs on every resume.
  */
-export function invalidatePanel(): void {
+function forgetDrawn(): void {
   drawn.clear()
   currentMode = null
   currentNoticeLines = 0
 }
 
+export function invalidatePanel(): void {
+  forgetDrawn()
+  // A resume is the one moment worth trying a panel that was refusing us: the
+  // refusals were most likely another app holding the display, and that app has
+  // just handed it back.
+  //
+  // Only here. A refused *rebuild* also forgets what is on screen, and doing it
+  // through this function meant every refusal reset the run of refusals that was
+  // supposed to add up — a host refusing everything never reached the limit,
+  // which is precisely the case the limit exists for.
+  consecutiveDrops = 0
+  gaveUp = false
+}
+
 export async function updateHeader(bridge: Bridge | null, state: AppState): Promise<void> {
-  if (!bridge || state.mode !== currentMode) return
+  if (!bridge || gaveUp || state.mode !== currentMode) return
   // Whichever container the spinner lives in — the conversation's header, or
   // the list's rows. One container either way; a full update sends three.
   if (state.mode === 'session_list') {
@@ -1373,7 +1429,7 @@ export async function updateHeader(bridge: Bridge | null, state: AppState): Prom
 }
 
 export async function updateDisplay(bridge: Bridge | null, state: AppState): Promise<void> {
-  if (!bridge) return
+  if (!bridge || gaveUp) return
 
   // Geometry, not content, is what forces a rebuild: the notice strip changes
   // the body container's height and the ids below it. Content alone goes out
@@ -1398,7 +1454,9 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
       // The mode was recorded above on the assumption this would land. Undo
       // that, or the next render sees the geometry as already sent and skips
       // the rebuild — leaving the panel showing the previous screen for good.
-      invalidatePanel()
+      // `forgetDrawn` rather than `invalidatePanel`: a refusal is not the host
+      // handing the panel back, so it must not clear the run of refusals.
+      forgetDrawn()
       return
     }
     recordRebuild(container)
@@ -1508,12 +1566,17 @@ export function setupEvents(
      */
     onExit?: (kind: 'abnormal' | 'system', detail?: string) => void
   },
-): void {
-  if (!bridge) return
+): () => void {
+  if (!bridge) return () => {}
   let lastEventTime = 0
   const EVENT_DEBOUNCE = 300
 
-  bridge.onEvenHubEvent((event) => {
+  // The SDK returns an unsubscribe function and this call was dropping it, so
+  // there was no way to stop listening — the handler stayed live after the host
+  // tore the app down, turning every stray event into more work for a page that
+  // no longer had a display. Returned rather than used here: the caller is the
+  // one that learns the app is going away.
+  return bridge.onEvenHubEvent((event) => {
     // Mic PCM arrives on the same event channel; route it out before ring handling.
     // Runtime shape may be Uint8Array, number[], or base64 string (host/JSON dependent).
     const audio = event.audioEvent?.audioPcm as unknown
