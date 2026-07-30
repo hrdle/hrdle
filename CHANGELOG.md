@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.11] - 2026-07-30
+
+### Changed
+- **The Keyboard/Input toggle is a real target now**. It sat at half the height
+  of the keys beside it and padded to almost nothing, which made `Input` the
+  smallest thing on the bar - measured at 42x20 against the keys' 45x34
+  - It is sized against the keys now: **79x30 and 56x30** inside a 138x34 group,
+    so `Input`'s tap area roughly doubles (840px^2 -> 1680px^2)
+  - The width comes out of the keys' share, since they flex. They go from 45 to
+    40px wide, still well above the 34px they were before v0.3.10, and the row
+    still ends exactly at the screen edge (measured on a 412px phone with touch
+    emulation)
+  - The floor is where the padding stops: the keys keep a 38px minimum, so on a
+    narrower phone the bar scrolls inside its own row rather than pushing the
+    page sideways
+
 ## [0.3.10] - 2026-07-30
 
 ### Changed
