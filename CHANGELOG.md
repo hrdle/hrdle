@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.13] - 2026-07-30
+
+### Added
+- **Setting Hrdle up from the glasses app is a wizard now, one screen at a
+  time**. The phone companion screen is the only thing someone who installed the
+  glasses app from the store has, and what stands between them and a working
+  setup is a computer, two other tools, a command that needs sudo, and a URL
+  nobody has memorised. All of that was one scrolling page with a "Setup"
+  heading, four bullet points, and the URL field already visible below it —
+  which invites a person who has installed nothing to type something into that
+  field and fail (`glasses/src/setup-wizard.ts`, `glasses/src/phone-ui.ts`)
+  - Nine screens: what Hrdle is, a machine to run it on, a coding agent,
+    Tailscale, install, start, this phone on the tailnet, connect, ready
+  - **Every screen says whether the work happens on the computer or on the
+    phone.** Someone is holding the phone and reading instructions for a machine
+    across the room, and "copy this" is ambiguous in exactly the way that wastes
+    ten minutes
+  - **Connecting is the only real gate.** A server that answers proves herdr,
+    Tailscale and Hrdle are all installed and running, so the screens that ask
+    about them complete at once rather than being walked through. That one rule
+    also gives two more entrances for free: someone returning to a working setup
+    sees no wizard at all, and "Already running" on the first screen goes
+    straight to the URL field
+  - Progress is stored, so closing the app mid-setup resumes where it left off
+    rather than starting over
+- **The phone companion UI opens in a browser at `?phone`**. It was reachable
+  only through the Even Hub app menu on real hardware, so every wording change
+  in a nine-screen wizard would have cost an ehpk build and a launch on the
+  device. Same rule as the glasses simulator: it is where this is checked first,
+  never where it is checked last (`glasses/src/main.ts`)
+
+### Changed
+- **`install.sh` installs herdr itself instead of warning and exiting.**
+  Stopping there turned a one-line install into "run it, watch it fail, install
+  herdr, run the same line again" — and the second run is character for
+  character the first, so nothing was gained by making anyone type it twice.
+  `HRDLE_SKIP_HERDR=1` opts out. Tailscale stays manual on purpose: it needs
+  sudo, its package route differs per distribution, and a half-applied network
+  daemon is a worse place to be left than a missing one — the wizard puts it
+  before the install step instead, so that failure never comes up
+
+### Fixed
+- **The copy button on the setup screens copied its own label.** It read the
+  command back off the surrounding box, which includes the button, and the
+  button says `copied` for a second and a half after a press — which is exactly
+  when someone taps it again
+- **The last setup screen's footer sat on top of the voice-input fields.** The
+  sticky action bar has nothing to advance to there, so it is gone and the
+  Disconnect button lives in the page
+
 ## [0.3.12] - 2026-07-30
 
 ### Added
