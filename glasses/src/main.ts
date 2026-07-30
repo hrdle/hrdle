@@ -568,6 +568,18 @@ async function main(): Promise<void> {
     })
     // Always start glasses mode (bridge exists = Even Hub)
     await startGlassesMode(bridge)
+  } else if (new URLSearchParams(location.search).has('phone')) {
+    // The phone companion UI without a device.
+    //
+    // On the G2 this screen is reachable only through the Even Hub app menu, so
+    // every wording change in a nine-screen setup wizard would otherwise cost an
+    // ehpk build and a launch on real hardware. Same reasoning as the glasses
+    // simulator below, and the same rule applies: this is where it is checked
+    // first, never where it is checked last.
+    trace('phone UI (browser)')
+    startPhoneUI(null)
+      .then(() => trace('phone UI ready'))
+      .catch((err) => trace(`phone UI failed: ${err}`, 'error', (err as Error)?.stack))
   } else {
     // Browser debug mode
     startDebugUI()

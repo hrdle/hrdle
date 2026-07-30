@@ -92,9 +92,9 @@ source ~/.bashrc
 
 | Dependency | Required | Installation |
 |------------|----------|--------------|
-| [Tailscale](https://tailscale.com/) | Yes | Linux: https://tailscale.com/download / macOS: `brew install tailscale` |
-| [herdr](https://herdr.dev/) | Yes | `curl -fsSL https://herdr.dev/install.sh \| sh` / `brew install herdr` |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Yes | `npm install -g @anthropic-ai/claude-code` |
+| [Tailscale](https://tailscale.com/) | Yes, install it first | Linux: `curl -fsSL https://tailscale.com/install.sh \| sh` / macOS: `brew install tailscale` (the App Store build ships no CLI). Then `sudo tailscale set --operator=$USER`, once |
+| [herdr](https://herdr.dev/) | Yes | The installer installs it if it is missing (`HRDLE_SKIP_HERDR=1` to do it yourself) |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Yes | `npm install -g @anthropic-ai/claude-code`, then sign in once. Codex, Grok Build and Kimi Code work too |
 
 ## Quick Start
 
