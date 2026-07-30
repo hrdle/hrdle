@@ -23,8 +23,6 @@ export type WizardStepId =
   | 'agent'
   | 'tailscale'
   | 'install'
-  | 'start'
-  | 'phone'
   | 'connect'
   | 'done'
 
@@ -48,13 +46,30 @@ export const WIZARD_STEPS: readonly WizardStep[] = [
   { id: 'agent', label: 'Coding agent', where: 'pc' },
   { id: 'tailscale', label: 'Tailscale', where: 'pc' },
   { id: 'install', label: 'Install', where: 'pc' },
-  { id: 'start', label: 'Start it', where: 'pc' },
-  { id: 'phone', label: 'Phone on the tailnet', where: 'phone' },
   { id: 'connect', label: 'Connect', where: 'phone' },
   { id: 'done', label: 'Glasses', where: 'phone' },
 ]
 
 const FIRST_STEP: WizardStepId = 'intro'
+
+/**
+ * Steps that no longer exist, and where the people standing on them go.
+ *
+ * Without this a retired id would be unrecognised, and `parseStep` would drop
+ * someone six screens into a setup back at the first one.
+ */
+const RETIRED_STEPS: Record<string, WizardStepId> = {
+  // Putting the phone on the tailnet was its own screen, and nothing on it
+  // could be checked: there is no way to see from a WebView whether Tailscale
+  // is installed, and the only HTTPS host inside the tailnet worth reaching is
+  // the server whose address the next screen asks for. Connecting is what
+  // proves the tailnet works, so the two are one screen.
+  phone: 'connect',
+  // Starting the server was a screen because the installer stopped after
+  // copying the binary. It registers the service itself now and prints the QR
+  // code when it is done, so there is nothing left to ask for here.
+  start: 'install',
+}
 
 /**
  * Where a successful connection lands you, wherever you were standing.
@@ -111,7 +126,6 @@ export function isAtOrAfter(a: WizardStepId, b: WizardStepId): boolean {
 export function parseStep(value: string | null | undefined): WizardStepId {
   if (!value) return FIRST_STEP
   const trimmed = value.trim()
-  return WIZARD_STEPS.some((step) => step.id === trimmed)
-    ? (trimmed as WizardStepId)
-    : FIRST_STEP
+  if (WIZARD_STEPS.some((step) => step.id === trimmed)) return trimmed as WizardStepId
+  return RETIRED_STEPS[trimmed] ?? FIRST_STEP
 }
