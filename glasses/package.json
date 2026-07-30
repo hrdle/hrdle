@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.12",
-    "@evenrealities/pretext": "^0.1.4"
+    "@evenrealities/pretext": "^0.1.4",
+    "jsqr": "^1.4.0"
   },
   "devDependencies": {
     "@evenrealities/evenhub-cli": "^0.1.13",

@@ -18,6 +18,7 @@
 
 import { getDashboard, getSessions, setBaseUrl } from './api.ts'
 import type { Bridge } from './display.ts'
+import { scanQr } from './qr-scan.ts'
 import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import {
   CONNECTED_STEP,
@@ -79,57 +80,78 @@ function makeStore(bridge: Bridge | null): Store {
 
 // ── Markup ──
 
+// Red, from the app's own icon: a dark panel with a lit red slit across it.
+//
+// Brand and state are kept apart on purpose. Everything that is simply "this
+// app" — the mark, the progress bar, headings, the primary button — is red.
+// Everything that reports a condition keeps the colour that condition has
+// everywhere else: green for a server that answered, red for one that did not.
+// Painting a success indicator in the brand colour would make "Connected" and
+// "Could not connect" the same colour, which no amount of wording recovers.
 const CSS = `
   .wiz { font-family: -apple-system, 'Helvetica Neue', sans-serif; background:#0a0a0a; color:#eee;
-         min-height:100vh; display:flex; flex-direction:column; }
+         min-height:100vh; display:flex; flex-direction:column;
+         --panel-accent:#ff6167; --panel-accent-strong:#c9272e; }
   .wiz * { box-sizing:border-box; }
   .wiz-top { padding:16px 20px 0; }
   .wiz-brand { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-  .wiz-mark { width:26px; height:26px; background:#0f0; color:#000; border-radius:7px;
+  .wiz-mark { width:26px; height:26px; background:#e0353c; color:#fff; border-radius:7px;
               display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; }
   .wiz-name { font-size:14px; font-weight:700; letter-spacing:.02em; }
   .wiz-bar { height:3px; background:#1a1a1a; border-radius:2px; overflow:hidden; }
-  .wiz-bar i { display:block; height:100%; background:#0f0; transition:width .25s ease; }
+  .wiz-bar i { display:block; height:100%;
+               background:linear-gradient(to right, #8c1f24, #ff5a60); transition:width .25s ease; }
   .wiz-meta { display:flex; justify-content:space-between; align-items:center;
               font-size:11px; color:#666; margin-top:8px; }
   .wiz-where { border:1px solid #333; border-radius:99px; padding:2px 9px; font-size:10.5px; }
-  .wiz-where.pc { color:#fc6; border-color:#553; }
-  .wiz-where.phone { color:#6cf; border-color:#345; }
+  .wiz-where.pc { color:#ff9a6b; border-color:#5a3324; }
+  .wiz-where.phone { color:#a8b4c4; border-color:#3a4048; }
   .wiz-body { flex:1; padding:18px 20px 8px; }
   .wiz-title { font-size:21px; font-weight:700; margin:0 0 8px; line-height:1.3; }
   .wiz-lead { font-size:14px; color:#aaa; line-height:1.65; margin:0 0 16px; }
   .wiz-card { background:#111; border:1px solid #222; border-radius:12px; padding:14px; margin-bottom:12px; }
-  .wiz-card h3 { font-size:13px; color:#0f0; font-weight:600; margin:0 0 8px; }
+  .wiz-card h3 { font-size:13px; color:#ff6167; font-weight:600; margin:0 0 8px; }
   .wiz-card p { font-size:13px; color:#bbb; line-height:1.65; margin:0 0 8px; }
   .wiz-card p:last-child { margin-bottom:0; }
   .wiz-note { font-size:12px; color:#888; line-height:1.6; margin:8px 0 0; }
-  .wiz-warn { border-color:#553; background:#161206; }
-  .wiz-warn h3 { color:#fc6; }
+  .wiz-warn { border-color:#5a2226; background:#180c0d; }
+  .wiz-warn h3 { color:#ff8a8f; }
   .wiz-points { list-style:none; padding:0; margin:0; font-size:13px; color:#bbb; line-height:1.6; }
   .wiz-points li { display:flex; gap:9px; margin-bottom:8px; }
   .wiz-points li:last-child { margin-bottom:0; }
-  .wiz-points li::before { content:'\\25C6'; color:#0f0; font-size:11px; line-height:1.5; }
+  .wiz-points li::before { content:'\\25C6'; color:#e0353c; font-size:11px; line-height:1.5; }
   .wiz-cmd { position:relative; background:#0d0d0d; border:1px solid #232323; border-radius:8px;
              padding:11px 58px 11px 11px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
-             font-size:11.5px; color:#0f0; word-break:break-all; line-height:1.6; margin:8px 0; }
+             font-size:11.5px; color:#ff9d9d; word-break:break-all; line-height:1.6; margin:8px 0; }
   .wiz-cmd button { position:absolute; top:6px; right:6px; background:#282828; border:none; color:#bbb;
                     font-size:11px; padding:4px 9px; border-radius:5px; cursor:pointer; }
   .wiz code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:.9em;
-              color:#9c9; background:#181818; padding:1px 5px; border-radius:4px; }
+              color:#e8a0a0; background:#1a1414; padding:1px 5px; border-radius:4px; }
   .wiz-kv { display:grid; grid-template-columns:auto 1fr; gap:5px 12px; font-size:13px; color:#ccc; }
   .wiz-kv span:nth-child(odd) { color:#888; }
   .wiz-input { width:100%; padding:12px; border-radius:8px; border:1px solid #333; background:#1a1a1a;
                color:#eee; font-size:14px; font-family:ui-monospace, Menlo, monospace; }
+  .wiz-input:focus { outline:none; border-color:#e0353c; }
   .wiz-status { font-size:13px; margin-top:10px; min-height:18px; }
   .wiz-foot { position:sticky; bottom:0; display:flex; gap:8px; padding:12px 20px 20px;
               background:linear-gradient(to top, #0a0a0a 60%, transparent); }
   .wiz-primary, .wiz-ghost { padding:13px 16px; border-radius:9px; font-size:14px; cursor:pointer; }
-  .wiz-primary { flex:1; border:none; background:#0a0; color:#fff; font-weight:600; }
+  .wiz-primary { flex:1; border:none; background:#c9272e; color:#fff; font-weight:600; }
   .wiz-primary[disabled] { background:#333; color:#888; }
-  .wiz-ghost { border:1px solid #333; background:transparent; color:#999; font-weight:500; }
+  .wiz-ghost { border:1px solid #3a3a3a; background:transparent; color:#999; font-weight:500; }
   .wiz-wide { display:block; width:100%; margin:4px 0 12px; }
-  .wiz-link { color:#4a9; text-decoration:none; }
-  .wiz-dot { width:9px; height:9px; border-radius:50%; background:#0f0; animation:wiz-pulse 2s infinite; }
+  .wiz-link { color:#ff8a8f; text-decoration:underline; }
+  .wiz-linkbtn { display:block; text-align:center; padding:12px; border-radius:9px;
+                 border:1px solid #5a2226; background:#180c0d; color:#ff8a8f;
+                 text-decoration:none; font-size:14px; font-weight:600; margin:8px 0; }
+  .wiz-scan { display:block; width:100%; padding:13px; border-radius:9px; border:1px solid #5a2226;
+              background:#180c0d; color:#ff8a8f; font-size:14px; font-weight:600; cursor:pointer;
+              margin:0 0 10px; }
+  .wiz-scan[disabled] { opacity:.55; }
+  .wiz-or { display:flex; align-items:center; gap:10px; color:#666; font-size:11px; margin:2px 0 10px; }
+  .wiz-or::before, .wiz-or::after { content:''; flex:1; height:1px; background:#242424; }
+  .wiz-ok { color:#4ade80; }
+  .wiz-dot { width:9px; height:9px; border-radius:50%; background:#4ade80; animation:wiz-pulse 2s infinite; }
   @keyframes wiz-pulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
 `
 
@@ -147,6 +169,18 @@ function cmd(text: string): string {
 
 function link(href: string, label: string): string {
   return `<a class="wiz-link" href="${href}" target="_blank" rel="noreferrer">${label}</a>`
+}
+
+/**
+ * A link big enough to be an obvious tap target.
+ *
+ * The inline version was reported as "where is the install link?" from the
+ * device: a coloured phrase inside a paragraph does not read as something to
+ * press on a phone. Anywhere the next thing to do is "go and get an app", it
+ * should look like a control rather than like prose.
+ */
+function linkButton(href: string, label: string): string {
+  return `<a class="wiz-linkbtn" href="${href}" target="_blank" rel="noreferrer">${label}</a>`
 }
 
 /**
@@ -176,8 +210,8 @@ function screenHtml(id: WizardStepId): { title: string; html: string } {
             <p>The glasses and this phone are screens. The agents themselves run on a
             machine of yours that stays on — ${__PRODUCT_NAME__} is what puts them here.</p>
           </div>
-          <p class="wiz-note">Setup is eight short steps, most of them commands you type on
-          that computer. About ten minutes.</p>
+          <p class="wiz-note">Six short steps: a few commands on that computer, then point this
+          phone's camera at a code it prints. About ten minutes.</p>
         `,
       }
 
@@ -253,47 +287,23 @@ function screenHtml(id: WizardStepId): { title: string; html: string } {
       return {
         title: `Install ${__PRODUCT_NAME__}`,
         html: `
-          <p class="wiz-lead">One command on that computer.</p>
+          <p class="wiz-lead">One command. Leave that window open when it finishes —
+          it ends by drawing a QR code, and the next screen reads it.</p>
           ${cmd(INSTALL_CMD)}
           <div class="wiz-card">
-            <h3>What this installs</h3>
-            <p>The ${__BINARY_NAME__} binary into <code>~/bin</code>, and
-            ${link('https://herdr.dev/', 'herdr')} if it is not already there — that is the
-            terminal multiplexer every session runs inside.</p>
-            <p class="wiz-note">If <code>~/bin</code> is not on your PATH the installer says so
-            and tells you the line to add.</p>
+            <h3>What it does</h3>
+            <p>Installs ${__BINARY_NAME__} into <code>~/bin</code> and
+            ${link('https://herdr.dev/', 'herdr')} if it is missing, registers the service so it
+            survives a reboot, and prints the address as a QR code.</p>
+            <p class="wiz-note">If it says a sudo command is still needed, run that line and then
+            <code>${__BINARY_NAME__} setup</code>.</p>
           </div>
-        `,
-      }
-
-    case 'start':
-      return {
-        title: `Start ${__PRODUCT_NAME__}`,
-        html: `
-          <p class="wiz-lead">Register it as a service, so it comes back by itself after a reboot.</p>
-          ${cmd(`${__BINARY_NAME__} setup -P yourpassword`)}
-          <p class="wiz-note">Choose your own password — you will be asked for it the first
-          time you open ${__PRODUCT_NAME__} in a browser.</p>
           <div class="wiz-card">
-            <h3>Write down the URL it prints</h3>
-            <p>Near the end of the output there is a line like:</p>
-            <div class="wiz-cmd">URL: https://your-machine.tailnet.ts.net:${__DEFAULT_PORT__}</div>
-            <p class="wiz-note">That is what you type on the next-but-one screen. If it scrolls
-            past, <code>${__BINARY_NAME__} status</code> prints it again.</p>
-          </div>
-        `,
-      }
-
-    case 'phone':
-      return {
-        title: 'Put this phone on the same tailnet',
-        html: `
-          <p class="wiz-lead">Install Tailscale here and sign in with the same account you
-          used on the computer.</p>
-          <div class="wiz-card">
-            <p>${link('https://tailscale.com/download', 'Get the Tailscale app')}</p>
-            <p class="wiz-note">Same account, or the two machines cannot see each other. Once
-            it says connected, come back here.</p>
+            <h3>Want a password on it?</h3>
+            <p class="wiz-note">As installed, anything signed in to your tailnet can open it —
+            usually your own devices, and nothing is exposed to the internet either way. To be
+            asked for a password in the browser instead, run:</p>
+            ${cmd(`${__BINARY_NAME__} setup -P yourpassword`)}
           </div>
         `,
       }
@@ -302,14 +312,33 @@ function screenHtml(id: WizardStepId): { title: string; html: string } {
       return {
         title: `Connect to ${__PRODUCT_NAME__}`,
         html: `
-          <p class="wiz-lead">The URL from the <b>Start ${__PRODUCT_NAME__}</b> step.</p>
-          <input id="wiz-url" class="wiz-input" type="url" inputmode="url" autocapitalize="off"
-                 autocorrect="off" spellcheck="false"
-                 placeholder="https://your-machine.tailnet.ts.net:${__DEFAULT_PORT__}" />
+          <p class="wiz-lead">Two things on this phone: join the tailnet, then point the camera
+          at the code on the computer.</p>
+          <div class="wiz-card">
+            <h3>1 &middot; Tailscale on this phone</h3>
+            ${linkButton('https://play.google.com/store/apps/details?id=com.tailscale.ipn', 'Google Play')}
+            ${linkButton('https://apps.apple.com/app/tailscale/id1470499037', 'App Store')}
+            <p class="wiz-note">Sign in with the same account you used on the computer, or the
+            two cannot see each other. If neither link opens from here, copy this into a
+            browser:</p>
+            ${cmd('https://tailscale.com/download')}
+          </div>
+          <div class="wiz-card">
+            <h3>2 &middot; Scan the code</h3>
+            <p class="wiz-note">The installer printed one when it finished. To bring it back,
+            run this on the computer:</p>
+            ${cmd(`${__BINARY_NAME__} qr`)}
+            <button type="button" class="wiz-scan" id="wiz-scan">Scan the QR code</button>
+            <div id="wiz-scan-status" class="wiz-status" style="margin:0 0 6px"></div>
+            <div class="wiz-or">or type the address</div>
+            <input id="wiz-url" class="wiz-input" type="url" inputmode="url" autocapitalize="off"
+                   autocorrect="off" spellcheck="false"
+                   placeholder="https://your-machine.tailnet.ts.net:${__DEFAULT_PORT__}" />
+          </div>
           <div id="wiz-connect-status" class="wiz-status"></div>
           <div class="wiz-card" style="margin-top:14px">
             <h3>If it will not connect</h3>
-            <p class="wiz-note">Check that Tailscale is connected on both ends, that
+            <p class="wiz-note">Check that Tailscale says connected on this phone, that
             <code>${__BINARY_NAME__} status</code> on the computer says it is running, and that the
             host name matches exactly — the certificate is issued for that name.</p>
           </div>
@@ -323,7 +352,7 @@ function screenHtml(id: WizardStepId): { title: string; html: string } {
           <div class="wiz-card" style="border-color:#1a3a1a; background:#0a1a0a">
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px">
               <div class="wiz-dot"></div>
-              <h3 style="margin:0">Connected</h3>
+              <h3 class="wiz-ok" style="margin:0">Connected</h3>
             </div>
             <div id="wiz-server" class="wiz-kv"></div>
           </div>
@@ -492,6 +521,37 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       if (event.key === 'Enter') button.click()
     })
 
+    const scan = app.querySelector<HTMLButtonElement>('#wiz-scan')
+    const scanStatus = app.querySelector<HTMLDivElement>('#wiz-scan-status')
+    scan?.addEventListener('click', async () => {
+      scan.setAttribute('disabled', '')
+      if (scanStatus) scanStatus.innerHTML = '<span style="color:#ff0">Opening the camera...</span>'
+      // `scanQr` is imported statically, and has to be. Loading the decoder on
+      // demand costs an `await` before the camera is asked for, and an `await`
+      // spends the user gesture this press carried — after which the browser
+      // refuses to open a file chooser at all. The device path goes through the
+      // host bridge and does not care, so this failed only in the browser,
+      // which is the one place the screen can be tested.
+      const outcome = await scanQr(bridge)
+      scan.removeAttribute('disabled')
+      if (outcome.cancelled) {
+        if (scanStatus) scanStatus.innerHTML = ''
+        return
+      }
+      if (outcome.error) {
+        if (scanStatus) scanStatus.innerHTML = `<span style="color:#ff5555">${outcome.error}</span>`
+        return
+      }
+      if (outcome.url) {
+        input.value = normalizeUrl(outcome.url)
+        if (scanStatus) scanStatus.innerHTML = '<span class="wiz-ok">Address read</span>'
+        // Straight on to connecting: the scan already did the only thing this
+        // screen asks for, and a second press to confirm an address the user
+        // never typed is a step with nothing in it.
+        button.click()
+      }
+    })
+
     button.addEventListener('click', async () => {
       const candidate = normalizeUrl(input.value)
       if (!candidate) {
@@ -542,7 +602,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       url = candidate
       await store.set(URL_SUFFIX, candidate)
       connected = true
-      status = '<span style="color:#0f0">Connected</span>'
+      status = '<span class="wiz-ok">Connected</span>'
       summary = {
         url: candidate,
         version: dashboard.version || '?',
@@ -600,7 +660,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       const state = diagClient.getState()
       const subscribed = diagClient.getSubscribed()
       target.innerHTML = [
-        `WS <span style="color:${state === 'OPEN' ? '#0f0' : '#f44'}">${state}</span>`,
+        `WS <span style="color:${state === 'OPEN' ? '#4ade80' : '#ff5555'}">${state}</span>`,
         `sub ${subscribed || 'none'}`,
         `buf ${subscribed ? diagClient.getTerminalText(subscribed).length : 0}ch`,
       ].join(' &middot; ')

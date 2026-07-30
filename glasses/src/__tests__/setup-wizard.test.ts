@@ -84,6 +84,20 @@ describe('restoring a stored position', () => {
     expect(parseStep(null)).toBe('intro')
     expect(parseStep(undefined)).toBe('intro')
   })
+
+  // Someone mid-setup when a build lands is the case that matters: dropping
+  // them back at screen one, six screens in, would be the wizard undoing its
+  // own work.
+  test('a retired step lands on the one that replaced it', () => {
+    expect(parseStep('phone')).toBe('connect')
+    expect(parseStep('start')).toBe('install')
+  })
+
+  test('retired ids do not reappear as steps', () => {
+    for (const gone of ['phone', 'start']) {
+      expect(WIZARD_STEPS.some((s) => s.id === gone)).toBe(false)
+    }
+  })
 })
 
 describe('step metadata', () => {
@@ -95,7 +109,7 @@ describe('step metadata', () => {
   })
 
   test('the commands to type are all on the PC', () => {
-    for (const id of ['agent', 'tailscale', 'install', 'start'] as const) {
+    for (const id of ['agent', 'tailscale', 'install'] as const) {
       expect(stepById(id).where).toBe('pc')
     }
   })

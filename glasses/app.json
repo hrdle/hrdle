@@ -2,7 +2,7 @@
   "package_id": "com.hrdle.glasses",
   "edition": "202601",
   "name": "Hrdle",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "min_app_version": "2.0.0",
   "min_sdk_version": "0.0.7",
   "entrypoint": "index.html",
@@ -10,6 +10,10 @@
     {
       "name": "network",
       "desc": "Connect to Hrdle server for terminal sessions"
+    },
+    {
+      "name": "camera",
+      "desc": "Scan the QR code that carries your server's address, during setup"
     }
   ],
   "supported_languages": [

@@ -160,24 +160,62 @@ show_path_instruction() {
   fi
 }
 
-# Setup instructions
-show_setup_instruction() {
+# Finish the job: certificate permission, the service, and the QR code.
+#
+# This used to print four numbered instructions and stop. Every one of them is
+# something this script is standing right next to and could simply do, and each
+# one left as homework is another chance to stop halfway — the phone app's setup
+# wizard exists precisely because that list was too long. What cannot be done
+# for the user is the sudo line, and that is the only one still printed.
+finish_setup() {
+  local install_path="${HRDLE_INSTALL_DIR:-$HOME/bin}/hrdle"
+
+  # Certificate permission.
+  #
+  # `sudo -n` rather than plain `sudo`: this script is usually running as
+  # `curl ... | bash`, where stdin is the pipe the script itself arrived
+  # through, so a password prompt has nowhere to read an answer from and would
+  # hang or fail confusingly. If a cached credential is there it goes through
+  # silently; if not, this is the one line the user still has to type.
   echo ""
-  info "Next steps:"
-  echo ""
-  echo "  1. Allow Tailscale certificate generation:"
-  echo "     sudo tailscale set --operator=\$USER"
-  echo ""
-  echo "  2. Start Hrdle:"
-  echo "     hrdle"
-  echo "     # or with a password"
-  echo "     hrdle -P mypassword"
-  echo ""
-  echo "  3. (optional) Register it as a systemd service:"
-  echo "     hrdle setup -P mypassword"
-  echo ""
-  echo "  Open in a browser: https://<hostname>:5924"
-  echo ""
+  if sudo -n tailscale set --operator="$USER" 2>/dev/null; then
+    info "Certificate generation allowed for $USER"
+  else
+    warn "One command still needs you, because sudo cannot prompt from a piped script:"
+    echo ""
+    echo "    sudo tailscale set --operator=\$USER"
+    echo ""
+    echo "  Without it Hrdle cannot issue its HTTPS certificate. Run it, then:"
+    echo "    hrdle setup"
+    echo ""
+    return
+  fi
+
+  # The service. Registered without a password: anyone on the tailnet can reach
+  # it, which for most people is their own devices only. `hrdle setup -P secret`
+  # re-runs this with one.
+  if [[ -n "${HRDLE_NO_SERVICE:-}" ]]; then
+    info "Skipping service registration (HRDLE_NO_SERVICE is set)"
+    echo ""
+    echo "  Start it yourself:            hrdle"
+    echo "  Then open:                    https://<your-tailscale-host>:5924"
+    echo "  Or register the service:      hrdle setup"
+    echo ""
+    return
+  fi
+
+  info "Registering the service..."
+  if ! "$install_path" setup; then
+    warn "Service registration failed. Try it by hand: hrdle setup"
+    return
+  fi
+
+  # The address, as something a phone can read.
+  #
+  # Printed here rather than described, because this is the moment it is needed:
+  # the server is up, the person is looking at this window, and the alternative
+  # is typing a Tailscale FQDN into a phone.
+  "$install_path" qr || true
 }
 
 main() {
@@ -201,8 +239,8 @@ main() {
   # PATH instructions
   show_path_instruction
 
-  # Setup instructions
-  show_setup_instruction
+  # Certificate permission, the service, and the QR code for the phone
+  finish_setup
 }
 
 main "$@"

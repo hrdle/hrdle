@@ -20,15 +20,19 @@ const LANGS: Array<{ value: string; label: string }> = [
   { value: 'en', label: 'English' },
 ]
 
+// The accent is a variable because this panel has two homes with different
+// palettes: the phone wizard, which is red like the app icon, and the browser
+// simulator, which is green because that is the colour the G2 actually draws in.
+// The fallback is the simulator's, so it needs no declaration of its own.
 const S = {
   section: 'background:#111;border:1px solid #222;border-radius:12px;padding:16px;margin-bottom:16px;',
-  h2: 'font-size:15px;color:#0f0;margin:0 0 4px;font-weight:600;',
+  h2: 'font-size:15px;color:var(--panel-accent,#0f0);margin:0 0 4px;font-weight:600;',
   sub: 'font-size:12px;color:#888;margin:0 0 12px;',
   label: 'display:block;font-size:12px;color:#bbb;margin:12px 0 4px;',
   input:
     'width:100%;padding:10px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#eee;font-size:14px;box-sizing:border-box;',
   row: 'display:flex;gap:8px;margin-top:8px;',
-  btn: 'padding:10px 14px;border-radius:8px;border:none;background:#0a0;color:#fff;font-size:13px;font-weight:600;cursor:pointer;',
+  btn: 'padding:10px 14px;border-radius:8px;border:none;background:var(--panel-accent-strong,#0a0);color:#fff;font-size:13px;font-weight:600;cursor:pointer;',
   btnGhost:
     'padding:10px 14px;border-radius:8px;border:1px solid #444;background:transparent;color:#aaa;font-size:13px;cursor:pointer;',
   status: 'font-size:12px;color:#888;margin-top:8px;min-height:16px;',
