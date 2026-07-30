@@ -397,7 +397,16 @@ export function Keyboard({
 	// URL one, v0.3.9) widens the others instead of leaving a hole.
 	const ACTION_SIZE = compact
 		? "h-[26px] text-[10px] min-w-[34px]"
-		: "h-[34px] text-[12px] min-w-[40px]";
+		: "h-[34px] text-[12px] min-w-[38px]";
+
+	// The Keyboard/Input toggle. It was half the height of the keys beside it
+	// (20px against 34px) and padded to almost nothing, which made "Input" the
+	// smallest target on the bar. It is sized against ACTION_SIZE now. Its width
+	// comes out of the keys' share - they flex - so the padding stops where the
+	// keys reach their minimum rather than at whatever looks generous.
+	const TOGGLE_SIZE = compact
+		? "h-[22px] px-2 text-[10px]"
+		: "h-[30px] px-4 text-[11px]";
 
 	const ActionButton = ({ keyDef }: { keyDef: KeyDef }) => {
 		const handleClick = () => {
@@ -467,7 +476,7 @@ export function Keyboard({
 						<button
 							type="button"
 							onClick={() => onInputModeChange?.("keyboard")}
-							className={`px-2 py-0.5 text-[11px] rounded font-medium transition-colors ${
+							className={`${TOGGLE_SIZE} flex items-center justify-center rounded font-medium transition-colors ${
 								inputMode === "keyboard"
 									? "bg-white/[0.08] text-zinc-300"
 									: "text-zinc-600"
@@ -478,7 +487,7 @@ export function Keyboard({
 						<button
 							type="button"
 							onClick={() => onInputModeChange?.("input")}
-							className={`px-2 py-0.5 text-[11px] rounded font-medium transition-colors ${
+							className={`${TOGGLE_SIZE} flex items-center justify-center rounded font-medium transition-colors ${
 								inputMode === "input"
 									? "bg-white/[0.08] text-zinc-300"
 									: "text-zinc-600"
