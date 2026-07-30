@@ -233,20 +233,23 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   /**
    * The device's own state, as the host pushes it.
    *
-   * Read from `onDeviceStatusChanged`, not from `getDeviceInfo()`. That was the
-   * first attempt and it reported `isWearing: false` on all 63 samples taken
-   * while the glasses were being worn continuously — because `getDeviceInfo()`
-   * hands back the bridge's cached record, and the SDK is explicit that the
-   * bridge updates that record and then fires `deviceStatusChanged` for pages
-   * to listen to. Polling the cache reads whatever it was initialised with;
-   * `batteryLevel` moved because something else refreshes it, which is what made
-   * the stale field look live.
+   * Read from `onDeviceStatusChanged` rather than `getDeviceInfo()`, which
+   * returns the bridge's cached record: the SDK says the bridge updates that
+   * record and *then* fires `deviceStatusChanged`, so polling it returns
+   * whatever initialised it. That is real — `connectType` sits at `none` in the
+   * first event and only reaches `connected` on a later one, which polling never
+   * saw.
    *
-   * The whole point is telling "the glasses came off" apart from "something
-   * killed us", so a field that is always false is worse than no field at all —
-   * it reads as an answer. Hence the event, and hence the first status being
-   * logged verbatim: the shape delivered has already turned out not to match
-   * the shape declared.
+   * It was not, however, the explanation for `isWearing`. Switching to the event
+   * was done believing a stale cache was why that field read `false` while the
+   * glasses were worn; it still reads `false` on the event, because the cause is
+   * in `fromJson` rather than in the delivery — see the note where the flags are
+   * assembled.
+   *
+   * The first status is logged verbatim, though it is worth knowing what that
+   * first one is: `createDefault()`'s output, synthesised by the SDK rather than
+   * reported by the device (`connectType: 'none'`, `sn: ''`, every number zero).
+   * Its arrival proves the subscription works and says nothing about the glasses.
    */
   let deviceNote = ''
   let statusProbed = false
@@ -270,8 +273,33 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
         trace('device status first event: (not serialisable)')
       }
     }
+    // `isWearing` is deliberately not reported: `false` here does not mean
+    // "not being worn".
+    //
+    // `DeviceStatus.fromJson` substitutes `false` for a field that arrives
+    // absent or null, and the protobuf underneath omits zero values on the wire
+    // — so `false` covers both "genuinely not worn" and "the host never filled
+    // this in", with nothing to tell them apart. It read `false` across every
+    // sample of two runs while the glasses were on the wearer's face, confirmed
+    // with them directly.
+    //
+    // `connectType` moving `none` -> `connected` is not a counter-argument: it
+    // is a non-zero string, so it actually travels. `batteryLevel` arriving as
+    // 77% rather than the `0` a missing field would produce says that field is
+    // populated too. `isWearing` being the one that never moves is exactly what
+    // an unpopulated boolean looks like.
+    //
+    // A field that is always false is worse than an absent one, because it reads
+    // as an answer. `off-head` was printed here for one afternoon and in that
+    // time produced a confident, wrong conclusion — that nine exits taken while
+    // the glasses were being worn were just someone taking them off. Restore it
+    // if the raw host push is ever seen to carry the key; until then the exit
+    // line should stay silent about wear rather than imply it.
+    //
+    // `isInCase` and `isCharging` are booleans from the same event and so carry
+    // the same ambiguity. Kept because nothing has shown them wrong — not
+    // because anything has shown them right.
     const flags = [
-      s.isWearing === false ? 'off-head' : '',
       s.isInCase ? 'in-case' : '',
       s.isCharging ? 'charging' : '',
     ].filter(Boolean)
