@@ -13,9 +13,12 @@ import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
 import { startDebugUI } from './debug-ui.ts'
 import { readStored, storageKey } from './storage.ts'
+import { DriftMonitor } from './drift.ts'
 
 const URL_SUFFIX = 'url'
 const MIC_SAMPLE_RATE = 16000
+// Fine enough to see lateness building before the beat that would have shown it.
+const DRIFT_TICK_MS = 1000
 // Slow now that the crash is understood: enough to date a silent death, not
 // so often that the log is mostly heartbeat.
 const HEARTBEAT_MS = 30_000
@@ -361,6 +364,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   let unsubEvents: (() => void) | null = null
   let heartbeat: ReturnType<typeof setInterval> | null = null
+  let driftTick: ReturnType<typeof setInterval> | null = null
 
   /**
    * Hand back everything this file took from the host.
@@ -382,6 +386,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     if (heartbeat) {
       clearInterval(heartbeat)
       heartbeat = null
+    }
+    if (driftTick) {
+      clearInterval(driftTick)
+      driftTick = null
     }
     for (const unsub of [unsubEvents, unsubDeviceStatus]) {
       try {
@@ -468,9 +476,27 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   // too: the interval stretched from 30s to 65s before eight of twenty deaths,
   // which is the engine being throttled rather than the app failing.
   const bootAt = Date.now()
+
+  // How late the timers are.
+  //
+  // Every exit with a measurable last heartbeat interval had a stretched one —
+  // one run beat at exactly 30.0s twenty times over and then produced a single
+  // interval of 53.7s before the host closed it, with the panel drawing
+  // successfully throughout. A 30-second beat cannot resolve that any further:
+  // it only notices lateness that pushes a beat past the next boundary, and a run
+  // starved and killed inside one interval leaves nothing behind.
+  //
+  // This tick's own lateness is the measurement. `DriftMonitor` decides what is
+  // worth a line — an episode's start goes out immediately, so a run that dies
+  // two seconds later still leaves the onset in the log.
+  const drift = new DriftMonitor(bootAt, DRIFT_TICK_MS)
+  driftTick = setInterval(() => {
+    for (const line of drift.tick(Date.now())) trace(line, 'error')
+  }, DRIFT_TICK_MS)
+
   heartbeat = setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${deviceNote}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${deviceNote}${drift.note()}`,
     )
   }, HEARTBEAT_MS)
 }
