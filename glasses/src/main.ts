@@ -213,6 +213,47 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
    */
   let foreground = true
 
+  /**
+   * What the glasses themselves are doing, as the host reports it.
+   *
+   * The heap says the JS is innocent, which is useful and also the end of what
+   * the JS can see. Eight deaths were recorded with a flat heap, no uncaught
+   * exception, and `host exit: system` — and `system` is the same code the host
+   * sends when the wearer confirms its exit dialogue, so the record could not
+   * separate "something killed us" from "the glasses were simply taken off".
+   *
+   * These fields separate them. Off the head, in the case, or a dropped BLE
+   * link are all ordinary reasons for the host to stop an app, and none of them
+   * are bugs. What remains after they are excluded is the actual problem.
+   *
+   * Cached rather than fetched at the moment of interest: `onExit` has to
+   * finish synchronously, and an exit is exactly when the answer matters most.
+   * A beat old is close enough for a state that changes when someone moves.
+   */
+  let deviceNote = ''
+  async function refreshDeviceNote(): Promise<void> {
+    try {
+      const info = await bridge.getDeviceInfo()
+      const s = info?.status
+      if (!s) {
+        deviceNote = ''
+        return
+      }
+      const flags = [
+        s.isWearing === false ? 'off-head' : '',
+        s.isInCase ? 'in-case' : '',
+        s.isCharging ? 'charging' : '',
+      ].filter(Boolean)
+      deviceNote =
+        ` dev=${s.connectType}${flags.length ? `,${flags.join(',')}` : ''}` +
+        (s.batteryLevel === undefined ? '' : ` batt=${s.batteryLevel}%`)
+    } catch {
+      // The host may answer nothing at all; a heartbeat that fails to describe
+      // the device is still a heartbeat.
+      deviceNote = ''
+    }
+  }
+
   setupEvents(bridge, {
     onForegroundEnter() {
       foreground = true
@@ -236,9 +277,14 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       // So the gesture goes out with it. A double-tap moments before says the
       // wearer walked out through the dialogue; silence says something else
       // closed us, and that is a different problem entirely.
+      //
+      // And the device state, because a gesture cannot tell those two apart on
+      // its own: taking the glasses off produces silence just as convincingly
+      // as being killed does. `off-head` or `in-case` here explains the exit;
+      // their absence is what makes it worth investigating.
       const g = controller.lastGesture()
       trace(
-        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}`,
+        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${deviceNote}`,
         'error',
       )
       controller.onHostExit(kind)
@@ -277,9 +323,11 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   // too: the interval stretched from 30s to 65s before eight of twenty deaths,
   // which is the engine being throttled rather than the app failing.
   const bootAt = Date.now()
+  void refreshDeviceNote() // so a death before the first beat has something to say
   setInterval(() => {
+    void refreshDeviceNote()
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${deviceNote}`,
     )
   }, HEARTBEAT_MS)
 }
