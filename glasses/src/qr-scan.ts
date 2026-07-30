@@ -14,6 +14,7 @@
 
 import jsQR from 'jsqr'
 import type { Bridge } from './display.ts'
+import { t } from './i18n.ts'
 
 /**
  * Longest edge the decode runs at.
@@ -98,12 +99,12 @@ async function decode(dataUrl: string): Promise<string | null> {
   const img = new Image()
   await new Promise<void>((resolve, reject) => {
     img.onload = () => resolve()
-    img.onerror = () => reject(new Error('that image could not be read'))
+    img.onerror = () => reject(new Error(t('scan.imageUnreadable')))
     img.src = dataUrl
   })
 
   const longest = Math.max(img.naturalWidth, img.naturalHeight)
-  if (!longest) throw new Error('that image was empty')
+  if (!longest) throw new Error(t('scan.imageEmpty'))
   const scale = Math.min(1, MAX_EDGE / longest)
   const width = Math.max(1, Math.round(img.naturalWidth * scale))
   const height = Math.max(1, Math.round(img.naturalHeight * scale))
@@ -112,7 +113,7 @@ async function decode(dataUrl: string): Promise<string | null> {
   canvas.width = width
   canvas.height = height
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
-  if (!ctx) throw new Error('this device cannot process the photo')
+  if (!ctx) throw new Error(t('scan.cannotProcess'))
   ctx.drawImage(img, 0, 0, width, height)
 
   const { data } = ctx.getImageData(0, 0, width, height)
@@ -136,7 +137,7 @@ export async function scanQr(bridge: Bridge | null): Promise<ScanOutcome> {
   try {
     still = await captureStill(bridge)
   } catch (err) {
-    return { error: `The camera could not be opened: ${message(err)}` }
+    return { error: t('scan.cameraFailed', { error: message(err) }) }
   }
   if (!still) return { cancelled: true }
 
@@ -144,14 +145,14 @@ export async function scanQr(bridge: Bridge | null): Promise<ScanOutcome> {
   try {
     payload = await decode(still)
   } catch (err) {
-    return { error: `Could not read that photo: ${message(err)}` }
+    return { error: t('scan.readFailed', { error: message(err) }) }
   }
 
   if (!payload) {
-    return { error: 'No QR code in that photo. Fill more of the frame with it and try again.' }
+    return { error: t('scan.noCode') }
   }
   if (!/^https?:\/\//i.test(payload)) {
-    return { error: 'That code is not a web address. Scan the one printed by `hrdle qr`.' }
+    return { error: t('scan.notAnAddress', { binary: __BINARY_NAME__ }) }
   }
   return { url: payload }
 }
