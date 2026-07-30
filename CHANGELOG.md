@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.12] - 2026-07-30
+
+### Added
+- **The glasses' voice input has settings, on the glasses app's own web
+  screens**. The Groq key, the transcription language and the vocabulary prompt
+  were server-environment values, which meant changing the language or trying a
+  different prompt required editing a systemd EnvironmentFile and restarting.
+  The panel appears in the phone companion UI once a server answers, and in the
+  simulator (`glasses/src/settings-ui.ts`, `POST/GET /api/glasses/settings`)
+  - **Language.** It was pinned to `ja` — the endpoint accepted `?lang=` and the
+    only caller never passed it — so speaking English was transcribed as though
+    it were Japanese. Auto-detect / Japanese / English now, where auto sends no
+    language at all and lets Whisper decide. Verified against Groq with one
+    audio clip: `ja` returns katakana where `en` and `auto` return Latin text
+  - **Key.** Saving one overrides `GROQ_API_KEY`, so a fresh install no longer
+    needs shell access to start transcribing. It is write-only: the API takes a
+    key and never returns one, reporting only whether one is set and from where
+  - **Prompt.** The composed vocabulary prompt shows as the placeholder, so the
+    editor starts from what is actually being sent rather than an empty box.
+    `off` disables the bias. The glossary is Japanese, which is the other half
+    of why English transcription was poor - a language switch alone does not fix
+    it, and this is how you replace the words
+  - Settings live in `<dataDir>/glasses-settings.json` at 0600, written through
+    the same atomic-rename and mutation-lock path as the peer registry
+  - Precedence, in each case, is: the saved setting, then the environment, then
+    the built-in default. A `?lang=` on the request still wins over all of it
+  - **The phone companion UI only gains the panel after `/glasses-upload`**,
+    since that screen ships inside the ehpk. The simulator the server serves at
+    `/glasses` updates with this release
+
 ## [0.3.11] - 2026-07-30
 
 ### Changed

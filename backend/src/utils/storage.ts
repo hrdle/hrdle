@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { mkdir, writeFile, rename, unlink } from 'node:fs/promises';
+import { mkdir, writeFile, rename, unlink, chmod } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { IDENTITY } from '../../../shared/identity';
@@ -26,10 +26,18 @@ export async function ensureDataDir(): Promise<string> {
  * can't truncate the target (a truncated JSON store reads back as empty and
  * silently loses everything it held). Same pattern as peer-registry. #251 #333
  */
-export async function atomicWriteFile(filePath: string, content: string): Promise<void> {
+export async function atomicWriteFile(
+  filePath: string,
+  content: string,
+  mode?: number,
+): Promise<void> {
   const tempPath = `${filePath}.tmp.${process.pid}.${randomBytes(4).toString('hex')}`;
   try {
-    await writeFile(tempPath, content);
+    await writeFile(tempPath, content, mode !== undefined ? { mode } : undefined);
+    // writeFile's mode is subject to umask and only applies on create, so a
+    // file holding a secret gets an explicit chmod — and it happens before the
+    // rename, so the target is never briefly readable by anyone else.
+    if (mode !== undefined) await chmod(tempPath, mode);
     await rename(tempPath, filePath);
   } catch (err) {
     try {

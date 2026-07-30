@@ -116,3 +116,36 @@ export async function dismissRelayItem(id: string): Promise<void> {
   })
   if (!res.ok) throw new Error(`dismiss ${res.status}`)
 }
+
+/** What the settings screen may see. The Groq key is write-only, so it is not here. */
+export interface GlassesSettingsView {
+  hasApiKey: boolean
+  apiKeySource: 'setting' | 'env' | 'none'
+  sttLang: string
+  sttLangSource: 'setting' | 'default'
+  sttPrompt: string
+  sttPromptSource: 'setting' | 'env' | 'composed'
+  effectivePrompt: string
+}
+
+export function getGlassesSettings(): Promise<GlassesSettingsView> {
+  return fetchJson('/api/glasses/settings')
+}
+
+/** Patch the settings. `null` clears a field; omitting it leaves that one alone. */
+export async function putGlassesSettings(patch: {
+  groqApiKey?: string | null
+  sttLang?: string | null
+  sttPrompt?: string | null
+}): Promise<GlassesSettingsView> {
+  const res = await fetch(`${baseUrl}/api/glasses/settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(detail.error || `settings ${res.status}`)
+  }
+  return res.json() as Promise<GlassesSettingsView>
+}

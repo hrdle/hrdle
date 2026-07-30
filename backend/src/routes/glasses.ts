@@ -1,5 +1,12 @@
 import { Hono } from 'hono';
-import { sttPrompt } from '../services/stt-prompt';
+import { z } from 'zod';
+import { buildSttPrompt, currentWorkspaceNames, sttPrompt } from '../services/stt-prompt';
+import {
+  glassesSettingsView,
+  resolveGroqApiKey,
+  resolveSttLang,
+  updateGlassesSettings,
+} from '../services/glasses-settings';
 
 const glasses = new Hono();
 
@@ -38,24 +45,27 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  *   - Default: little-endian 16-bit mono PCM at `?sampleRate=` (default 16000);
  *     the server wraps it into a WAV before forwarding to Groq.
  *   - `?format=wav`: body is already a complete WAV/other audio file — forwarded as-is.
- * Query: `?sampleRate=<n>` (PCM only), `?lang=<code>` (default `ja`).
+ * Query: `?sampleRate=<n>` (PCM only), `?lang=<code>`.
  * Response: `{ text }`.
  *
- * Sends a vocabulary prompt built from live workspace names plus this
- * product's own terms (see `stt-prompt.ts`); `HRDLE_STT_PROMPT=off` disables it.
+ * The key, the language and the prompt come from the settings the glasses app's
+ * own web screens write (`glasses-settings.ts`), each falling back to what the
+ * server was configured with: `GROQ_API_KEY`, `ja`, and the vocabulary prompt
+ * composed from live workspace names (`stt-prompt.ts`). A `?lang=` on the
+ * request still wins, and `auto` sends no language so Whisper detects it.
  *
  * Used by the G2 glasses voice-input flow (SDK gives raw mic PCM only, so STT
  * is done server-side; the key never leaves this host).
  */
 glasses.post('/stt', async (c) => {
-  const apiKey = process.env.GROQ_API_KEY;
+  const { key: apiKey } = await resolveGroqApiKey();
   if (!apiKey) {
-    return c.json({ error: 'GROQ_API_KEY not set on the server' }, 503);
+    return c.json({ error: 'No Groq API key: set one in the glasses settings or GROQ_API_KEY' }, 503);
   }
 
   const format = c.req.query('format') || 'pcm';
   const sampleRate = Number(c.req.query('sampleRate')) || 16000;
-  const lang = c.req.query('lang') || 'ja';
+  const lang = c.req.query('lang') || (await resolveSttLang()).lang;
 
   const raw = new Uint8Array(await c.req.arrayBuffer());
   if (raw.length === 0) {
@@ -76,7 +86,10 @@ glasses.post('/stt', async (c) => {
     const form = new FormData();
     form.append('file', new Blob([wavBytes.buffer], { type: 'audio/wav' }), 'audio.wav');
     form.append('model', GROQ_MODEL);
-    form.append('language', lang);
+    // `auto` means send nothing: Whisper detects the language itself. Sending a
+    // wrong one is worse than sending none - it transcribes English as though
+    // it were the language named.
+    if (lang && lang !== 'auto') form.append('language', lang);
     form.append('response_format', 'json');
     // Greedy decoding keeps short commands fast and deterministic.
     form.append('temperature', '0');
@@ -105,6 +118,45 @@ glasses.post('/stt', async (c) => {
     console.error('[glasses/stt] transcription failed:', err);
     return c.json({ error: 'transcription failed' }, 500);
   }
+});
+
+/**
+ * The settings the glasses app's own web screens edit.
+ *
+ * GET returns everything except the key itself — whether one is set, and which
+ * source each value comes from, so the screen can say "this is coming from the
+ * environment" rather than showing a box that looks empty but is not.
+ */
+glasses.get('/settings', async (c) => {
+  const composed = buildSttPrompt(await currentWorkspaceNames());
+  return c.json(await glassesSettingsView(composed));
+});
+
+/**
+ * PUT accepts a patch. `null` clears a field (back to the environment, or to
+ * the composed prompt); omitting it leaves that field alone. The key is
+ * write-only: it goes in through here and never comes back out.
+ */
+const GlassesSettingsPatchSchema = z.object({
+  groqApiKey: z.string().max(500).nullable().optional(),
+  // Whisper takes ISO-639-1; `auto` is ours and means "send none".
+  sttLang: z
+    .string()
+    .regex(/^(auto|[a-z]{2}(-[A-Za-z]{2,4})?)$/, 'expected `auto` or a language code such as `en`')
+    .nullable()
+    .optional(),
+  sttPrompt: z.string().max(2000).nullable().optional(),
+});
+
+glasses.put('/settings', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = GlassesSettingsPatchSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message || 'invalid settings' }, 400);
+  }
+  await updateGlassesSettings(parsed.data);
+  const composed = buildSttPrompt(await currentWorkspaceNames());
+  return c.json(await glassesSettingsView(composed));
 });
 
 export { glasses };

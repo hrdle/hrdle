@@ -430,6 +430,21 @@ Latin-script names were never the ones being misheard. `HRDLE_STT_PROMPT=off`
 disables it, and any other value replaces it (for A/B testing; the variable name
 is composed by `envVar()` from `binaryName` in `identity.json`).
 
+The key, the language and that prompt are also settings, editable from the
+glasses app's own web screens (the phone companion UI and the simulator) and
+stored by `services/glasses-settings.ts` in `<dataDir>/glasses-settings.json`
+(0600, since it can hold a key):
+
+| | Precedence | Notes |
+|---|---|---|
+| Groq key | setting, then `GROQ_API_KEY` | Write-only through the API - `GET /api/glasses/settings` reports only whether one is set and where it came from |
+| Language | `?lang=` on the request, then the setting, then `ja` | `auto` sends no language at all and lets Whisper detect it. The glossary is Japanese, so a prompt of its own is what makes another language work properly |
+| Prompt | setting, then `HRDLE_STT_PROMPT`, then composed | The setting wins because it is the one reachable while wearing the glasses; the env var stays for an A/B run that should not outlive the process |
+
+The settings screen ships in the ehpk, so **the phone companion UI only gains it
+after `/glasses-upload`**. The simulator the server serves at `/glasses` updates
+with the server itself.
+
 Note that **silence and very short clips produce hallucinations** (a stock
 sign-off phrase, typically). The prompt does not remove them, so a length and
 volume floor is needed separately.

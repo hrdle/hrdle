@@ -2,6 +2,7 @@
 
 import type { Bridge } from './display.ts'
 import { setBaseUrl, getDashboard, getSessions } from './api.ts'
+import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { clearStored, readStored, storageKey } from './storage.ts'
 
 const URL_SUFFIX = 'url'
@@ -157,6 +158,11 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
             <p style="font-size: 14px; color: #0f0; margin: 0 0 4px; font-weight: 600;">Ready to drive from the glasses</p>
             <p style="font-size: 12px; color: #888; margin: 0;">Launch this app from the G2 glasses menu</p>
           </div>
+        </div>
+
+        <!-- Voice input settings (only useful once a server is reachable) -->
+        <div id="settings-section" style="display: none;">
+          ${settingsPanelHtml()}
         </div>
 
         <!-- Help -->
@@ -315,6 +321,12 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       connectedInfo.style.display = 'block'
       btnDisconnect.style.display = 'block'
       aboutSection.style.display = 'none'
+
+      // The settings live on the server, so they are only reachable - and only
+      // meaningful - once one answers.
+      const settingsSection = document.getElementById('settings-section')
+      if (settingsSection) settingsSection.style.display = 'block'
+      void wireSettingsPanel()
 
       // Start WS diagnostic
       startWsDiag(sessionsRes.sessions || [])
