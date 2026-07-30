@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.15] - 2026-07-31
+
+### Added
+- **The glasses app's setup screens speak Japanese** (`glasses/src/i18n.ts`).
+  `glasses/src` had no i18n at all, which is why those screens were written in
+  English and stayed there — the rule is that prose we write is English *unless*
+  it goes through a translation table, and there was no table. There is one now:
+  a lookup, a language and a way to change it, rather than react-i18next, since
+  nothing there is React and the ehpk pays for every kilobyte
+  - Language comes from a saved choice, then `navigator.languages`, then
+    English. The header toggle switches it on any screen and the choice persists
+  - The tests check that both tables carry the same keys. `t()` falls back to
+    English, so a missing key does not break a screen — it produces one sentence
+    in the wrong language, which is exactly the kind of thing nobody notices
+  - Phone screens only. What the G2 itself draws stays English: Japanese is
+    full-width, so the line widths in `metrics.ts` and the seven-line clamp would
+    all have to be re-reckoned, and that is its own piece of work
+- **The first setup screen draws the network** rather than describing it. The
+  one fact people were missing — that a machine of their own does the work — was
+  a sentence in the middle of a paragraph. It is a diagram now: machine,
+  Tailscale, phone, Bluetooth, G2, top to bottom
+  - **The internet leg is dashed and the local ones solid**, because which hop
+    leaves the building is the point of the picture. Tailscale is named as what
+    it is: a VPN across your own devices, crossing the open internet so the phone
+    reaches that machine from anywhere, encrypted end to end, opening no port for
+    anyone else to find. People are right to ask whether this exposes their
+    desktop, and the answer belongs where the question forms
+  - The machine's box says `awake 24/7`. An agent keeps working while nobody is
+    watching, and nothing reaches a phone from a sleeping machine
+
+### Changed
+- **The machine does not have to be one you own.** A small VPS is already awake
+  around the clock and already has a fixed home, which is exactly what this
+  wants — the step says so now, with the sizing and the one consequence worth
+  knowing (the agent accounts sign in from there rather than from your desk).
+  Every screen said "computer", so the whole surface says "machine" now, the
+  step badge included
+
 ## [0.3.14] - 2026-07-31
 
 Aimed at one thing: nothing typed by hand that a machine could have handed over.
