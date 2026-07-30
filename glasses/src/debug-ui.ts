@@ -250,6 +250,13 @@ export function startDebugUI(): void {
             <button type="button" id="btn-tap">Tap</button>
             <button type="button" id="btn-dbl">Double tap</button>
           </div>
+          <h2>Host lifecycle</h2>
+          <div class="ring">
+            <button type="button" id="btn-fg-exit">Foreground exit</button>
+            <button type="button" id="btn-fg-enter">Foreground enter</button>
+            <button type="button" id="btn-host-exit">Host exit</button>
+          </div>
+          <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
           <h2>Voice input</h2>
           <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
           <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
@@ -613,7 +620,9 @@ export function startDebugUI(): void {
     const session = state.sessions[state.sessionIndex]
     const bufText = session ? ws.getTerminalText(session.id) : ''
     const choices = session ? ws.getChoices(session.id) : []
-    diag.textContent = `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]`
+    diag.textContent =
+      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]` +
+      (controller.isStopped() ? ' | stopped' : '')
     const top = state.relayWaiting[0]
     relay.textContent =
       `Relay: waiting=${state.relayWaiting.length} info=${state.relayInfo.length}` +
@@ -994,6 +1003,27 @@ export function startDebugUI(): void {
   el('btn-down').addEventListener('click', () => controller.swipeDown())
   el('btn-tap').addEventListener('click', () => controller.tap())
   el('btn-dbl').addEventListener('click', () => controller.doubleTap())
+
+  // The host's own lifecycle, on demand. These paths used to be reachable only
+  // by wearing the glasses and waiting for the host to close the app — which is
+  // exactly how a release went out with nothing releasing anything.
+  const lifecycleStatus = el('lifecycle-status')
+  el('btn-fg-exit').addEventListener('click', () => {
+    controller.onForegroundExit()
+    lifecycleStatus.textContent = 'Foreground exit: drawing stopped, resume point saved, microphone closed.'
+    renderDiag(controller.state)
+  })
+  el('btn-fg-enter').addEventListener('click', () => {
+    controller.onForegroundEnter()
+    lifecycleStatus.textContent = 'Foreground enter: reconnected and redrawn from scratch.'
+    renderDiag(controller.state)
+  })
+  el('btn-host-exit').addEventListener('click', () => {
+    controller.onHostExit('system')
+    lifecycleStatus.textContent =
+      'Host exit: socket closed, clocks cleared, microphone closed. Nothing draws from here — reload to start again.'
+    renderDiag(controller.state)
+  })
 
   // Keyboard: arrows scroll, Enter taps, Backspace double-taps. Faster than
   // clicking when walking someone through a flow.

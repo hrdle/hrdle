@@ -65,6 +65,9 @@ export class WsClient {
   private relaySubscribed = false
   private onDevice = true
   private screenSubscribed = false
+  /** Set by `close()`. Refuses every later connect, including the automatic
+   *  one, so a socket closed on the way out stays closed. */
+  private closed = false
 
   // Buffer of last N lines per session
   private terminalBuffers = new Map<string, string[]>()
@@ -76,6 +79,7 @@ export class WsClient {
   }
 
   connect(): void {
+    if (this.closed) return
     const base = getBaseUrl() || location.origin
     const wsBase = base.startsWith('http') ? base.replace(/^http/, 'ws') : `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`
     const wsUrl = wsBase + '/ws/mux'
@@ -326,19 +330,39 @@ export class WsClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) return
+    if (this.closed || this.reconnectTimer) return
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.connect()
     }, 3000)
   }
 
+  /**
+   * Close for good.
+   *
+   * This used to reconnect three seconds later. `ws.close()` fires `onclose`,
+   * `onclose` schedules a reconnect, and nothing said not to — so the one caller
+   * that matters, the host tearing the app down, got a socket back and with it
+   * the `sessions-updated` pushes that keep the app drawing to a panel it no
+   * longer owns. The handlers are detached before closing so the close is
+   * silent, and `closed` refuses any later connect.
+   */
   close(): void {
+    this.closed = true
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    this.ws?.close()
+    this.stopPing()
+    const ws = this.ws
     this.ws = null
+    if (!ws) return
+    ws.onopen = null
+    ws.onmessage = null
+    ws.onclose = null
+    ws.onerror = null
+    try {
+      ws.close()
+    } catch { /* already gone; nothing left to close */ }
   }
 }

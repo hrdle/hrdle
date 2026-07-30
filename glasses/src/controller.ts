@@ -231,6 +231,11 @@ export class GlassesController {
   private overlayReturnMode: 'session_list' | 'conversation' = 'session_list'
   /** Pending auto-dismissal of a notification overlay; null when none is due. */
   private noticeTimer: ReturnType<typeof setTimeout> | null = null
+  /** The two clocks started by `connect()`, held so the way out can stop them. */
+  private spinnerTimer: ReturnType<typeof setInterval> | null = null
+  private autoTimer: ReturnType<typeof setInterval> | null = null
+  /** Torn down by the host. Nothing draws, nothing reconnects, nothing ticks. */
+  private stopped = false
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
   private lastGestureAt = 0
   /** What that gesture was. Reported on the way out: `SYSTEM_EXIT_EVENT` is
@@ -271,13 +276,18 @@ export class GlassesController {
    *  relay subscription is (re)sent on every connect; the server answers with
    *  a snapshot, then pushes upserts/removals. */
   connect(): void {
+    if (this.stopped) return
     this.ws.subscribeGlassesRelay(this.platform.onDevice)
     this.ws.connect()
     // One timer for the life of the app rather than start/stop bookkeeping on
     // every state change. It costs nothing when nothing is working: the tick
     // returns before touching the display.
-    setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
-    setInterval(() => this.tickAutoAdvance(), AUTO_SCROLL_STEP_MS)
+    //
+    // "The life of the app" was taken literally and the ids thrown away, which
+    // left nothing able to stop them once the host took the app down — two
+    // clocks drawing to a revoked panel for as long as the WebView lasted.
+    this.spinnerTimer = setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
+    this.autoTimer = setInterval(() => this.tickAutoAdvance(), AUTO_SCROLL_STEP_MS)
   }
 
   /**
@@ -299,7 +309,7 @@ export class GlassesController {
     // Nobody is looking at this panel, and nothing sent to it would arrive.
     // Advancing anyway would also walk the recap past the point the reader
     // left it, so they come back to the middle of something.
-    if (!this.foreground) return
+    if (this.stopped || !this.foreground) return
     // Everything has been shown, twice. Drawing again would be for nobody.
     if (this.autoResting) return
     // The reader is working the ring; do not fight them for it.
@@ -353,7 +363,7 @@ export class GlassesController {
     const st = this.state
     // Nothing drawn from the background arrives, so an animation run there is
     // spent entirely on the way to being dropped.
-    if (!this.foreground) return
+    if (this.stopped || !this.foreground) return
     if (!this.somethingIsWorking()) return
     st.spinnerTick = (st.spinnerTick ?? 0) + 1
     this.platform.renderHeader(st)
@@ -438,6 +448,7 @@ export class GlassesController {
 
   /** The app is back. Its socket died while it slept and its screen is stale. */
   onForegroundEnter(): void {
+    if (this.stopped) return
     this.foreground = true
     this.state.spinnerTick = 0
     this.ws.connect()
@@ -452,6 +463,18 @@ export class GlassesController {
     // is a WebView the phone has a reason to throttle.
     this.foreground = false
     this.saveResumePoint()
+    // Close the microphone as well. Nothing would have closed it: a recording
+    // interrupted by the glasses showing something else went on streaming 16kHz
+    // PCM from a screen nobody could see, and the PCM stops arriving while
+    // `recording` still claims otherwise — so the recording is abandoned rather
+    // than left to resume into a screen that will never receive audio again.
+    if (this.recording) void this.cancelVoice()
+  }
+
+  /** Whether the host has torn this down. Read by the simulator's diagnostics,
+   *  where the whole point of the exit buttons is seeing that it took. */
+  isStopped(): boolean {
+    return this.stopped
   }
 
   /** What the wearer last did, and how long ago — for the exit line. */
@@ -462,8 +485,60 @@ export class GlassesController {
     }
   }
 
+  /**
+   * The host has taken the app down. Put everything back before going quiet.
+   *
+   * Only reachable from `ABNORMAL_EXIT_EVENT` and `SYSTEM_EXIT_EVENT`, and
+   * deliberately not from `requestExit`: asking the host for its exit dialogue
+   * is not the same as leaving, and the wearer can cancel it.
+   *
+   * Until this existed the app kept running after the exit — drawing to a
+   * container the host had revoked at about one refused write a second, one run
+   * still going 64 minutes later. Official submission guidance rejects exactly
+   * that ("Lingering webviews inside the Even Realities App are rejected"), and
+   * a mic left open kept the BLE link busy for a screen nobody could see.
+   */
   onHostExit(_kind: 'abnormal' | 'system'): void {
+    // The host has been seen sending an exit while the app was already leaving,
+    // and a second resume point written from a torn-down state is worse than
+    // none — it would overwrite the one saved while the reader's place was still
+    // known.
+    if (this.stopped) return
+    // First, because everything below stops things the save reads from.
     this.saveResumePoint()
+    this.shutdown()
+  }
+
+  /**
+   * Release everything this controller started.
+   *
+   * Idempotent, and safe to call from a handler that may fire more than once —
+   * the host has been seen sending an exit while the app was already on the way
+   * out. `stopped` is what makes it stick: clearing the timers stops the clocks,
+   * but async work already in flight (a conversation load, a transcription)
+   * still comes back and calls `render`, so the flag closes that door too.
+   */
+  private shutdown(): void {
+    if (this.stopped) return
+    this.stopped = true
+    if (this.spinnerTimer) {
+      clearInterval(this.spinnerTimer)
+      this.spinnerTimer = null
+    }
+    if (this.autoTimer) {
+      clearInterval(this.autoTimer)
+      this.autoTimer = null
+    }
+    this.clearNoticeTimer()
+    this.recording = false
+    this.audioChunks = []
+    // Unconditional: `recording` says whether the PCM was being collected, not
+    // whether the microphone is open — `startVoice` opens it before anything
+    // sets that flag, and a failed open leaves it false. `audioControl(false)`
+    // on a closed mic costs one no-op call; a mic left open costs the wearer's
+    // battery until the WebView dies.
+    void Promise.resolve(this.platform.stopMicCapture()).catch(() => {})
+    this.ws.close()
   }
 
   // ── Ring input (the single handler set shared by G2 and debug) ──
@@ -479,6 +554,9 @@ export class GlassesController {
 
   /** Explicit state machine dispatch: (mode, action) → transition. */
   private async handle(action: RingAction): Promise<void> {
+    // Gone. The host keeps delivering ring input to a page it has already
+    // revoked, and acting on it would restart the very work `shutdown` stopped.
+    if (this.stopped) return
     // Every ring gesture goes through here, so this is the one place that has
     // to know the reader is driving. The auto-advance clock stays out of the
     // way for AUTO_ADVANCE_IDLE_MS afterwards.
@@ -1270,7 +1348,10 @@ export class GlassesController {
    * in one frame, which is the only frame that was ever going to be seen.
    */
   private render(): void {
-    if (!this.foreground) return
+    // `stopped` first: after a host exit the panel is not ours, and this is the
+    // one place every draw passes through — including the ones asked for by
+    // work that was already in flight when the exit arrived.
+    if (this.stopped || !this.foreground) return
     this.platform.render(this.state)
   }
 }
