@@ -296,7 +296,7 @@ export class GlassesController {
    */
   private onSuperseded(by: string): void {
     if (this.stopped) return
-    void reportLog('error', `superseded by instance ${by} — releasing everything`)
+    this.log('error', `superseded: retired by instance ${by} — releasing everything`)
     this.shutdown()
     this.platform.onSuperseded?.()
   }
@@ -504,6 +504,24 @@ export class GlassesController {
    *  where the whole point of the exit buttons is seeing that it took. */
   isStopped(): boolean {
     return this.stopped
+  }
+
+  /**
+   * Log a line that says which run wrote it.
+   *
+   * `main.ts` stamps the run id on everything it traces, and lines written from
+   * here were the exception — they reached the log naked, so a reader could not
+   * tell which of two concurrent instances produced them, and the id-keyed log
+   * monitor dropped them entirely.
+   *
+   * It mattered most for the one line that exists to identify an instance: the
+   * retirement notice named the newcomer and not the run being retired. Fixed as
+   * a class rather than a line, because the next `reportLog` added here would
+   * have had the same hole.
+   */
+  private log(level: string, message: string): void {
+    const id = this.platform.instanceId
+    void reportLog(level, id ? `[${id}] ${message}` : message)
   }
 
   /** What the wearer last did, and how long ago — for the exit line. */
@@ -944,7 +962,7 @@ export class GlassesController {
       try {
         await sendPrompt(t.sessionId, text, t.paneId)
       } catch (err) {
-        void reportLog(
+        this.log(
           'error',
           `voice send failed (session=${t.sessionId} pane=${t.paneId ?? 'active'}): ${err}`,
         )
