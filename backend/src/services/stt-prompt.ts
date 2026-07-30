@@ -1,4 +1,5 @@
 import { IDENTITY, envVar } from '../../../shared/identity';
+import { type GlassesSettings, loadGlassesSettings } from './glasses-settings';
 import { listWorkspaces } from './herdr-client';
 import { getAllSessionMetadata } from './session-metadata';
 
@@ -140,11 +141,18 @@ const OVERRIDE_ENV = envVar('STT_PROMPT');
 /**
  * The prompt to send with a transcription, or `undefined` to send none.
  *
- * `HRDLE_STT_PROMPT=off` disables the bias, which is how the two are compared
- * without a rebuild; any other value is used verbatim.
+ * Three sources, most specific first: what the settings screen saved, then
+ * `HRDLE_STT_PROMPT`, then the composed vocabulary. `off` from either override
+ * disables the bias, which is how the two are compared without a rebuild; any
+ * other value is used verbatim.
+ *
+ * The saved setting outranks the environment because it is the one a person can
+ * change while wearing the glasses; the env var stays for A/B runs that should
+ * not survive a restart.
  */
 export async function sttPrompt(now = Date.now()): Promise<string | undefined> {
-  const override = process.env[OVERRIDE_ENV];
+  const saved = (await loadGlassesSettings().catch((): GlassesSettings => ({}))).sttPrompt;
+  const override = saved ?? process.env[OVERRIDE_ENV];
   if (override === 'off') return undefined;
   if (override) return override;
 

@@ -20,6 +20,10 @@ app's name on EVEN Hub — is the same `Hrdle`.
 - The server URL lives in localStorage (`hrdle-url`). The key is composed from
   `storagePrefix` in `identity.json`, and older prefixes are consulted only when
   reading (`src/storage.ts`)
+- A voice-input settings panel (`src/settings-ui.ts`) for the Groq key, the
+  transcription language and the vocabulary prompt. It is shown by the phone
+  companion UI once a server answers, and by the simulator; both write to
+  `/api/glasses/settings`, so a value set in either is what the G2 uses
 
 ## Layout
 
@@ -32,6 +36,8 @@ app's name on EVEN Hub — is the same `Hrdle`.
 - `src/phone-ui.ts` — the companion UI on the phone
 - `src/types.ts` — types and formatting helpers
 - `src/storage.ts` — how localStorage keys are spelled, and reading older ones
+- `src/settings-ui.ts` — the voice-input settings panel shared by the phone UI
+  and the simulator
 
 ## Building and shipping
 

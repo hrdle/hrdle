@@ -10,6 +10,7 @@
 // injects what the Groq transcription would have returned.
 
 import { setBaseUrl, transcribe } from './api.ts'
+import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { NOTICE_BORDER, NOTICE_BORDER_COLOR, NOTICE_PAD, noticeHeight, screenText, wrapForPanel } from './display.ts'
@@ -252,6 +253,7 @@ export function startDebugUI(): void {
           <h2>Voice input</h2>
           <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
           <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
+          ${settingsPanelHtml()}
 
           <h2>Background</h2>
           <div class="bg-row">
@@ -639,6 +641,11 @@ export function startDebugUI(): void {
       rule,
     ].join('\n')
   }
+
+  // The voice-input settings live on the server; the simulator talks to the
+  // same endpoints the phone UI does, so a key or a language set here is what
+  // the G2 will use too.
+  void wireSettingsPanel()
 
   el('g2-copy').addEventListener('click', async () => {
     try {
