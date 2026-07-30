@@ -216,6 +216,9 @@ const MAX_CODE_LINES = 4
  * Common indentation goes first: on a panel this narrow, four leading spaces
  * are the difference between fitting and not, and dropping the shared prefix
  * keeps every line's relation to the others intact.
+ *
+ * A block that still does not fit is clipped rather than replaced: the head
+ * survives and a count says what was held back.
  */
 function renderCodeBlock(lines: string[]): string[] {
   const body = [...lines]
@@ -228,9 +231,20 @@ function renderCodeBlock(lines: string[]): string[] {
   const dedented = body.map((l) => stripUnrenderable(l.slice(indent)))
 
   const fits = dedented.length <= MAX_CODE_LINES && dedented.every((l) => textWidth(l) <= BODY_WIDTH)
-  // Still worth saying how much was withheld — `[code]` alone said only that
-  // something was there.
-  return fits ? dedented : [`[code ${dedented.length} lines]`]
+  if (fits) return dedented
+
+  // Too long or too wide, but show the head anyway. `[code N lines]` carried
+  // no information at all: it named a quantity of something the reader could
+  // not see, and threw away the content the preceding sentence had just
+  // promised — the same mistake `[table]` made before rows were flattened.
+  // The first line of a fenced block is nearly always the one that identifies
+  // it (the command being run, the field being set), so it is the last thing
+  // to discard rather than the first.
+  const head = dedented.slice(0, MAX_CODE_LINES - 1).map((l) => clipToWidth(l, BODY_WIDTH))
+  const withheld = dedented.length - head.length
+  return withheld > 0
+    ? [...head, `… +${withheld} ${withheld === 1 ? 'line' : 'lines'}`]
+    : head
 }
 
 /**

@@ -590,14 +590,29 @@ describe('fenced code', () => {
       .toEqual(['const a = 1', '  const b = 2'])
   })
 
-  test('summarises a block whose lines will not fit', () => {
+  test('clips a line too wide to fit instead of dropping it', () => {
     const wide = 'x'.repeat(200)
-    expect(sanitizeForG2(`\`\`\`\n${wide}\n\`\`\``)).toBe('[code 1 lines]')
+    const out = sanitizeForG2(`\`\`\`\n${wide}\n\`\`\``)
+    expect(out.startsWith('xxx')).toBe(true)
+    expect(out.endsWith('…')).toBe(true)
+    expect(width(out)).toBeLessThanOrEqual(BODY_WIDTH)
   })
 
-  test('summarises a block long enough to become the page', () => {
+  test('a block long enough to become the page keeps its head and counts the rest', () => {
     const many = Array.from({ length: 6 }, (_, i) => `${i}行目`).join('\n')
-    expect(sanitizeForG2(`\`\`\`\n${many}\n\`\`\``)).toBe('[code 6 lines]')
+    expect(sanitizeForG2(`\`\`\`\n${many}\n\`\`\``).split('\n'))
+      .toEqual(['0行目', '1行目', '2行目', '… +3 lines'])
+  })
+
+  test('the withheld count is singular when one line is held back', () => {
+    // Four lines fit on count alone, so this only happens when one is too wide.
+    const four = ['line 0', 'line 1', 'line 2', 'x'.repeat(200)].join('\n')
+    expect(sanitizeForG2(`\`\`\`\n${four}\n\`\`\``).split('\n').at(-1)).toBe('… +1 line')
+  })
+
+  test('the head is what identifies the block, so it survives', () => {
+    const block = ['git push origin main', '  ...deploy output...', 'x'.repeat(120), 'tail'].join('\n')
+    expect(sanitizeForG2(`\`\`\`bash\n${block}\n\`\`\``).split('\n')[0]).toBe('git push origin main')
   })
 
   test('an unterminated fence is still rendered', () => {
