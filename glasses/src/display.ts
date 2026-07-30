@@ -141,6 +141,10 @@ export interface AppState {
    *  workspace. Carries into the conversation: its own agent session, its own
    *  status, and the pane replies are routed to. */
   selectedPaneId?: string
+  /** Whether the list cursor is on the notifications row rather than on a
+   *  session. Kept separately because the cursor's position is otherwise
+   *  expressed as a session and a pane, and that row is neither. */
+  listOnNotifications?: boolean
   /** Advances one frame per spinner tick while the shown session is working.
    *  Absent in states built before the spinner existed; treated as 0. */
   spinnerTick?: number
@@ -358,6 +362,20 @@ export interface ListRow {
    * So the name becomes a heading over them and the cursor passes it by.
    */
   header?: boolean
+  /**
+   * The way in to the relay items.
+   *
+   * The overlay has always been a browsable list of every waiting question and
+   * every notification, with a counter and `swipe:next` to walk it — but nothing
+   * could open it deliberately. It appeared when a question arrived and that was
+   * the only way in, so a wearer who dismissed it, or who wanted to reread an
+   * older notice, had no route back. The list said `+2` and offered no way to
+   * reach the two.
+   *
+   * This is that route: the line the notices were already being printed on,
+   * turned into somewhere the cursor can rest.
+   */
+  notifications?: true
 }
 
 /**
@@ -369,8 +387,13 @@ export interface ListRow {
  * conversations with separate session ids, and only then does the workspace
  * row stop being the whole story.
  */
-export function listRows(sessions: Session[]): ListRow[] {
+export function listRows(sessions: Session[], withNotifications = false): ListRow[] {
   const rows: ListRow[] = []
+  // First, and pinned there by `sessionListBody` — a notice that scrolled out of
+  // sight would be worse than the banner it replaces. `sessionIndex` is -1
+  // because there is no session behind it; every reader of a row checks
+  // `notifications` before touching it.
+  if (withNotifications) rows.push({ sessionIndex: -1, notifications: true })
   sessions.forEach((s, sessionIndex) => {
     const panes = s.panes ?? []
     if (panes.length < 2) {
@@ -384,15 +407,29 @@ export function listRows(sessions: Session[]): ListRow[] {
 }
 
 /** Rows the cursor can rest on. */
-export function selectableRows(sessions: Session[]): ListRow[] {
-  return listRows(sessions).filter((r) => !r.header)
+export function selectableRows(sessions: Session[], withNotifications = false): ListRow[] {
+  return listRows(sessions, withNotifications).filter((r) => !r.header)
+}
+
+/** Whether the list is showing a way in to the relay items — one line, and only
+ *  when there is something behind it. Seven lines is not enough to keep an empty
+ *  row for later. */
+export function hasNotificationRow(state: AppState): boolean {
+  return state.relayWaiting.length + state.relayInfo.length > 0
 }
 
 /** Index of the row the cursor is on. */
 export function rowCursor(state: AppState): number {
-  const rows = listRows(state.sessions)
+  const withNotifications = hasNotificationRow(state)
+  const rows = listRows(state.sessions, withNotifications)
+  // A stale flag — the notices cleared while the cursor sat on them — falls
+  // through to the session lookup below rather than pointing at a row that is
+  // no longer there.
+  if (state.listOnNotifications && withNotifications) return 0
   const found = rows.findIndex(
-    (r) => !r.header && r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
+    (r) =>
+      !r.header && !r.notifications &&
+      r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
   )
   if (found >= 0) return found
   // Landed on a workspace that turned out to have panes — a fresh state, or a
@@ -453,18 +490,35 @@ function paneDetail(p: Pane, siblings: Pane[]): string {
  * own row with ！, so repeating them here would spend the scarcest line on the
  * screen saying something the screen already says.
  */
-function listInfoBanner(state: AppState): string[] {
-  const info = state.relayInfo[0]
-  if (!info) return []
-  // The count goes next to the label, not after the text: the text is what
-  // gets cut at the panel edge, and "+2" is the part that must survive.
-  const more = state.relayInfo.length > 1 ? `+${state.relayInfo.length - 1}` : ''
-  const wrapped = splitDisplayLines(`[i]${relayLabel(state, info)}${more}: ${info.text}`)
+/**
+ * The notifications row's text: what the banner used to say, on a line the
+ * cursor can now reach.
+ *
+ * A waiting question comes first when there is one. It is the item that wants
+ * something from the reader, and `[!]` against `[i]` is the difference between
+ * "answer me" and "for your information" — which is worth more than showing
+ * whichever arrived last.
+ *
+ * The count sits next to the label rather than after the text, because the text
+ * is what gets cut at the panel edge and `+2` is the part that has to survive.
+ */
+function notificationRowText(state: AppState, marker: string): string {
+  const total = state.relayWaiting.length + state.relayInfo.length
+  const item = state.relayWaiting[0] ?? state.relayInfo[0]
+  if (!item) return ''
+  const badge = item.kind === 'waiting' ? '[!]' : '[i]'
+  const more = total > 1 ? `+${total - 1}` : ''
+  // The cursor column is part of the line and has to be part of the measurement.
+  // Wrapping the text alone produced a first line that filled the panel exactly,
+  // and prepending the marker afterwards pushed one character onto a second
+  // line — a notice occupying two rows, which is the thing this row exists to
+  // avoid. Found by looking at the panel; the arithmetic looked fine.
+  const wrapped = splitDisplayLines(`${marker}${badge}${relayLabel(state, item)}${more}: ${item.text}`)
   const line = wrapped[0] || ''
-  if (!line) return []
+  if (!line) return ''
   // A message cut at the panel edge with nothing to show for it reads as a
-  // complete, and wrong, sentence. Opening the session shows the rest.
-  return [wrapped.length > 1 ? ellipsize(line) : line]
+  // complete, and wrong, sentence. Opening the row shows the rest.
+  return wrapped.length > 1 ? ellipsize(line) : line
 }
 
 function sessionListBody(state: AppState): string {
@@ -473,16 +527,24 @@ function sessionListBody(state: AppState): string {
   // waiting_input; those sessions still get the [!] marker.
   const relayWaitingIds = new Set(state.relayWaiting.map((i) => i.sessionId))
   const frame = spinnerFrame(state)
-  const banner = listInfoBanner(state)
-  const listLines = LIST_LINES - banner.length
-  const rows = listRows(sessions)
-  if (!rows.length) return [...banner, '(no sessions)'].join('\n')
   const cursor = rowCursor(state)
-  const start = Math.max(0, Math.min(cursor - 3, rows.length - listLines))
-  const visible = rows.slice(Math.max(0, start), Math.max(0, start) + listLines)
+  // Pinned rather than scrolled with the rest. It replaces a banner that was
+  // always on screen, and a notice that slid out of view as the reader walked
+  // down thirteen workspaces would be a worse thing than the banner was.
+  const pinned = hasNotificationRow(state) ? 1 : 0
+  const notice = pinned ? [notificationRowText(state, cursor === 0 ? '>' : ' ')] : []
+  const rows = listRows(sessions, pinned === 1)
+  const scrollable = rows.slice(pinned)
+  if (!scrollable.length) return [...notice, '(no sessions)'].join('\n')
+  const listLines = LIST_LINES - pinned
+  // The cursor's index within the scrolling part; the pinned row is index 0 of
+  // the whole list and never part of the window.
+  const inScroll = Math.max(0, cursor - pinned)
+  const start = Math.max(0, Math.min(inScroll - 3, scrollable.length - listLines))
+  const visible = scrollable.slice(Math.max(0, start), Math.max(0, start) + listLines)
 
   const listBody = visible.map((row, i) => {
-    const idx = Math.max(0, start) + i
+    const idx = pinned + Math.max(0, start) + i
     const here = idx === cursor ? '>' : ' '
     const s = sessions[row.sessionIndex]
     // Pad the badge so every name starts in the same column: a list where
@@ -506,7 +568,7 @@ function sessionListBody(state: AppState): string {
     return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${paneName(p, row.paneId)}${detail ? `  ${detail}` : ''}`
   })
 
-  return [...banner, ...listBody].join('\n')
+  return [...notice, ...listBody].join('\n')
 }
 
 /**
@@ -751,13 +813,17 @@ function conversationContent(state: AppState): {
 /** Everything the list screen has to say, in the one bar it still has. */
 function sessionListFooter(state: AppState): string {
   // Counted among what can be opened; headings are not places to be.
-  const rows = listRows(state.sessions)
+  const rows = listRows(state.sessions, hasNotificationRow(state))
   const at = rows[rowCursor(state)]
   const selectable = rows.filter((r) => !r.header)
   const cursor = selectable.findIndex((r) => r === at) + 1
   const total = selectable.length
   const badge = state.relayWaiting.length > 0 ? `  !${state.relayWaiting.length}` : ''
-  return withClock(`tap:open  swipe:nav  ${cursor}/${total}${badge}`)
+  // The gesture does something different on that row, so it says so. A footer
+  // that promises `tap:open` and then shows a notice queue has misled the reader
+  // about the only control they have.
+  const open = at?.notifications ? 'tap:notices' : 'tap:open'
+  return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`)
 }
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 

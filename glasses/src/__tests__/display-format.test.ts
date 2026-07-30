@@ -880,22 +880,57 @@ describe('notification banner on the list', () => {
     expect(body.split('\n')[0]).toContain('グラス開発')
   })
 
+  // The leading column is the cursor's. The notice is a row the cursor can rest
+  // on now, so it carries the same marker column as every row below it — a line
+  // that started one column to the left would not line up with them.
+
   test('a notification heads the list, named by its workspace', () => {
     const body = screenText(mk([info('a', '応答が完了しました')])).body.split('\n')
-    expect(body[0]).toBe('[i]グラス開発: 応答が完了しました')
+    expect(body[0]).toBe(' [i]グラス開発: 応答が完了しました')
     // The list itself is still there, one row lower.
     expect(body[1]).toContain('グラス開発')
   })
 
   test('an unknown workspace falls back to its id rather than vanishing', () => {
     const body = screenText(mk([info('gone', '応答が完了しました')])).body
-    expect(body.split('\n')[0]).toBe('[i]gone: 応答が完了しました')
+    expect(body.split('\n')[0]).toBe(' [i]gone: 応答が完了しました')
   })
 
   test('the count of the others survives even when the text is cut', () => {
     const long = 'あ'.repeat(120)
     const banner = screenText(mk([info('a', long, 2), info('s1', long, 1)], 2)).body.split('\n')[0]
-    expect(banner.startsWith('[i]グラス開発+1: ')).toBe(true)
+    expect(banner.startsWith(' [i]グラス開発+1: ')).toBe(true)
+  })
+
+  test('the cursor can rest on it', () => {
+    const body = screenText({ ...mk([info('a', '応答が完了しました')]), listOnNotifications: true })
+      .body.split('\n')
+    expect(body[0].startsWith('>')).toBe(true)
+    // And nothing below it is marked while it holds the cursor.
+    expect(body.slice(1).every((l) => !l.startsWith('>'))).toBe(true)
+  })
+
+  test('a waiting question outranks a newer notification for the row', () => {
+    // The row shows one item, and the one that wants something from the reader
+    // is worth more than whichever arrived last.
+    const st = {
+      ...mk([info('a', 'ただのお知らせ')]),
+      relayWaiting: [{ ...info('a', '選んでください'), kind: 'waiting' as const }],
+    }
+    const first = screenText(st).body.split('\n')[0]
+    expect(first).toContain('[!]')
+    expect(first).toContain('選んでください')
+    // Both are counted, so the reader knows the list holds more than the one.
+    expect(first).toContain('+1')
+  })
+
+  test('it stays put while the reader walks a long list', () => {
+    // It replaced a banner that was always on screen. A notice that scrolled out
+    // of sight as the cursor moved down would be a worse thing than the banner.
+    const st = { ...mk([info('a', '応答が完了しました')], 14), sessionIndex: 13 }
+    const body = screenText(st).body.split('\n')
+    expect(body[0]).toContain('応答が完了しました')
+    expect(body.at(-1)).toContain('ws13')
   })
 
   test('the banner takes its line from the list, never from the panel', () => {
