@@ -1,5 +1,5 @@
 // Server API response types (subset relevant to G2 display)
-import { BODY_WIDTH, clipToWidth, stripUnrenderable, textWidth } from './metrics.ts'
+import { BODY_WIDTH, clipToWidth, splitLines, stripUnrenderable, textWidth } from './metrics.ts'
 
 type IndicatorState = 'processing' | 'waiting_input' | 'idle' | 'completed'
 
@@ -227,10 +227,25 @@ function renderCodeBlock(lines: string[]): string[] {
   const indent = Math.min(...filled.map((l) => (l.match(/^ */) as RegExpMatchArray)[0].length))
   const dedented = body.map((l) => stripUnrenderable(l.slice(indent)))
 
-  const fits = dedented.length <= MAX_CODE_LINES && dedented.every((l) => textWidth(l) <= BODY_WIDTH)
-  // Still worth saying how much was withheld — `[code]` alone said only that
-  // something was there.
-  return fits ? dedented : [`[code ${dedented.length} lines]`]
+  // A line too wide for the panel is wrapped, not thrown away along with the
+  // block around it.
+  //
+  // `[code 2 lines]` was a real screen. Two lines, one of them a little over the
+  // width, and the marker said nothing about either — the reader was told a
+  // fenced block existed and shown none of it, for want of a line break. The
+  // width test was doing the same job as the line-count test and reaching a much
+  // worse answer.
+  //
+  // Wrapping a command is imperfect: the break lands on a space, and the reader
+  // has to see that it is still one command. It is what the prose beside it
+  // already does, and it beats withholding what a sentence has just promised.
+  const wrapped = dedented.flatMap((l) => (textWidth(l) <= BODY_WIDTH ? [l] : splitLines(l)))
+  if (wrapped.length <= MAX_CODE_LINES) return wrapped
+  // Genuinely too much for an aside. Still worth saying how much was withheld —
+  // `[code]` alone said only that something was there. Counted in source lines
+  // rather than wrapped ones, which is what the reader would count if they could
+  // see it.
+  return [`[code ${dedented.length} lines]`]
 }
 
 /**

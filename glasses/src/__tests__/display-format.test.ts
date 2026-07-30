@@ -590,8 +590,26 @@ describe('fenced code', () => {
       .toEqual(['const a = 1', '  const b = 2'])
   })
 
-  test('summarises a block whose lines will not fit', () => {
-    const wide = 'x'.repeat(200)
+  test('wraps a line a little over the width instead of dropping the block', () => {
+    // `[code 2 lines]` on a real screen: two lines, one of them slightly over,
+    // and the marker showed neither of them. The reader was told a fenced block
+    // existed and given none of it, for want of a line break.
+    const wide = 'curl -fsSL https://herdr.dev/install.sh | sh && herdr integration install claude'
+    // Asserted, so the case cannot quietly stop being the case under test.
+    expect(width(wide)).toBeGreaterThan(BODY_WIDTH)
+    const out = sanitizeForG2(`\`\`\`\nbun run test\n${wide}\n\`\`\``)
+    expect(out).not.toContain('[code')
+    expect(out.split('\n')).toEqual([
+      'bun run test',
+      'curl -fsSL https://herdr.dev/install.sh | sh && herdr integration',
+      'install claude',
+    ])
+  })
+
+  test('summarises a line too long to wrap inside the budget', () => {
+    // Four rendered lines is the whole budget; a line that wraps past it is
+    // source rather than an aside, and becomes the page if shown.
+    const wide = 'x'.repeat(500)
     expect(sanitizeForG2(`\`\`\`\n${wide}\n\`\`\``)).toBe('[code 1 lines]')
   })
 
