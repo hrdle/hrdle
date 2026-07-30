@@ -1457,6 +1457,31 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
 
 // ─── Events ───
 
+/**
+ * The host's own account of why it is stopping us.
+ *
+ * `systemExitReasonCode` is printed even when it is zero, because zero is an
+ * answer and absent is a different one — the protobuf omits zero values on the
+ * wire, so a missing key and a genuine `0` arrive identically and only the raw
+ * object can tell them apart. That distinction has already cost a day here:
+ * `isWearing` reads `false` for both "not worn" and "not reported", and it was
+ * read as the former.
+ */
+function exitDetail(sys: { eventSource?: unknown; systemExitReasonCode?: number } | undefined): string {
+  if (!sys) return ''
+  const parts = [
+    sys.systemExitReasonCode === undefined ? 'reason=absent' : `reason=${sys.systemExitReasonCode}`,
+    sys.eventSource === undefined ? '' : `src=${String(sys.eventSource)}`,
+  ].filter(Boolean)
+  let raw = ''
+  try {
+    raw = JSON.stringify(sys)
+  } catch {
+    raw = '(not serialisable)'
+  }
+  return ` ${parts.join(' ')} sys=${raw.slice(0, 200)}`
+}
+
 export function setupEvents(
   bridge: Bridge | null,
   callbacks: {
@@ -1471,8 +1496,17 @@ export function setupEvents(
     onForegroundEnter?: () => void
     /** Going away. Whatever should survive has to be written now. */
     onForegroundExit?: () => void
-    /** The host is tearing the app down and says why. */
-    onExit?: (kind: 'abnormal' | 'system') => void
+    /**
+     * The host is tearing the app down and says why.
+     *
+     * `detail` is the rest of what it said. `SYSTEM_EXIT_EVENT` is sent both
+     * when the wearer confirms the host's exit dialogue and when the host
+     * decides on its own, so `kind` alone cannot separate the two — and fifteen
+     * exits were recorded without the app ever having asked for one.
+     * `systemExitReasonCode` and `eventSource` are the only host-side answer to
+     * which it was, and both were being discarded.
+     */
+    onExit?: (kind: 'abnormal' | 'system', detail?: string) => void
   },
 ): void {
   if (!bridge) return
@@ -1532,10 +1566,10 @@ export function setupEvents(
         callbacks.onForegroundExit?.()
         return
       case OsEventTypeList.ABNORMAL_EXIT_EVENT:
-        callbacks.onExit?.('abnormal')
+        callbacks.onExit?.('abnormal', exitDetail(event.sysEvent))
         return
       case OsEventTypeList.SYSTEM_EXIT_EVENT:
-        callbacks.onExit?.('system')
+        callbacks.onExit?.('system', exitDetail(event.sysEvent))
         return
     }
 

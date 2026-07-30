@@ -33,9 +33,26 @@ const RESUME_SUFFIX = 'glasses-resume'
 const pendingLogs: Array<{ level: string; message: string; stack?: string }> = []
 let logSinkReady = false
 
+/**
+ * Which run wrote a line.
+ *
+ * The host starts this app twice within seconds often enough that the log is
+ * two interleaved stories, and until now nothing said which line belonged to
+ * which. Worse, `page container created` has been seen printed *before* the
+ * `main:` line of the same run — `reportLog` posts without awaiting, so arrival
+ * order is not emission order and a reader cannot even rely on adjacency.
+ *
+ * Four hex characters is enough to separate two runs in one log and short
+ * enough to sit on every line.
+ */
+const RUN_ID = Math.floor(Math.random() * 0x10000)
+  .toString(16)
+  .padStart(4, '0')
+
 function trace(message: string, level = 'info', stack?: string): void {
-  if (logSinkReady) void reportLog(level, message, stack)
-  else pendingLogs.push({ level, message, stack })
+  const tagged = `[${RUN_ID}] ${message}`
+  if (logSinkReady) void reportLog(level, tagged, stack)
+  else pendingLogs.push({ level, message: tagged, stack })
 }
 
 function flushLogs(): void {
@@ -273,6 +290,15 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
         trace('device status first event: (not serialisable)')
       }
     }
+    // `none` is the SDK's uninitialised marker, and everything alongside it is
+    // `createDefault()`'s filler rather than a reading: zero battery, false
+    // flags, empty serial. Reporting that produced `dev=none,off-head batt=0%`
+    // on an exit — which reads as a flat battery on glasses that were at 63%.
+    // Say nothing until the device has actually spoken.
+    if (!s.connectType || s.connectType === 'none') {
+      deviceNote = ''
+      return
+    }
     // `isWearing` is deliberately not reported: `false` here does not mean
     // "not being worn".
     //
@@ -340,26 +366,30 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       trace('foreground: exited — saving resume point')
       controller.onForegroundExit()
     },
-    onExit(kind) {
-      // The host says why it is stopping us, and the two kinds mean opposite
-      // things: `abnormal` is an unexpected disconnect, `system` is the user
-      // confirming the host's exit dialogue. Only ever having seen `system` is
-      // the finding — this app was being left, not crashing.
+    onExit(kind, detail) {
+      // `system` is sent both when the wearer confirms the host's exit dialogue
+      // and when the host decides on its own — the same code for opposite
+      // meanings. Fifteen exits were recorded, every one of them `system`, and
+      // this app never asked for a single one, so the interesting question is
+      // always which of the two it was.
       //
-      // So the gesture goes out with it. A double-tap moments before says the
-      // wearer walked out through the dialogue; silence says something else
-      // closed us, and that is a different problem entirely.
-      //
-      // And the device state, because a gesture cannot tell those two apart on
-      // its own: taking the glasses off produces silence just as convincingly
-      // as being killed does. `off-head` or `in-case` here explains the exit;
-      // their absence is what makes it worth investigating.
+      // The gesture narrows it: a double-tap moments before says the wearer
+      // walked out through the dialogue, silence says something else closed us.
+      // `detail` answers it outright — `systemExitReasonCode` and `eventSource`
+      // are the host's own account, and both were being thrown away here.
       const g = controller.lastGesture()
       trace(
-        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${deviceNote}`,
+        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${deviceNote}${detail ?? ''}`,
         'error',
       )
       controller.onHostExit(kind)
+    },
+    // `display.ts` has always built this string and `main.ts` has never taken
+    // it, so every event's shape was being stringified and dropped. Audio and
+    // IMU are excluded upstream; what is left is rare enough to log outright,
+    // and an exit is usually preceded by something.
+    onRawEvent(raw) {
+      trace(`event: ${raw}`)
     },
     onSwipeDown: () => controller.swipeDown(),
     onSwipeUp: () => controller.swipeUp(),
@@ -417,7 +447,22 @@ async function main(): Promise<void> {
   // gate on it, or the browser debug simulator would never start.
   const isEvenHub =
     typeof (window as unknown as Record<string, unknown>).flutter_inappwebview !== 'undefined'
-  trace(`main: v${__APP_VERSION__} (${__BUILD_COMMIT__}) isEvenHub=${isEvenHub}`)
+  // `wasDiscarded` is how a reload tells itself apart from a launch. The host
+  // starts this app twice within seconds regularly, and the two cases are
+  // indistinguishable in the log so far: a genuine second launch, or the same
+  // page being discarded under memory pressure and reloaded at the same URL.
+  // Page Lifecycle is implemented across Blink, Android WebView included, so
+  // the answer is available and was simply not being asked for.
+  const lifecycle = (() => {
+    const doc = document as Document & { wasDiscarded?: boolean }
+    return `discarded=${doc.wasDiscarded ?? '?'} vis=${document.visibilityState}`
+  })()
+  trace(`main: v${__APP_VERSION__} (${__BUILD_COMMIT__}) isEvenHub=${isEvenHub} ${lifecycle}`)
+  // Freeze is the host putting the page aside without tearing it down. If an
+  // exit is preceded by one, the sequence is a suspend that never resumed —
+  // which is a different failure from being stopped outright.
+  document.addEventListener('freeze', () => trace('page: freeze'))
+  document.addEventListener('resume', () => trace('page: resume'))
   const bridge = isEvenHub ? await initDisplay() : null
   trace(`bridge=${bridge ? 'ready' : 'null'}`)
 
