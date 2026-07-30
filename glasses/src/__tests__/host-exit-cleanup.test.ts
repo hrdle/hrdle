@@ -13,7 +13,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
 import { invalidatePanel, panelGaveUp, updateDisplay } from '../display.ts'
-import { setBaseUrl } from '../api.ts'
+import { setBaseUrl, reportLog } from '../api.ts'
 
 function stubPlatform(log: string[]) {
   return {
@@ -179,6 +179,42 @@ describe('being superseded by a newer run releases everything', () => {
     log.length = 0
     supersede(c, 'cccc')
     expect(log).toEqual([])
+  })
+
+  test('the log line names both runs', async () => {
+    // The notice used to name the newcomer and not the run being retired, which
+    // is backwards for the one line whose job is to identify an instance — and
+    // the run-id-keyed log monitor dropped it for having no id at all.
+    // Drain first. The posts are serialised through one promise chain, and the
+    // earlier tests left theirs queued against a closed port — installing the
+    // capturing fetch before draining catches *their* lines instead. The first
+    // version of this test did exactly that and failed on a line written by
+    // another test's controller, which had no instanceId to find.
+    setBaseUrl('http://127.0.0.1:1')
+    await reportLog('info', 'drain')
+    const posted: string[] = []
+    const realFetch = globalThis.fetch
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { message?: string }
+      if (body.message) posted.push(body.message)
+      return new Response('{}', { headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+    try {
+      const platform = stubPlatform([]) as unknown as { instanceId: string }
+      platform.instanceId = 'aaaa'
+      const c = new GlassesController(platform as never)
+      supersede(c, 'zzzz')
+      // `reportLog` returns the tail of its serialising chain, so awaiting one
+      // waits for every post queued ahead of it — including the ones earlier
+      // tests left in flight against a closed port.
+      await reportLog('info', 'flush')
+      const line = posted.find((m) => m.includes('superseded'))
+      expect(line).toBeDefined()
+      expect(line).toContain('[aaaa]') // who was retired
+      expect(line).toContain('zzzz') // who retired it
+    } finally {
+      globalThis.fetch = realFetch
+    }
   })
 })
 
