@@ -144,6 +144,18 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
    with no textarea and no Edit control, so a wrong one stays on that build
    forever. v0.0.5 went up in Japanese and had to be left that way.
 
+   **The field is capped at 500 characters and truncates silently.** `fill`
+   reports success either way, so read the value back and check the length and
+   the last sentence before pressing "Add build":
+
+   ```bash
+   agent-browser --session-name evenhub eval "(() => { const t = document.querySelector('textarea'); return {len: t.value.length, tail: t.value.slice(-60)} })()"
+   ```
+
+   A 620-character changelog for v0.0.11 arrived as 500 ending mid-word
+   ("Separately, a co"). Caught before submitting, which is the only place it can
+   be caught — combined with the rule above, an unchecked overflow is permanent.
+
 9. **Confirm**: the snapshot should show the new version as
    `"vX.X.X Uploaded N seconds ago Private"`
 
