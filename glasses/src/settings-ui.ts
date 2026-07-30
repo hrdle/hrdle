@@ -12,12 +12,13 @@
 // came from.
 
 import { getGlassesSettings, putGlassesSettings, type GlassesSettingsView } from './api.ts'
+import { t } from './i18n.ts'
 
 /** Languages offered. `auto` sends none and lets Whisper detect it. */
-const LANGS: Array<{ value: string; label: string }> = [
-  { value: 'auto', label: 'Auto-detect' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'en', label: 'English' },
+const LANGS: Array<{ value: string; labelKey: string }> = [
+  { value: 'auto', labelKey: 'settings.langAuto' },
+  { value: 'ja', labelKey: 'settings.langJa' },
+  { value: 'en', labelKey: 'settings.langEn' },
 ]
 
 // The accent is a variable because this panel has two homes with different
@@ -42,28 +43,28 @@ const S = {
 export function settingsPanelHtml(): string {
   return `
     <div id="stt-settings" style="${S.section}">
-      <h2 style="${S.h2}">Voice input</h2>
-      <p style="${S.sub}">Transcription runs on the server through Groq. The key never leaves that host.</p>
+      <h2 style="${S.h2}">${t('settings.title')}</h2>
+      <p style="${S.sub}">${t('settings.subtitle')}</p>
 
-      <label style="${S.label}" for="stt-key">Groq API key</label>
+      <label style="${S.label}" for="stt-key">${t('settings.key')}</label>
       <input id="stt-key" type="password" autocomplete="off" placeholder="gsk_..." style="${S.input}" />
       <div style="${S.row}">
-        <button type="button" id="stt-key-save" style="${S.btn}">Save key</button>
-        <button type="button" id="stt-key-clear" style="${S.btnGhost}">Clear</button>
+        <button type="button" id="stt-key-save" style="${S.btn}">${t('settings.keySave')}</button>
+        <button type="button" id="stt-key-clear" style="${S.btnGhost}">${t('settings.keyClear')}</button>
       </div>
       <div id="stt-key-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="stt-lang">Language</label>
+      <label style="${S.label}" for="stt-lang">${t('settings.lang')}</label>
       <select id="stt-lang" style="${S.input}">
-        ${LANGS.map((l) => `<option value="${l.value}">${l.label}</option>`).join('')}
+        ${LANGS.map((l) => `<option value="${l.value}">${t(l.labelKey)}</option>`).join('')}
       </select>
       <div id="stt-lang-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="stt-prompt">Vocabulary prompt</label>
+      <label style="${S.label}" for="stt-prompt">${t('settings.prompt')}</label>
       <textarea id="stt-prompt" rows="4" style="${S.input};font-family:inherit;resize:vertical;"></textarea>
       <div style="${S.row}">
-        <button type="button" id="stt-prompt-save" style="${S.btn}">Save prompt</button>
-        <button type="button" id="stt-prompt-reset" style="${S.btnGhost}">Reset</button>
+        <button type="button" id="stt-prompt-save" style="${S.btn}">${t('settings.promptSave')}</button>
+        <button type="button" id="stt-prompt-reset" style="${S.btnGhost}">${t('settings.promptReset')}</button>
       </div>
       <div id="stt-prompt-status" style="${S.status}"></div>
     </div>
@@ -75,16 +76,14 @@ function el<T extends HTMLElement>(id: string): T | null {
 }
 
 function describeKey(v: GlassesSettingsView): string {
-  if (!v.hasApiKey) return 'No key set - transcription will fail with 503.'
-  return v.apiKeySource === 'env'
-    ? 'A key is set from the server environment (GROQ_API_KEY). Saving one here overrides it.'
-    : 'A key is saved here.'
+  if (!v.hasApiKey) return t('settings.keyNone')
+  return v.apiKeySource === 'env' ? t('settings.keyEnv') : t('settings.keySaved')
 }
 
 function describePrompt(v: GlassesSettingsView): string {
-  if (v.sttPromptSource === 'setting') return 'Using the prompt saved here.'
-  if (v.sttPromptSource === 'env') return 'Using HRDLE_STT_PROMPT from the server environment.'
-  return 'Using the prompt composed from your workspace names and the glossary.'
+  if (v.sttPromptSource === 'setting') return t('settings.promptSetting')
+  if (v.sttPromptSource === 'env') return t('settings.promptEnv')
+  return t('settings.promptComposed')
 }
 
 /**
@@ -106,15 +105,15 @@ export async function wireSettingsPanel(): Promise<void> {
 
   const render = (v: GlassesSettingsView) => {
     key.value = ''
-    key.placeholder = v.hasApiKey ? 'A key is set - type a new one to replace it' : 'gsk_...'
+    key.placeholder = v.hasApiKey ? t('settings.keyPlaceholderSet') : 'gsk_...'
     if (keyStatus) keyStatus.textContent = describeKey(v)
 
     lang.value = LANGS.some((l) => l.value === v.sttLang) ? v.sttLang : 'auto'
     if (langStatus) {
       langStatus.textContent =
         v.sttLangSource === 'setting'
-          ? 'Saved here.'
-          : `Server default (${v.sttLang}). Pick one to change it.`
+          ? t('settings.langSaved')
+          : t('settings.langDefault', { lang: v.sttLang })
     }
 
     prompt.value = v.sttPrompt
@@ -125,7 +124,11 @@ export async function wireSettingsPanel(): Promise<void> {
   }
 
   const fail = (node: HTMLElement | null, err: unknown) => {
-    if (node) node.textContent = `Failed: ${err instanceof Error ? err.message : String(err)}`
+    if (node) {
+      node.textContent = t('settings.failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 
   try {
@@ -137,7 +140,7 @@ export async function wireSettingsPanel(): Promise<void> {
 
   el('stt-key-save')?.addEventListener('click', async () => {
     if (!key.value.trim()) {
-      if (keyStatus) keyStatus.textContent = 'Nothing to save - the field is empty.'
+      if (keyStatus) keyStatus.textContent = t('settings.keyEmpty')
       return
     }
     try {
