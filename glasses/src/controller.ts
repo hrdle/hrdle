@@ -154,6 +154,14 @@ export interface GlassesPlatform {
    * panel is showing, and both are stale by the time this is called.
    */
   onForegroundRegained(): void
+  /** Names this run of the app to the server, which is the only party able to
+   *  see that the host left a previous one running. Absent in the simulator,
+   *  which never takes part in retirement either way. */
+  instanceId?: string
+  /** This run has been retired in favour of a newer one. The controller has
+   *  already let go of its own clocks, socket and microphone; this is for
+   *  whatever the entry point started on its own. */
+  onSuperseded?: () => void
 }
 
 /** Where a reply (choice keys / voice prompt) is routed. paneId targets the
@@ -269,7 +277,28 @@ export class GlassesController {
       onRelaySnapshot: (items) => this.onRelaySnapshot(items),
       onRelayUpsert: (item) => this.onRelayUpsert(item),
       onRelayRemove: (id) => this.onRelayRemove(id),
+      onSuperseded: (by) => this.onSuperseded(by),
     })
+  }
+
+  /**
+   * A newer run of the app has connected; this one is the leftover.
+   *
+   * The host launches a new WebView without tearing down the previous one, and
+   * from inside neither can see the other — everything-evenhub#16 records two
+   * instances running concurrently for sixteen minutes, the stale one still
+   * holding the microphone. The server can see both, so it is the one that says
+   * which is which.
+   *
+   * No resume point is saved on the way out. The newcomer has already read the
+   * saved one and is where the reader is; writing this instance's position over
+   * it would move them back to wherever this run happened to be looking.
+   */
+  private onSuperseded(by: string): void {
+    if (this.stopped) return
+    void reportLog('error', `superseded by instance ${by} — releasing everything`)
+    this.shutdown()
+    this.platform.onSuperseded?.()
   }
 
   /** Connect the WS and mark this connection as "glasses present" (#504). The
@@ -277,7 +306,7 @@ export class GlassesController {
    *  a snapshot, then pushes upserts/removals. */
   connect(): void {
     if (this.stopped) return
-    this.ws.subscribeGlassesRelay(this.platform.onDevice)
+    this.ws.subscribeGlassesRelay(this.platform.onDevice, this.platform.instanceId)
     this.ws.connect()
     // One timer for the life of the app rather than start/stop bookkeeping on
     // every state change. It costs nothing when nothing is working: the tick

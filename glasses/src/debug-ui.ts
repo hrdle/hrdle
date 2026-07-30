@@ -255,6 +255,7 @@ export function startDebugUI(): void {
             <button type="button" id="btn-fg-exit">Foreground exit</button>
             <button type="button" id="btn-fg-enter">Foreground enter</button>
             <button type="button" id="btn-host-exit">Host exit</button>
+            <button type="button" id="btn-superseded">Superseded</button>
           </div>
           <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
           <h2>Voice input</h2>
@@ -580,6 +581,14 @@ export function startDebugUI(): void {
     // rather than silent: the recovery it stands for is the whole point.
     onForegroundRegained() {
       setVoiceStatus('Detected a return to the foreground (input arrived, so drawing resumes)')
+    },
+    // `instanceId` is deliberately absent: the simulator subscribes with
+    // `onDevice: false`, so the server never retires it and never lets it retire
+    // real glasses — testing in a browser while wearing them has to keep
+    // working. The button below drives this path anyway, because a path only
+    // reachable by owning two WebViews at once is a path nobody tests.
+    onSuperseded() {
+      setVoiceStatus('Retired in favour of a newer run (the panel is no longer ours)')
     },
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
@@ -1022,6 +1031,14 @@ export function startDebugUI(): void {
     controller.onHostExit('system')
     lifecycleStatus.textContent =
       'Host exit: socket closed, clocks cleared, microphone closed. Nothing draws from here — reload to start again.'
+    renderDiag(controller.state)
+  })
+  el('btn-superseded').addEventListener('click', () => {
+    // What the server sends when a newer run of the app connects. Same release
+    // as a host exit, minus the resume point — the newcomer owns that.
+    ;(controller as unknown as { onSuperseded(by: string): void }).onSuperseded('newer')
+    lifecycleStatus.textContent =
+      'Superseded: released everything and saved no resume point (the newer run owns the reader’s place).'
     renderDiag(controller.state)
   })
 

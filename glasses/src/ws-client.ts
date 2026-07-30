@@ -15,6 +15,9 @@ export interface WsCallbacks {
   onRelayRemove?: (id: string) => void
   /** Screen mirror (demo). `null` = no device publishing / publisher gone. */
   onGlassesScreen?: (screen: GlassesScreen | null) => void
+  /** A newer run of the app has connected; this one is the ghost the host left
+   *  behind and should let go of everything. `by` is the newcomer's id. */
+  onSuperseded?: (by: string) => void
 }
 
 // Well inside the server's 60s ping timeout, with room for a dropped one.
@@ -64,6 +67,9 @@ export class WsClient {
   // every (re)connect while this flag is set (#504).
   private relaySubscribed = false
   private onDevice = true
+  /** Which run of the app this is; re-sent on every reconnect so the server's
+   *  view of who is current survives a dropped socket. */
+  private instanceId: string | undefined
   private screenSubscribed = false
   /** Set by `close()`. Refuses every later connect, including the automatic
    *  one, so a socket closed on the way out stays closed. */
@@ -98,7 +104,11 @@ export class WsClient {
       // Re-establish the relay subscription before onReady so the server's
       // snapshot arrives around the same time as session re-subscribes.
       if (this.relaySubscribed) {
-        this.send({ type: 'subscribe-glasses-relay', onDevice: this.onDevice })
+        this.send({
+          type: 'subscribe-glasses-relay',
+          onDevice: this.onDevice,
+          instanceId: this.instanceId,
+        })
       }
       if (this.screenSubscribed) {
         this.send({ type: 'subscribe-glasses-screen' })
@@ -149,6 +159,8 @@ export class WsClient {
         this.callbacks.onRelayRemove?.(msg.id as string)
       } else if (msg.type === 'glasses-screen') {
         this.callbacks.onGlassesScreen?.((msg.screen ?? null) as GlassesScreen | null)
+      } else if (msg.type === 'glasses-superseded') {
+        this.callbacks.onSuperseded?.(String(msg.by ?? '?'))
       }
     } catch { /* ignore */ }
   }
@@ -191,10 +203,14 @@ export class WsClient {
   /** `onDevice` false = the browser simulator. It receives every relay item
    *  either way; the flag only stops a preview window from being taken as
    *  proof that the user was told, which would silence their browser push. */
-  subscribeGlassesRelay(onDevice: boolean): void {
+  /** `instanceId` names this run of the app, so the server can retire the
+   *  previous one — the host launches a new WebView without tearing down the old
+   *  one, and neither instance can see the other from inside. */
+  subscribeGlassesRelay(onDevice: boolean, instanceId?: string): void {
     this.relaySubscribed = true
     this.onDevice = onDevice
-    this.send({ type: 'subscribe-glasses-relay', onDevice })
+    this.instanceId = instanceId
+    this.send({ type: 'subscribe-glasses-relay', onDevice, instanceId })
   }
 
   unsubscribeGlassesRelay(): void {

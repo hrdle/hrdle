@@ -316,7 +316,10 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     // Absent means device: an ehpk predating the field is on a face, while the
     // simulator ships inside the server binary that reads it, so it can never
     // be the older of the two.
-    await subscribeGlassesRelay(ws, msg.onDevice !== false);
+    // `instanceId` lets the server retire the app's previous run, which the
+    // host does not do for us (everything-evenhub#16, "Ghost WebViews on
+    // relaunch").
+    await subscribeGlassesRelay(ws, msg.onDevice !== false, msg.instanceId);
     return;
   }
 
