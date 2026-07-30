@@ -121,6 +121,67 @@ describe('a host exit releases what the app took', () => {
   })
 })
 
+describe('being superseded by a newer run releases everything', () => {
+  // The host launches a new WebView without tearing down the old one, and from
+  // inside neither instance can see the other. The server can, so it says which
+  // is which — this is what the losing side does about it.
+
+  /** Reach the callback the WsClient would have invoked. */
+  function supersede(c: GlassesController, by = 'bbbb') {
+    ;(c as unknown as { onSuperseded(by: string): void }).onSuperseded(by)
+  }
+
+  test('it lets go of the socket, the clocks and the microphone', () => {
+    const { c, log, timers } = connected()
+    supersede(c)
+    expect(c.isStopped()).toBe(true)
+    expect(timers.spinnerTimer).toBeNull()
+    expect(timers.autoTimer).toBeNull()
+    expect(c.ws.getState()).toBe('null')
+    expect(log).toContain('mic off')
+  })
+
+  test('it does NOT save a resume point', () => {
+    // The newcomer has already read the saved one and is where the reader is.
+    // Writing this run's position over it would move them back to wherever this
+    // instance happened to be looking.
+    const { c, log } = connected()
+    supersede(c)
+    expect(log).not.toContain('saveState')
+  })
+
+  test('the entry point is told, so it can release its own timers', () => {
+    const log: string[] = []
+    const platform = stubPlatform(log) as unknown as { onSuperseded: () => void }
+    platform.onSuperseded = () => log.push('platform released')
+    setBaseUrl('http://127.0.0.1:1')
+    const c = new GlassesController(platform as never)
+    c.connect()
+    supersede(c)
+    expect(log).toContain('platform released')
+  })
+
+  test('nothing draws afterwards', async () => {
+    const { c, log } = connected()
+    supersede(c)
+    log.length = 0
+    c.tap()
+    ;(c as unknown as { onSessionsUpdated(s: unknown[]): void }).onSessionsUpdated([
+      { id: 'a', name: 'work', state: 'idle', panes: [] },
+    ])
+    await Promise.resolve()
+    expect(log).toEqual([])
+  })
+
+  test('a second notice is harmless', () => {
+    const { c, log } = connected()
+    supersede(c)
+    log.length = 0
+    supersede(c, 'cccc')
+    expect(log).toEqual([])
+  })
+})
+
 describe('a foreground exit closes the microphone', () => {
   test('an interrupted recording does not leave the mic open', async () => {
     // The PCM stops arriving when the glasses show something else, while

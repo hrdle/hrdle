@@ -1069,7 +1069,16 @@ export type MuxClientMessage =
   // hardware silences the browser push, because only a wearer is actually
   // being told. Absent means device: an older ehpk that predates the field is
   // running on a face, and a simulator ships with the server that reads this.
-  | { type: 'subscribe-glasses-relay'; onDevice?: boolean }
+  //
+  // `instanceId` names which run of the app this is, so the server can retire
+  // the previous one. The Even Realities app does not tear down a plugin's old
+  // WebView when it launches a new one (everything-evenhub#16, "Ghost WebViews
+  // on relaunch": two instances observed running concurrently for 16+ minutes,
+  // the stale one still holding the microphone). Nothing on the glasses side can
+  // see the other instance — but both of them connect here, so this is the one
+  // place that can. Absent means an ehpk older than the field, which is left
+  // alone rather than retired on a guess.
+  | { type: 'subscribe-glasses-relay'; onDevice?: boolean; instanceId?: string }
   | { type: 'unsubscribe-glasses-relay' }
   // Screen mirroring for demos. The device publishes; browsers subscribe.
   // Only a connection with a real Even Hub bridge publishes, so the simulator
@@ -1137,7 +1146,11 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('unsubscribe'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('subscribe-conversation'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('unsubscribe-conversation'), sessionId: z.string().min(1) }),
-  z.object({ type: z.literal('subscribe-glasses-relay'), onDevice: z.boolean().optional() }),
+  z.object({
+    type: z.literal('subscribe-glasses-relay'),
+    onDevice: z.boolean().optional(),
+    instanceId: z.string().min(1).max(64).optional(),
+  }),
   z.object({ type: z.literal('unsubscribe-glasses-relay') }),
   z.object({
     type: z.literal('glasses-screen'),
@@ -1174,6 +1187,10 @@ export type MuxServerMessage =
   | { type: 'glasses-relay'; item: GlassesRelayItem } // upsert (create / dismiss reflection)
   | { type: 'glasses-relay-remove'; id: string } // exit-blocked / TTL expiry
   | { type: 'glasses-relay-snapshot'; items: GlassesRelayItem[] } // on subscribe: current blocked set
+  // A newer run of the glasses app has arrived; this connection's run is the old
+  // one and should let go of everything — panel, microphone, timers, socket.
+  // `by` is the newcomer's instanceId, so the log says who retired whom.
+  | { type: 'glasses-superseded'; by: string }
   // Screen mirror. `null` means no device is publishing — sent on subscribe
   // when nothing is live, and again when the publisher disconnects, so a demo
   // audience sees "Disconnected" rather than a frozen screen.

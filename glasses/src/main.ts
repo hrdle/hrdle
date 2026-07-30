@@ -171,6 +171,9 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   const platform: GlassesPlatform = {
     // startGlassesMode only runs with a real Even Hub bridge.
     onDevice: true,
+    // The same id every log line carries, so "superseded by 0e3f" names a run
+    // whose story is already in the log.
+    instanceId: RUN_ID,
     render(state) {
       // Just the startup burst — that is where frames used to pile up.
       if (++renders <= 10) trace(`render #${renders} mode=${state.mode} sessions=${state.sessions.length}`)
@@ -207,6 +210,11 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       } catch (err) {
         trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
       }
+    },
+    onSuperseded() {
+      // Same release as a host exit, and for the same reason: nothing this run
+      // does from here reaches anybody. The panel belongs to the newer instance.
+      releaseHostResources()
     },
     onForegroundRegained() {
       foreground = true

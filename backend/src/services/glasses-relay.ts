@@ -159,6 +159,18 @@ const subscribers = new Set<RelaySocket>();
  */
 const deviceSubscribers = new Set<RelaySocket>();
 
+/**
+ * Which run of the glasses app each device connection belongs to.
+ *
+ * The Even Realities app does not tear down a plugin's previous WebView when it
+ * launches a new one — everything-evenhub#16 records two instances running
+ * concurrently for over sixteen minutes, the stale one still holding the
+ * microphone. From inside the WebView neither instance can see the other, and
+ * the host offers nothing to ask. Both of them connect here, so this is the only
+ * vantage point that has the answer.
+ */
+const deviceInstances = new WeakMap<RelaySocket, string>();
+
 export function glassesRelaySubscriberCount(): number {
   return subscribers.size;
 }
@@ -171,6 +183,44 @@ export function glassesDeviceCount(): number {
 export function unsubscribeGlassesRelay(ws: RelaySocket): void {
   subscribers.delete(ws);
   deviceSubscribers.delete(ws);
+  deviceInstances.delete(ws);
+}
+
+/**
+ * Retire every device connection that belongs to an earlier run.
+ *
+ * Newest wins. That is the host's own rule as far as it can be observed: in both
+ * recorded double launches the instance the host sent `launchSource` to — the one
+ * it kept — was the one that started second.
+ *
+ * Only connections carrying a *different* instanceId are retired, so a socket
+ * that drops and reconnects does not retire itself. Connections with no
+ * instanceId are left alone: an ehpk older than the field cannot be told apart
+ * from the newcomer, and silencing a live wearer on a guess is the worse error.
+ *
+ * The simulator never takes part. It subscribes with `onDevice: false`, so it is
+ * neither retired by real glasses nor able to retire them — testing in a browser
+ * while wearing the device has to keep working.
+ */
+function retirePreviousInstances(newcomer: RelaySocket, instanceId: string): void {
+  const payload = JSON.stringify({ type: 'glasses-superseded', by: instanceId });
+  for (const ws of deviceSubscribers) {
+    if (ws === newcomer) continue;
+    const previous = deviceInstances.get(ws);
+    if (!previous || previous === instanceId) continue;
+    console.log(`[glasses-relay] retiring instance ${previous}, superseded by ${instanceId}`);
+    try {
+      ws.send(payload);
+    } catch {
+      // Already gone, which is the outcome being asked for.
+    }
+    // Dropped from the device set immediately rather than waiting for it to
+    // disconnect: while it is still counted, the server believes a wearer is
+    // being shown notifications that are in fact going to a revoked panel.
+    subscribers.delete(ws);
+    deviceSubscribers.delete(ws);
+    deviceInstances.delete(ws);
+  }
 }
 
 function sendToSubscribers(msg: Record<string, unknown>): void {
@@ -615,10 +665,21 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
  * snapshot. `onDevice` false marks a simulator: it still receives everything,
  * it just does not count as the user having been told.
  */
-export async function subscribeGlassesRelay(ws: RelaySocket, onDevice = true): Promise<void> {
+export async function subscribeGlassesRelay(
+  ws: RelaySocket,
+  onDevice = true,
+  instanceId?: string,
+): Promise<void> {
   subscribers.add(ws);
-  if (onDevice) deviceSubscribers.add(ws);
-  else deviceSubscribers.delete(ws);
+  if (onDevice) {
+    deviceSubscribers.add(ws);
+    if (instanceId) {
+      deviceInstances.set(ws, instanceId);
+      retirePreviousInstances(ws, instanceId);
+    }
+  } else {
+    deviceSubscribers.delete(ws);
+  }
   try {
     const items = await buildGlassesRelaySnapshot();
     ws.send(JSON.stringify({ type: 'glasses-relay-snapshot', items }));
