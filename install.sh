@@ -47,18 +47,55 @@ check_dependencies() {
   info "Checking dependencies..."
 
   # herdr — Hrdle runs every session in a herdr workspace, so this is required.
+  #
+  # Installed here rather than reported as a missing prerequisite. Stopping at
+  # this point turned a one-line install into "run it, watch it fail, install
+  # herdr, run the same line again" — and the second run is character for
+  # character the first, so nothing was gained by making someone type it twice.
   if ! command -v herdr &> /dev/null; then
-    warn "herdr is not installed"
-    echo "  curl -fsSL https://herdr.dev/install.sh | sh"
-    echo "  macOS: brew install herdr"
-    exit 1
+    if [[ -n "${HRDLE_SKIP_HERDR:-}" ]]; then
+      warn "herdr is not installed, and HRDLE_SKIP_HERDR is set"
+      echo "  curl -fsSL https://herdr.dev/install.sh | sh"
+      echo "  macOS: brew install herdr"
+      exit 1
+    fi
+    # herdr stands on its own rather than being a detail of this install, so say
+    # what is about to happen instead of just doing it.
+    info "herdr is missing. Installing it now (HRDLE_SKIP_HERDR=1 to do it yourself)"
+    if [[ "$(uname -s)" == "Darwin" ]] && command -v brew &> /dev/null; then
+      brew install herdr || error "herdr install failed. See https://herdr.dev/"
+    else
+      curl -fsSL https://herdr.dev/install.sh | sh || error "herdr install failed. See https://herdr.dev/"
+    fi
+    # A binary installed a second ago is not necessarily findable: the shell
+    # caches lookups, and the directory it landed in may not be on PATH in this
+    # process at all.
+    hash -r 2>/dev/null || true
+    if ! command -v herdr &> /dev/null; then
+      for dir in "$HOME/.local/bin" "$HOME/bin" "/opt/homebrew/bin" "/usr/local/bin"; do
+        if [[ -x "$dir/herdr" ]]; then
+          export PATH="$dir:$PATH"
+          break
+        fi
+      done
+    fi
+    command -v herdr &> /dev/null ||
+      error "herdr installed but is not on PATH. Open a new shell and run this installer again."
   fi
   info "  herdr: $(herdr --version 2>/dev/null || echo 'installed')"
 
   # Tailscale
+  #
+  # Not installed for you, unlike herdr: it needs sudo, its package route
+  # differs per distribution, and a half-applied network daemon is a worse place
+  # to be left than a missing one.
   if ! command -v tailscale &> /dev/null; then
     warn "Tailscale is not installed"
-    echo "  https://tailscale.com/download"
+    echo "  Linux: curl -fsSL https://tailscale.com/install.sh | sh"
+    echo "  macOS: brew install tailscale   (the App Store build ships no CLI)"
+    echo ""
+    echo "  Then allow certificate generation, once:"
+    echo "    sudo tailscale set --operator=\$USER"
     exit 1
   fi
   info "  tailscale: $(tailscale version | head -1)"
