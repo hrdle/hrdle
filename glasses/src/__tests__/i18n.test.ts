@@ -23,14 +23,14 @@ describe('the two tables match', () => {
 
 describe('substitution', () => {
   test('fills named placeholders', () => {
-    expect(t('nav.step', { n: 3, total: 7, label: 'Install' })).toContain('3')
-    expect(t('nav.step', { n: 3, total: 7, label: 'Install' })).toContain('Install')
+    expect(t('settings.langDefault', { lang: 'ja' })).toContain('ja')
+    expect(t('settings.failed', { error: 'nope' })).toContain('nope')
   })
 
   test('leaves an unknown placeholder alone rather than blanking it', () => {
     // Better a visible `{binary}` than a sentence with a hole in it — one is a
     // bug report, the other reads as finished prose that says less than it should.
-    expect(t('connect.trouble', {})).toContain('{binary}')
+    expect(t('scan.notAnAddress', {})).toContain('{binary}')
   })
 
   test('an unknown key comes back as itself', () => {
