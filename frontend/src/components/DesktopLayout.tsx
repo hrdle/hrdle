@@ -18,10 +18,7 @@ import {
 	type SessionTheme,
 	type TmuxLayoutNode,
 } from "../../../shared/types";
-import {
-	sendTerminalInputRest,
-	useMultiplexedTerminal,
-} from "../hooks/useMultiplexedTerminal";
+import { useMultiplexedTerminal } from "../hooks/useMultiplexedTerminal";
 import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
 import { sessionFetch } from "../services/peer-fetch";
@@ -1212,18 +1209,6 @@ export function DesktopLayout({
 		onShowSessions: () => setShowSessionModal(true),
 		onOpenFileViewer: openFileViewer,
 		remoteControl,
-		// Chat composer fallback: the mux WS rejects input for unsubscribed
-		// sessions, so remote-control mode sends over REST (peer-aware).
-		sendInputRest: remoteControl
-			? (paneId: string, data: string) =>
-					sendTerminalInputRest(
-						peerConn.apiBase,
-						peerConn.token,
-						controlSessionIdRef.current ?? "",
-						paneId,
-						data,
-					)
-			: undefined,
 	};
 
 	const handleSplit = useCallback((direction: "horizontal" | "vertical") => {

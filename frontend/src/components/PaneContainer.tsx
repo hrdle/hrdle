@@ -71,9 +71,6 @@ export interface ControlModeContext {
 	/** Remote-control mode (PC only): the xterm area shows a placeholder and
 	 * the local herdr client owns the terminal. */
 	remoteControl?: boolean;
-	/** REST input sender for remote-control mode (the mux WS rejects input for
-	 * unsubscribed sessions). Used by the Chat composer. */
-	sendInputRest?: (paneId: string, data: string) => Promise<boolean>;
 }
 
 interface PaneContainerProps {
@@ -645,14 +642,8 @@ function TerminalPane({
 						subtitle={session?.name}
 						inline={true}
 						enabled={showConversation}
-						// Tablet has its own FloatingKeyboard that already routes input to
-						// the active pane (same as Terminal mode) — no in-view composer.
-						showComposer={!isTablet}
-						paneId={controlModeContext.getControlConfig(paneId)?.paneId}
-						theme={session?.theme}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
-						sendInputOverRest={controlModeContext.sendInputRest}
 					/>
 				)}
 				{sessionTarget ? (

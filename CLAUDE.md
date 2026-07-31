@@ -203,7 +203,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 **Session Management**:
 - **SessionList.tsx** - Full session list with tabs (Active/History/Dashboard), pane list with focus/close/split actions, pinch-to-zoom support
 - **SessionHistory.tsx** - Past session browser with project grouping
-- **ConversationViewer.tsx** - Markdown-rendered conversation display with image support
+- **ConversationViewer.tsx** - The transcript, read-only, laid out after the Claude app: the user's turns as bubbles on the right, the agent's as a full-width column, on a warm neutral surface of its own (`--color-conv-*` in `index.css`, not the session's terminal color). A tool call and its result render as **one** collapsed card - the transcript stores them a message apart (call on the assistant turn, result on the user turn after it), so `buildRows` pairs them by `toolUseId` and drops the result-only message that used to appear as a "System" speaker saying the output of something two screens up. Consecutive turns from one speaker are labelled once
 
 **History V2** (`components/history/`, opt-in via `hrdle-history-v2` localStorage flag):
 - **SessionHistoryV2.tsx** - Flat searchable history list with facet filtering
@@ -217,8 +217,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **dashboard/PeerServerCard.tsx** - Per-peer server info card with system metrics
 
 **Chat** (`components/chat/`):
-- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected
-- **ChatComposer.tsx** - Multi-line message composer used by ChatView
+- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. **Read-only**: there is no composer, and chat mode no longer raises the soft keyboard. Two places to type into one pane only made it ambiguous which one was listening, and the answer was never the one on screen
 
 **Keyboard / Input**:
 - **InputBar.tsx** - Persistent input bar above the terminal with prompt history, slash-command picker, image upload, sendable to the focused pane
@@ -265,7 +264,6 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **useNetworkLatency.ts** - WebSocket latency tracking
 - **useLineSelection.ts** - Text line selection utilities
 - **useSelectionMode.ts** - Touch-selection state machine for `SelectionOverlay` (start/end cell, drag handles, copy-to-clipboard)
-- **useInputEcho.ts** - Echoes characters typed into the InputBar back into the conversation/chat view while the terminal is hidden
 - **useConversationStream.ts** - Subscribes to `/ws/mux` conversation streams (`subscribe-conversation`) and exposes incremental conversation updates
 - **useAgentConversation.ts** - Unified conversation hook: Claude streams over the WebSocket, thread agents (Codex/Grok) poll over HTTP — chosen from the shared `AGENT_PROVIDERS` registry
 - **useThreadConversation.ts** - Polling conversation loader for thread-based agents (`?agent=codex|grok`)

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PaneDemand, PaneViewport, TmuxLayoutNode } from "../../../shared/types";
-import { authFetch, fetchWithTimeout } from "../services/api";
 import { reportWsLatency } from "../services/latency-store";
 import { appendWsToken } from "../services/peer-ws";
 import { getDeviceId } from "../utils/device-id";
@@ -553,83 +552,6 @@ export function unsubscribeConversation(sessionId: string) {
 	}
 }
 
-/**
- * Send terminal input to a specific pane on a session, regardless of which session
- * the active terminal hook is subscribed to. Used by ChatView's composer.
- */
-export function sendTerminalInput(
-	sessionId: string,
-	paneId: string,
-	data: string,
-): boolean {
-	if (sharedWs?.readyState !== WebSocket.OPEN || !wsReady) return false;
-	const bytes = new TextEncoder().encode(data);
-	const base64 = uint8ArrayToBase64(bytes);
-	sharedWs.send(
-		JSON.stringify({ type: "input", sessionId, paneId, data: base64 }),
-	);
-	dispatchInputEcho(sessionId, paneId, data);
-	return true;
-}
-
-/**
- * REST variant of sendTerminalInput for remote-control mode: the mux WS rejects
- * input for sessions this client is not subscribed to, so route through
- * POST /panes/input instead (peer-aware base+token, see #256). Resolves true
- * only when the server accepted the input.
- */
-export async function sendTerminalInputRest(
-	peerApiBase: string | null | undefined,
-	token: string | null | undefined,
-	sessionId: string,
-	paneId: string,
-	data: string,
-): Promise<boolean> {
-	const path = `/api/workspaces/${encodeURIComponent(sessionId)}/panes/input`;
-	const bytes = new TextEncoder().encode(data);
-	const body = JSON.stringify({
-		paneId,
-		data: uint8ArrayToBase64(bytes),
-		encoding: "base64",
-	});
-	const headers: HeadersInit = { "Content-Type": "application/json" };
-	try {
-		let res: Response;
-		if (peerApiBase && peerApiBase.length > 0) {
-			const peerHeaders = new Headers(headers);
-			if (token) peerHeaders.set("Authorization", `Bearer ${token}`);
-			res = await fetchWithTimeout(`${peerApiBase}${path}`, {
-				method: "POST",
-				headers: peerHeaders,
-				body,
-			});
-		} else {
-			res = await authFetch(`${import.meta.env.VITE_API_URL || ""}${path}`, {
-				method: "POST",
-				headers,
-				body,
-			});
-		}
-		if (!res.ok) return false;
-		dispatchInputEcho(sessionId, paneId, data);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-function dispatchInputEcho(
-	sessionId: string,
-	paneId: string,
-	data: string,
-) {
-	window.dispatchEvent(
-		new CustomEvent("cchub-input-echo", {
-			detail: { sessionId, paneId, data },
-		}),
-	);
-}
-
 // =============================================================================
 // React Hook
 // =============================================================================
@@ -716,7 +638,6 @@ export function useMultiplexedTerminal(
 		const bytes = new TextEncoder().encode(data);
 		const base64 = uint8ArrayToBase64(bytes);
 		sendSessionMessage({ type: "input", paneId, data: base64 });
-		if (subscribedSession) dispatchInputEcho(subscribedSession, paneId, data);
 	}, []);
 
 	// Last size we sent, so a tap can re-claim ownership at the current size.

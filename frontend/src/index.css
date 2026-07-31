@@ -28,6 +28,20 @@
 	--color-warning: #f59e0b;
 	--color-error: #ef4444;
 
+	/* Conversation surface.
+	   Its own warm neutral scale rather than the app's greys: this is reading
+	   surface, not chrome, and the terminal's own background is a per-session
+	   color that changes under the same text. */
+	--color-conv-bg: #262624;
+	--color-conv-surface: #2f2f2c;
+	--color-conv-surface-hover: #3a3a36;
+	--color-conv-bubble: #34332f;
+	--color-conv-text: #f0efea;
+	--color-conv-text-secondary: #c3c1b7;
+	--color-conv-text-muted: #8b8981;
+	--color-conv-border: #3d3d39;
+	--color-conv-accent: #d97757;
+
 	/* Typography */
 	font-family: "Inter", "Noto Sans JP", system-ui, -apple-system, sans-serif;
 	line-height: 1.5;
@@ -55,6 +69,16 @@
 	--color-brand: #2563eb;
 	--color-brand-dim: #1d4ed8;
 	--color-brand-glow: rgba(37, 99, 235, 0.3);
+
+	--color-conv-bg: #faf9f5;
+	--color-conv-surface: #f2f0e8;
+	--color-conv-surface-hover: #e9e6da;
+	--color-conv-bubble: #f0eee6;
+	--color-conv-text: #1f1e1d;
+	--color-conv-text-secondary: #4a4844;
+	--color-conv-text-muted: #83817b;
+	--color-conv-border: #e2dfd4;
+	--color-conv-accent: #c96442;
 }
 
 /* Tailwind v4 @theme: generate th-* utility classes from CSS variables */
@@ -73,6 +97,16 @@
   --color-th-success: var(--color-success);
   --color-th-warning: var(--color-warning);
   --color-th-error: var(--color-error);
+
+  --color-cv-bg: var(--color-conv-bg);
+  --color-cv-surface: var(--color-conv-surface);
+  --color-cv-surface-hover: var(--color-conv-surface-hover);
+  --color-cv-bubble: var(--color-conv-bubble);
+  --color-cv-text: var(--color-conv-text);
+  --color-cv-text-secondary: var(--color-conv-text-secondary);
+  --color-cv-text-muted: var(--color-conv-text-muted);
+  --color-cv-border: var(--color-conv-border);
+  --color-cv-accent: var(--color-conv-accent);
 }
 
 html,
