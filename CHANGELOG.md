@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.16] - 2026-07-31
+
+### Added
+- **A glasses run that dies without a word is still dated.** Nineteen runs were
+  recorded on 2026-07-31; thirteen announced their own exit and five were killed
+  too abruptly to say anything — the heartbeat simply stopped. A quarter of the
+  day's deaths were invisible until someone read the log afterwards, and then
+  only by inferring death from an absence of lines, which reads exactly like a
+  log that is lagging. That confusion nearly had a live run declared dead the
+  same morning
+  - The server already knew: `muxClose` drops the relay subscription the moment
+    the socket goes. It just did not say which run it was, or that it was
+    glasses at all. `unsubscribeGlassesRelay` now reports what it dropped and
+    the close writes it down — `[glasses-relay] device gone: [a147] code=1006`
+  - Only hardware. A simulator tab closing is not glasses going away, and every
+    browser socket passes through the same call, so one that was never
+    subscribed reports nothing
+
+### Fixed
+- **The glasses app no longer misses the host's launch source** (`v0.0.18`). The
+  host pushes it once when loading completes and the SDK keeps no copy — the
+  subscription is a plain event listener with no cached getter beside it, so
+  whatever is not listening at that moment never finds out. The SDK's own
+  troubleshooting table says as much: register it early
+  - It was registered after `initDisplay` resolved, which put a full round trip
+    to the host in the way — the bridge, then the startup page container, and
+    only then a listener. Three runs the same day reached `startup complete`
+    having never been told their launch source
+  - `initDisplay` now takes a callback and runs it the moment the bridge
+    resolves, before it builds the container. On `appMenu` a missed push meant
+    the companion settings UI silently not starting; on either source it meant
+    the log could not tell a discarded instance apart from one that was simply
+    not listening yet
+
 ## [0.3.15] - 2026-07-31
 
 ### Added
