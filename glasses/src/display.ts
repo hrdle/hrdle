@@ -1249,12 +1249,34 @@ let currentMode: Mode | null = null
  *  new geometry needs. */
 let currentNoticeLines = 0
 
-export async function initDisplay(): Promise<Bridge | null> {
+/**
+ * Get the bridge and put the first frame on the panel.
+ *
+ * `onBridge` runs the moment the bridge resolves and before the startup
+ * container is built, which is the only place a one-shot subscription can be
+ * registered in time. The host pushes the launch source once when loading
+ * completes and the SDK keeps no copy of it — `onLaunchSource` is a plain
+ * event subscription with no cached getter beside it, so a listener attached
+ * after the push never learns the answer. Creating the container first costs a
+ * round trip to the host, and subscribing on the far side of it is what the
+ * SDK's own troubleshooting entry means by "register `onLaunchSource` early".
+ *
+ * A throwing callback must not cost us the panel, so it is contained here.
+ */
+export async function initDisplay(
+  onBridge?: (bridge: Bridge) => void,
+): Promise<Bridge | null> {
   try {
     const bridge = await Promise.race([
       waitForEvenAppBridge(),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('bridge timeout')), 5000)),
     ])
+
+    try {
+      onBridge?.(bridge)
+    } catch (e) {
+      traceSink?.(`onBridge failed: ${e}`, 'error')
+    }
 
     const initial = new CreateStartUpPageContainer({
       containerTotalNum: 2,
