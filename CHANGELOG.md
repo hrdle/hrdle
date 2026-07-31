@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.25] - 2026-08-01
+
+### Fixed
+- **An uploaded image arrives as a paste, so the agent shows `[Image #1]`
+  again.** Attaching a picture from a phone left the prompt holding fifty
+  characters of upload path where the picture should be
+  - Nothing here had changed: the upload has always sent the path as terminal
+    input. Claude Code recognises an image only in its *paste* handler - which
+    is how a terminal delivers a drag-and-drop - and its auto-paste-detection
+    only treats a batch as a paste above roughly 300 bytes, which a path is
+    nowhere near. Verified on a live pane against Claude Code 2.1.220: the same
+    path, raw versus wrapped in DECSET 2004 markers, gives the literal path
+    versus the placeholder
+  - All three upload paths go through it: the phone's input bar, the desktop
+    file picker, and a pasted clipboard image. The separating space sits
+    outside the markers, since inside it would be part of the filename the
+    agent goes looking for
+
 ## [0.3.24] - 2026-08-01
 
 ### Added
