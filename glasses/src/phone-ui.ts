@@ -17,6 +17,7 @@
 // change. The store is the only thing that differs, and `makeStore` absorbs it.
 
 import { getDashboard, getSessions, setBaseUrl } from './api.ts'
+import { BRAND_CSS, brandIcon } from './brand.ts'
 import type { Bridge } from './display.ts'
 import { type Lang, getLang, setLang, t } from './i18n.ts'
 import { scanQr } from './qr-scan.ts'
@@ -96,8 +97,9 @@ const CSS = `
   .wiz * { box-sizing:border-box; }
   .wiz-top { padding:16px 20px 0; }
   .wiz-brand { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-  .wiz-mark { width:26px; height:26px; background:#e0353c; color:#fff; border-radius:7px;
-              display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; }
+  .wiz-mark { width:28px; height:28px; border-radius:8px; overflow:hidden; flex-shrink:0; }
+  .wiz-hero { display:flex; justify-content:center; margin:2px 0 18px; }
+  .wiz-hero .bi { border-radius:26px; box-shadow:0 10px 34px rgba(224,53,60,.18); }
   .wiz-name { font-size:14px; font-weight:700; letter-spacing:.02em; }
   .wiz-langs { margin-left:auto; display:flex; gap:4px; }
   .wiz-lang { background:transparent; border:1px solid #2e2e2e; color:#777; border-radius:99px;
@@ -215,6 +217,7 @@ function screenHtml(id: WizardStepId): { title: string; html: string } {
       return {
         title: t('intro.title', { product }),
         html: `
+          <div class="wiz-hero">${brandIcon('hero', 132)}</div>
           <p class="wiz-lead">${t('intro.lead', { product })}</p>
           <div class="wiz-net">
             <div class="wiz-net-box">
@@ -437,7 +440,7 @@ function shellHtml(id: WizardStepId, connected: boolean): string {
     <div class="wiz">
       <div class="wiz-top">
         <div class="wiz-brand">
-          <div class="wiz-mark">H</div>
+          <div class="wiz-mark">${brandIcon('hdr', 28)}</div>
           <div class="wiz-name">${__PRODUCT_NAME__}<span style="color:#666; font-weight:400"> ${t('brand.for')}</span></div>
           <div class="wiz-langs">${langs}</div>
         </div>
@@ -461,7 +464,7 @@ function shellHtml(id: WizardStepId, connected: boolean): string {
         id === CONNECTED_STEP ? '' : `<div class="wiz-foot">${back}${primary}${skip}</div>`
       }
     </div>
-    <style>${CSS}</style>
+    <style>${CSS}${BRAND_CSS}</style>
   `
 }
 
