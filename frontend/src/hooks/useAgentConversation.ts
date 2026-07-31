@@ -10,9 +10,13 @@ import { useThreadConversation } from "./useThreadConversation";
 export interface UseAgentConversationOptions {
 	/** Provider for the active session. Drives which underlying source is read. */
 	agent: AgentProvider | undefined;
-	/** tmux session id (used by the Claude WebSocket subscription). */
+	/** Workspace id (used by the Claude WebSocket subscription). */
 	sessionId: string;
-	/** Codex thread id (used by the Codex rollout poller). */
+	/**
+	 * The pane's own agent session id: the thread for a thread agent, the
+	 * Claude session for Claude. Both need it — a workspace can hold two agent
+	 * panes, and then the workspace id alone names two conversations.
+	 */
 	agentSessionId: string | null | undefined;
 	enabled?: boolean;
 }
@@ -53,6 +57,7 @@ export function useAgentConversation({
 	const threadAgent = threadAgentOf(agent);
 	const claude = useConversationStream({
 		sessionId,
+		agentSessionId,
 		enabled: enabled && isStream,
 	});
 	const thread = useThreadConversation({

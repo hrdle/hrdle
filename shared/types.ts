@@ -1068,8 +1068,12 @@ export interface ClientFocus {
 export type MuxClientMessage =
   | { type: 'subscribe'; sessionId: string }
   | { type: 'unsubscribe'; sessionId: string }
-  | { type: 'subscribe-conversation'; sessionId: string }
-  | { type: 'unsubscribe-conversation'; sessionId: string }
+  // `agentSessionId` names the pane's own agent session. Without it the server
+  // can only resolve a workspace, and a workspace with two agent panes has two
+  // conversations — it answered with whichever pane it happened to summarise
+  // the workspace by, which is not the one on screen (#80).
+  | { type: 'subscribe-conversation'; sessionId: string; agentSessionId?: string }
+  | { type: 'unsubscribe-conversation'; sessionId: string; agentSessionId?: string }
   // Glasses relay presence subscription (#504). No sessionId: it marks the
   // whole connection as "glasses present", which gates relay assembly/send.
   //
@@ -1153,8 +1157,16 @@ const controlClientMessageOptions = [
 export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('subscribe'), sessionId: z.string().min(1) }),
   z.object({ type: z.literal('unsubscribe'), sessionId: z.string().min(1) }),
-  z.object({ type: z.literal('subscribe-conversation'), sessionId: z.string().min(1) }),
-  z.object({ type: z.literal('unsubscribe-conversation'), sessionId: z.string().min(1) }),
+  z.object({
+    type: z.literal('subscribe-conversation'),
+    sessionId: z.string().min(1),
+    agentSessionId: z.string().min(1).optional(),
+  }),
+  z.object({
+    type: z.literal('unsubscribe-conversation'),
+    sessionId: z.string().min(1),
+    agentSessionId: z.string().min(1).optional(),
+  }),
   z.object({
     type: z.literal('subscribe-glasses-relay'),
     onDevice: z.boolean().optional(),
@@ -1187,10 +1199,12 @@ export type MuxServerMessage =
   // `focus` rides along so the glasses can follow the phone/tablet in hand
   //; absent when every client is hidden. Ordinary clients ignore it.
   | { type: 'sessions-updated'; sessions: SessionResponse[]; focus?: ClientFocus }
-  | { type: 'conversation-subscribed'; sessionId: string; ccSessionId: string | null }
-  | { type: 'conversation-unsubscribed'; sessionId: string }
-  | { type: 'initial-conversation'; sessionId: string; messages: ConversationMessage[] }
-  | { type: 'conversation-update'; sessionId: string; messages: ConversationMessage[] }
+  // Every one echoes the `agentSessionId` it was subscribed with, so a client
+  // showing two panes of one workspace can tell whose conversation arrived.
+  | { type: 'conversation-subscribed'; sessionId: string; agentSessionId?: string; ccSessionId: string | null }
+  | { type: 'conversation-unsubscribed'; sessionId: string; agentSessionId?: string }
+  | { type: 'initial-conversation'; sessionId: string; agentSessionId?: string; messages: ConversationMessage[] }
+  | { type: 'conversation-update'; sessionId: string; agentSessionId?: string; messages: ConversationMessage[] }
   // Glasses relay (#504). Sent only to connections subscribed via
   // `subscribe-glasses-relay` — never broadcast to ordinary mux clients.
   | { type: 'glasses-relay'; item: GlassesRelayItem } // upsert (create / dismiss reflection)

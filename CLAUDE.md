@@ -264,7 +264,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **useNetworkLatency.ts** - WebSocket latency tracking
 - **useLineSelection.ts** - Text line selection utilities
 - **useSelectionMode.ts** - Touch-selection state machine for `SelectionOverlay` (start/end cell, drag handles, copy-to-clipboard)
-- **useConversationStream.ts** - Subscribes to `/ws/mux` conversation streams (`subscribe-conversation`) and exposes incremental conversation updates
+- **useConversationStream.ts** - Subscribes to `/ws/mux` conversation streams (`subscribe-conversation`) and exposes incremental conversation updates. The subscription carries the **pane's** `agentSessionId`, not just the workspace id: a workspace with two agent panes holds two conversations, and resolving by directory alone answered with whichever transcript was written last - a different agent from the one on screen (#80)
 - **useAgentConversation.ts** - Unified conversation hook: Claude streams over the WebSocket, thread agents (Codex/Grok) poll over HTTP — chosen from the shared `AGENT_PROVIDERS` registry
 - **useThreadConversation.ts** - Polling conversation loader for thread-based agents (`?agent=codex|grok`)
 - **usePeers.ts** - Peer list CRUD and state management (`/api/peers`)

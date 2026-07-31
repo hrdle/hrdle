@@ -115,25 +115,40 @@ const PING_INTERVAL_MS = 10_000;
 // on mobile when carrier NAT drops the session).
 const PONG_TIMEOUT_MS = 25_000;
 
-// Conversation subscriptions (multiple sessions can be subscribed at once)
+// Conversation subscriptions.
+//
+// Keyed by session *and* pane agent session: a workspace with two agent panes
+// has two conversations, and a single key per workspace let the second pane's
+// subscription tear down the first (#80).
+const CONV_KEY_SEP = "\u0000";
+
+function convKey(sessionId: string, agentSessionId?: string | null): string {
+	return agentSessionId ? `${sessionId}${CONV_KEY_SEP}${agentSessionId}` : sessionId;
+}
+
+function convParts(key: string): { sessionId: string; agentSessionId?: string } {
+	const [sessionId, agentSessionId] = key.split(CONV_KEY_SEP);
+	return agentSessionId ? { sessionId, agentSessionId } : { sessionId };
+}
+
 const subscribedConversations = new Set<string>();
 const pendingConversationSubs = new Set<string>();
 const pendingConversationUnsubs = new Set<string>();
 
 function flushConversationPending() {
 	if (!sharedWs || sharedWs.readyState !== WebSocket.OPEN || !wsReady) return;
-	for (const sid of pendingConversationUnsubs) {
+	for (const key of pendingConversationUnsubs) {
 		sharedWs.send(
-			JSON.stringify({ type: "unsubscribe-conversation", sessionId: sid }),
+			JSON.stringify({ type: "unsubscribe-conversation", ...convParts(key) }),
 		);
-		subscribedConversations.delete(sid);
+		subscribedConversations.delete(key);
 	}
 	pendingConversationUnsubs.clear();
-	for (const sid of pendingConversationSubs) {
+	for (const key of pendingConversationSubs) {
 		sharedWs.send(
-			JSON.stringify({ type: "subscribe-conversation", sessionId: sid }),
+			JSON.stringify({ type: "subscribe-conversation", ...convParts(key) }),
 		);
-		subscribedConversations.add(sid);
+		subscribedConversations.add(key);
 	}
 	pendingConversationSubs.clear();
 }
@@ -522,33 +537,39 @@ function registerVisibilityListener() {
 
 export function subscribeConversation(
 	sessionId: string,
+	agentSessionId?: string | null,
 	token?: string | null,
 ) {
-	pendingConversationUnsubs.delete(sessionId);
+	const key = convKey(sessionId, agentSessionId);
+	pendingConversationUnsubs.delete(key);
 	if (sharedWs?.readyState === WebSocket.OPEN && wsReady) {
 		// Already subscribed: nothing to do. The backend recreates the watcher
 		// on every subscribe-conversation, so re-sending would needlessly tear
 		// down and rebuild it (and re-send initial-conversation).
-		if (subscribedConversations.has(sessionId)) return;
+		if (subscribedConversations.has(key)) return;
 		sharedWs.send(
-			JSON.stringify({ type: "subscribe-conversation", sessionId }),
+			JSON.stringify({ type: "subscribe-conversation", ...convParts(key) }),
 		);
-		subscribedConversations.add(sessionId);
+		subscribedConversations.add(key);
 	} else {
-		pendingConversationSubs.add(sessionId);
+		pendingConversationSubs.add(key);
 		ensureConnection(token);
 	}
 }
 
-export function unsubscribeConversation(sessionId: string) {
-	pendingConversationSubs.delete(sessionId);
-	subscribedConversations.delete(sessionId);
+export function unsubscribeConversation(
+	sessionId: string,
+	agentSessionId?: string | null,
+) {
+	const key = convKey(sessionId, agentSessionId);
+	pendingConversationSubs.delete(key);
+	subscribedConversations.delete(key);
 	if (sharedWs?.readyState === WebSocket.OPEN && wsReady) {
 		sharedWs.send(
-			JSON.stringify({ type: "unsubscribe-conversation", sessionId }),
+			JSON.stringify({ type: "unsubscribe-conversation", ...convParts(key) }),
 		);
 	} else {
-		pendingConversationUnsubs.add(sessionId);
+		pendingConversationUnsubs.add(key);
 	}
 }
 

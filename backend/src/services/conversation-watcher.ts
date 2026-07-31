@@ -30,17 +30,32 @@ export class ConversationWatcher {
   private lastMtimeMs = 0;
 
   /**
-   * Start watching the conversation jsonl associated with the given working directory.
-   * Returns the initial set of conversation messages (may be empty if no session exists yet).
+   * Start watching a conversation jsonl.
+   *
+   * `agentSessionId` is the pane's own Claude session, and when it is given it
+   * decides the file. Resolving by directory alone picks the newest transcript
+   * under that path, which is the right answer only while a workspace has one
+   * agent in it — with two panes it showed whichever had written last, and
+   * that is a different conversation from the one on screen.
+   *
+   * A session id that resolves to nothing (herdr reporting a stale id, a
+   * transcript not written yet) falls back to the directory, because a
+   * conversation from the right directory beats an empty screen.
+   *
+   * Returns the initial set of conversation messages (may be empty if no
+   * session exists yet).
    */
-  async start(workingDir: string): Promise<ConversationMessage[]> {
+  async start(workingDir: string, agentSessionId?: string): Promise<ConversationMessage[]> {
     // Re-entrant start: close any previous fs.watch before re-initialising.
     // Otherwise the old watcher leaks and its change events trigger reparse
     // against the overwritten filePath, delivering the wrong file's
     // conversation (#334). Listeners are kept — they belong to the subscriber.
     this.closeWatcher();
 
-    const session = await claudeCodeService.getSessionForPath(workingDir);
+    const session =
+      (agentSessionId
+        ? await claudeCodeService.getSessionById(agentSessionId, workingDir)
+        : null) ?? (await claudeCodeService.getSessionForPath(workingDir));
     if (!session?.sessionId) {
       return [];
     }
