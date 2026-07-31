@@ -46,7 +46,10 @@ export function VirtualizedHistoryList({
 	});
 
 	return (
-		<div ref={parentRef} className="h-full overflow-y-auto overscroll-contain">
+		<div
+			ref={parentRef}
+			className="h-full overflow-y-auto overscroll-contain bg-cv-bg"
+		>
 			<div
 				style={{
 					height: `${virtualizer.getTotalSize()}px`,
@@ -73,9 +76,9 @@ export function VirtualizedHistoryList({
 								ref={virtualizer.measureElement}
 							>
 								{row.kind === "header" ? (
-									<div className="flex items-center justify-between px-3 pt-2.5 pb-1 text-[10.5px] uppercase tracking-wider text-zinc-500">
+									<div className="flex items-center justify-between px-4 pb-1.5 pt-4 text-[11px] font-medium text-cv-text-muted">
 										<span>{row.label}</span>
-										<span className="tabular-nums">{row.count}</span>
+										<span className="tabular-nums opacity-70">{row.count}</span>
 									</div>
 								) : (
 									<HistoryRowV2
