@@ -42,6 +42,18 @@
 	--color-conv-border: #3d3d39;
 	--color-conv-accent: #d97757;
 
+	/* Syntax tokens, warm to match the surface above. highlight.js ships its
+	   own themes; every one of them is a different room's lighting. */
+	--conv-tok-comment: #85837c;
+	--conv-tok-keyword: #cf8e6d;
+	--conv-tok-string: #9aab5f;
+	--conv-tok-number: #d0a25f;
+	--conv-tok-title: #a3b8d8;
+	--conv-tok-attr: #c2a5d0;
+	--conv-tok-meta: #8a8880;
+	--conv-tok-addition: #98c379;
+	--conv-tok-deletion: #e06c75;
+
 	/* Typography */
 	font-family: "Inter", "Noto Sans JP", system-ui, -apple-system, sans-serif;
 	line-height: 1.5;
@@ -79,6 +91,16 @@
 	--color-conv-text-muted: #83817b;
 	--color-conv-border: #e2dfd4;
 	--color-conv-accent: #c96442;
+
+	--conv-tok-comment: #8a8780;
+	--conv-tok-keyword: #a04a2a;
+	--conv-tok-string: #4f6b28;
+	--conv-tok-number: #8a5a12;
+	--conv-tok-title: #2f5b8f;
+	--conv-tok-attr: #6b4a8a;
+	--conv-tok-meta: #7c7a74;
+	--conv-tok-addition: #2f6b32;
+	--conv-tok-deletion: #a03028;
 }
 
 /* Tailwind v4 @theme: generate th-* utility classes from CSS variables */
@@ -191,4 +213,68 @@ body {
 
 .animate-status-glow {
 	animation: status-glow 2s ease-in-out infinite;
+}
+
+/* Conversation code: re-colour highlight.js tokens against the conversation
+   palette. Two classes deep on purpose — the file viewer imports
+   highlight.js/styles/github-dark.css globally, whose single-class rules would
+   otherwise paint the transcript in another theme's colours (and its dark
+   greys into light mode). */
+.cv-code .hljs-comment,
+.cv-code .hljs-quote {
+	color: var(--conv-tok-comment);
+	font-style: italic;
+}
+.cv-code .hljs-keyword,
+.cv-code .hljs-selector-tag,
+.cv-code .hljs-literal,
+.cv-code .hljs-type,
+.cv-code .hljs-built_in,
+.cv-code .hljs-name {
+	color: var(--conv-tok-keyword);
+}
+.cv-code .hljs-string,
+.cv-code .hljs-regexp,
+.cv-code .hljs-symbol,
+.cv-code .hljs-template-string {
+	color: var(--conv-tok-string);
+}
+.cv-code .hljs-number,
+.cv-code .hljs-variable,
+.cv-code .hljs-template-variable,
+.cv-code .hljs-bullet,
+.cv-code .hljs-link {
+	color: var(--conv-tok-number);
+}
+.cv-code .hljs-title,
+.cv-code .hljs-title.function_,
+.cv-code .hljs-title.class_,
+.cv-code .hljs-section,
+.cv-code .hljs-selector-id,
+.cv-code .hljs-selector-class {
+	color: var(--conv-tok-title);
+}
+.cv-code .hljs-attr,
+.cv-code .hljs-attribute,
+.cv-code .hljs-property,
+.cv-code .hljs-params {
+	color: var(--conv-tok-attr);
+}
+.cv-code .hljs-meta,
+.cv-code .hljs-doctag,
+.cv-code .hljs-punctuation,
+.cv-code .hljs-operator {
+	color: var(--conv-tok-meta);
+}
+.cv-code .hljs-addition {
+	color: var(--conv-tok-addition);
+}
+.cv-code .hljs-deletion {
+	color: var(--conv-tok-deletion);
+}
+.cv-code .hljs-strong {
+	font-weight: 600;
+}
+.cv-code .hljs-emphasis {
+	font-style: italic;
 }
