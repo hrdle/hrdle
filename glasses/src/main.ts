@@ -7,7 +7,7 @@
 
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
 import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, panelDrops, setPanelTrace, invalidatePanel, startMic, stopMic } from './display.ts'
-import type { AppState } from './display.ts'
+import type { AppState, Bridge } from './display.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
@@ -540,32 +540,43 @@ async function main(): Promise<void> {
   // which is a different failure from being stopped outright.
   document.addEventListener('freeze', () => trace('page: freeze'))
   document.addEventListener('resume', () => trace('page: resume'))
-  const bridge = isEvenHub ? await initDisplay() : null
-  trace(`bridge=${bridge ? 'ready' : 'null'}`)
-
-  if (bridge) {
-    // Even Hub environment — check launch source.
-    //
-    // One launch, one answer: the subscription is released as soon as it
-    // arrives rather than left open for the life of the app, which is what the
-    // SDK asks for and what nothing here was doing.
-    let unsubLaunch: (() => void) | null = null
-    unsubLaunch = bridge.onLaunchSource((source) => {
+  // Even Hub environment — check launch source.
+  //
+  // Handed to `initDisplay` rather than registered after it, because the host
+  // pushes the launch source once when loading completes and the SDK stores no
+  // copy: `onLaunchSource` is an event subscription with no cached getter
+  // beside it, so whatever is not listening at that moment never finds out.
+  // Registering after `initDisplay` meant waiting out the startup container's
+  // round trip to the host first, and three runs on 2026-07-31 reached
+  // `startup complete` with no launch source at all.
+  //
+  // One launch, one answer: the subscription is released as soon as it arrives
+  // rather than left open for the life of the app, which is what the SDK asks
+  // for and what nothing here was doing.
+  let unsubLaunch: (() => void) | null = null
+  function subscribeLaunchSource(b: Bridge): void {
+    unsubLaunch = b.onLaunchSource((source) => {
       // Which path was taken matters: launching from the phone runs the
       // companion UI AND the glasses mode at once, and only that case has
       // been reported as dying seconds after startup.
       trace(`launchSource=${source}`)
       if (source === 'appMenu') {
-        startPhoneUI(bridge)
+        startPhoneUI(b)
           .then(() => trace('phone UI ready'))
           .catch((err) => trace(`phone UI failed: ${err}`, 'error', (err as Error)?.stack))
       }
-      // glassesMenu: already started below
+      // glassesMenu: glasses mode starts either way, below
       try {
         unsubLaunch?.()
       } catch { /* nothing left to release */ }
       unsubLaunch = null
     })
+  }
+
+  const bridge = isEvenHub ? await initDisplay(subscribeLaunchSource) : null
+  trace(`bridge=${bridge ? 'ready' : 'null'}`)
+
+  if (bridge) {
     // Always start glasses mode (bridge exists = Even Hub)
     await startGlassesMode(bridge)
   } else if (new URLSearchParams(location.search).has('phone')) {
