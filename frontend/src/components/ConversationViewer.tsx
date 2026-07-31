@@ -1,36 +1,43 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: depends on refs and setters that React guarantees stable; adding them would cause unintended re-runs */
-/** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: legacy click-on-div UI; keyboard navigation provided via main shortcuts */
+/** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: tap-to-zoom images and the lightbox backdrop; keyboard users close it with Escape */
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
+	Bot,
+	Brain,
 	Check,
 	ChevronLeft,
 	ChevronRight,
 	Circle,
 	CircleDot,
+	Copy,
+	FileText,
+	Globe,
+	ListTodo,
+	Pencil,
+	Search,
+	Terminal,
+	TriangleAlert,
+	Wrench,
 } from "lucide-react";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-	type AgentProvider,
-	type ConversationMessage,
-	type SessionTheme,
-	type ToolResultInfo,
-	type ToolUseInfo,
-	isAgentProvider,
+import type {
+	ConversationMessage,
+	ToolResultInfo,
+	ToolUseInfo,
 } from "../../../shared/types";
-import { agentBadge } from "../utils/agentDisplay";
-import { getTerminalThemes } from "./terminal-themes";
-import { storageKey } from "../utils/app-storage";
 import { TMP_PATHS } from "../../../shared/identity";
+import { agentBadge } from "../utils/agentDisplay";
+import { storageKey } from "../utils/app-storage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 // Conversation font size (shared across all sessions)
 const CV_FONT_SIZE_KEY = storageKey("conversation-font-size");
-const CV_DEFAULT_FONT_SIZE = 13;
-const CV_MIN_FONT_SIZE = 9;
+const CV_DEFAULT_FONT_SIZE = 15;
+const CV_MIN_FONT_SIZE = 11;
 const CV_MAX_FONT_SIZE = 24;
 
 function loadCvFontSize(): number {
@@ -88,44 +95,205 @@ function isSystemSummary(content: string): boolean {
 	);
 }
 
-// Collapsible section component
-function CollapsibleSection({
-	title,
-	icon,
-	defaultOpen = false,
-	children,
-}: {
-	title: string;
-	icon: string;
-	defaultOpen?: boolean;
-	children: React.ReactNode;
-	variant?: string;
-}) {
-	const [isOpen, setIsOpen] = useState(defaultOpen);
+function openLightbox(src: string) {
+	window.dispatchEvent(
+		new CustomEvent("cchub-image-zoom", { detail: { src } }),
+	);
+}
+
+// =============================================================================
+// Markdown
+// =============================================================================
+
+/**
+ * Code block with a copy button.
+ *
+ * The text is read back off the rendered node rather than re-derived from the
+ * markdown AST: react-markdown hands `pre` its children already parsed, and
+ * innerText is what the reader actually sees.
+ */
+function CodeBlock({ children }: { children?: React.ReactNode }) {
+	const preRef = useRef<HTMLPreElement>(null);
+	const [copied, setCopied] = useState(false);
+
+	const copy = useCallback(() => {
+		const text = preRef.current?.innerText ?? "";
+		if (!text) return;
+		navigator.clipboard
+			.writeText(text)
+			.then(() => {
+				setCopied(true);
+				window.setTimeout(() => setCopied(false), 1500);
+			})
+			.catch(() => {
+				// clipboard unavailable (insecure context) — nothing useful to say
+			});
+	}, []);
 
 	return (
-		<div className="my-0.5">
+		<div className="group relative my-3">
+			<pre
+				ref={preRef}
+				className="overflow-x-auto rounded-xl border border-cv-border bg-cv-surface px-3.5 py-3 font-mono text-[0.85em] leading-relaxed text-cv-text-secondary"
+			>
+				{children}
+			</pre>
 			<button
 				type="button"
-				onClick={() => setIsOpen(!isOpen)}
-				className="flex items-center gap-1.5 py-0.5 text-[length:var(--cv-fs-meta,11px)] text-zinc-600 hover:text-zinc-400"
+				onClick={copy}
+				aria-label="Copy code"
+				className="absolute right-2 top-2 rounded-md border border-cv-border bg-cv-bg/80 p-1.5 text-cv-text-muted opacity-0 transition-opacity hover:text-cv-text focus:opacity-100 group-hover:opacity-100"
 			>
-				<ChevronRight
-					className={`w-3 h-3 shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-				/>
-				<span>{icon}</span>
-				<span className="truncate">{title}</span>
+				{copied ? (
+					<Check className="h-3.5 w-3.5" />
+				) : (
+					<Copy className="h-3.5 w-3.5" />
+				)}
 			</button>
-			{isOpen && (
-				<div className="ml-4 pl-2 border-l border-white/[0.08] text-[length:var(--cv-fs-meta,11px)] text-zinc-300 overflow-x-auto">
-					{children}
-				</div>
-			)}
 		</div>
 	);
 }
 
-// Tool use display
+const markdownComponents = {
+	pre: ({ children }: { children?: React.ReactNode }) => (
+		<CodeBlock>{children}</CodeBlock>
+	),
+	code: ({
+		children,
+		className,
+	}: {
+		children?: React.ReactNode;
+		className?: string;
+	}) => {
+		const isBlock = className?.includes("language-");
+		return isBlock ? (
+			<code>{children}</code>
+		) : (
+			<code className="rounded bg-cv-surface px-1.5 py-0.5 font-mono text-[0.85em] text-cv-text">
+				{children}
+			</code>
+		);
+	},
+	p: ({ children }: { children?: React.ReactNode }) => (
+		<p className="my-3 leading-[1.7]">{children}</p>
+	),
+	ul: ({ children }: { children?: React.ReactNode }) => (
+		<ul className="my-3 list-disc space-y-1 pl-5 leading-[1.7]">{children}</ul>
+	),
+	ol: ({ children }: { children?: React.ReactNode }) => (
+		<ol className="my-3 list-decimal space-y-1 pl-5 leading-[1.7]">
+			{children}
+		</ol>
+	),
+	li: ({ children }: { children?: React.ReactNode }) => <li>{children}</li>,
+	h1: ({ children }: { children?: React.ReactNode }) => (
+		<h1 className="mb-2 mt-5 text-[1.3em] font-semibold text-cv-text">
+			{children}
+		</h1>
+	),
+	h2: ({ children }: { children?: React.ReactNode }) => (
+		<h2 className="mb-2 mt-5 text-[1.15em] font-semibold text-cv-text">
+			{children}
+		</h2>
+	),
+	h3: ({ children }: { children?: React.ReactNode }) => (
+		<h3 className="mb-1.5 mt-4 text-[1.05em] font-semibold text-cv-text">
+			{children}
+		</h3>
+	),
+	strong: ({ children }: { children?: React.ReactNode }) => (
+		<strong className="font-semibold text-cv-text">{children}</strong>
+	),
+	em: ({ children }: { children?: React.ReactNode }) => (
+		<em className="italic">{children}</em>
+	),
+	hr: () => <hr className="my-5 border-cv-border" />,
+	a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+		<a
+			href={href}
+			className="text-cv-accent underline underline-offset-2"
+			target="_blank"
+			rel="noopener noreferrer"
+		>
+			{children}
+		</a>
+	),
+	blockquote: ({ children }: { children?: React.ReactNode }) => (
+		<blockquote className="my-3 border-l-2 border-cv-border pl-3 text-cv-text-secondary">
+			{children}
+		</blockquote>
+	),
+	table: ({ children }: { children?: React.ReactNode }) => (
+		<div className="my-3 overflow-x-auto rounded-xl border border-cv-border">
+			<table className="min-w-full text-[0.9em]">{children}</table>
+		</div>
+	),
+	th: ({ children }: { children?: React.ReactNode }) => (
+		<th className="border-b border-cv-border bg-cv-surface px-3 py-2 text-left font-medium">
+			{children}
+		</th>
+	),
+	td: ({ children }: { children?: React.ReactNode }) => (
+		<td className="border-b border-cv-border px-3 py-2 align-top">
+			{children}
+		</td>
+	),
+	img: ({ src, alt }: { src?: string; alt?: string }) => (
+		<img
+			src={src}
+			alt={alt || "Screenshot"}
+			onClick={(e) => {
+				if (!src) return;
+				e.preventDefault();
+				e.stopPropagation();
+				openLightbox(src);
+			}}
+			onTouchEnd={(e) => {
+				if (!src) return;
+				e.preventDefault();
+				e.stopPropagation();
+				openLightbox(src);
+			}}
+			className="my-3 h-auto max-w-full cursor-zoom-in rounded-xl border border-cv-border"
+			loading="lazy"
+			draggable={false}
+		/>
+	),
+};
+
+function Markdown({ content }: { content: string }) {
+	return (
+		<div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+			<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+				{processImageReferences(content)}
+			</ReactMarkdown>
+		</div>
+	);
+}
+
+// =============================================================================
+// Tool calls
+// =============================================================================
+
+/** Tool name to icon. Names differ per agent, so match on substrings. */
+function toolIcon(name: string) {
+	const n = name.toLowerCase();
+	if (n.includes("bash") || n.includes("shell") || n.includes("exec"))
+		return Terminal;
+	if (n.includes("todo") || n.includes("plan")) return ListTodo;
+	if (n.includes("write") || n.includes("edit") || n.includes("patch"))
+		return Pencil;
+	if (n.includes("read") || n.includes("view") || n.includes("cat"))
+		return FileText;
+	if (n.includes("grep") || n.includes("glob") || n.includes("search"))
+		return Search;
+	if (n.includes("web") || n.includes("fetch") || n.includes("browser"))
+		return Globe;
+	if (n.includes("task") || n.includes("agent")) return Bot;
+	return Wrench;
+}
+
+/** One-line description of what a call is doing, shown next to its name. */
 function getToolSummary(name: string, input: Record<string, unknown>): string {
 	// Bash has an explicit description field
 	if (typeof input.description === "string" && input.description) {
@@ -198,24 +366,24 @@ function parseTodoInput(
 
 function TodoChecklist({ items }: { items: TodoDisplayItem[] }) {
 	return (
-		<ul className="py-0.5 space-y-0.5">
+		<ul className="space-y-1">
 			{items.map((item, idx) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: render-only, order-stable
-				<li key={idx} className="flex items-start gap-1.5">
+				<li key={idx} className="flex items-start gap-2">
 					{item.status === "done" ? (
-						<Check className="w-3.5 h-3.5 shrink-0 mt-px text-green-400" />
+						<Check className="mt-px h-3.5 w-3.5 shrink-0 text-emerald-500" />
 					) : item.status === "in_progress" ? (
-						<CircleDot className="w-3.5 h-3.5 shrink-0 mt-px text-blue-400" />
+						<CircleDot className="mt-px h-3.5 w-3.5 shrink-0 text-cv-accent" />
 					) : (
-						<Circle className="w-3.5 h-3.5 shrink-0 mt-px text-zinc-600" />
+						<Circle className="mt-px h-3.5 w-3.5 shrink-0 text-cv-text-muted" />
 					)}
 					<span
 						className={
 							item.status === "done"
-								? "text-zinc-500 line-through decoration-zinc-600"
+								? "text-cv-text-muted line-through"
 								: item.status === "in_progress"
-									? "text-zinc-100"
-									: "text-zinc-400"
+									? "text-cv-text"
+									: "text-cv-text-secondary"
 						}
 					>
 						{item.text}
@@ -226,134 +394,7 @@ function TodoChecklist({ items }: { items: TodoDisplayItem[] }) {
 	);
 }
 
-function ToolUseDisplay({ tools }: { tools: ToolUseInfo[] }) {
-	return (
-		<>
-			{tools.map((tool, idx) => {
-				const todos = parseTodoInput(tool.name, tool.input);
-				if (todos) {
-					const done = todos.filter((i) => i.status === "done").length;
-					return (
-						<CollapsibleSection
-							// biome-ignore lint/suspicious/noArrayIndexKey: tools array is conversation-order-stable
-							key={idx}
-							title={`${tool.name} (${done}/${todos.length})`}
-							icon="☑️"
-							variant="tool"
-							defaultOpen
-						>
-							<TodoChecklist items={todos} />
-						</CollapsibleSection>
-					);
-				}
-				const inputStr = JSON.stringify(tool.input, null, 2);
-				const summary = getToolSummary(tool.name, tool.input);
-				const title = summary ? `${tool.name}: ${summary}` : tool.name;
-				return (
-					<CollapsibleSection
-						// biome-ignore lint/suspicious/noArrayIndexKey: tools array is conversation-order-stable
-						key={idx}
-						title={title}
-						icon="🔧"
-						variant="tool"
-					>
-						<pre className="text-green-300 whitespace-pre-wrap break-all">
-							{inputStr}
-						</pre>
-					</CollapsibleSection>
-				);
-			})}
-		</>
-	);
-}
-
-// Tool result display
-function ToolResultDisplay({ results }: { results: ToolResultInfo[] }) {
-	const { t } = useTranslation();
-	return (
-		<>
-			{results.map((result, idx) => {
-				const maxPreview = 500;
-				const isLong = result.output.length > maxPreview;
-				const preview = isLong
-					? `${result.output.substring(0, maxPreview)}...`
-					: result.output;
-				const hasImages = result.images && result.images.length > 0;
-				const hasOutput = result.output.length > 0;
-
-				return (
-					<CollapsibleSection
-						// biome-ignore lint/suspicious/noArrayIndexKey: results array is conversation-order-stable
-						key={idx}
-						title={
-							result.toolName
-								? `${result.toolName} ${t("conversation.toolResult")}`
-								: t("conversation.toolResult")
-						}
-						icon={result.isError ? "❌" : "📋"}
-						variant={result.isError ? "error" : "result"}
-						defaultOpen
-					>
-						{hasOutput && (
-							<pre
-								className={`whitespace-pre-wrap break-all ${result.isError ? "text-red-300" : "text-zinc-200"}`}
-							>
-								{isLong ? (
-									<ExpandableText text={result.output} preview={preview} />
-								) : (
-									result.output
-								)}
-							</pre>
-						)}
-						{hasImages && (
-							<div className="flex flex-wrap gap-2 mt-1">
-								{result.images?.map((img, i) => {
-									const src = `data:${img.mediaType};base64,${img.data}`;
-									return (
-										<img
-											// biome-ignore lint/suspicious/noArrayIndexKey: images array is render-only, order-stable
-											key={i}
-											src={src}
-											alt="Tool result"
-											onClick={(e) => {
-												e.preventDefault();
-												e.stopPropagation();
-												window.dispatchEvent(
-													new CustomEvent("cchub-image-zoom", {
-														detail: { src },
-													}),
-												);
-											}}
-											onTouchEnd={(e) => {
-												e.preventDefault();
-												e.stopPropagation();
-												window.dispatchEvent(
-													new CustomEvent("cchub-image-zoom", {
-														detail: { src },
-													}),
-												);
-											}}
-											className="max-w-[280px] h-auto rounded border border-white/[0.06] cursor-zoom-in"
-											loading="lazy"
-											draggable={false}
-										/>
-									);
-								})}
-							</div>
-						)}
-						{!hasOutput && !hasImages && (
-							<pre className="whitespace-pre-wrap break-all text-zinc-400">
-								{t("conversation.noOutput")}
-							</pre>
-						)}
-					</CollapsibleSection>
-				);
-			})}
-		</>
-	);
-}
-
-// Expandable text for long outputs
+/** Long tool output: show a head, expand on demand. */
 function ExpandableText({ text, preview }: { text: string; preview: string }) {
 	const { t } = useTranslation();
 	const [expanded, setExpanded] = useState(false);
@@ -364,7 +405,7 @@ function ExpandableText({ text, preview }: { text: string; preview: string }) {
 			<button
 				type="button"
 				onClick={() => setExpanded(!expanded)}
-				className="ml-2 text-blue-400 hover:underline"
+				className="ml-2 text-cv-accent hover:underline"
 			>
 				{expanded ? t("conversation.collapse") : t("conversation.showAll")}
 			</button>
@@ -372,19 +413,300 @@ function ExpandableText({ text, preview }: { text: string; preview: string }) {
 	);
 }
 
-// Thinking display
-function ThinkingDisplay({ thinking }: { thinking: string }) {
+function ToolResultBody({ result }: { result: ToolResultInfo }) {
 	const { t } = useTranslation();
+	const maxPreview = 500;
+	const isLong = result.output.length > maxPreview;
+	const preview = isLong
+		? `${result.output.substring(0, maxPreview)}...`
+		: result.output;
+	const hasImages = !!result.images && result.images.length > 0;
+	const hasOutput = result.output.length > 0;
+
 	return (
-		<CollapsibleSection
-			title={t("conversation.thinking")}
-			icon="💭"
-			variant="thinking"
-		>
-			<div className="text-purple-200 whitespace-pre-wrap">{thinking}</div>
-		</CollapsibleSection>
+		<div className="space-y-2">
+			{hasOutput && (
+				<pre
+					className={`whitespace-pre-wrap break-all font-mono text-[length:var(--cv-fs-meta,12px)] ${
+						result.isError ? "text-red-400" : "text-cv-text-secondary"
+					}`}
+				>
+					{isLong ? (
+						<ExpandableText text={result.output} preview={preview} />
+					) : (
+						result.output
+					)}
+				</pre>
+			)}
+			{hasImages && (
+				<div className="flex flex-wrap gap-2">
+					{result.images?.map((img, i) => {
+						const src = `data:${img.mediaType};base64,${img.data}`;
+						return (
+							<img
+								// biome-ignore lint/suspicious/noArrayIndexKey: images array is render-only, order-stable
+								key={i}
+								src={src}
+								alt="Tool result"
+								onClick={(e) => {
+									e.preventDefault();
+									e.stopPropagation();
+									openLightbox(src);
+								}}
+								onTouchEnd={(e) => {
+									e.preventDefault();
+									e.stopPropagation();
+									openLightbox(src);
+								}}
+								className="h-auto max-w-[280px] cursor-zoom-in rounded-lg border border-cv-border"
+								loading="lazy"
+								draggable={false}
+							/>
+						);
+					})}
+				</div>
+			)}
+			{!hasOutput && !hasImages && (
+				<p className="font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">
+					{t("conversation.noOutput")}
+				</p>
+			)}
+		</div>
 	);
 }
+
+/**
+ * A tool call and its result as one card.
+ *
+ * The transcript stores them apart — the call on the assistant turn, the result
+ * on the user turn that follows — which is how the previous layout ended up
+ * showing a "System" speaker saying the output of something two screens up.
+ * Pairing them by `toolUseId` puts the answer where the question was asked.
+ */
+function ToolCard({
+	call,
+	result,
+}: {
+	call?: ToolUseInfo;
+	result?: ToolResultInfo;
+}) {
+	const { t } = useTranslation();
+	const todos = call ? parseTodoInput(call.name, call.input) : null;
+	const isError = !!result?.isError;
+	const [open, setOpen] = useState(!!todos || isError);
+
+	const name = call?.name ?? result?.toolName ?? t("conversation.toolResult");
+	const summary = call ? getToolSummary(call.name, call.input) : "";
+	const Icon = isError ? TriangleAlert : toolIcon(name);
+	const done = todos ? todos.filter((i) => i.status === "done").length : 0;
+
+	return (
+		<div className="my-2 overflow-hidden rounded-xl border border-cv-border">
+			<button
+				type="button"
+				onClick={() => setOpen(!open)}
+				className="flex w-full items-center gap-2 bg-cv-surface px-3 py-2 text-left text-[length:var(--cv-fs-meta,12px)] transition-colors hover:bg-cv-surface-hover"
+			>
+				<ChevronRight
+					className={`h-3 w-3 shrink-0 text-cv-text-muted transition-transform ${open ? "rotate-90" : ""}`}
+				/>
+				<Icon
+					className={`h-3.5 w-3.5 shrink-0 ${isError ? "text-red-400" : "text-cv-text-muted"}`}
+				/>
+				<span
+					className={`shrink-0 font-medium ${isError ? "text-red-400" : "text-cv-text-secondary"}`}
+				>
+					{name}
+					{todos ? ` (${done}/${todos.length})` : ""}
+				</span>
+				{summary && (
+					<span className="truncate font-mono text-cv-text-muted">
+						{summary}
+					</span>
+				)}
+			</button>
+			{open && (
+				<div className="space-y-3 border-t border-cv-border px-3 py-2.5">
+					{todos && <TodoChecklist items={todos} />}
+					{call && !todos && (
+						<pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-secondary">
+							{JSON.stringify(call.input, null, 2)}
+						</pre>
+					)}
+					{result && (
+						<div className={call ? "border-t border-cv-border pt-2.5" : ""}>
+							<ToolResultBody result={result} />
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+function ThinkingBlock({ text }: { text: string }) {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+
+	return (
+		<div className="my-2">
+			<button
+				type="button"
+				onClick={() => setOpen(!open)}
+				className="flex items-center gap-1.5 text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted hover:text-cv-text-secondary"
+			>
+				<Brain className="h-3.5 w-3.5 shrink-0" />
+				<span>{t("conversation.thinking")}</span>
+				<ChevronRight
+					className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+				/>
+			</button>
+			{open && (
+				<div className="mt-1.5 border-l-2 border-cv-border pl-3 text-cv-text-secondary italic">
+					<Markdown content={text} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+/** Context-continuation summaries: kept, but folded away by default. */
+function SummaryCard({ text }: { text: string }) {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+
+	return (
+		<div className="my-2 overflow-hidden rounded-xl border border-cv-border">
+			<button
+				type="button"
+				onClick={() => setOpen(!open)}
+				className="flex w-full items-center gap-2 bg-cv-surface px-3 py-2 text-left text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted transition-colors hover:bg-cv-surface-hover"
+			>
+				<ChevronRight
+					className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+				/>
+				<span>{t("conversation.systemSummary")}</span>
+			</button>
+			{open && (
+				<div className="border-t border-cv-border px-3 py-2.5 text-cv-text-secondary">
+					<Markdown content={text} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+// =============================================================================
+// Rows
+// =============================================================================
+
+/**
+ * A message plus the tool results that belong to the calls it made.
+ *
+ * Messages that carry nothing but results of calls shown elsewhere never become
+ * a row at all — they are the previous layout's "System" turns.
+ */
+interface DisplayRow {
+	msg: ConversationMessage;
+	/** Result per tool call in `msg.toolUse`, by index. */
+	results: (ToolResultInfo | undefined)[];
+	/** Results whose call is nowhere in this conversation (truncated history). */
+	orphanResults: ToolResultInfo[];
+	/** First row of a turn. A burst of tool calls is one speaker, not twelve. */
+	showSpeaker: boolean;
+}
+
+function buildRows(messages: ConversationMessage[]): DisplayRow[] {
+	const resultByCallId = new Map<string, ToolResultInfo>();
+	const callIds = new Set<string>();
+	for (const msg of messages) {
+		for (const call of msg.toolUse ?? []) callIds.add(call.id);
+		for (const result of msg.toolResult ?? []) {
+			if (!resultByCallId.has(result.toolUseId))
+				resultByCallId.set(result.toolUseId, result);
+		}
+	}
+
+	const rows: DisplayRow[] = [];
+	let prevRole: ConversationMessage["role"] | null = null;
+	for (const msg of messages) {
+		const calls = msg.toolUse ?? [];
+		const orphanResults = (msg.toolResult ?? []).filter(
+			(r) => !callIds.has(r.toolUseId),
+		);
+		const hasBody = !!msg.content || !!msg.thinking || calls.length > 0;
+		if (!hasBody && orphanResults.length === 0) continue;
+		rows.push({
+			msg,
+			results: calls.map((c) => resultByCallId.get(c.id)),
+			orphanResults,
+			showSpeaker: msg.role !== prevRole,
+		});
+		prevRole = msg.role;
+	}
+	return rows;
+}
+
+const MessageRow = memo(function MessageRow({
+	row,
+	agent,
+}: {
+	row: DisplayRow;
+	agent?: string;
+}) {
+	const { msg, results, orphanResults } = row;
+	const calls = msg.toolUse ?? [];
+
+	const orphans = orphanResults.map((result) => (
+		<ToolCard key={result.toolUseId} result={result} />
+	));
+
+	if (msg.role === "user") {
+		if (msg.content && isSystemSummary(msg.content)) {
+			return <SummaryCard text={msg.content} />;
+		}
+		// The user's own turn: a bubble on the right, the one place in the view
+		// where text is not the full column width.
+		return (
+			<div className="flex flex-col items-end gap-1">
+				{msg.content && (
+					<div className="max-w-[85%] rounded-2xl bg-cv-bubble px-4 py-2.5 text-cv-text">
+						<Markdown content={msg.content} />
+					</div>
+				)}
+				{orphans.length > 0 && <div className="w-full">{orphans}</div>}
+			</div>
+		);
+	}
+
+	const badge = agentBadge(agent);
+	return (
+		<div>
+			{row.showSpeaker && (
+				<div className="mb-1 flex items-center gap-1.5">
+					<span className={`h-1.5 w-1.5 rounded-full ${badge.barClassName}`} />
+					<span className="text-[length:var(--cv-fs-meta,12px)] font-medium text-cv-text-muted">
+						{badge.label}
+					</span>
+				</div>
+			)}
+			{msg.thinking && <ThinkingBlock text={msg.thinking} />}
+			{msg.content && (
+				<div className="text-cv-text">
+					<Markdown content={msg.content} />
+				</div>
+			)}
+			{calls.map((call, idx) => (
+				<ToolCard key={call.id} call={call} result={results[idx]} />
+			))}
+			{orphans}
+		</div>
+	);
+});
+
+// =============================================================================
+// Viewer
+// =============================================================================
 
 interface ConversationViewerProps {
 	title: string;
@@ -398,225 +720,9 @@ interface ConversationViewerProps {
 	isActive?: boolean; // Whether the session is actively running
 	onRefresh?: () => void; // Callback to refresh conversation
 	inline?: boolean; // If true, render inline instead of fullscreen modal
-	/** Fires once per touch gesture when the user starts scrolling. Used to
-	 *  collapse the input bar / soft keyboard so more of the conversation is
-	 *  visible (mirrors Terminal's behavior). */
-	onScrollGesture?: () => void;
-	/** Fires when the scroll position transitions to / from the bottom. The
-	 *  parent uses this to hide the keyboard while the user is reading
-	 *  history and re-show it when they return to the latest message. */
-	onAtBottomChange?: (atBottom: boolean) => void;
-	/** Session theme — used to color the background to match the Terminal. */
-	theme?: SessionTheme;
-	/** Agent that produced these messages. Switches the assistant role label. */
+	/** Agent that produced these messages. Switches the assistant label. */
 	agent?: string;
 }
-
-// Markdown components configuration
-const markdownComponents = {
-	pre: ({ children }: { children?: React.ReactNode }) => (
-		<pre className="bg-white/[0.03] px-2 py-1 rounded overflow-x-auto my-1 text-[length:var(--cv-fs-meta,11px)]">
-			{children}
-		</pre>
-	),
-	code: ({
-		children,
-		className,
-	}: {
-		children?: React.ReactNode;
-		className?: string;
-	}) => {
-		const isBlock = className?.includes("language-");
-		return isBlock ? (
-			<code className="text-zinc-300">{children}</code>
-		) : (
-			<code className="bg-white/[0.06] px-1 rounded text-zinc-300">
-				{children}
-			</code>
-		);
-	},
-	p: ({ children }: { children?: React.ReactNode }) => (
-		<p className="my-0.5">{children}</p>
-	),
-	ul: ({ children }: { children?: React.ReactNode }) => (
-		<ul className="list-disc ml-4 my-0.5">{children}</ul>
-	),
-	ol: ({ children }: { children?: React.ReactNode }) => (
-		<ol className="list-decimal ml-4 my-0.5">{children}</ol>
-	),
-	li: ({ children }: { children?: React.ReactNode }) => (
-		<li className="my-0">{children}</li>
-	),
-	h1: ({ children }: { children?: React.ReactNode }) => (
-		<h1 className="text-lg font-bold my-1">{children}</h1>
-	),
-	h2: ({ children }: { children?: React.ReactNode }) => (
-		<h2 className="text-base font-bold my-1">{children}</h2>
-	),
-	h3: ({ children }: { children?: React.ReactNode }) => (
-		<h3 className="text-sm font-bold my-0.5">{children}</h3>
-	),
-	strong: ({ children }: { children?: React.ReactNode }) => (
-		<strong className="font-bold text-th-text">{children}</strong>
-	),
-	a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
-		<a
-			href={href}
-			className="text-blue-400 underline"
-			target="_blank"
-			rel="noopener noreferrer"
-		>
-			{children}
-		</a>
-	),
-	blockquote: ({ children }: { children?: React.ReactNode }) => (
-		<blockquote className="border-l-2 border-gray-500 pl-2 my-1 text-th-text-secondary">
-			{children}
-		</blockquote>
-	),
-	table: ({ children }: { children?: React.ReactNode }) => (
-		<div className="overflow-x-auto my-1">
-			<table className="min-w-full text-xs border border-th-border">
-				{children}
-			</table>
-		</div>
-	),
-	th: ({ children }: { children?: React.ReactNode }) => (
-		<th className="border border-th-border px-2 py-1 bg-th-surface-hover">
-			{children}
-		</th>
-	),
-	td: ({ children }: { children?: React.ReactNode }) => (
-		<td className="border border-th-border px-2 py-1">{children}</td>
-	),
-	img: ({ src, alt }: { src?: string; alt?: string }) => (
-		<img
-			src={src}
-			alt={alt || "Screenshot"}
-			onClick={(e) => {
-				if (!src) return;
-				e.preventDefault();
-				e.stopPropagation();
-				window.dispatchEvent(
-					new CustomEvent("cchub-image-zoom", { detail: { src } }),
-				);
-			}}
-			onTouchEnd={(e) => {
-				if (!src) return;
-				e.preventDefault();
-				e.stopPropagation();
-				window.dispatchEvent(
-					new CustomEvent("cchub-image-zoom", { detail: { src } }),
-				);
-			}}
-			className="max-w-[280px] h-auto rounded my-2 border border-white/[0.06] cursor-zoom-in"
-			loading="lazy"
-			draggable={false}
-		/>
-	),
-};
-
-// Role → sidebar bar color + role-label color.
-// Terminal-style compact layout: a thin colored bar at the left edge
-// identifies the speaker; the role label sits on its own dim line and
-// the body is indented under the bar. Agent kinds pull their colors from
-// the per-provider styles in agentDisplay.ts.
-function getRoleColors(kind: "you" | "system" | "summary" | AgentProvider) {
-	switch (kind) {
-		case "you":
-			return { bar: "bg-blue-400/70", label: "text-blue-300" };
-		case "summary":
-			return { bar: "bg-amber-400/70", label: "text-amber-300" };
-		case "system":
-			return { bar: "bg-zinc-500/50", label: "text-zinc-500" };
-		default: {
-			const badge = agentBadge(kind);
-			return { bar: badge.barClassName, label: badge.labelClassName };
-		}
-	}
-}
-
-// Memoized message item component
-const MessageItem = memo(function MessageItem({
-	msg,
-	agent,
-}: {
-	msg: ConversationMessage;
-	agent?: string;
-}) {
-	const { t } = useTranslation();
-
-	// Determine if this is a tool-result-only message (system response)
-	const isToolResultOnly =
-		msg.role === "user" &&
-		msg.toolResult &&
-		msg.toolResult.length > 0 &&
-		!msg.content;
-
-	// Determine if this is a system-generated summary (context continuation)
-	const isSummaryMessage =
-		msg.role === "user" && msg.content && isSystemSummary(msg.content);
-
-	let displayRole: string;
-	let kind: "you" | "system" | "summary" | AgentProvider;
-
-	if (isSummaryMessage) {
-		displayRole = t("conversation.systemSummary");
-		kind = "summary";
-	} else if (isToolResultOnly) {
-		displayRole = t("conversation.system");
-		kind = "system";
-	} else if (msg.role === "user") {
-		displayRole = t("conversation.you");
-		kind = "you";
-	} else {
-		// Assistant turn: label and color come from the session's provider.
-		kind = agent && isAgentProvider(agent) ? agent : "claude";
-		displayRole = t(`conversation.${kind}`);
-	}
-
-	const { bar, label } = getRoleColors(kind);
-
-	return (
-		<div className="py-1">
-			<div className="flex gap-2">
-				<div className={`w-[2px] shrink-0 self-stretch rounded-sm ${bar}`} />
-				<div className="flex-1 min-w-0">
-					<div
-						className={`text-[length:var(--cv-fs-meta,11px)] uppercase tracking-wide font-medium ${label} mb-0.5`}
-					>
-						{displayRole}
-					</div>
-
-					{/* Thinking block (Claude only) */}
-					{msg.thinking && <ThinkingDisplay thinking={msg.thinking} />}
-
-					{/* Main text content */}
-					{msg.content && (
-						<div className="text-zinc-300 markdown-content leading-snug">
-							<ReactMarkdown
-								remarkPlugins={[remarkGfm]}
-								components={markdownComponents}
-							>
-								{processImageReferences(msg.content)}
-							</ReactMarkdown>
-						</div>
-					)}
-
-					{/* Tool use (Claude only) */}
-					{msg.toolUse && msg.toolUse.length > 0 && (
-						<ToolUseDisplay tools={msg.toolUse} />
-					)}
-
-					{/* Tool result (displayed as System when no user text) */}
-					{msg.toolResult && msg.toolResult.length > 0 && (
-						<ToolResultDisplay results={msg.toolResult} />
-					)}
-				</div>
-			</div>
-		</div>
-	);
-});
 
 export function ConversationViewer({
 	title,
@@ -630,15 +736,14 @@ export function ConversationViewer({
 	isActive = false,
 	onRefresh,
 	inline = false,
-	onScrollGesture,
-	onAtBottomChange,
-	theme,
 	agent,
 }: ConversationViewerProps) {
 	const { t } = useTranslation();
 	const parentRef = useRef<HTMLDivElement>(null);
-	const [prevMessageCount, setPrevMessageCount] = useState(0);
+	const [prevRowCount, setPrevRowCount] = useState(0);
 	const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+
+	const rows = useMemo(() => buildRows(messages), [messages]);
 
 	// Inline images (rendered by markdownComponents) dispatch this event when
 	// tapped. Listening at the component level (rather than event delegation
@@ -662,6 +767,7 @@ export function ConversationViewer({
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [lightboxSrc]);
+
 	const [fontSize, setFontSize] = useState<number>(loadCvFontSize);
 	const [showFontSizeIndicator, setShowFontSizeIndicator] = useState(false);
 	const fontSizeIndicatorTimerRef = useRef<number | null>(null);
@@ -741,128 +847,62 @@ export function ConversationViewer({
 		};
 	}, [fontSize]);
 
-	// Track scroll gestures and at-bottom state. The atBottom transition is
-	// only reported during/just-after a user touch — otherwise viewport
-	// changes from the keyboard showing/hiding would themselves toggle the
-	// state and cause the keyboard to oscillate.
-	const onScrollGestureRef = useRef(onScrollGesture);
-	onScrollGestureRef.current = onScrollGesture;
-	const onAtBottomChangeRef = useRef(onAtBottomChange);
-	onAtBottomChangeRef.current = onAtBottomChange;
+	// Whether the reader is at the live edge. Streaming output only follows the
+	// scroll when they are — otherwise reading older output yanks them back.
 	const atBottomRef = useRef(true);
 	useEffect(() => {
 		const el = parentRef.current;
 		if (!el) return;
 		const BOTTOM_THRESHOLD = 24;
-		const computeAtBottom = () =>
-			el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD;
-
-		let userTouching = false;
-		let userTouchedUntil = 0; // timestamp; treat events within this window as user-driven
-		let startY: number | null = null;
-		let gestureFired = false;
-
-		let cooldownUntil = 0;
 		const onScroll = () => {
-			const atBottom = computeAtBottom();
-			const prev = atBottomRef.current;
-			// Always keep internal at-bottom state fresh — the auto-scroll
-			// effect reads this to decide whether to follow streaming output.
-			atBottomRef.current = atBottom;
-			// The external onAtBottomChange callback drives keyboard visibility,
-			// so keep it gated to user gestures to avoid show/hide oscillation.
-			if (!userTouching && Date.now() > userTouchedUntil) return;
-			if (atBottom === prev) return;
-			if (Date.now() < cooldownUntil) return;
-			cooldownUntil = Date.now() + 600;
-			onAtBottomChangeRef.current?.(atBottom);
-		};
-		const onStart = (e: TouchEvent) => {
-			userTouching = true;
-			if (e.touches.length !== 1) {
-				startY = null;
-				gestureFired = false;
-				return;
-			}
-			startY = e.touches[0].clientY;
-			gestureFired = false;
-		};
-		const onMove = (e: TouchEvent) => {
-			if (gestureFired || startY === null || e.touches.length !== 1) return;
-			const dy = Math.abs(e.touches[0].clientY - startY);
-			if (dy > 5) {
-				gestureFired = true;
-				onScrollGestureRef.current?.();
-			}
-		};
-		const onEnd = () => {
-			userTouching = false;
-			userTouchedUntil = Date.now() + 350; // momentum scroll window
-			startY = null;
-			gestureFired = false;
+			atBottomRef.current =
+				el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD;
 		};
 		el.addEventListener("scroll", onScroll, { passive: true });
-		el.addEventListener("touchstart", onStart, { passive: true });
-		el.addEventListener("touchmove", onMove, { passive: true });
-		el.addEventListener("touchend", onEnd);
-		el.addEventListener("touchcancel", onEnd);
-		return () => {
-			el.removeEventListener("scroll", onScroll);
-			el.removeEventListener("touchstart", onStart);
-			el.removeEventListener("touchmove", onMove);
-			el.removeEventListener("touchend", onEnd);
-			el.removeEventListener("touchcancel", onEnd);
-		};
+		return () => el.removeEventListener("scroll", onScroll);
 	}, []);
 
 	const virtualizer = useVirtualizer({
-		count: messages.length,
+		count: rows.length,
 		getScrollElement: () => parentRef.current,
 		estimateSize: (index) => {
 			// Better estimate based on content length to reduce scroll jank
-			const msg = messages[index];
-			if (!msg) return 100;
-			const len = msg.content?.length || 0;
-			if (len < 100) return 60;
-			if (len < 500) return 150;
-			if (len < 2000) return 300;
-			return 500;
+			const row = rows[index];
+			if (!row) return 120;
+			const len = row.msg.content?.length || 0;
+			const tools = (row.msg.toolUse?.length || 0) * 40;
+			if (len < 100) return 72 + tools;
+			if (len < 500) return 160 + tools;
+			if (len < 2000) return 320 + tools;
+			return 520 + tools;
 		},
 		overscan: 10,
 	});
 
 	const scrollToEnd = useCallback(() => {
-		if (messages.length > 0) {
-			virtualizer.scrollToIndex(messages.length - 1, { align: "end" });
+		if (rows.length > 0) {
+			virtualizer.scrollToIndex(rows.length - 1, { align: "end" });
 		}
-	}, [virtualizer, messages.length]);
+	}, [virtualizer, rows.length]);
 
 	useEffect(() => {
-		if (scrollToBottom && messages.length > 0 && !isLoading) {
-			if (messages.length > prevMessageCount) {
-				// Only follow streaming output if the user is still at the bottom;
-				// otherwise they're reading older content and we'd yank them back.
+		if (scrollToBottom && rows.length > 0 && !isLoading) {
+			if (rows.length > prevRowCount) {
 				if (atBottomRef.current) {
 					requestAnimationFrame(() => {
 						scrollToEnd();
 					});
 				}
 			}
-			setPrevMessageCount(messages.length);
+			setPrevRowCount(rows.length);
 		}
-	}, [
-		messages.length,
-		isLoading,
-		scrollToBottom,
-		prevMessageCount,
-		scrollToEnd,
-	]);
+	}, [rows.length, isLoading, scrollToBottom, prevRowCount, scrollToEnd]);
 
 	// Snap to bottom when the container becomes visible (e.g. unhidden after
 	// mounting under display:none). Without this, scrollToEnd above runs while
 	// the parent has 0 height and silently no-ops.
-	const messagesLenRef = useRef(messages.length);
-	messagesLenRef.current = messages.length;
+	const rowsLenRef = useRef(rows.length);
+	rowsLenRef.current = rows.length;
 	useEffect(() => {
 		if (!scrollToBottom) return;
 		const el = parentRef.current;
@@ -870,11 +910,9 @@ export function ConversationViewer({
 		let prevHeight = el.clientHeight;
 		const ro = new ResizeObserver(() => {
 			const h = el.clientHeight;
-			if (h > 0 && prevHeight === 0 && messagesLenRef.current > 0) {
+			if (h > 0 && prevHeight === 0 && rowsLenRef.current > 0) {
 				requestAnimationFrame(() => {
-					virtualizer.scrollToIndex(messagesLenRef.current - 1, {
-						align: "end",
-					});
+					virtualizer.scrollToIndex(rowsLenRef.current - 1, { align: "end" });
 				});
 			}
 			prevHeight = h;
@@ -886,31 +924,24 @@ export function ConversationViewer({
 	// Auto-refresh when session is active (silently in background)
 	useEffect(() => {
 		if (!isActive || !onRefresh) return;
-
 		const interval = setInterval(() => {
 			onRefresh();
-		}, 3000); // Refresh every 3 seconds
-
-		return () => {
-			clearInterval(interval);
-		};
+		}, 3000);
+		return () => clearInterval(interval);
 	}, [isActive, onRefresh]);
 
-	// Container class based on inline mode
 	const containerClass = inline
-		? "h-full flex flex-col relative"
-		: "fixed inset-0 z-50 flex flex-col";
-	const themeBg = getTerminalThemes()[theme || "default"].background;
+		? "h-full flex flex-col relative bg-cv-bg"
+		: "fixed inset-0 z-50 flex flex-col bg-cv-bg";
 
 	return (
-		<div className={containerClass} style={{ backgroundColor: themeBg }}>
+		<div className={containerClass}>
 			{/* Floating font-size controls (bottom-left) — only visible when the
           user is actively changing the size (via pinch / button) or hovering
           the bottom-left hot-zone on desktop. Tap the small "Aa" badge on
           touch devices to reveal. */}
 			{inline && (
-				<div className="absolute bottom-2 left-2 z-30 group">
-					{/* Tiny always-visible trigger */}
+				<div className="group absolute bottom-2 left-2 z-30">
 					<button
 						type="button"
 						onClick={() => {
@@ -922,7 +953,7 @@ export function ConversationViewer({
 								4000,
 							);
 						}}
-						className={`w-6 h-6 rounded text-[10px] font-medium transition-opacity flex items-center justify-center bg-black/40 text-zinc-500 hover:text-zinc-300 ${
+						className={`flex h-6 w-6 items-center justify-center rounded text-[10px] font-medium text-cv-text-muted transition-opacity hover:text-cv-text ${
 							showFontSizeIndicator
 								? "opacity-0"
 								: "opacity-60 hover:opacity-100"
@@ -932,19 +963,18 @@ export function ConversationViewer({
 					>
 						Aa
 					</button>
-					{/* Full controls — shown on hover (desktop) or while indicator active */}
 					<div
 						className={`absolute bottom-0 left-0 flex items-center gap-1 transition-opacity duration-150 ${
 							showFontSizeIndicator
-								? "opacity-100 pointer-events-auto"
-								: "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto"
+								? "pointer-events-auto opacity-100"
+								: "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
 						}`}
 					>
-						<div className="flex items-center bg-black/70 backdrop-blur-sm rounded-md border border-white/[0.08]">
+						<div className="flex items-center rounded-lg border border-cv-border bg-cv-surface">
 							<button
 								type="button"
 								onClick={() => changeFontSize(-1)}
-								className="w-7 h-7 text-zinc-300 hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors text-sm"
+								className="flex h-7 w-7 items-center justify-center text-sm text-cv-text-secondary transition-colors hover:bg-cv-surface-hover hover:text-cv-text"
 								aria-label="Decrease font size"
 								title="Decrease font size"
 							>
@@ -953,7 +983,7 @@ export function ConversationViewer({
 							<button
 								type="button"
 								onClick={resetFontSize}
-								className="px-1.5 h-7 text-[10px] text-zinc-400 hover:text-white hover:bg-white/[0.08] border-x border-white/[0.06] transition-colors"
+								className="h-7 border-x border-cv-border px-1.5 text-[10px] text-cv-text-muted transition-colors hover:bg-cv-surface-hover hover:text-cv-text"
 								aria-label="Reset font size"
 								title="Reset font size"
 							>
@@ -962,94 +992,100 @@ export function ConversationViewer({
 							<button
 								type="button"
 								onClick={() => changeFontSize(1)}
-								className="w-7 h-7 text-zinc-300 hover:text-white hover:bg-white/[0.08] flex items-center justify-center transition-colors text-sm"
+								className="flex h-7 w-7 items-center justify-center text-sm text-cv-text-secondary transition-colors hover:bg-cv-surface-hover hover:text-cv-text"
 								aria-label="Increase font size"
 								title="Increase font size"
 							>
 								＋
 							</button>
 						</div>
-						<div className="bg-black/70 text-white text-[11px] font-medium px-2 py-1 rounded shadow">
+						<div className="rounded bg-cv-surface px-2 py-1 text-[11px] font-medium text-cv-text-secondary">
 							{fontSize}px
 						</div>
 					</div>
 				</div>
 			)}
+
 			{/* Messages */}
 			<div
 				ref={parentRef}
-				className="flex-1 overflow-y-auto px-3 py-1 select-text overscroll-contain relative"
+				className="relative flex-1 select-text overflow-y-auto overscroll-contain"
 				style={{
 					WebkitUserSelect: "text",
 					userSelect: "text",
 					WebkitTouchCallout: "default",
 					fontSize: `${fontSize}px`,
-					["--cv-fs-meta" as never]: `${Math.max(8, fontSize - 2)}px`,
+					["--cv-fs-meta" as never]: `${Math.max(10, fontSize - 3)}px`,
 				}}
 			>
-				{isLoading ? (
-					<div className="text-center text-th-text-muted py-8">
-						{t("common.loading")}
-					</div>
-				) : messages.length === 0 ? (
-					<div className="text-center text-th-text-muted py-8">
-						{t("conversation.noMessages")}
-					</div>
-				) : (
-					<div
-						style={{
-							height: `${virtualizer.getTotalSize()}px`,
-							width: "100%",
-							position: "relative",
-						}}
-					>
+				<div className="mx-auto w-full max-w-[46rem] px-4 py-5">
+					{isLoading ? (
+						<div className="py-10 text-center text-cv-text-muted">
+							{t("common.loading")}
+						</div>
+					) : rows.length === 0 ? (
+						<div className="py-10 text-center text-cv-text-muted">
+							{t("conversation.noMessages")}
+						</div>
+					) : (
 						<div
 							style={{
-								position: "absolute",
-								top: 0,
-								left: 0,
+								height: `${virtualizer.getTotalSize()}px`,
 								width: "100%",
-								transform: `translateY(${virtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
+								position: "relative",
 							}}
 						>
-							{virtualizer.getVirtualItems().map((virtualRow) => (
-								<div
-									key={virtualRow.key}
-									data-index={virtualRow.index}
-									ref={virtualizer.measureElement}
-								>
-									<div className="pb-1">
-										<MessageItem
-											msg={messages[virtualRow.index]}
-											agent={agent}
-										/>
+							<div
+								style={{
+									position: "absolute",
+									top: 0,
+									left: 0,
+									width: "100%",
+									transform: `translateY(${virtualizer.getVirtualItems()[0]?.start ?? 0}px)`,
+								}}
+							>
+								{virtualizer.getVirtualItems().map((virtualRow) => (
+									<div
+										key={virtualRow.key}
+										data-index={virtualRow.index}
+										ref={virtualizer.measureElement}
+									>
+										<div
+											className={
+												rows[virtualRow.index]?.showSpeaker
+													? "pb-1 pt-5"
+													: "pb-1"
+											}
+										>
+											<MessageRow row={rows[virtualRow.index]} agent={agent} />
+										</div>
 									</div>
-								</div>
-							))}
+								))}
+							</div>
 						</div>
-					</div>
-				)}
+					)}
+				</div>
 			</div>
 
 			{/* Footer - only show in modal mode */}
 			{!inline && (
-				<div
-					className="flex items-center px-3 py-2 border-t border-white/[0.06] shrink-0"
-					style={{ backgroundColor: themeBg }}
-				>
+				<div className="flex shrink-0 items-center border-t border-cv-border bg-cv-bg px-3 py-2">
 					<button
 						type="button"
 						onClick={onClose}
-						className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+						className="p-1.5 text-cv-text-muted transition-colors hover:text-cv-text"
+						aria-label="Close"
 					>
-						<ChevronLeft className="w-5 h-5" />
+						<ChevronLeft className="h-5 w-5" />
 					</button>
-					<div className="flex-1 min-w-0 ml-2">
-						<h2 className="text-[13px] font-medium text-white truncate">
+					<div className="ml-2 min-w-0 flex-1">
+						<h2 className="truncate text-[13px] font-medium text-cv-text">
 							{title}
 						</h2>
 						{subtitle && (
-							<p className="text-[11px] text-zinc-500 truncate">{subtitle}</p>
+							<p className="truncate text-[11px] text-cv-text-muted">
+								{subtitle}
+							</p>
 						)}
 					</div>
 					{onResume && (
@@ -1057,7 +1093,7 @@ export function ConversationViewer({
 							type="button"
 							onClick={onResume}
 							disabled={isResuming}
-							className="ml-2 px-3 py-1.5 text-[12px] font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-md shrink-0 transition-colors"
+							className="ml-2 shrink-0 rounded-lg bg-cv-accent px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
 						>
 							{isResuming ? t("session.resuming") : t("session.resume")}
 						</button>
@@ -1068,7 +1104,7 @@ export function ConversationViewer({
 			{/* Image lightbox — tap an inline image to open at full size */}
 			{lightboxSrc && (
 				<div
-					className="fixed inset-0 z-[10000] bg-black/90 flex items-center justify-center p-4"
+					className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 p-4"
 					onClick={() => setLightboxSrc(null)}
 					onTouchEnd={() => setLightboxSrc(null)}
 				>
@@ -1078,12 +1114,12 @@ export function ConversationViewer({
 							e.stopPropagation();
 							setLightboxSrc(null);
 						}}
-						className="absolute top-3 right-3 z-10 w-10 h-10 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+						className="absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
 						aria-label="Close"
 					>
 						<svg
 							aria-hidden="true"
-							className="w-5 h-5"
+							className="h-5 w-5"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -1099,7 +1135,7 @@ export function ConversationViewer({
 					<img
 						src={lightboxSrc}
 						alt="Expanded"
-						className="max-w-full max-h-full object-contain select-none"
+						className="max-h-full max-w-full select-none object-contain"
 						onClick={(e) => e.stopPropagation()}
 						draggable={false}
 					/>

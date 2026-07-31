@@ -31,7 +31,6 @@ import { PeerManager } from "./components/PeerManager";
 import { Onboarding, useOnboarding } from "./components/Onboarding";
 import { WorkspaceList } from "./components/WorkspaceList";
 import type { TerminalRef } from "./components/Terminal";
-import { getTerminalThemes } from "./components/terminal-themes";
 import { openClaudeAppSession } from "./utils/claude-app";
 import {
 	makeSessionKey,
@@ -425,16 +424,9 @@ export function App() {
 		}
 	}, [conversationModeSessions]);
 
-	// Mobile: open the soft keyboard automatically when entering ChatView,
-	// since the xterm area (which normally surfaces the keyboard on focus) is hidden.
-	// Also re-fire on session switch — when toggling between two chat-mode sessions,
-	// `showConversation` stays true but the Terminal is remounted (key=activeSessionId),
-	// so the previous showKeyboard() targeted a stale instance.
-	useEffect(() => {
-		if (!showConversation) return;
-		const id = setTimeout(() => mobileTerminalRef.current?.showKeyboard(), 150);
-		return () => clearTimeout(id);
-	}, [showConversation, activeSessionKey]);
+	// Chat mode is read-only: no composer, no soft keyboard. Typing belongs to
+	// the terminal, and a keyboard over a transcript only asked the reader to
+	// guess where the characters were going.
 
 	// Mobile pane tabs state
 	const [mobilePanes, setMobilePanes] = useState<
@@ -1233,15 +1225,10 @@ export function App() {
 						// Keeping ChatView mounted preserves the conversation subscription so
 						// messages are pre-loaded by the time the user toggles to chat mode —
 						// avoiding the black/loading flash on every open.
-						const themeBg =
-							getTerminalThemes()[activeSession.theme || "default"].background;
 						const chatOverlay = conversationAvailable ? (
-							<div
-								className="h-full flex flex-col"
-								style={{ backgroundColor: themeBg }}
-							>
+							<div className="h-full flex flex-col bg-cv-bg">
 								<div
-									className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06] shrink-0"
+									className="flex items-center gap-2 px-3 py-2 border-b border-cv-border shrink-0"
 									style={{
 										paddingTop: "max(env(safe-area-inset-top, 0px), 8px)",
 									}}
@@ -1249,7 +1236,7 @@ export function App() {
 									<button
 										type="button"
 										onClick={() => setShowConversation(false)}
-										className="p-1.5 text-zinc-500 hover:text-zinc-300 shrink-0"
+										className="p-1.5 text-cv-text-muted hover:text-cv-text shrink-0"
 										title="Switch to terminal"
 										aria-label="Switch to Terminal"
 									>
@@ -1257,22 +1244,22 @@ export function App() {
 									</button>
 									<div className="flex-1 min-w-0">
 										<div className="flex items-center gap-2">
-											<h2 className="text-[13px] font-medium text-white truncate">
+											<h2 className="text-[13px] font-medium text-cv-text truncate">
 												{activeSession.name || "Conversation"}
 											</h2>
 											{isProcessing && (
-												<span className="inline-flex items-center gap-1 text-[10px] text-blue-300 bg-blue-500/15 px-1.5 py-0.5 rounded shrink-0">
-													<span className="inline-block w-2 h-2 border border-blue-300 border-t-transparent rounded-full animate-spin" />
+												<span className="inline-flex items-center gap-1 text-[10px] text-cv-accent bg-cv-surface px-1.5 py-0.5 rounded shrink-0">
+													<span className="inline-block w-2 h-2 border border-cv-accent border-t-transparent rounded-full animate-spin" />
 													Working
 												</span>
 											)}
 											{!isProcessing && isWaitingInput && (
-												<span className="inline-flex items-center gap-1 text-[10px] text-amber-300 bg-amber-500/15 px-1.5 py-0.5 rounded shrink-0">
+												<span className="inline-flex items-center gap-1 text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
 													Waiting for input
 												</span>
 											)}
 										</div>
-										<p className="text-[11px] text-zinc-500 truncate">
+										<p className="text-[11px] text-cv-text-muted truncate">
 											{activeSession.currentPath?.replace(
 												/^\/home\/[^/]+\//,
 												"~/",
@@ -1288,18 +1275,10 @@ export function App() {
 											/^\/home\/[^/]+\//,
 											"~/",
 										)}
-									inline
-									enabled
-									theme={activeSession.theme}
-									agent={activeConversationPane?.agent}
-									agentSessionId={activeConversationPane?.agentSessionId}
-										onScrollGesture={() =>
-											mobileTerminalRef.current?.hideKeyboard()
-										}
-										onAtBottomChange={(atBottom) => {
-											if (atBottom) mobileTerminalRef.current?.showKeyboard();
-											else mobileTerminalRef.current?.hideKeyboard();
-										}}
+										inline
+										enabled
+										agent={activeConversationPane?.agent}
+										agentSessionId={activeConversationPane?.agentSessionId}
 									/>
 								</div>
 							</div>
