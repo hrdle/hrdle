@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.27] - 2026-08-01
+
+### Changed
+- **The history list reads like the conversation it opens.** The transcript was
+  rebuilt to read like the Claude app while the list stayed the old cold grey,
+  so every tap announced a seam that isn't there. Same palette now
+  (`--color-conv-*`), light and dark, across the search field, facet sidebar,
+  filter drawer and date headers
+  - The row leads with the recap - it says what happened - and falls back to the
+    prompt, dimmer for being a fallback. Under it, one muted line of
+    `project / agent / branch / when`, with the agent as the same coloured dot
+    the transcript uses for its speaker
+  - Off the row: the boxed agent badge, four metadata icons, message count and
+    duration. A list is for telling one conversation from another, and none of
+    them helped with that. The peer stays - a session on another machine is a
+    different thing, not a detail
+  - Facet chips lose their five per-axis colours for one quiet style
+
 ## [0.3.26] - 2026-08-01
 
 ### Fixed
