@@ -256,6 +256,7 @@ export function startDebugUI(): void {
             <button type="button" id="btn-fg-enter">Foreground enter</button>
             <button type="button" id="btn-host-exit">Host exit</button>
             <button type="button" id="btn-superseded">Superseded</button>
+            <button type="button" id="btn-gave-up">Server unreachable</button>
           </div>
           <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
           <h2>Voice input</h2>
@@ -589,6 +590,12 @@ export function startDebugUI(): void {
     // reachable by owning two WebViews at once is a path nobody tests.
     onSuperseded() {
       setVoiceStatus('Retired in favour of a newer run (the panel is no longer ours)')
+    },
+    // Reported rather than acted on, like `requestExit` above: closing the tab
+    // would take the screen the closing message is being checked on with it,
+    // and the message is the part worth looking at here.
+    exitNow() {
+      setVoiceStatus('Closed itself (on the device the WebView goes away here)')
     },
     // No host store in a browser; localStorage plays the same part, and it
     // lets the simulator exercise the resume path without the device.
@@ -1031,6 +1038,16 @@ export function startDebugUI(): void {
     controller.onHostExit('system')
     lifecycleStatus.textContent =
       'Host exit: socket closed, clocks cleared, microphone closed. Nothing draws from here — reload to start again.'
+    renderDiag(controller.state)
+  })
+  el('btn-gave-up').addEventListener('click', () => {
+    // The real route takes five minutes of failed reconnects, which is not a
+    // thing anyone will sit through to look at the screen it ends on — and that
+    // screen is the part worth looking at, since it is the app's one chance to
+    // tell a wearer it closed on purpose.
+    ;(controller as unknown as { onWsGaveUp(): void }).onWsGaveUp()
+    lifecycleStatus.textContent =
+      'Server unreachable: the closing message is up, and on the device the WebView goes away a few seconds later.'
     renderDiag(controller.state)
   })
   el('btn-superseded').addEventListener('click', () => {

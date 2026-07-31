@@ -21,6 +21,9 @@ import {
   splitLines,
   textWidth,
 } from './metrics.ts'
+// The give-up threshold, so the screen quotes the number the client actually
+// uses rather than a copy of it that can drift.
+import { GIVE_UP_AFTER_MS } from './ws-client.ts'
 import { formatMessage, recapBlockLines } from './types.ts'
 import type { Session, Pane, ConversationMessage, GlassesRelayItem } from './types.ts'
 
@@ -145,6 +148,15 @@ export interface AppState {
    *  session. Kept separately because the cursor's position is otherwise
    *  expressed as a session and a pane, and that row is neither. */
   listOnNotifications?: boolean
+  /**
+   * The run is ending on its own, and why.
+   *
+   * Read before `mode`, because none of the modes are true any more — the list
+   * behind it is whatever the panel last showed, and its cursor no longer goes
+   * anywhere. Kept as a reason rather than a sentence so the wording stays in
+   * this file with the rest of what the panel says.
+   */
+  fatal?: 'offline'
   /** Advances one frame per spinner tick while the shown session is working.
    *  Absent in states built before the spinner existed; treated as 0. */
   spinnerTick?: number
@@ -862,6 +874,38 @@ export function wrapHeader(text: string): string {
  * the device's own output — same wrapping at 52 columns, same 7-line clamp,
  * same pagination — rather than a second implementation that silently drifts.
  */
+/**
+ * The last thing a run draws before it closes itself.
+ *
+ * English, like everything the G2 draws — `i18n.ts` covers the phone screens,
+ * where the width of a full-width character does not have to be reckoned
+ * against `metrics.ts` and the seven-line clamp.
+ *
+ * Headerless and footerless: there is nothing left to navigate to, and a footer
+ * offering gestures that no longer do anything would be worse than none.
+ */
+function fatalScreen(reason: NonNullable<AppState['fatal']>): {
+  header: string
+  body: string
+  footer: string
+  headerless: boolean
+} {
+  const minutes = Math.round(GIVE_UP_AFTER_MS / 60_000)
+  const body =
+    reason === 'offline'
+      ? [
+          // Four lines, no blanks between them: an empty string does not
+          // survive the render, so spacing written that way is spacing that
+          // only exists in this file. Checked on the simulator.
+          'Cannot reach the server.',
+          `Tried for ${minutes} minutes.`,
+          'Closing to free the glasses.',
+          'Open again once it is back.',
+        ].join('\n')
+      : 'Closing.'
+  return { header: '', body, footer: '', headerless: true }
+}
+
 export function screenText(state: AppState): {
   header: string
   body: string
@@ -877,6 +921,11 @@ export function screenText(state: AppState): {
    *  to know, or it renders a row lower than the device does. */
   headerless?: boolean
 } {
+  // Said before anything else, because a run that is closing itself has no mode
+  // left worth drawing. A WebView that simply vanishes is indistinguishable
+  // from one that crashed, which is the thing the wearer has been seeing all
+  // day; this is the app saying which of the two it was.
+  if (state.fatal) return fatalScreen(state.fatal)
   switch (state.mode) {
     case 'session_list':
       // No header: the list screen gave that bar back to the list.
