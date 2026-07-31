@@ -64,6 +64,10 @@ const EN: Table = {
   'intro.net.bluetooth': '<b>Bluetooth</b> — the phone drives the glasses directly.',
   'intro.net.glasses': 'The G2',
   'intro.net.glassesDesc': 'read what an agent is asking, answer it with the ring',
+  'intro.guideTitle': 'Reading this on a phone?',
+  'intro.guide':
+    'The next four screens are commands typed on that machine. The same guide is a web page, so you can open it there and copy them straight out of it.',
+  'intro.guideButton': 'Open the guide on that machine',
   'intro.getTitle': 'What you get',
   'intro.get1': 'Run several agent sessions at once and switch between them',
   'intro.get2': 'Watch what each one is doing, live',
@@ -231,6 +235,10 @@ const JA: Table = {
   'intro.net.bluetooth': '<b>Bluetooth</b> — スマホがグラスを直接動かします。',
   'intro.net.glasses': 'G2 グラス',
   'intro.net.glassesDesc': 'エージェントの問いを読み、リングで答える',
+  'intro.guideTitle': 'スマホで読んでいますか?',
+  'intro.guide':
+    'この先の4画面は、マシン側で打つコマンドです。同じ手順はウェブページにもあるので、マシンで開けばコマンドをそのままコピーできます。',
+  'intro.guideButton': 'マシンで手順を開く',
   'intro.getTitle': 'できること',
   'intro.get1': '複数のエージェントセッションを同時に動かし、切り替える',
   'intro.get2': 'それぞれが何をしているかをリアルタイムで見る',

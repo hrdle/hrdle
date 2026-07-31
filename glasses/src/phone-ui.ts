@@ -48,6 +48,21 @@ const STEP_SUFFIX = 'setup-step'
 
 const INSTALL_CMD = `curl -fsSL https://raw.githubusercontent.com/${__REPO__}/main/install.sh | bash`
 
+/**
+ * The same guide, as a page.
+ *
+ * Four of these screens are commands typed on a machine that is usually not the
+ * phone reading them, and there is no way to get a command from here to there —
+ * copying puts it on this phone's clipboard, which the machine cannot see.
+ * Opening the guide over there instead puts the copy buttons where the commands
+ * are going.
+ *
+ * The address is longer than anyone wants to type at a keyboard, which is why it
+ * is offered as a copyable block as well as a link, and why a short domain is
+ * worth having. Kept in step with hrdle/hrdle-setup, which serves it.
+ */
+const GUIDE_URL = 'https://hrdle-setup.abe00makoto.workers.dev'
+
 // ── Storage ──
 
 interface Store {
@@ -240,6 +255,12 @@ function screenHtml(id: WizardStepId): { title: string; html: string } {
               <b>${t('intro.net.glasses')}</b>
               <span>${t('intro.net.glassesDesc')}</span>
             </div>
+          </div>
+          <div class="wiz-card">
+            <h3>${t('intro.guideTitle')}</h3>
+            <p class="wiz-note">${t('intro.guide')}</p>
+            ${linkButton(GUIDE_URL, t('intro.guideButton'))}
+            ${cmd(GUIDE_URL)}
           </div>
           <div class="wiz-card">
             <h3>${t('intro.getTitle')}</h3>
