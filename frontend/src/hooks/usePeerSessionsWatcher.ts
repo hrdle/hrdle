@@ -145,19 +145,18 @@ function openWatcher(peer: PeerClientView) {
 				// The terminal sharedWs only ever subscribes to one peer, so without
 				// this the user never gets notified from any other peer.
 				//
-				// Unless that peer's own glasses already took it: the flag is set by
-				// the server that raised the event, so a peer with glasses goes quiet
-				// while every other peer keeps notifying.
-				if (!msg.deliveredToGlasses) {
-					fireHookNotification(
-						msg.event,
-						msg.cwd,
-						ccSessionId,
-						msg.data,
-						msg.message,
-						peer.id,
-					);
-				}
+				// `deliveredToGlasses` used to suppress this too. It says the peer
+				// created a relay item, which only establishes that a glasses app
+				// there holds a socket — not that anyone is wearing anything, so a
+				// peer with the app running went quiet for nothing.
+				fireHookNotification(
+					msg.event,
+					msg.cwd,
+					ccSessionId,
+					msg.data,
+					msg.message,
+					peer.id,
+				);
 				return;
 			}
 
