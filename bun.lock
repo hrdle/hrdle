@@ -13,6 +13,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@hono/zod-validator": "^0.7.6",
+        "@mmmike/web-push": "^0.1.0",
         "hono": "^4.12.8",
         "qrcode": "^1.5.4",
         "zod": "^4.3.6",
@@ -392,6 +393,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@mmmike/web-push": ["@mmmike/web-push@0.1.0", "", {}, "sha512-Laoa95uZso8lTi+jGlfJ3Z11ZAOXvBeTzX1go+UXHVs0AbF4Q7WA8FuYFR1Ca69hY1JWrsfBnstFMOwXf+UVhw=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.1", "", { "dependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1", "@tybys/wasm-util": "^0.10.1" } }, "sha512-p64ah1M1ld8xjWv3qbvFwHiFVWrq1yFvV4f7w+mzaqiR4IlSgkqhcRdHwsGgomwzBH51sRY4NEowLxnaBjcW/A=="],
 
