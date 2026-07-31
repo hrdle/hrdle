@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { TMP_PATHS } from "../../../shared/identity";
 import { bracketedPaste, imagePastePayload } from "./terminal-paste";
 
 describe("bracketedPaste", () => {
@@ -12,7 +13,7 @@ describe("bracketedPaste", () => {
 });
 
 describe("imagePastePayload", () => {
-	const path = "/tmp/hrdle-images/1785535391131-54a7a3971872a527.jpg";
+	const path = `${TMP_PATHS.imagesDir}/1785535391131-54a7a3971872a527.jpg`;
 
 	test("arrives as a paste, which is what turns it into [Image #1]", () => {
 		// Typed in as keystrokes the path stays a path in the prompt. Verified

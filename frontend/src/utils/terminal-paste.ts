@@ -12,10 +12,9 @@ export function bracketedPaste(text: string): string {
 /**
  * An uploaded image's path, as the terminal would deliver a dropped file.
  *
- * Typed in character by character, the path stays a path: a wall of
- * `/tmp/hrdle-images/1785535391131-54a7a3971872a527.jpg` sitting in the prompt
- * where the picture should be. Claude Code recognises an image only in its
- * paste handler — which is how a drag-and-drop arrives, since terminals
+ * Typed in character by character, the path stays a path: fifty characters of
+ * upload directory and hex sitting in the prompt where the picture should be.
+ * Claude Code recognises an image only in its paste handler — which is how a drag-and-drop arrives, since terminals
  * deliver dropped files as a paste — and replaces it with `[Image #1]`.
  * Verified against Claude Code 2.1.220: the same path, same pane, raw versus
  * wrapped, gives the literal path versus the placeholder.
