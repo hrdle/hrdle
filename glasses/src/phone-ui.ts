@@ -14,8 +14,10 @@
 //     store, because `startGlassesMode` reads it from there when the app starts
 //     on the G2. Another origin's `localStorage` does not exist as far as the
 //     glasses are concerned.
-//   - **The camera.** Reading the QR code goes through the host SDK's
-//     `captureImageFromCamera`, which is not reachable from a framed page.
+//   - **The camera.** Reading the QR code opens a camera stream, and the guide
+//     is a cross-origin frame: handing it one means a permissions-policy
+//     delegation the WebView is under no obligation to honour. The scanner runs
+//     on this page and the guide only asks for the result.
 //   - **Every request to the server.** This one was a surprise. The server
 //     answers `Access-Control-Allow-Origin: *`, so CORS was never the obstacle —
 //     Private Network Access is. The guide is served from a public origin and a
@@ -178,7 +180,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
         break
 
       case 'hrdle:scan-qr': {
-        const outcome = await scanQr(bridge)
+        const outcome = await scanQr()
         reply({ type: 'hrdle:qr-result', ...outcome })
         break
       }
