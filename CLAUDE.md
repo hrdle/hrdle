@@ -528,11 +528,104 @@ Uses custom i18n module with embedded translations:
 - Language detected from environment variables: `LANG`, `LC_ALL`, `LC_MESSAGES`
 - Japanese locale (`ja_*`) → Japanese, otherwise English
 
+### Glasses app
+
+`glasses/src/i18n.ts` — a lookup, a language and a way to change it, rather than
+react-i18next (nothing there is React and the ehpk pays for every kilobyte).
+Language comes from a saved choice, then `navigator.languages`, then English.
+
+It carries only what could not move to hrdle-setup: the voice-input settings
+panel, which the browser simulator also renders, and the errors from reading a QR
+code, which happens on the device because the camera does. The tests assert both
+tables carry the same keys — `t()` falls back to English, so a missing key does
+not break a screen, it produces one sentence in the wrong language, which is
+exactly the kind of thing nobody notices.
+
+**What the G2 itself draws stays English.** Japanese is full-width, so the line
+widths in `metrics.ts` and the seven-line clamp would all have to be re-reckoned;
+that is its own piece of work rather than a translation.
+
 ## Type Sharing
 
 Types are defined in `shared/types.ts` with Zod schemas for validation. Import from `../../../shared/types` in both backend and frontend.
 
 Key types: `ControlClientMessage`, `ControlServerMessage` (per-session terminal I/O), `MuxClientMessage`, `MuxServerMessage` (multiplexed WebSocket protocol), `PaneViewport` / `PaneCursor` / `PaneModes` (viewport frames), `SessionResponse`, `PaneInfo`, `TabInfo` (a workspace's tabs; `SessionResponse.tabs`/`activeTabId`, only when >1 tab), `TmuxLayoutNode`.
+
+## What Hrdle is next to
+
+Written down because it was got wrong three times in one afternoon (2026-07-31),
+each time by assuming rather than looking. Anyone about to describe this product
+— a README, a store listing, the setup guide — should read this first.
+
+The agents are not the competition. Claude Code, Codex, Grok and Kimi are the
+things being run. The competition is:
+
+| | What it is | Where it wins |
+|---|---|---|
+| **Even Terminal** (`@evenrealities/even-terminal`, "Terminal Mode") | Even Realities' own. Spawns **one** agent, renders it to the G2, turns R1 gestures into keystrokes. QR pairing, Tailscale recommended. macOS/Linux/Windows | One agent on your glasses. One `npm install -g`, no herdr. Made by the people who made the glasses. Its own readme: "a renderer + input bridge, not a runtime" |
+| **cmux** (cmux.com) | Native macOS terminal for running agents in parallel: tabs, split panes, embedded browser, socket API — **and an iPhone app that mirrors the terminals** | Sitting at a Mac, watching several agents. Also does remote (SSH, attach to tmux) |
+| **herdr on its own** | Everything Hrdle knows about sessions | Any terminal. No extra layer to install |
+
+So three things that read like differentiators are **not**:
+
+- *"Sessions are yours to control"* — that is herdr's, and a Hrdle session **is**
+  a herdr pane
+- *"See your agents on your glasses"* — Even ship that themselves
+- *"Reach it from your phone"* — cmux has an iPhone app
+
+What is left, and is true: **you need never open a computer again.** Not to watch
+a session — to *start* one. `even-terminal` spawns its agent in the directory it
+was launched from, so the work begins at that keyboard; cmux is a window onto the
+Mac you are at. Both watch work begun at a desk. Hrdle starts it without one: a
+new session from the phone (name, directory, agent, machine — the create modal in
+`WorkspaceList.tsx`), spoken instructions, answers from the glasses. Several
+sessions, across several machines.
+
+Voice is the main input, not an extra. The ring wins only when the agent has
+already narrowed the answer to two — which makes a Groq key part of setup rather
+than an optional afterthought.
+
+## Where the setup wizard lives
+
+**Not in this repository.** It is [hrdle/hrdle-setup](https://github.com/hrdle/hrdle-setup),
+served from Cloudflare Workers, and the glasses app frames it in an iframe.
+Do not "fix the wording" in `glasses/src` — there is none there to fix.
+
+`phone-ui.ts` is a frame plus answers to three postMessage requests, and the
+boundary is not a preference:
+
+- **The store.** `startGlassesMode` reads the server address from the *host's*
+  store when the app starts on the G2. Another origin's `localStorage` does not
+  exist as far as the glasses are concerned
+- **The camera.** The QR scan is `captureImageFromCamera`
+- **Every request to the server.** The guide was going to call the API directly —
+  the server does answer `Access-Control-Allow-Origin: *`. **Private Network
+  Access stops it**: the guide is public-origin, a tailnet address is inside
+  CGNAT space, and Chrome refuses that crossing whatever CORS says. Measured:
+  from `hrdle-setup.*.workers.dev`, `api.github.com` returns 200 and a `.ts.net`
+  host fails to reach the network at all
+
+There is no offline copy of the guide, deliberately: the setup it describes ends
+in reaching a server over a tailnet, so a phone with no internet cannot finish it
+anyway, and a second copy of seven screens is a second copy to keep correct.
+
+The two repositories' `i18n.ts` files carry the same keys and sentences on
+purpose. Change one, change the other. `hrdle-setup/src/identity.ts` mirrors
+`identity.json` for the same reason `install.sh` does — it cannot read the file.
+
+## The icon
+
+`frontend/public/favicon.svg` is the source of truth for its geometry, and its
+own comment says what it is: *a scanner mid-sweep. 11 segments / lamp at 0.33
+(left of center) / band folded by S*0.028*. A Knight Industries nose. The still
+mark is one frame of something moving, which is why an animated version sweeps
+rather than pulses.
+
+Port those numbers; do not redraw it by eye. `glasses/src/brand.ts` computes
+every lamp from that geometry and was checked against the source — all seven red
+lamps and all three white cores agree to within 0.007 units of 512. Each lamp
+carries its source opacity as an SVG presentation attribute so a stopped
+animation falls back to the artwork as drawn rather than to something flat.
 
 ## Rules for working on the glasses app (`glasses/`)
 
