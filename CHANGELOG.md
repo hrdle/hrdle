@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.17] - 2026-07-31
+
+### Added
+- **The setup guide is a website now**, at
+  [hrdle-setup.abe00makoto.workers.dev](https://hrdle-setup.abe00makoto.workers.dev)
+  (source in [hrdle/hrdle-setup](https://github.com/hrdle/hrdle-setup), served
+  from Cloudflare Workers), and the glasses app's first screen points at it
+  - Four of the wizard's screens are commands typed on a machine that is usually
+    not the phone reading them, and there is no way to get a command from one to
+    the other: copying puts it on the phone's clipboard, which the machine cannot
+    see. Opened over there, the copy buttons land where the commands are going
+  - It is also where those screens can be corrected without a rebuilt ehpk, an
+    upload to EVEN Hub, a version bump and a promotion to Beta — which is what a
+    wording change cost three times in one afternoon
+  - The split is not a preference. Connecting has to write the server address to
+    the *host's* store, because that is where the G2 reads it from, and the QR
+    scan goes through the host SDK's camera. Those two screens stay in the app;
+    everything before them is on the site, which ends by handing back to it
+- **The wizard wears the app's actual icon, and the icon sweeps.** It carried a
+  red rounded square with an `H` in it — a placeholder, on every screen, of an app
+  that has a real mark. The mark is a scanner: eleven lamps in a slit, the light
+  parked left of centre so it reads as travelling rather than stopped
+  - So it travels. The keyframes are the icon's own brightness profile read
+    across the band and replayed through time — each lamp starts one eleventh of
+    a cycle further along than its left neighbour, so at every instant the eleven
+    of them hold the distribution the still artwork does. It does not pulse
+  - Drawn from the source geometry rather than inlined as a PNG, and checked
+    against it: all seven red lamps and all three white cores agree to within
+    0.007 units of 512. Each lamp keeps its original opacity as an SVG
+    attribute, so `prefers-reduced-motion` falls back to the artwork as drawn
+    rather than to something flat
+
 ## [0.3.16] - 2026-07-31
 
 ### Added
