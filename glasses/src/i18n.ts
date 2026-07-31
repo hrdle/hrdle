@@ -46,13 +46,18 @@ const EN: Table = {
   'machine.vps2':
     'One or two cores and 2 GB of memory is enough for several agent sessions. Your agent accounts sign in from there rather than from your desk, which is worth knowing but is not usually a problem.',
 
+  'scan.starting': 'Starting the camera...',
+  'scan.hint': 'Point the camera at the code `{binary} qr` printed in your terminal.',
+  'scan.cancel': 'Cancel',
+  'scan.notAnAddress':
+    'That code is not a web address - still looking for the one `{binary} qr` printed.',
+  'scan.timedOut':
+    'No code found. Move closer, or make the terminal window bigger, and try again.',
+  'scan.noCamera': 'This app cannot open a camera here. Type the address instead.',
+  'scan.denied':
+    'Camera access was refused. Allow it for this app in the phone settings, or type the address instead.',
   'scan.cameraFailed': 'The camera could not be opened: {error}',
-  'scan.readFailed': 'Could not read that photo: {error}',
-  'scan.noCode': 'No QR code in that photo. Fill more of the frame with it and try again.',
-  'scan.notAnAddress': 'That code is not a web address. Scan the one printed by `{binary} qr`.',
-  'scan.imageUnreadable': 'that image could not be read',
-  'scan.imageEmpty': 'that image was empty',
-  'scan.cannotProcess': 'this device cannot process the photo',
+  'scan.cannotProcess': 'This device cannot process the camera image.',
 
   'settings.title': 'Voice input',
   'settings.subtitle':
@@ -98,15 +103,18 @@ const JA: Table = {
   'machine.vps2':
     '1〜2コアとメモリ 2GB あれば複数のエージェントセッションを動かせます。エージェントのアカウントは手元ではなくその VPS からサインインすることになる点は知っておくとよいですが、通常は問題になりません。',
 
-  'scan.cameraFailed': 'カメラを開けませんでした: {error}',
-  'scan.readFailed': 'その写真を読み取れませんでした: {error}',
-  'scan.noCode':
-    'その写真に QR コードが見つかりません。コードが画面いっぱいに写るようにして、もう一度試してください。',
+  'scan.starting': 'カメラを起動しています…',
+  'scan.hint': 'ターミナルに表示された `{binary} qr` のコードにカメラを向けてください。',
+  'scan.cancel': 'キャンセル',
   'scan.notAnAddress':
-    'そのコードはウェブアドレスではありません。`{binary} qr` が表示するコードを読み取ってください。',
-  'scan.imageUnreadable': '画像を読み込めませんでした',
-  'scan.imageEmpty': '画像が空でした',
-  'scan.cannotProcess': 'この端末では写真を処理できません',
+    'そのコードはウェブアドレスではありません。`{binary} qr` が表示したコードを探しています。',
+  'scan.timedOut':
+    'コードが見つかりませんでした。近づくか、ターミナルのウィンドウを大きくして、もう一度試してください。',
+  'scan.noCamera': 'ここではカメラを開けません。アドレスは手で入力してください。',
+  'scan.denied':
+    'カメラの使用が拒否されました。端末の設定でこのアプリに許可するか、アドレスを手で入力してください。',
+  'scan.cameraFailed': 'カメラを開けませんでした: {error}',
+  'scan.cannotProcess': 'この端末ではカメラ映像を処理できません。',
 
   'settings.title': '音声入力',
   'settings.subtitle':
