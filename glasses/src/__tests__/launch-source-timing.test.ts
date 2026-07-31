@@ -19,10 +19,6 @@ import { describe, expect, mock, test } from 'bun:test'
 /** Every SDK value `display.ts` imports, in a shape that records call order. */
 const calls: string[] = []
 
-class Noop {
-  constructor(_props?: unknown) {}
-}
-
 function fakeBridge() {
   return {
     onLaunchSource(cb: (s: string) => void) {
@@ -37,22 +33,21 @@ function fakeBridge() {
   }
 }
 
+// `mock.module` replaces the module for the whole test run, not just this file,
+// so everything except the one function under test is passed straight through.
+// A hand-written stand-in for the whole SDK looked tidier and took the rest of
+// the suite down with it: `display-format.test.ts` reads `OsEventTypeList`
+// members and counts real container writes, and against a stub those are
+// `undefined` and zero. It passed locally and failed in CI, which is the worst
+// way to find out.
+const actual = await import('@evenrealities/even_hub_sdk')
+
 mock.module('@evenrealities/even_hub_sdk', () => ({
+  ...actual,
   waitForEvenAppBridge: async () => {
     calls.push('waitForEvenAppBridge')
     return fakeBridge()
   },
-  TextContainerProperty: Noop,
-  CreateStartUpPageContainer: Noop,
-  RebuildPageContainer: Noop,
-  TextContainerUpgrade: Noop,
-  OsEventTypeList: {
-    FOREGROUND_ENTER: 4,
-    FOREGROUND_EXIT: 5,
-    ABNORMAL_EXIT: 6,
-    SYSTEM_EXIT: 7,
-  },
-  AudioInputSource: { Glasses: 0, Phone: 1 },
 }))
 
 // Supplied by `define` in vite.config.ts, so under `bun test` it has to be put
