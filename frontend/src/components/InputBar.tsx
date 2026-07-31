@@ -16,6 +16,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { bracketedPaste, imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
 import { Keyboard } from "./Keyboard";
 import { storageKey } from "../utils/app-storage";
@@ -147,7 +148,7 @@ export const InputBar = memo(
 					if (text) {
 						addToInputHistory(text);
 						if (text.includes("\n")) {
-							sendRef.current(`\x1b[200~${text}\x1b[201~`);
+							sendRef.current(bracketedPaste(text));
 						} else {
 							sendRef.current(text);
 						}
@@ -185,7 +186,7 @@ export const InputBar = memo(
 			try {
 				const result = await uploadImage(file, peerId);
 				if (result.ok && result.path) {
-					sendRef.current(result.path);
+					sendRef.current(imagePastePayload(result.path));
 				} else {
 					console.error("Upload failed:", result.error);
 					sendRef.current(
@@ -596,7 +597,7 @@ export const InputBar = memo(
 										if (inputValue) {
 											addToInputHistory(inputValue);
 											if (inputValue.includes("\n")) {
-												sendRef.current(`\x1b[200~${inputValue}\x1b[201~`);
+												sendRef.current(bracketedPaste(inputValue));
 											} else {
 												sendRef.current(inputValue);
 											}

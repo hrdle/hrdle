@@ -35,6 +35,7 @@ import {
 	useWorkspaces,
 } from "../hooks/useWorkspaces";
 import { fireHookNotification } from "../utils/hookNotification";
+import { imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
 import { makePseudoViewport } from "../utils/viewport-pseudo";
 import { DashboardPanel } from "./DashboardPanel";
@@ -1257,7 +1258,7 @@ export function DesktopLayout({
 					);
 					if (result.ok && result.path) {
 						const ref = terminalRefs.current?.get(activePaneRef.current);
-						ref?.sendInput(result.path);
+						ref?.sendInput(imagePastePayload(result.path));
 					} else {
 						console.error("Upload failed:", result.error);
 					}
@@ -1521,7 +1522,7 @@ export function DesktopLayout({
 				const result = await uploadImage(file, getActivePeerId());
 				if (result.ok && result.path) {
 					const ref = terminalRefs.current?.get(activePaneRef.current);
-					ref?.sendInput(result.path);
+					ref?.sendInput(imagePastePayload(result.path));
 				} else {
 					console.error("Upload failed:", result.error);
 				}
