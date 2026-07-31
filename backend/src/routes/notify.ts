@@ -359,23 +359,36 @@ notify.post('/', async (c) => {
       // off and the server cuts the socket a minute later, so most events were
       // being sent to nobody. A push is delivered by the operating system.
       //
-      // Not gated on `deliveredToGlasses`: that flag says a wearer was told,
-      // and the glasses app is killed by its host every few minutes, so the
-      // phone is what is left. Suppressed only when the glasses actually took
-      // it, same as the browser notification.
-      if (!deliveredToGlasses) {
-        void sendPush({
-          title: shortPath(cwd) || IDENTITY.productName,
-          body: message || HOOK_RELAY_TEXT[event] || `Hook: ${event}`,
-          // `sw-notification.js` already opens `/?notify-session=…` when no
-          // window is focused, and posts the id to one that is. Same route.
-          url: sessionId ? `/?notify-session=${encodeURIComponent(sessionId)}` : '/',
-        }).then((r: PushResult) => {
-          if (r.sent || r.pruned || r.failed) {
-            console.log(`[push] sent=${r.sent} pruned=${r.pruned} failed=${r.failed}`);
-          }
-        });
-      }
+      // Sent whatever `deliveredToGlasses` says.
+      //
+      // That flag claims a wearer has been told, and it cannot: it is set when a
+      // relay item was created, and the only thing that establishes is that the
+      // glasses app holds a socket. `isWearing` is unusable — the protobuf omits
+      // zero values, so `false` covers both "not worn" and "the host never filled
+      // this in", and it read `false` across every sample taken while the glasses
+      // were on someone's face. `connectType` has read `none` on every event
+      // recorded so far, including while the app was drawing. On 2026-07-31 the
+      // G2 returned to its home screen with the app still running and still
+      // subscribed, so the panel showed nothing while the flag stayed up.
+      //
+      // Two notifications for one event is a nuisance. A silent phone because an
+      // app was running with its glasses in a case is the failure this whole
+      // path exists to prevent, and the comment in `glasses-relay.ts` says which
+      // way to fall: losing a notification is the worse failure of the two.
+      //
+      // The flag stays on the wire. When the glasses can say they are being
+      // worn, suppression becomes correct again and this is where it goes.
+      void sendPush({
+        title: shortPath(cwd) || IDENTITY.productName,
+        body: message || HOOK_RELAY_TEXT[event] || `Hook: ${event}`,
+        // `sw-notification.js` already opens `/?notify-session=…` when no
+        // window is focused, and posts the id to one that is. Same route.
+        url: sessionId ? `/?notify-session=${encodeURIComponent(sessionId)}` : '/',
+      }).then((r: PushResult) => {
+        if (r.sent || r.pruned || r.failed) {
+          console.log(`[push] sent=${r.sent} pruned=${r.pruned} failed=${r.failed}`);
+        }
+      });
     }
 
     return c.json({ ok: true });

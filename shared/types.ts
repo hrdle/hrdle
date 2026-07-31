@@ -969,11 +969,20 @@ export type ControlServerMessage =
   | { type: 'pong'; timestamp: number }
   | { type: 'session-exited'; reason: string }
   | { type: 'error'; message: string; paneId?: string }
-  // `deliveredToGlasses`: this event is already on the G2 screen as a relay
-  // item, so browsers must not also raise an OS notification for it. Set per
-  // event rather than announced as a "glasses are on" state, because it is
-  // true only when the item actually landed — the server never claims delivery
-  // it could not make, and an absent flag always means "notify as before".
+  // `deliveredToGlasses`: a relay item for this event was created. Informational
+  // — nothing suppresses a notification on it any more.
+  //
+  // It used to, on the reading that the wearer had already been told. It cannot
+  // establish that. All it means is that the glasses app held a socket: on
+  // 2026-07-31 the G2 returned to its home screen with the app still running
+  // and still subscribed, so the flag stayed up while the panel showed nothing,
+  // and glasses in a case silenced the phone for as long as the app lived.
+  // Neither field that would settle it is usable — `isWearing` reads `false`
+  // even on a wearer's face (the protobuf omits zero values), and `connectType`
+  // has read `none` on every event recorded.
+  //
+  // Kept on the wire because it is true and worth seeing, and because this is
+  // where suppression goes back when the glasses can say they are worn.
   | { type: 'hook-event'; event: string; cwd?: string; sessionId?: string; message?: string; data?: Record<string, unknown>; deliveredToGlasses?: boolean };
 
 // =============================================================================

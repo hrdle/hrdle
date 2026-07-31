@@ -195,16 +195,13 @@ export const TerminalPage = forwardRef<TerminalRef, TerminalPageProps>(
 					controlTerminal.requestViewport(pane.paneId, offset);
 				}
 			},
-			onHookEvent: (
-				event,
-				cwd,
-				agentSessionId,
-				data,
-				message,
-				deliveredToGlasses,
-			) => {
-				// Already on the G2 screen — the glasses are the notification.
-				if (deliveredToGlasses) return;
+			onHookEvent: (event, cwd, agentSessionId, data, message) => {
+				// `deliveredToGlasses` used to silence this, on the reasoning that
+				// the wearer had already been told. It cannot establish that: the
+				// flag only means the glasses app holds a socket, and on
+				// 2026-07-31 the G2 went back to its home screen with the app
+				// still running and still subscribed. Glasses in a case, with the
+				// app alive, silenced the phone for nothing.
 				fireHookNotification(
 					event,
 					cwd,

@@ -840,19 +840,12 @@ export function DesktopLayout({
 			};
 			setTimeout(() => requestAllViewports(), 500);
 		},
-		onHookEvent: (event, cwd, sessionId, data, message, deliveredToGlasses) => {
-			// The glasses already showed it; a second alert on the desk is noise.
-			// The indicator update below still runs — it is state, not an alert.
-			if (!deliveredToGlasses) {
-				fireHookNotification(
-					event,
-					cwd,
-					sessionId,
-					data,
-					message,
-					peerConn.peerId,
-				);
-			}
+		onHookEvent: (event, cwd, sessionId, data, message) => {
+			// `deliveredToGlasses` used to silence this. It says a relay item was
+			// created, which only establishes that the glasses app holds a socket
+			// — not that anyone is looking at a panel. Glasses in a case with the
+			// app still running silenced everything else for nothing.
+			fireHookNotification(event, cwd, sessionId, data, message, peerConn.peerId);
 			// Update indicatorState on every useWorkspaces instance immediately
 			updateCachedSessionsByHookEvent(event, sessionId);
 		},
