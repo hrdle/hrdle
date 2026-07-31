@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.19] - 2026-07-31
+
+### Added
+- **Notifications arrive by Web Push**, so one no longer depends on a browser
+  tab being awake. They have always been fired by the page when a mux WebSocket
+  message arrived, which works exactly as long as the page is running — and on
+  Android it usually is not. The tab freezes when the screen goes off, its
+  keepalive stops, and the server drops the socket as a zombie sixty seconds
+  later. Measured on the phone: three closes in one two-minute window, so every
+  hook event in those gaps was broadcast to nobody. The fallback was the
+  glasses, and the glasses app is killed by its host every few minutes
+  - **No new infrastructure.** VAPID means the keys are generated here and
+    registered with nobody: no Firebase project, no API key, no account.
+    Nothing new listens on a port — the server only POSTs outbound to whatever
+    endpoint the subscription names — and the payload is encrypted to the
+    subscription's own key, so the push service forwards bytes it cannot read.
+    Two files under the data directory, both 0600: the keypair and the devices
+  - RFC 8291 (`aes128gcm`), asserted by a test rather than assumed. The first
+    library tried encrypts with `aesgcm`, the superseded draft, and a push
+    service dropping it later would have taken every notification with it
+  - The service worker needed a `push` handler and nothing else. Its click
+    handler has understood `notify-session` and the deep link into a session
+    since long before this, so the session travels in the payload's url and is
+    unpacked into the shape that handler already reads
+  - Subscribing is behind the password — it is a browser asking for a copy of
+    every notification. `POST /api/push/renew` is the exception, for the
+    service worker's re-subscribe when a push service rotates an endpoint: a
+    worker cannot read the token the page holds, so naming the endpoint being
+    replaced stands in for it. It refreshes a device authenticated once and
+    cannot add a new one
+  - A 410 from a push service prunes the subscription; a 5xx or a timeout does
+    not. Dropping a real phone on a transient error silences it permanently and
+    nothing would say why
+
 ## [0.3.18] - 2026-07-31
 
 ### Changed
