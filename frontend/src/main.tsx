@@ -4,6 +4,7 @@ import { UpdatePrompt } from "./components/UpdatePrompt";
 import { initRemoteLogger } from "./utils/remoteLogger";
 import { applyUiScale, getStoredUiScale } from "./utils/uiScale";
 import { dispatchNotificationNavigation } from "./utils/notificationNavigation";
+import { ensurePushSubscription } from "./utils/webPush";
 import "./i18n";
 import "./index.css";
 
@@ -48,8 +49,14 @@ window.addEventListener("resize", updateViewportHeight);
 
 // Request notification permission for hook event notifications
 if ("Notification" in window && Notification.permission === "default") {
-	Notification.requestPermission();
+	Notification.requestPermission().then(() => void ensurePushSubscription());
 }
+
+// Register this browser for Web Push on every load. A hook event fired while
+// the tab is frozen — which on Android is most of the time the screen is off —
+// reaches the phone through the operating system rather than through a socket
+// that is no longer open. Idempotent, and silent when the browser cannot do it.
+void ensurePushSubscription();
 
 // Listen for ServiceWorker log messages
 if ("serviceWorker" in navigator) {

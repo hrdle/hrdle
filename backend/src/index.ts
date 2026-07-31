@@ -13,6 +13,7 @@ import { peers } from './routes/peers';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
 import { glassesRelay } from './routes/glasses-relay';
+import { push } from './routes/push';
 import { muxOpen, muxMessage, muxClose, type MuxData } from './routes/terminal-mux';
 import { parseArgs, runCli, VERSION } from './cli';
 import { conditionalAuthMiddleware, isAuthRequired, getJwtSecret, initJwtSecret } from './middleware/auth';
@@ -176,6 +177,17 @@ app.use('/api/herdr/*', conditionalAuthMiddleware);
 // self-notes via `cchub glasses` from inside panes where no token exists —
 // unauthenticated local trust, same pattern as /api/notify. The STT and any
 // other glasses endpoints remain protected.
+// Adding a device to the push list is a browser asking for a copy of every
+// notification, so it needs the same password the UI does. The exception is the
+// service worker's re-subscribe after a push service rotates an endpoint: a
+// worker cannot read the token out of localStorage, and a subscription that
+// cannot be renewed goes silently dead. That path is a no-op unless a matching
+// endpoint is already stored, so it can only refresh a device that was
+// authenticated once already.
+app.use('/api/push/*', (c, next) => {
+  if (c.req.path === '/api/push/renew') return next();
+  return conditionalAuthMiddleware(c, next);
+});
 app.use('/api/glasses/*', (c, next) => {
   if (c.req.path.startsWith('/api/glasses/relay')) return next();
   return conditionalAuthMiddleware(c, next);
@@ -191,6 +203,7 @@ app.route('/api/dashboard', dashboard);
 app.route('/api/notify', notify);
 app.route('/api/peers', peers);
 app.route('/api/herdr', herdr);
+app.route('/api/push', push);
 app.route('/api/glasses/relay', glassesRelay);
 app.route('/api/glasses', glasses);
 

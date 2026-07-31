@@ -10,6 +10,16 @@ import {
   resolveHookTarget,
 } from '../services/glasses-relay';
 import { resolveNotifyCommand } from '../services/notify-command';
+import { sendPush, type PushResult } from '../services/push';
+import { IDENTITY } from '../../../shared/identity';
+
+/** `/home/you/repos/thing` -> `~/repos/thing`, which is what the browser
+ *  notification has always used as its title. */
+function shortPath(cwd?: string): string {
+  if (!cwd) return '';
+  const home = homedir();
+  return cwd === home ? '~' : cwd.startsWith(`${home}/`) ? `~${cwd.slice(home.length)}` : cwd;
+}
 
 // Read only the trailing slice of a transcript instead of the whole file.
 // Active Claude sessions produce multi-MB .jsonl transcripts; the previous
@@ -342,6 +352,30 @@ notify.post('/', async (c) => {
         ...(deliveredToGlasses ? { deliveredToGlasses: true } : {}),
       };
       broadcastToMuxClients(hookMsg);
+
+      // The same event again, by a route that does not need anything of ours to
+      // be awake. The broadcast above only reaches a page that is running, and
+      // on Android it usually is not — the tab is frozen when the screen goes
+      // off and the server cuts the socket a minute later, so most events were
+      // being sent to nobody. A push is delivered by the operating system.
+      //
+      // Not gated on `deliveredToGlasses`: that flag says a wearer was told,
+      // and the glasses app is killed by its host every few minutes, so the
+      // phone is what is left. Suppressed only when the glasses actually took
+      // it, same as the browser notification.
+      if (!deliveredToGlasses) {
+        void sendPush({
+          title: shortPath(cwd) || IDENTITY.productName,
+          body: message || HOOK_RELAY_TEXT[event] || `Hook: ${event}`,
+          // `sw-notification.js` already opens `/?notify-session=…` when no
+          // window is focused, and posts the id to one that is. Same route.
+          url: sessionId ? `/?notify-session=${encodeURIComponent(sessionId)}` : '/',
+        }).then((r: PushResult) => {
+          if (r.sent || r.pruned || r.failed) {
+            console.log(`[push] sent=${r.sent} pruned=${r.pruned} failed=${r.failed}`);
+          }
+        });
+      }
     }
 
     return c.json({ ok: true });
