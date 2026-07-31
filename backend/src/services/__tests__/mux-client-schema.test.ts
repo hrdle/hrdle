@@ -87,3 +87,37 @@ describe('MuxClientMessageSchema — glasses-relay subscription (#504)', () => {
     expect(MuxClientMessageSchema.safeParse({ type: 'glasses-relay' }).success).toBe(false);
   });
 });
+
+describe('MuxClientMessageSchema — per-pane conversation subscription (#80)', () => {
+  test('keeps agentSessionId, which names which conversation of a workspace', () => {
+    const r = MuxClientMessageSchema.safeParse({
+      type: 'subscribe-conversation',
+      sessionId: 'work',
+      agentSessionId: 'aaaa-bbbb',
+    });
+    expect(r.success).toBe(true);
+    if (r.success && r.data.type === 'subscribe-conversation') {
+      expect(r.data.agentSessionId).toBe('aaaa-bbbb');
+    }
+  });
+
+  test('unsubscribe carries it too, so one pane cannot close the other watcher', () => {
+    const r = MuxClientMessageSchema.safeParse({
+      type: 'unsubscribe-conversation',
+      sessionId: 'work',
+      agentSessionId: 'aaaa-bbbb',
+    });
+    expect(r.success).toBe(true);
+    if (r.success && r.data.type === 'unsubscribe-conversation') {
+      expect(r.data.agentSessionId).toBe('aaaa-bbbb');
+    }
+  });
+
+  test('still valid without it: a single-agent workspace resolves by directory', () => {
+    const r = MuxClientMessageSchema.safeParse({ type: 'subscribe-conversation', sessionId: 'work' });
+    expect(r.success).toBe(true);
+    if (r.success && r.data.type === 'subscribe-conversation') {
+      expect(r.data.agentSessionId).toBeUndefined();
+    }
+  });
+});

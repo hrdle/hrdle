@@ -297,12 +297,12 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
   }
 
   if (msg.type === 'subscribe-conversation') {
-    await handleSubscribeConversation(ws, msg.sessionId);
+    await handleSubscribeConversation(ws, msg.sessionId, msg.agentSessionId);
     return;
   }
 
   if (msg.type === 'unsubscribe-conversation') {
-    handleUnsubscribeConversation(ws, msg.sessionId);
+    handleUnsubscribeConversation(ws, msg.sessionId, msg.agentSessionId);
     return;
   }
 
@@ -642,28 +642,50 @@ async function emitInitialViewports(
   }
 }
 
-async function handleSubscribeConversation(ws: ServerWebSocket<MuxData>, sessionId: string) {
-  console.log(`[mux] subscribe-conversation: ${sessionId}`);
+/**
+ * Watcher key.
+ *
+ * A workspace is not a conversation: two agent panes in one workspace are two,
+ * and keying the watcher by workspace alone meant the second subscription
+ * silently tore down the first (#80).
+ */
+function conversationKey(sessionId: string, agentSessionId?: string): string {
+  return agentSessionId ? `${sessionId}\u0000${agentSessionId}` : sessionId;
+}
 
-  const existing = ws.data.conversationWatchers.get(sessionId);
+async function handleSubscribeConversation(
+  ws: ServerWebSocket<MuxData>,
+  sessionId: string,
+  agentSessionId?: string,
+) {
+  console.log(`[mux] subscribe-conversation: ${sessionId}${agentSessionId ? ` agent=${agentSessionId}` : ''}`);
+  const key = conversationKey(sessionId, agentSessionId);
+
+  const existing = ws.data.conversationWatchers.get(key);
   if (existing) {
     try { existing.stop(); } catch { /* ignore */ }
-    ws.data.conversationWatchers.delete(sessionId);
+    ws.data.conversationWatchers.delete(key);
   }
 
   let workingDir: string | undefined;
   try {
     const sessions = await herdrService.listWorkspaces();
     const session = sessions.find(s => s.id === sessionId);
-    workingDir = session?.currentPath;
+    // The pane's own directory, not the workspace's. `currentPath` is the
+    // first agent pane's, so a second pane working elsewhere would have been
+    // read against a project directory it has no transcript in.
+    const pane = agentSessionId
+      ? session?.panes?.find(p => p.agentSessionId === agentSessionId)
+      : undefined;
+    workingDir = pane?.path || session?.currentPath;
   } catch (err) {
     console.warn(`[mux] subscribe-conversation: failed to list sessions: ${err}`);
   }
 
   if (!workingDir) {
     try {
-      ws.send(JSON.stringify({ type: 'conversation-subscribed', sessionId, ccSessionId: null }));
-      ws.send(JSON.stringify({ type: 'initial-conversation', sessionId, messages: [] }));
+      ws.send(JSON.stringify({ type: 'conversation-subscribed', sessionId, agentSessionId, ccSessionId: null }));
+      ws.send(JSON.stringify({ type: 'initial-conversation', sessionId, agentSessionId, messages: [] }));
     } catch { /* disconnected */ }
     return;
   }
@@ -671,7 +693,7 @@ async function handleSubscribeConversation(ws: ServerWebSocket<MuxData>, session
   const watcher = new ConversationWatcher();
   let initialMessages: ConversationMessage[] = [];
   try {
-    initialMessages = await watcher.start(workingDir);
+    initialMessages = await watcher.start(workingDir, agentSessionId);
   } catch (err) {
     console.warn(`[mux] subscribe-conversation start failed for ${sessionId}:`, err);
   }
@@ -687,35 +709,42 @@ async function handleSubscribeConversation(ws: ServerWebSocket<MuxData>, session
 
   watcher.onUpdate((newMessages) => {
     try {
-      ws.send(JSON.stringify({ type: 'conversation-update', sessionId, messages: newMessages }));
+      ws.send(JSON.stringify({ type: 'conversation-update', sessionId, agentSessionId, messages: newMessages }));
     } catch { /* disconnected */ }
   });
 
-  ws.data.conversationWatchers.set(sessionId, watcher);
+  ws.data.conversationWatchers.set(key, watcher);
 
   try {
     ws.send(JSON.stringify({
       type: 'conversation-subscribed',
       sessionId,
+      agentSessionId,
       ccSessionId: watcher.getCcSessionId(),
     }));
     ws.send(JSON.stringify({
       type: 'initial-conversation',
       sessionId,
+      agentSessionId,
       messages: initialMessages,
     }));
   } catch { /* disconnected */ }
 }
 
-function handleUnsubscribeConversation(ws: ServerWebSocket<MuxData>, sessionId: string) {
-  console.log(`[mux] unsubscribe-conversation: ${sessionId}`);
-  const watcher = ws.data.conversationWatchers.get(sessionId);
+function handleUnsubscribeConversation(
+  ws: ServerWebSocket<MuxData>,
+  sessionId: string,
+  agentSessionId?: string,
+) {
+  console.log(`[mux] unsubscribe-conversation: ${sessionId}${agentSessionId ? ` agent=${agentSessionId}` : ''}`);
+  const key = conversationKey(sessionId, agentSessionId);
+  const watcher = ws.data.conversationWatchers.get(key);
   if (watcher) {
     try { watcher.stop(); } catch { /* ignore */ }
-    ws.data.conversationWatchers.delete(sessionId);
+    ws.data.conversationWatchers.delete(key);
   }
   try {
-    ws.send(JSON.stringify({ type: 'conversation-unsubscribed', sessionId }));
+    ws.send(JSON.stringify({ type: 'conversation-unsubscribed', sessionId, agentSessionId }));
   } catch { /* disconnected */ }
 }
 

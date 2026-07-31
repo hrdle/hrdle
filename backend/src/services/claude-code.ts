@@ -83,8 +83,11 @@ export class ClaudeCodeService {
     }
   }
 
-  constructor() {
-    this.claudeDir = join(homedir(), '.claude', 'projects');
+  constructor(projectsDir?: string) {
+    // The argument exists for tests: Bun caches `os.homedir()`, so a fixture
+    // cannot redirect this by setting HOME, and the alternative is writing
+    // fixtures into the reader's real transcripts.
+    this.claudeDir = projectsDir ?? join(homedir(), '.claude', 'projects');
   }
 
   /**

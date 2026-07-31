@@ -12,12 +12,16 @@ interface ConversationEventDetail {
 		| "initial-conversation"
 		| "conversation-update";
 	sessionId: string;
+	agentSessionId?: string;
 	ccSessionId?: string | null;
 	messages?: ConversationMessage[];
 }
 
 interface UseConversationStreamOptions {
 	sessionId: string;
+	/** The pane's own agent session. Names which conversation of a workspace
+	 *  this is — a workspace with two agent panes has two. */
+	agentSessionId?: string | null;
 	enabled?: boolean;
 	token?: string | null;
 }
@@ -30,6 +34,7 @@ interface UseConversationStreamResult {
 
 export function useConversationStream({
 	sessionId,
+	agentSessionId,
 	enabled = true,
 	token,
 }: UseConversationStreamOptions): UseConversationStreamResult {
@@ -49,6 +54,15 @@ export function useConversationStream({
 		const handler = (ev: Event) => {
 			const detail = (ev as CustomEvent<ConversationEventDetail>).detail;
 			if (!detail || detail.sessionId !== sessionId) return;
+			// Two panes of one workspace share a sessionId, so the pane's agent
+			// session is what tells their messages apart. An older server echoes
+			// nothing back; then the sessionId is all there is to go on.
+			if (
+				agentSessionId &&
+				detail.agentSessionId &&
+				detail.agentSessionId !== agentSessionId
+			)
+				return;
 
 			switch (detail.type) {
 				case "conversation-subscribed":
@@ -69,13 +83,13 @@ export function useConversationStream({
 		};
 
 		window.addEventListener("cchub-conversation", handler);
-		subscribeConversation(sessionId, token);
+		subscribeConversation(sessionId, agentSessionId, token);
 
 		return () => {
 			window.removeEventListener("cchub-conversation", handler);
-			unsubscribeConversation(sessionId);
+			unsubscribeConversation(sessionId, agentSessionId);
 		};
-	}, [sessionId, enabled, token]);
+	}, [sessionId, agentSessionId, enabled, token]);
 
 	return { messages, isReady, ccSessionId };
 }
