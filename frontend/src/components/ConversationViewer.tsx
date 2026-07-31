@@ -31,6 +31,11 @@ import type {
 import { TMP_PATHS } from "../../../shared/identity";
 import { agentBadge } from "../utils/agentDisplay";
 import { storageKey } from "../utils/app-storage";
+import {
+	highlightToHtml,
+	languageForOutput,
+	languageFromClassName,
+} from "../utils/codeHighlight";
 import { getToolSummary } from "../utils/toolSummary";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -135,7 +140,7 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
 		<div className="group relative my-3">
 			<pre
 				ref={preRef}
-				className="overflow-x-auto rounded-xl border border-cv-border bg-cv-surface px-3.5 py-3 font-mono text-[0.85em] leading-relaxed text-cv-text-secondary"
+				className="cv-code overflow-x-auto rounded-xl border border-cv-border bg-cv-surface px-3.5 py-3 font-mono text-[0.85em] leading-relaxed text-cv-text-secondary"
 			>
 				{children}
 			</pre>
@@ -155,6 +160,27 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
 	);
 }
 
+/**
+ * A fenced block or a tool's output, coloured when we know the language.
+ *
+ * Falls back to a text node whenever `highlightToHtml` declines — the HTML
+ * path is only ever fed output highlight.js escaped itself.
+ */
+function HighlightedCode({
+	code,
+	language,
+}: {
+	code: string;
+	language: string | null;
+}) {
+	const html = useMemo(() => highlightToHtml(code, language), [code, language]);
+	if (html === null) return <code>{code}</code>;
+	return (
+		// biome-ignore lint/security/noDangerouslySetInnerHtml: highlight.js output, which escapes its input
+		<code dangerouslySetInnerHTML={{ __html: html }} />
+	);
+}
+
 const markdownComponents = {
 	pre: ({ children }: { children?: React.ReactNode }) => (
 		<CodeBlock>{children}</CodeBlock>
@@ -167,12 +193,18 @@ const markdownComponents = {
 		className?: string;
 	}) => {
 		const isBlock = className?.includes("language-");
-		return isBlock ? (
-			<code>{children}</code>
-		) : (
-			<code className="rounded bg-cv-surface px-1.5 py-0.5 font-mono text-[0.85em] text-cv-text">
-				{children}
-			</code>
+		if (!isBlock) {
+			return (
+				<code className="rounded bg-cv-surface px-1.5 py-0.5 font-mono text-[0.85em] text-cv-text">
+					{children}
+				</code>
+			);
+		}
+		return (
+			<HighlightedCode
+				code={String(children).replace(/\n$/, "")}
+				language={languageFromClassName(className)}
+			/>
 		);
 	},
 	p: ({ children }: { children?: React.ReactNode }) => (
@@ -367,13 +399,21 @@ function TodoChecklist({ items }: { items: TodoDisplayItem[] }) {
 }
 
 /** Long tool output: show a head, expand on demand. */
-function ExpandableText({ text, preview }: { text: string; preview: string }) {
+function ExpandableText({
+	text,
+	preview,
+	language,
+}: {
+	text: string;
+	preview: string;
+	language: string | null;
+}) {
 	const { t } = useTranslation();
 	const [expanded, setExpanded] = useState(false);
 
 	return (
 		<>
-			{expanded ? text : preview}
+			<HighlightedCode code={expanded ? text : preview} language={language} />
 			<button
 				type="button"
 				onClick={() => setExpanded(!expanded)}
@@ -385,7 +425,15 @@ function ExpandableText({ text, preview }: { text: string; preview: string }) {
 	);
 }
 
-function ToolResultBody({ result }: { result: ToolResultInfo }) {
+function ToolResultBody({
+	result,
+	filePath,
+}: {
+	result: ToolResultInfo;
+	/** Path the call named, when it named one. A result never says what it is,
+	 *  so the file it came from is the only clue its output has. */
+	filePath: string | undefined;
+}) {
 	const { t } = useTranslation();
 	const maxPreview = 500;
 	const isLong = result.output.length > maxPreview;
@@ -394,19 +442,28 @@ function ToolResultBody({ result }: { result: ToolResultInfo }) {
 		: result.output;
 	const hasImages = !!result.images && result.images.length > 0;
 	const hasOutput = result.output.length > 0;
+	// An error is a message, not a listing: colouring it as source would only
+	// argue with the red that says it failed.
+	const outputLanguage = result.isError
+		? null
+		: languageForOutput(filePath, result.output);
 
 	return (
 		<div className="space-y-2">
 			{hasOutput && (
 				<pre
-					className={`whitespace-pre-wrap break-all font-mono text-[length:var(--cv-fs-meta,12px)] ${
+					className={`cv-code whitespace-pre-wrap break-all font-mono text-[length:var(--cv-fs-meta,12px)] ${
 						result.isError ? "text-red-400" : "text-cv-text-secondary"
 					}`}
 				>
 					{isLong ? (
-						<ExpandableText text={result.output} preview={preview} />
+						<ExpandableText
+							text={result.output}
+							preview={preview}
+							language={outputLanguage}
+						/>
 					) : (
-						result.output
+						<HighlightedCode code={result.output} language={outputLanguage} />
 					)}
 				</pre>
 			)}
@@ -469,6 +526,13 @@ function ToolCard({
 
 	const name = call?.name ?? result?.toolName ?? t("conversation.toolResult");
 	const summary = call ? getToolSummary(call.input) : "";
+	// Read/Write/Edit name a file; its extension is what tells the output what
+	// language it is looking at.
+	const calledPath = call
+		? ((call.input.file_path ?? call.input.path ?? call.input.notebook_path) as
+				| string
+				| undefined)
+		: undefined;
 	const Icon = isError ? TriangleAlert : toolIcon(name);
 	const done = todos ? todos.filter((i) => i.status === "done").length : 0;
 
@@ -501,13 +565,16 @@ function ToolCard({
 				<div className="space-y-3 border-t border-cv-border px-3 py-2.5">
 					{todos && <TodoChecklist items={todos} />}
 					{call && !todos && (
-						<pre className="overflow-x-auto whitespace-pre-wrap break-all font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-secondary">
-							{JSON.stringify(call.input, null, 2)}
+						<pre className="cv-code overflow-x-auto whitespace-pre-wrap break-all font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-secondary">
+							<HighlightedCode
+								code={JSON.stringify(call.input, null, 2)}
+								language="json"
+							/>
 						</pre>
 					)}
 					{result && (
 						<div className={call ? "border-t border-cv-border pt-2.5" : ""}>
-							<ToolResultBody result={result} />
+							<ToolResultBody result={result} filePath={calledPath} />
 						</div>
 					)}
 				</div>
