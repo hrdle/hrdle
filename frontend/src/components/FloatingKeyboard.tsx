@@ -21,6 +21,7 @@ import {
 } from "react";
 import { Keyboard } from "./Keyboard";
 import { storageKey } from "../utils/app-storage";
+import { bracketedPaste } from "../utils/terminal-paste";
 
 export interface FloatingKeyboardRef {
 	setInputText: (text: string) => void;
@@ -290,7 +291,7 @@ export const FloatingKeyboard = forwardRef<
 		// user can retry instead of silently losing the message. #264
 		if (text) {
 			const textRes = text.includes("\n")
-				? onSend(`\x1b[200~${text}\x1b[201~`)
+				? onSend(bracketedPaste(text))
 				: onSend(text);
 			if (textRes === false) return;
 			addToHistory(text);
