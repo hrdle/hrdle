@@ -79,9 +79,20 @@ describe('paneIndicatorState', () => {
     ).toBe('processing');
   });
 
-  it('keeps hooks first for thread agents, then herdr, then idle', () => {
-    // Mirrors the session-level rule: herdr's status accuracy for thread
-    // agents is unverified (#390).
+  it('lets a working thread agent outrank the hook that said it finished', () => {
+    // A Kimi pane sat at `completed` through an entire turn. Its documented
+    // setup registers `Stop` and nothing else, so "finished" is the only hook
+    // event that ever arrives -- and with a 24h TTL it outranked herdr, which
+    // was reporting `working` the whole time. Verified on herdr 0.7.5: the
+    // pane read `working` through the turn and `done` the moment it ended.
+    expect(
+      paneIndicatorState({
+        paneAgent: 'kimi',
+        paneAgentStatus: 'working',
+        sessionIndicator: 'completed',
+        hookState: 'completed',
+      }),
+    ).toBe('processing');
     expect(
       paneIndicatorState({
         paneAgent: 'codex',
@@ -89,7 +100,19 @@ describe('paneIndicatorState', () => {
         sessionIndicator: 'processing',
         hookState: 'completed',
       }),
-    ).toBe('completed');
+    ).toBe('processing');
+  });
+
+  it('falls back to the hook for an agent herdr has no status for', () => {
+    // Grok has no herdr integration, so the hook is all there is.
+    expect(
+      paneIndicatorState({
+        paneAgent: 'grok',
+        paneAgentStatus: undefined,
+        sessionIndicator: 'completed',
+        hookState: 'processing',
+      }),
+    ).toBe('processing');
     expect(
       paneIndicatorState({
         paneAgent: 'kimi',
