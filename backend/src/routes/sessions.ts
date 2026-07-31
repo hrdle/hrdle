@@ -194,14 +194,23 @@ export function herdrStatusToIndicator(status?: string): IndicatorState | null {
 }
 
 /**
- * Per-pane indicator, same priority as the session level: herdr's per-pane
- * status is the source of truth and hook state only fills in what herdr can't
- * see. A hook override can sit stale for most of a turn — nothing fires
- * between an answered AskUserQuestion and the turn's Stop — so it must never
- * outrank a live herdr status (a stale `waiting_input` here becomes a false
- * permission-pending badge on the workspace card). Thread agents keep hooks first,
- * mirroring the session-level rule (#390: herdr's accuracy there is
- * unverified).
+ * Per-pane indicator: herdr's per-pane status is the source of truth and hook
+ * state only fills in what herdr cannot see.
+ *
+ * A hook override can sit stale for most of a turn — nothing fires between an
+ * answered AskUserQuestion and the turn's Stop — so it must never outrank a
+ * live herdr status (a stale `waiting_input` becomes a false
+ * permission-pending badge on the workspace card).
+ *
+ * This now holds for thread agents too. They used to keep hooks first because
+ * herdr's accuracy for them was unverified (#390), and the cost of that was a
+ * Kimi pane frozen at `completed` while it worked: the documented Kimi setup
+ * registers `Stop` and nothing else, so the only hook event that ever arrives
+ * says "finished" — and it then outranked herdr for the next 24 hours.
+ * Verified on herdr 0.7.5: a Kimi pane reported `working` through its turn and
+ * `done` the moment it ended. An agent with no herdr integration (Grok) has no
+ * status to read, so `herdrStatusToIndicator` returns null and hooks still
+ * carry it.
  */
 export function paneIndicatorState(opts: {
   paneAgent?: AgentProvider;
@@ -214,7 +223,7 @@ export function paneIndicatorState(opts: {
   if (agentSupportsConversationMetadata(opts.paneAgent)) {
     return herdrState ?? opts.sessionIndicator;
   }
-  return opts.hookState ?? herdrState ?? 'idle';
+  return herdrState ?? opts.hookState ?? 'idle';
 }
 
 export const sessions = new Hono();
@@ -289,13 +298,14 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
     // ccSession.projectPath === s.currentPath.
     const isExactPathMatch = !!ccSession && !!s.currentPath && ccSession.projectPath === s.currentPath;
 
-    // Thread agents keep hooks first: herdr detects these panes too, but its
-    // status accuracy there hasn't been verified the way it has for Claude
-    // (#390), and Grok isn't integrated with herdr at all.
+    // Same order for every agent: herdr watches the pane, a hook only reports
+    // the moment it fired. Thread agents used to read hooks first, which left a
+    // Kimi pane at `completed` for a whole turn — its only registered hook is
+    // `Stop`, so "finished" was the only thing hrdle ever heard.
     const sessionIndicatorState = includeClaudeInfo
       ? indicatorState
       : includeThreadInfo
-        ? (hookState ?? herdrState ?? undefined)
+        ? (herdrState ?? hookState ?? undefined)
         : undefined;
 
     const panePids: (number | undefined)[] = s.panes ? s.panes.map((p: { pid?: number }) => p.pid) : [];
