@@ -251,7 +251,7 @@ export function SessionHistoryV2({
 
 	if (isLoadingProjects) {
 		return (
-			<div className="p-4 text-center text-th-text-muted text-sm">
+			<div className="bg-cv-bg p-6 text-center text-sm text-cv-text-muted">
 				{t("history.loadingHistory")}
 			</div>
 		);
@@ -259,7 +259,7 @@ export function SessionHistoryV2({
 
 	if (error) {
 		return (
-			<div className="p-4 text-center text-red-400 text-sm">
+			<div className="bg-cv-bg p-6 text-center text-sm text-red-400">
 				{t("common.error")}: {error}
 			</div>
 		);
@@ -270,25 +270,25 @@ export function SessionHistoryV2({
 	);
 
 	return (
-		<div ref={setRootRef} className="flex flex-col h-full">
+		<div ref={setRootRef} className="flex h-full flex-col bg-cv-bg">
 			{/* Header: search + (narrow) Filters button */}
-			<div className="px-3 pt-3 pb-2 shrink-0 flex items-center gap-2">
-				<div className="relative flex-1 max-w-sm">
-					<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+			<div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3">
+				<div className="relative max-w-sm flex-1">
+					<Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-cv-text-muted" />
 					<input
 						type="text"
 						value={searchInput}
 						onChange={(e) => setSearchInput(e.target.value)}
 						placeholder={t("history.searchPlaceholder")}
-						className="w-full pl-9 pr-3 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-md text-[13px] text-white placeholder:text-zinc-700 focus:outline-none focus:border-white/[0.12] transition-colors"
+						className="w-full rounded-full border border-cv-border bg-cv-surface py-1.5 pl-9 pr-3 text-[13px] text-cv-text transition-colors placeholder:text-cv-text-muted focus:border-cv-accent/50 focus:outline-none"
 					/>
 					{searchInput && (
 						<button
 							type="button"
 							onClick={() => setSearchInput("")}
-							className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-zinc-600 hover:text-zinc-400"
+							className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-cv-text-muted hover:text-cv-text"
 						>
-							<X className="w-3.5 h-3.5" />
+							<X className="h-3.5 w-3.5" />
 						</button>
 					)}
 				</div>
@@ -296,12 +296,12 @@ export function SessionHistoryV2({
 					<button
 						type="button"
 						onClick={() => setDrawerOpen(true)}
-						className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-[12px] text-zinc-200"
+						className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cv-border px-3 py-1.5 text-[12px] text-cv-text-secondary transition-colors hover:bg-cv-surface"
 					>
-						<SlidersHorizontal className="w-3.5 h-3.5" />
+						<SlidersHorizontal className="h-3.5 w-3.5" />
 						{t("history.filters")}
 						{chips.length > 0 && (
-							<span className="px-1 rounded-full bg-blue-400/30 text-blue-100 text-[10px] tabular-nums">
+							<span className="rounded-full bg-cv-accent px-1.5 text-[10px] tabular-nums text-white">
 								{chips.length}
 							</span>
 						)}
@@ -311,7 +311,7 @@ export function SessionHistoryV2({
 
 			{/* Active facet chips */}
 			{chips.length > 0 && (
-				<div className="px-3 pb-2 shrink-0">
+				<div className="shrink-0 px-4 pb-2">
 					<HistoryActiveChips
 						chips={chips}
 						onRemove={removeChip}
@@ -326,13 +326,13 @@ export function SessionHistoryV2({
 					<>
 						<aside
 							style={{ width: sidebarWidth }}
-							className="shrink-0 overflow-y-auto border-r border-white/[0.06] px-3 py-3"
+							className="shrink-0 overflow-y-auto border-r border-cv-border px-4 py-3"
 						>
 							{sidebar}
 						</aside>
 						{/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle */}
 						<div
-							className="w-1 -ml-0.5 shrink-0 cursor-col-resize touch-none hover:bg-blue-500/60 transition-colors"
+							className="-ml-0.5 w-1 shrink-0 cursor-col-resize touch-none transition-colors hover:bg-cv-accent/50"
 							onMouseDown={handleSidebarResizeStart}
 							onTouchStart={handleSidebarResizeStart}
 						/>
@@ -340,7 +340,7 @@ export function SessionHistoryV2({
 				)}
 				<div className="flex-1 min-h-0 flex flex-col">
 					{/* Status line */}
-					<div className="px-3 py-1.5 shrink-0 text-[11px] text-zinc-500 border-b border-white/[0.04]">
+					<div className="shrink-0 px-4 py-1.5 text-[11px] text-cv-text-muted">
 						{isSearchMode ? (
 							isSearching ? (
 								t("history.searching")
@@ -358,12 +358,12 @@ export function SessionHistoryV2({
 					</div>
 
 					{resumeError && (
-						<div className="mx-3 mt-2 px-3 py-2 bg-red-900/50 text-red-300 text-xs flex items-center justify-between rounded shrink-0">
+						<div className="mx-4 mt-2 flex shrink-0 items-center justify-between rounded-lg bg-red-500/15 px-3 py-2 text-xs text-red-400">
 							<span>{resumeError}</span>
 							<button
 								type="button"
 								onClick={dismissError}
-								className="text-red-400 hover:text-red-200 ml-2"
+								className="ml-2 text-red-400 hover:opacity-70"
 							>
 								×
 							</button>
@@ -372,7 +372,7 @@ export function SessionHistoryV2({
 
 					<div className="flex-1 min-h-0">
 						{rows.length === 0 ? (
-							<div className="p-4 text-center text-th-text-muted text-sm">
+							<div className="p-8 text-center text-sm text-cv-text-muted">
 								{isSearchMode
 									? t("history.noSearchResults")
 									: facetActive

@@ -8,14 +8,13 @@ interface HistoryActiveChipsProps {
 	onClearAll: () => void;
 }
 
-const AXIS_CLASS: Record<ActiveChip["axis"], string> = {
-	projects: "border-blue-400/30 bg-blue-400/15 text-blue-200",
-	agents: "border-violet-400/30 bg-violet-400/15 text-violet-200",
-	branches: "border-purple-400/30 bg-purple-400/15 text-purple-200",
-	peers: "border-pink-400/30 bg-pink-400/15 text-pink-200",
-	period: "border-amber-400/30 bg-amber-400/15 text-amber-200",
-};
-
+/**
+ * One style for every axis.
+ *
+ * Five pastel colours on a reading surface read as confetti, and the colour
+ * never said anything the value did not: nobody has to be told that
+ * `hrdle-work-2` is a project.
+ */
 /** Removable chips for the active facet selection, with a Clear-all action. */
 export function HistoryActiveChips({
 	chips,
@@ -31,17 +30,16 @@ export function HistoryActiveChips({
 					type="button"
 					key={`${chip.axis}:${chip.value}`}
 					onClick={() => onRemove(chip)}
-					className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium ${AXIS_CLASS[chip.axis]}`}
+					className="inline-flex items-center gap-1 rounded-full border border-cv-border bg-cv-surface px-2.5 py-0.5 text-[11px] font-medium text-cv-text-secondary transition-colors hover:bg-cv-surface-hover"
 				>
-					<span className="opacity-70">#</span>
 					{chip.label}
-					<X className="w-3 h-3 opacity-70" />
+					<X className="h-3 w-3 opacity-60" />
 				</button>
 			))}
 			<button
 				type="button"
 				onClick={onClearAll}
-				className="px-2 py-0.5 text-[11px] text-zinc-500 hover:text-zinc-300"
+				className="px-2 py-0.5 text-[11px] text-cv-text-muted hover:text-cv-text"
 			>
 				{t("history.clearFilters")}
 			</button>

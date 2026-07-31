@@ -36,7 +36,7 @@ function CheckRow({
 					type="checkbox"
 					checked={checked}
 					onChange={onToggle}
-					className="w-3.5 h-3.5 accent-blue-500 shrink-0"
+					className="h-3.5 w-3.5 shrink-0 accent-[var(--color-conv-accent)]"
 				/>
 				{color && (
 					<span
@@ -45,12 +45,12 @@ function CheckRow({
 					/>
 				)}
 				<span
-					className={`truncate text-[12.5px] ${checked ? "text-zinc-100" : "text-zinc-400 group-hover:text-zinc-300"}`}
+					className={`truncate text-[12.5px] ${checked ? "text-cv-text" : "text-cv-text-secondary group-hover:text-cv-text"}`}
 				>
 					{label}
 				</span>
 			</span>
-			<span className="text-[11px] text-zinc-600 tabular-nums shrink-0">
+			<span className="shrink-0 text-[11px] tabular-nums text-cv-text-muted">
 				{count}
 			</span>
 		</label>
@@ -74,7 +74,7 @@ function MultiGroup({
 	const shown = expanded ? values : values.slice(0, VISIBLE_CAP);
 	return (
 		<div className="mb-4">
-			<div className="text-[10.5px] uppercase tracking-wider text-zinc-500 mb-1">
+			<div className="mb-1 text-[11px] font-medium text-cv-text-muted">
 				{title}
 			</div>
 			{shown.map((v) => (
@@ -91,7 +91,7 @@ function MultiGroup({
 				<button
 					type="button"
 					onClick={() => setExpanded((e) => !e)}
-					className="mt-0.5 text-[11px] text-zinc-500 hover:text-zinc-300"
+					className="mt-0.5 text-[11px] text-cv-text-muted hover:text-cv-text"
 				>
 					{expanded
 						? t("common.showLess")
@@ -127,7 +127,7 @@ export function HistoryFacetSidebar({
 			{/* Period first: it scopes the option lists / counts of every group
 			    below, so it reads as the outermost filter. */}
 			<div className="mb-4">
-				<div className="text-[10.5px] uppercase tracking-wider text-zinc-500 mb-1">
+				<div className="mb-1 text-[11px] font-medium text-cv-text-muted">
 					{t("history.facetPeriod")}
 				</div>
 				{periods.map((p) => (
@@ -140,10 +140,10 @@ export function HistoryFacetSidebar({
 							name="history-period"
 							checked={state.period === p.value}
 							onChange={() => onChange({ ...state, period: p.value })}
-							className="w-3.5 h-3.5 accent-blue-500 shrink-0"
+							className="h-3.5 w-3.5 shrink-0 accent-[var(--color-conv-accent)]"
 						/>
 						<span
-							className={`text-[12.5px] ${state.period === p.value ? "text-zinc-100" : "text-zinc-400 group-hover:text-zinc-300"}`}
+							className={`text-[12.5px] ${state.period === p.value ? "text-cv-text" : "text-cv-text-secondary group-hover:text-cv-text"}`}
 						>
 							{p.label}
 						</span>
