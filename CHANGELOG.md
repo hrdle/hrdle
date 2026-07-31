@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.21] - 2026-08-01
+
+### Changed
+- **The conversation view is read-only, and laid out after the Claude app.** It
+  had two jobs and did neither cleanly: it rendered a transcript in terminal
+  styling, and it offered a second place to type into a pane that already has
+  one
+  - Input goes first, all of it - no composer, no echo line under the messages,
+    no soft keyboard raised on entering chat mode on mobile. Two inputs for one
+    pane only made it ambiguous which one was listening, and the answer was
+    never the one on screen. Their plumbing goes with them: `sendInputRest`
+    through the pane tree, `sendTerminalInput`, `sendTerminalInputRest` and the
+    input-echo event that had no listener left
+  - The surface has its own warm neutral scale (`--color-conv-*`) rather than
+    the session's terminal color. That color identifies a pane; it was never
+    chosen to be read against. Both light and dark
+  - The user's turns are bubbles on the right, the agent's a full-width column
+    in a 46rem measure at 15px and 1.7 line height
+  - **A tool call and its result are one card.** The transcript stores them a
+    message apart - the call on the assistant turn, the result on the user turn
+    after it - which is how the old layout ended up with a "System" speaker
+    reading out the result of something two screens up. They are paired by
+    `toolUseId`, and the result-only message stops being a row at all
+  - One speaker label per turn, so a burst of twelve tool calls is labelled
+    once. Thinking and context-continuation summaries fold away by default; a
+    tool whose result is an error opens by default
+  - Code blocks carry a copy button, and the emoji markers are lucide icons
+
 ## [0.3.20] - 2026-07-31
 
 ### Fixed
