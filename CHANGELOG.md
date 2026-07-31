@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.23] - 2026-08-01
+
+### Fixed
+- **A collapsed tool row says what the tool was asked, not only its name.** The
+  summary knew `description`, file paths, `pattern`, Bash commands and prompts,
+  but not `query` - the field every search tool carries - so a column of
+  `WebSearch` / `ToolSearch` rows was indistinguishable until each was opened
+  - `query` and `url` join the list. A URL outranks the prompt beside it: for a
+    fetch, the address says which page, the question rarely does
+  - An input matching nothing known falls back to its first short single-line
+    string, skipping identifiers and knobs (`id`, `session_id`, `model`, ...),
+    so a tool nobody anticipated still says something about itself
+  - Every branch is cut to one line and ellipsized at 60 characters; the header
+    is one line, and a pasted paragraph should not decide its width
+
 ## [0.3.22] - 2026-08-01
 
 ### Fixed
