@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.20] - 2026-07-31
+
+### Fixed
+- **A notification is no longer silenced because the glasses app happens to be
+  running.** `deliveredToGlasses` suppressed the browser notification, the peer
+  notification and the push, on the reading that the wearer had already been
+  told — and the flag cannot establish that. It is set when a relay item was
+  created, and all that proves is that the glasses app held a socket
+  - The G2 returns to its home screen with the app still running, still drawing
+    and still subscribed: observed on 2026-07-31 with `fg=1`, `drops=0` and the
+    flag up, while the panel showed nothing. An app left running with the
+    glasses off the face silenced the phone for its whole life
+  - Neither field that would settle it is usable. `isWearing` reads `false` even
+    on a wearer's face, because the protobuf omits zero values and `false`
+    therefore covers both "not worn" and "never filled in". `connectType` has
+    read `none` on every device-status event recorded, including while the app
+    was drawing
+  - So the rule is the one the relay itself already follows: losing a
+    notification is the worse failure of the two. Two notifications for one
+    event is a nuisance. The flag stays on the wire — it is true, worth seeing,
+    and where suppression goes back when the glasses can report being worn
+
 ## [0.3.19] - 2026-07-31
 
 ### Added
