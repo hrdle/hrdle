@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.22] - 2026-08-01
+
+### Fixed
+- **The conversation view follows its pane, not its workspace.** A workspace
+  with two agent panes holds two conversations; the subscription named only the
+  workspace, so the server resolved it by directory - and that answers with the
+  most recently modified transcript in the project folder. Three Claude panes in
+  one repository all read whichever had written last, which is generally not the
+  pane on screen
+  - The pane's own agent session id now travels with the subscription and back
+    on every message. The server uses it to pick the pane's working directory
+    (the workspace's is the *first* agent pane's, so a pane working elsewhere
+    was read against a project folder holding none of its transcripts) and to
+    resolve the transcript by id rather than by mtime
+  - Watchers are keyed by session and pane together. One key per workspace meant
+    the second pane's subscription tore down the first pane's watcher
+  - An id that resolves to nothing falls back to the directory, and a
+    subscription without an id behaves as before, so an older peer still answers
+
 ## [0.3.21] - 2026-08-01
 
 ### Changed
