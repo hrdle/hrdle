@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.24] - 2026-08-01
+
+### Added
+- **Syntax highlighting for code in the conversation.** The file viewer has
+  highlighted code since it existed; the transcript showed the same files as one
+  flat grey. highlight.js is already in the bundle for the viewer, so this costs
+  the parse and nothing else
+  - Not one of highlight.js's own themes: the viewer imports github-dark, which
+    is dark-only and cold next to the conversation's warm neutrals, and its
+    single-class rules would paint its greys into light mode. The `hljs-*`
+    classes are re-coloured under `.cv-code` from variables that follow the
+    theme
+  - Fenced blocks name their own language; a tool call's input is JSON; a
+    result borrows the language of the file the call named - and only when its
+    output has line breaks, since a one-line result is a status message and
+    colouring "File created successfully at: ..." as TypeScript tints scattered
+    words in an English sentence. Errors stay red and unhighlighted
+  - Highlighting declines rather than returning the source untouched: the value
+    goes through `dangerouslySetInnerHTML`, so the only thing on that path is
+    output highlight.js escaped itself. Blocks over 40k characters are skipped
+
 ## [0.3.23] - 2026-08-01
 
 ### Fixed
