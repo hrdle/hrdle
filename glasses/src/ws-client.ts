@@ -111,6 +111,11 @@ export class WsClient {
 
   connect(): void {
     if (this.closed) return
+    // Whatever was here is being replaced, so it goes now rather than being
+    // left open with nothing pinging it. `onForegroundEnter` calls this on the
+    // assumption that the socket died while the app slept; when it did not,
+    // this used to overwrite a live one and abandon it.
+    this.discardSocket()
     const base = getBaseUrl() || location.origin
     const wsBase = base.startsWith('http') ? base.replace(/^http/, 'ws') : `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`
     const wsUrl = wsBase + '/ws/mux'
@@ -408,6 +413,24 @@ export class WsClient {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+    this.discardSocket()
+  }
+
+  /**
+   * Let go of the current socket without ending the client.
+   *
+   * The handlers come off first, so a close we asked for does not look like one
+   * the network did: `onclose` schedules a reconnect, and a deliberate
+   * replacement that schedules one produces a second socket for the one it was
+   * replacing.
+   *
+   * Only the newest socket is ever pinged — `startPing` clears the timer before
+   * setting it — so any socket left open here goes quiet, and the server cuts
+   * it as a zombie sixty seconds later. Measured on 2026-07-31: nineteen opens
+   * and sixteen ping timeouts in twenty minutes, on a run that was healthy
+   * throughout. Every one of those closes took the relay subscription with it.
+   */
+  private discardSocket(): void {
     this.stopPing()
     const ws = this.ws
     this.ws = null
