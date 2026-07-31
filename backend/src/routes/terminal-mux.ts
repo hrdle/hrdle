@@ -375,7 +375,15 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 export function muxClose(ws: ServerWebSocket<MuxData>, code: number, reason: string) {
   console.log(`[mux] WebSocket closed: ${ws.data.visitorId} (code=${code}, reason=${reason})`);
   activeMuxConnections.delete(ws);
-  unsubscribeGlassesRelay(ws);
+  // A glasses run ending, recorded from the one place that does not depend on
+  // the run being able to speak. The app announces its own exit when the host
+  // gives it the chance, but five of nineteen runs on 2026-07-31 were killed
+  // too abruptly for that and left nothing behind at all.
+  const departed = unsubscribeGlassesRelay(ws);
+  if (departed?.onDevice) {
+    const who = departed.instanceId ? `[${departed.instanceId}]` : '(no instance id)';
+    console.log(`[glasses-relay] device gone: ${who} code=${code} reason=${reason || '(none)'}`);
+  }
   // The publisher going away must reach the viewers: a mirror that keeps
   // showing the last frame is indistinguishable from a live one that has
   // stopped changing.
