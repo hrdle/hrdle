@@ -180,10 +180,38 @@ export function glassesDeviceCount(): number {
   return deviceSubscribers.size;
 }
 
-export function unsubscribeGlassesRelay(ws: RelaySocket): void {
-  subscribers.delete(ws);
-  deviceSubscribers.delete(ws);
+/** What a departing subscription was, for a caller that wants to record it. */
+export interface GlassesRelayDeparture {
+  /** Real hardware rather than a simulator tab. */
+  onDevice: boolean;
+  /** The run id it subscribed with, absent on an ehpk older than the field. */
+  instanceId?: string;
+}
+
+/**
+ * Drop a subscription, and say what it was.
+ *
+ * The return value exists so a closing socket can be logged as the death of a
+ * glasses run. Five of nineteen runs on 2026-07-31 died silently — the app's
+ * heartbeat stopped, no `host exit` arrived, and nothing recorded the moment
+ * they went. A quarter of the day's deaths were only found by reading the log
+ * afterwards, and even then by inferring death from silence, which reads the
+ * same as a log that is merely lagging.
+ *
+ * This side has the fact rather than the inference: the socket closed. It is
+ * also the only observer left when the host kills a WebView too abruptly for
+ * the app to say anything.
+ *
+ * Returns null when the socket was never a subscriber, so an ordinary browser
+ * disconnect does not get reported as glasses going away.
+ */
+export function unsubscribeGlassesRelay(ws: RelaySocket): GlassesRelayDeparture | null {
+  const wasSubscribed = subscribers.delete(ws);
+  const onDevice = deviceSubscribers.delete(ws);
+  const instanceId = deviceInstances.get(ws);
   deviceInstances.delete(ws);
+  if (!wasSubscribed && !onDevice) return null;
+  return { onDevice, ...(instanceId ? { instanceId } : {}) };
 }
 
 /**
