@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.26] - 2026-08-01
+
+### Fixed
+- **A working Kimi or Codex pane no longer reads "completed" for the whole
+  turn.** The indicator took the hook override first for thread agents, and the
+  documented Kimi setup registers `Stop` and nothing else - so "finished" is the
+  only hook event that ever arrives, and with a 24-hour TTL it pinned the
+  indicator until the next turn ended. herdr was reporting `working` the whole
+  time and being ignored
+  - Claude stopped reading hooks first for exactly this shape of bug; thread
+    agents kept the old order because herdr's accuracy for them was unverified
+    (#390). Verified now on herdr 0.7.5: a Kimi pane read `working` through its
+    turn and `done` within twenty seconds of its end, with two Kimi panes on one
+    host disagreeing correctly
+  - The rule is now the same for every agent: herdr watches the pane, a hook
+    only reports the moment it fired. An agent with no herdr integration (Grok)
+    has no status to read, so its hook still carries the indicator as before
+
 ## [0.3.25] - 2026-08-01
 
 ### Fixed
