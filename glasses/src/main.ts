@@ -211,6 +211,25 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
         trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
       }
     },
+    exitNow() {
+      // Mode 0 — no dialogue. `requestExit` uses mode 1 because a double-tap is
+      // the wearer asking and they are allowed to change their mind; this is
+      // the run reporting that it has nothing left to do, and a cancelled exit
+      // would leave it exactly as unreachable as it already was.
+      //
+      // Released here rather than waiting for `SYSTEM_EXIT_EVENT`: the event
+      // may not arrive at all for an exit we asked for, and everything this
+      // holds is already useless.
+      trace('closing: server unreachable')
+      releaseHostResources()
+      try {
+        void Promise.resolve(bridge.shutDownPageContainer(0)).then((ok) => {
+          if (ok === false) trace('shutDownPageContainer(0) refused by host', 'error')
+        })
+      } catch (err) {
+        trace(`shutDownPageContainer(0) failed: ${err}`, 'error', (err as Error)?.stack)
+      }
+    },
     onSuperseded() {
       // Same release as a host exit, and for the same reason: nothing this run
       // does from here reaches anybody. The panel belongs to the newer instance.

@@ -18,10 +18,32 @@ export interface WsCallbacks {
   /** A newer run of the app has connected; this one is the ghost the host left
    *  behind and should let go of everything. `by` is the newcomer's id. */
   onSuperseded?: (by: string) => void
+  /** The server has been unreachable long enough that retrying is no longer
+   *  worth the resources it costs. Nothing will be attempted after this. */
+  onGiveUp?: () => void
 }
 
 // Well inside the server's 60s ping timeout, with room for a dropped one.
 const PING_INTERVAL_MS = 15_000
+
+const RECONNECT_DELAY_MS = 3000
+
+/**
+ * How long the app keeps trying before it closes itself.
+ *
+ * Retrying forever is what a transient drop needs and what an abandoned run
+ * turns into: a WebView holding a page container, a microphone and a clock,
+ * showing a screen from whenever the connection went, reconnecting every three
+ * seconds for as long as the host leaves it there. Submission guidance rejects
+ * exactly that shape ("Lingering webviews inside the Even Realities App").
+ *
+ * Five minutes is chosen to be far outside anything benign. A Wi-Fi blip, a
+ * tailnet reconnect, or the server being restarted for a release all recover in
+ * seconds — a hundred consecutive failures is a server that is not coming back
+ * on its own, or a wearer who walked away from it.
+ */
+export const GIVE_UP_AFTER_MS = 5 * 60_000
+const GIVE_UP_AFTER_TRIES = Math.round(GIVE_UP_AFTER_MS / RECONNECT_DELAY_MS)
 
 // Strip ANSI escape codes, control sequences, and non-ASCII for G2 display
 function stripAnsi(str: string): string {
@@ -58,6 +80,9 @@ export class WsClient {
   private ws: WebSocket | null = null
   private callbacks: WsCallbacks
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  /** Consecutive failed attempts. Reset by a socket that opens, so only an
+   *  unbroken run of them counts towards giving up. */
+  private failures = 0
   // The server drops connections that go 60s without a ping (#236). Every
   // other client sends one; this one did not, so it was being cut and
   // reconnected on a 90s cycle for its whole life.
@@ -100,6 +125,9 @@ export class WsClient {
 
     this.ws.onopen = () => {
       console.log('[ws] connected')
+      // Reaching the server is what makes the run of failures a blip rather
+      // than an absence, so only an open socket clears it.
+      this.failures = 0
       this.startPing()
       // Re-establish the relay subscription before onReady so the server's
       // snapshot arrives around the same time as session re-subscribes.
@@ -347,10 +375,21 @@ export class WsClient {
 
   private scheduleReconnect(): void {
     if (this.closed || this.reconnectTimer) return
+    // Every failure funnels through here — a constructor that threw, a close,
+    // an error — so this is the one place the run of them can be counted.
+    this.failures++
+    if (this.failures >= GIVE_UP_AFTER_TRIES) {
+      // `closed` rather than a separate flag: giving up means the same thing to
+      // every other path here as being closed does, and it stops `connect()`
+      // from being reached again by any of them.
+      this.closed = true
+      this.callbacks.onGiveUp?.()
+      return
+    }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.connect()
-    }, 3000)
+    }, RECONNECT_DELAY_MS)
   }
 
   /**

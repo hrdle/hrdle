@@ -88,6 +88,17 @@ const AUTO_SCROLL_STEP_MS = 2500
 const AUTO_PAGE_STEP_MS = 3 * SECONDS_PER_LINE_MS
 
 /**
+ * How long the closing message stays on the panel before the run ends.
+ *
+ * Six lines at the reading pace the rest of this file assumes (five seconds a
+ * line) would be half a minute, which is too long to hold a wearer who has
+ * already noticed. This is the compromise: long enough to read the first line
+ * and look up, short enough that the glasses are not held by a run that has
+ * nothing left to do.
+ */
+const FATAL_LINGER_MS = 8000
+
+/**
  * How long the end of a scroll stays up before it goes back to the top.
  *
  * Without it the last line appeared and was gone in the time any other line
@@ -162,6 +173,11 @@ export interface GlassesPlatform {
    *  already let go of its own clocks, socket and microphone; this is for
    *  whatever the entry point started on its own. */
   onSuperseded?: () => void
+  /** Close this run for good, without asking. Distinct from `requestExit`,
+   *  which raises the host's cancellable dialogue: nothing here is a question
+   *  to the wearer, and a cancelled exit would leave the run it was called for
+   *  exactly as stuck as it already was. */
+  exitNow?: () => void
 }
 
 /** Where a reply (choice keys / voice prompt) is routed. paneId targets the
@@ -242,6 +258,8 @@ export class GlassesController {
   /** The two clocks started by `connect()`, held so the way out can stop them. */
   private spinnerTimer: ReturnType<typeof setInterval> | null = null
   private autoTimer: ReturnType<typeof setInterval> | null = null
+  /** The gap between saying the run is closing and closing it. */
+  private exitTimer: ReturnType<typeof setTimeout> | null = null
   /** Torn down by the host. Nothing draws, nothing reconnects, nothing ticks. */
   private stopped = false
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
@@ -278,6 +296,7 @@ export class GlassesController {
       onRelayUpsert: (item) => this.onRelayUpsert(item),
       onRelayRemove: (id) => this.onRelayRemove(id),
       onSuperseded: (by) => this.onSuperseded(by),
+      onGiveUp: () => this.onWsGaveUp(),
     })
   }
 
@@ -299,6 +318,35 @@ export class GlassesController {
     this.log('error', `superseded: retired by instance ${by} — releasing everything`)
     this.shutdown()
     this.platform.onSuperseded?.()
+  }
+
+  /**
+   * The server has been unreachable long enough to stop trying.
+   *
+   * Drawn before it goes, and the delay is the whole reason there is a gap
+   * between saying so and doing it: a WebView that disappears looks exactly
+   * like one the host killed, which is the failure the wearer has been living
+   * with. A sentence on the panel is the difference between "it crashed again"
+   * and "it could not reach the server, so it closed".
+   *
+   * `shutdown` runs after the message rather than before it, because it stops
+   * the render queue.
+   */
+  private onWsGaveUp(): void {
+    // Already counting down. The client only gives up once — it marks itself
+    // closed before saying so — but a second call here would orphan the first
+    // timer rather than replace it, and an interval nobody holds is exactly
+    // what #46 was about.
+    if (this.stopped || this.exitTimer) return
+    this.log('error', 'ws: server unreachable — showing the reason, then closing')
+    this.state.fatal = 'offline'
+    this.render()
+    this.exitTimer = setTimeout(() => {
+      this.exitTimer = null
+      if (this.stopped) return
+      this.shutdown()
+      this.platform.exitNow?.()
+    }, FATAL_LINGER_MS)
   }
 
   /** Connect the WS and mark this connection as "glasses present" (#504). The
@@ -575,6 +623,12 @@ export class GlassesController {
     if (this.autoTimer) {
       clearInterval(this.autoTimer)
       this.autoTimer = null
+    }
+    // The host can take the run down inside the closing message's own delay,
+    // and then there is nothing left for that timer to close.
+    if (this.exitTimer) {
+      clearTimeout(this.exitTimer)
+      this.exitTimer = null
     }
     this.clearNoticeTimer()
     this.recording = false
