@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.18] - 2026-07-31
+
+### Changed
+- **The glasses app frames the setup guide rather than carrying it.** The phone
+  screen was the whole wizard — seven screens, their wording, the connection
+  test, the settings panel. All of that lives at
+  [hrdle/hrdle-setup](https://github.com/hrdle/hrdle-setup) now, served from
+  Cloudflare Workers, and `phone-ui.ts` is a frame plus answers to the things a
+  web page cannot do for itself
+  - The reason is arithmetic. A wording change over there costs a deploy; the
+    same change in the app costs a rebuilt ehpk, an upload to EVEN Hub, a version
+    bump and a promotion to Beta — three times in one afternoon
+  - The host still writes the server address, because `startGlassesMode` reads
+    that key from the *host's* own store when the app starts on the G2, and
+    nothing the guide saves on its own origin would be there. It still reads the
+    QR code, because that is `captureImageFromCamera`
+  - **And it makes every request to the server**, which was not the plan. The
+    server answers `Access-Control-Allow-Origin: *`, so the guide was going to
+    call it directly. Private Network Access stops that: the guide is
+    public-origin, a tailnet address is inside CGNAT space, and Chrome refuses
+    the crossing whatever CORS says. Measured rather than assumed — from that
+    origin a fetch to `api.github.com` returns 200 and one to a `.ts.net` host
+    does not reach the network at all
+  - No offline copy of the guide. The setup it describes ends in reaching a
+    server over a tailnet, so a phone with no internet cannot finish it anyway,
+    and a second copy of seven screens is a second copy to keep correct. A failed
+    load gets the fact and the address instead
+  - `setup-wizard.ts` and `brand.ts` are gone with the screens they served. The
+    ehpk is 10 kB smaller for having stopped carrying the wizard
+
 ## [0.3.17] - 2026-07-31
 
 ### Added
