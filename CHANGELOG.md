@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.29] - 2026-08-01
+
+### Fixed
+- **A tool call in the conversation now says what it acted on, whichever agent
+  made it.** Kimi's `Read`, `Edit` and `Write` showed the tool's name and
+  nothing else - 37 of the 82 tool lines in a real transcript
+  - The cause was reading a call's arguments by tool name. `case 'Read'`
+    returned `file_path`, which is Claude's spelling; Kimi calls it `path` and
+    Grok `target_file`. Returning the empty string also shadowed the fallback
+    that scans for the first string argument and would have found it - so the
+    tool names that were never taught (Grok's `read_file`, Kimi's `FetchURL`)
+    read fine, and the ones taught a single agent's spelling were the ones that
+    broke
+  - Arguments are read by field now: a description first, then what was
+    searched for, then the file, then the instruction given. What is left bare
+    is `TodoList` and `AskUserQuestion`, whose arguments are arrays and which
+    have nothing to say
+- **A scoped search in the web UI named the directory it looked in rather than
+  what it was looking for.** `Grep` carries a `path` alongside its `pattern`
+  whenever it is scoped, and the file fields were read first
+
 ## [0.3.28] - 2026-08-01
 
 ### Added
