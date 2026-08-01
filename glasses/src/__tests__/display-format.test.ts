@@ -408,9 +408,14 @@ describe('session list', () => {
   test('every name starts in the same column whether or not it has a badge', () => {
     // The blank badge is a full-width space — the same 320 units as a spinner
     // frame — so a row with nothing to say lines up with one that has.
+    //
+    // Measured in pixels, not characters: the panel is proportional, and the
+    // cursor marker is one character where the blank standing in for it is two.
+    // A character count says those rows are misaligned; the reader's eye says
+    // they are not, and the pixels agree with the eye.
     const starts = screenText(state)
       .body.split('\n')
-      .map((l) => l.search(/[^ >\u3000▲▶▼◀]/))
+      .map((l) => width(l.slice(0, l.search(/[^ >\u3000！▲▶▼◀]/))))
     expect(new Set(starts).size).toBe(1)
   })
 })
@@ -972,21 +977,21 @@ describe('notification banner on the list', () => {
     // container with a border round it, which is what stops the eye reading it
     // as one more session name.
     const screen = screenText(mk([info('a', '応答が完了しました')]))
-    expect(screen.notice).toBe(' [i]グラス開発: 応答が完了しました')
+    expect(screen.notice).toBe('  [i]グラス開発: 応答が完了しました')
     // The list itself is still there, below it.
     expect(screen.body.split('\n')[0]).toContain('グラス開発')
   })
 
   test('an unknown workspace falls back to its id rather than vanishing', () => {
     expect(screenText(mk([info('gone', '応答が完了しました')])).notice).toBe(
-      ' [i]gone: 応答が完了しました',
+      '  [i]gone: 応答が完了しました',
     )
   })
 
   test('the count of the others survives even when the text is cut', () => {
     const long = 'あ'.repeat(120)
     const banner = screenText(mk([info('a', long, 2), info('s1', long, 1)], 2)).notice ?? ''
-    expect(banner.startsWith(' [i]グラス開発+1: ')).toBe(true)
+    expect(banner.startsWith('  [i]グラス開発+1: ')).toBe(true)
   })
 
   test('the cursor can rest on it', () => {
@@ -1941,5 +1946,96 @@ describe('a notification is drawn as a card, not as another screen', () => {
     // And clipped to what the box holds rather than to what the panel would.
     expect(screen.body.split('\n').length).toBeLessThanOrEqual(CARD_LINES)
     expect(CARD_LINES).toBeLessThan(MAX_LINES)
+  })
+})
+
+describe('the list marks the sessions that want you', () => {
+  // Only `processing` used to carry a mark, so `waiting_input` looked exactly
+  // like idle. Survivable while the list floated waiting sessions to the top;
+  // once the order was frozen so the cursor would hold still, the mark became
+  // the only way to find them.
+
+  const base = {
+    mode: 'session_list' as const,
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: 0,
+  }
+  type Ind = 'waiting_input' | 'processing' | 'completed' | 'idle'
+  const rows = (sessions: unknown[]) =>
+    screenText({ ...base, sessions } as never).body.split('\n')
+  const ws = (id: string, indicatorState: Ind, panes?: unknown[]) => ({
+    id, name: id, state: 'idle' as const, indicatorState, panes,
+  })
+
+  test('a session waiting for you is marked', () => {
+    expect(rows([ws('a', 'waiting_input')])[0]).toContain('！')
+  })
+
+  test('the states nobody has to act on stay unmarked', () => {
+    // Most sessions are one of these. A mark on all of them is no mark at all.
+    for (const state of ['completed', 'idle'] as Ind[]) {
+      expect(rows([ws('a', state)])[0]).not.toContain('！')
+    }
+  })
+
+  test('waiting outranks working', () => {
+    // A session that is running will finish on its own; one that is asking
+    // will not. Where both are true of a workspace, the asking is the news.
+    const row = rows([
+      ws('a', 'processing', [
+        { paneId: '%1', indicatorState: 'processing' },
+        { paneId: '%2', indicatorState: 'waiting_input' },
+      ]),
+    ])[0]
+    expect(row).toContain('！')
+  })
+
+  test('a heading answers for the panes folded under it', () => {
+    // The heading can be the last row on screen with its panes below the fold,
+    // which is exactly when it is the only thing there is to go on.
+    const row = rows([
+      ws('a', 'completed', [
+        { paneId: '%1', indicatorState: 'completed' },
+        { paneId: '%2', indicatorState: 'waiting_input' },
+      ]),
+    ])[0]
+    expect(row).toContain('！')
+  })
+
+  test('a waiting pane is marked on its own row too', () => {
+    const body = rows([
+      ws('a', 'completed', [
+        { paneId: '%1', indicatorState: 'completed' },
+        { paneId: '%2', indicatorState: 'waiting_input' },
+      ]),
+    ])
+    expect(body[2]).toContain('！')
+    expect(body[1]).not.toContain('！')
+  })
+
+  test('the mark keeps the badge column, so the names still line up', () => {
+    const body = rows([ws('a', 'waiting_input'), ws('b', 'idle'), ws('c', 'processing')])
+    const starts = body.map((l) => width(l.slice(0, l.search(/[^ >　！▲▶▼◀]/))))
+    expect(new Set(starts).size).toBe(1)
+  })
+})
+
+describe('the cursor does not shove its row sideways', () => {
+  // `>` is 10px and a space is 5, so the row under the cursor used to sit 5px
+  // right of every other row - and the cursor moves on every swipe, so the
+  // whole list shivered as it was walked. Two spaces come to exactly 10.
+  test('the marker and the blank standing in for it are the same width', () => {
+    expect(width('  ')).toBe(width('>'))
   })
 })

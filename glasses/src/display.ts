@@ -282,8 +282,50 @@ function isWaiting(s: Session): boolean {
  */
 const BADGE_BLANK = '\u3000'
 
-function statusLabel(s: Session, frame: string): string {
-  return s.indicatorState === 'processing' ? frame : BADGE_BLANK
+/**
+ * The mark on a session that wants the wearer.
+ *
+ * Full width, like the spinner and the blank, so the names beside it stay in
+ * one column. The same glyph a relay item already used: to the reader the two
+ * mean one thing - this one is asking - and which mechanism noticed is not
+ * something to spend a second symbol on.
+ */
+const WAITING_BADGE = '！'
+
+/**
+ * The cursor column, and what stands in it on the other rows.
+ *
+ * Two spaces, not one. `>` is 10px on this panel and a space is 5, so a single
+ * space left the row under the cursor sitting 5px right of every other row -
+ * and since the cursor moves on every swipe, the whole list appeared to shiver
+ * sideways as it was walked. Measured, not counted: two spaces come to exactly
+ * the 10px the marker takes.
+ */
+const CURSOR_HERE = '>'
+const CURSOR_NONE = '  '
+
+/**
+ * What a workspace's row says about its state.
+ *
+ * Only `processing` used to be marked, so `waiting_input` - the state most
+ * worth finding on this screen - looked exactly like idle. That was survivable
+ * while the list floated waiting sessions to the top; once the order was frozen
+ * so the cursor would hold still, the mark became the only way to find them.
+ *
+ * Waiting outranks working: a session that is running will finish on its own,
+ * and one that is asking will not.
+ *
+ * Read from the panes first. A heading summarises what is folded under it, and
+ * the panes can be below the fold when the heading is the last visible row -
+ * which is exactly when the summary is the only thing there is to go on.
+ */
+function workspaceLabel(s: Session, frame: string): string {
+  const panes = s.panes ?? []
+  if (s.indicatorState === 'waiting_input') return WAITING_BADGE
+  if (panes.some((p) => p.indicatorState === 'waiting_input')) return WAITING_BADGE
+  if (s.indicatorState === 'processing') return frame
+  if (panes.some((p) => p.indicatorState === 'processing')) return frame
+  return BADGE_BLANK
 }
 
 /**
@@ -484,8 +526,11 @@ export function rowCursor(state: AppState): number {
   return fallback >= 0 ? fallback : 0
 }
 
+/** The same for one pane. Waiting outranks working, for the same reason. */
 function paneStatusLabel(p: Pane, frame: string): string {
-  return p.indicatorState === 'processing' ? frame : BADGE_BLANK
+  if (p.indicatorState === 'waiting_input') return WAITING_BADGE
+  if (p.indicatorState === 'processing') return frame
+  return BADGE_BLANK
 }
 
 /**
@@ -580,7 +625,7 @@ function notificationRowText(state: AppState, marker: string): string {
  */
 function sessionListNotice(state: AppState): string {
   if (!hasNotificationRow(state)) return ''
-  return notificationRowText(state, rowCursor(state) === 0 ? '>' : ' ')
+  return notificationRowText(state, rowCursor(state) === 0 ? CURSOR_HERE : CURSOR_NONE)
 }
 
 function sessionListBody(state: AppState): string {
@@ -608,16 +653,19 @@ function sessionListBody(state: AppState): string {
 
   const listBody = visible.map((row, i) => {
     const idx = pinned + Math.max(0, start) + i
-    const here = idx === cursor ? '>' : ' '
+    const here = idx === cursor ? CURSOR_HERE : CURSOR_NONE
     const s = sessions[row.sessionIndex]
     // Pad the badge so every name starts in the same column: a list where
     // `>[!] name` and `  name` begin three columns apart is hard to scan.
     if (row.header || !row.paneId) {
       // A relay item is a question already asked and still unanswered, which
       // outlives the indicator that raised it; that one keeps its mark.
-      const label = relayWaitingIds.has(s.id) ? '！' : statusLabel(s, frame)
+      // The relay knows about questions herdr has not called `blocked` - an
+      // agent's own declared wait. It cannot see the other direction, so the
+      // indicator is consulted too rather than instead.
+      const label = relayWaitingIds.has(s.id) ? WAITING_BADGE : workspaceLabel(s, frame)
       // A heading takes no cursor, so it never carries the marker.
-      return `${row.header ? ' ' : here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}`
+      return `${row.header ? CURSOR_NONE : here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}`
     }
     const panes = s.panes ?? []
     const p = panes.find((x) => x.paneId === row.paneId)

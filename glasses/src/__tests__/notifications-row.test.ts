@@ -188,18 +188,26 @@ describe('the row is one line, marker included', () => {
     const st = state({ relayInfo: [item('info', 'i1')] })
     st.relayInfo[0].text = 'あ'.repeat(200)
     for (const on of [false, true]) {
-      const body = screenText({ ...st, listOnNotifications: on }).body.split('\n')
-      expect(width(body[0])).toBeLessThanOrEqual(BODY_WIDTH)
-      // Row 1 is a session, not the rest of the notice.
-      expect(body[1]).toContain('ws')
+      const screen = screenText({ ...st, listOnNotifications: on })
+      expect(width(screen.notice ?? '')).toBeLessThanOrEqual(BODY_WIDTH)
+      expect((screen.notice ?? '').split('\n')).toHaveLength(1)
+      // The list below it starts with a session, not the rest of the notice.
+      expect(screen.body.split('\n')[0]).toContain('ws')
     }
   })
 
   test('the cursor marker does not change how much text fits', () => {
     const st = state({ relayInfo: [item('info', 'i1')] })
     st.relayInfo[0].text = 'あ'.repeat(200)
-    const off = screenText({ ...st, listOnNotifications: false }).body.split('\n')[0]
-    const on = screenText({ ...st, listOnNotifications: true }).body.split('\n')[0]
-    expect(off.length).toBe(on.length)
+    // Compared after the marker, because the marker is what differs: `>` is
+    // one character and the blank standing in for it is two, chosen to come to
+    // the same 10px. What has to match is the message - the same amount of it
+    // survives the wrap either way, which is what this row's budget is about.
+    // (The rendered widths land 1px apart: `advance` adjusts on the preceding
+    // character, and the character before the badge is not the same one.)
+    const strip = (s: string) => s.replace(/^(>|  )/, '')
+    const off = strip(screenText({ ...st, listOnNotifications: false }).notice ?? '')
+    const on = strip(screenText({ ...st, listOnNotifications: true }).notice ?? '')
+    expect(off).toBe(on)
   })
 })
