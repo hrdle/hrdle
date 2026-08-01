@@ -15,7 +15,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "^0.0.12",
+    "@evenrealities/even_hub_sdk": "^0.0.13",
     "@evenrealities/pretext": "^0.1.4",
     "jsqr": "^1.4.0"
   },
