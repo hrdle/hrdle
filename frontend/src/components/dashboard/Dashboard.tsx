@@ -1,6 +1,8 @@
-import { Bot, Globe, Moon, Server, Sun } from "lucide-react";
+import { Bot, Globe, Moon, Server, SlidersHorizontal, Sun } from "lucide-react";
+import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { IDENTITY } from "../../../../shared/identity";
 import { agentDisplayName } from "../../../../shared/types";
 import { useDashboard } from "../../hooks/useDashboard";
 import { usePeers } from "../../hooks/usePeers";
@@ -8,6 +10,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { useUiScale } from "../../hooks/useUiScale";
 import { formatTokens, formatUsd } from "../../utils/format";
 import { nukeClientCache } from "../../utils/nuke-cache";
+import { Card, StatTile } from "./Card";
 import { DailyUsageChart } from "./DailyUsageChart";
 import { HourlyHeatmap } from "./HourlyHeatmap";
 import { ModelUsageChart } from "./ModelUsageChart";
@@ -26,6 +29,40 @@ interface DashboardProps {
 }
 
 type AgentTab = "claude" | "codex" | "grok" | "kimi";
+
+/**
+ * One section header, so the three sections read as three sections. The
+ * settings block used to be a bare divider with buttons under it, which made
+ * the panel look like it ended at "server status" and then kept going.
+ */
+function SectionHeading({
+	id,
+	icon,
+	children,
+	aside,
+}: {
+	id: string;
+	icon: ReactNode;
+	children: ReactNode;
+	aside?: ReactNode;
+}) {
+	return (
+		<div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+			<div className="flex items-center gap-2">
+				{icon}
+				<h2 id={id} className="text-xs font-medium text-th-text-secondary">
+					{children}
+				</h2>
+			</div>
+			{aside}
+		</div>
+	);
+}
+
+const ICON_CLASS = "w-3.5 h-3.5 text-th-text-muted";
+/** The two-column grid the wide layout uses; a compact panel just stacks. */
+const gridClass = (compact: boolean) =>
+	compact ? "space-y-3" : "md:grid md:grid-cols-2 md:gap-3 space-y-3 md:space-y-0";
 
 export function Dashboard({ className = "", compact = false }: DashboardProps) {
 	const { t, i18n } = useTranslation();
@@ -112,86 +149,72 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 			className={`overflow-y-auto overscroll-contain px-4 py-4 ${className}`}
 		>
 			<section aria-labelledby="dashboard-agent-usage">
-				<div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-					<div className="flex items-center gap-2">
-						<Bot className="w-3.5 h-3.5 text-th-text-muted" />
-						<h2
-							id="dashboard-agent-usage"
-							className="text-xs font-medium text-th-text-secondary"
-						>
-							{t("dashboard.agentUsage")}
-						</h2>
-					</div>
-					{showAgentTabs && (
-						<div
-							className="flex gap-1 text-xs"
-							role="tablist"
-							aria-label={t("dashboard.agentUsage")}
-						>
-							{availableTabs.map((id) => {
-								const isActive = effectiveTab === id;
-								const label = agentDisplayName(id);
-								return (
-									<button
-										key={id}
-										type="button"
-										role="tab"
-										aria-selected={isActive}
-										onClick={() => setAgentTab(id)}
-										className={`px-3 py-1.5 rounded-md transition-colors ${
-											isActive
-												? "bg-white/[0.08] text-th-text"
-												: "bg-white/[0.03] text-th-text-muted hover:text-th-text hover:bg-white/[0.05]"
-										}`}
-									>
-										{label}
-									</button>
-								);
-							})}
-						</div>
-					)}
-				</div>
+				<SectionHeading
+					id="dashboard-agent-usage"
+					icon={<Bot className={ICON_CLASS} />}
+					aside={
+						showAgentTabs && (
+							<div
+								className="flex gap-1 text-xs"
+								role="tablist"
+								aria-label={t("dashboard.agentUsage")}
+							>
+								{availableTabs.map((id) => {
+									const isActive = effectiveTab === id;
+									const label = agentDisplayName(id);
+									return (
+										<button
+											key={id}
+											type="button"
+											role="tab"
+											aria-selected={isActive}
+											onClick={() => setAgentTab(id)}
+											className={`px-3 py-1.5 rounded-md transition-colors ${
+												isActive
+													? "bg-white/[0.08] text-th-text"
+													: "bg-white/[0.03] text-th-text-muted hover:text-th-text hover:bg-white/[0.05]"
+											}`}
+										>
+											{label}
+										</button>
+									);
+								})}
+							</div>
+						)
+					}
+				>
+					{t("dashboard.agentUsage")}
+				</SectionHeading>
 
 				{effectiveTab === "grok" ? (
-					<div
-						className={
-							compact
-								? "space-y-3"
-								: "md:grid md:grid-cols-2 md:gap-4 space-y-3 md:space-y-0"
-						}
-					>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2">
-							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-xs font-medium text-th-text-secondary">
-									{t("dashboard.grokUsage")}
-								</h3>
-								{grokUsage?.planType && (
-									<span className="px-1.5 py-px rounded border text-[10px] font-medium text-emerald-300 bg-emerald-400/10 border-emerald-400/20">
+					<div className={gridClass(compact)}>
+						<Card
+							className="md:col-span-2"
+							title={t("dashboard.grokUsage")}
+							aside={
+								grokUsage?.planType && (
+									<span className="px-1.5 py-px rounded border text-[10px] font-medium text-emerald-300 bg-emerald-400/10 border-emerald-400/20 shrink-0">
 										{grokUsage.planType}
 									</span>
-								)}
-							</div>
-							<div className="grid grid-cols-2 gap-3">
+								)
+							}
+							footnote={t("dashboard.grokNoRateLimitInfo")}
+						>
+							<div className="grid grid-cols-2 gap-2.5">
 								{(
 									[
 										["grokLast24h", grokUsage?.last24h],
 										["grokLast7d", grokUsage?.last7d],
 									] as const
 								).map(([labelKey, window]) => (
-									<div
-										key={labelKey}
-										className="bg-white/[0.03] rounded-md p-3 border border-white/[0.06]"
-									>
-										<div className="text-[11px] text-th-text-muted mb-1">
-											{t(`dashboard.${labelKey}`)}
-										</div>
-										<div className="text-lg font-semibold text-th-text">
+									<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
+										<div className="text-lg font-semibold text-th-text tabular-nums">
 											{formatTokens(window?.totalTokens ?? 0)}
 										</div>
-										<div className="text-[11px] text-th-text-muted mt-0.5">
+										<div className="text-[11px] text-th-text-muted">
 											{t("dashboard.grokTurns", { count: window?.turns ?? 0 })}
 										</div>
-									</div>
+									</StatTile>
 								))}
 							</div>
 							{(grokUsage?.models.length ?? 0) > 0 && (
@@ -204,54 +227,40 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 											key={m.model}
 											className="flex justify-between text-xs text-th-text-secondary"
 										>
-											<span>{m.model}</span>
-											<span>{formatTokens(m.totalTokens)}</span>
+											<span className="truncate">{m.model}</span>
+											<span className="shrink-0 tabular-nums">
+												{formatTokens(m.totalTokens)}
+											</span>
 										</div>
 									))}
 								</div>
 							)}
-						</div>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2 text-th-text-muted text-xs">
-							{t("dashboard.grokNoRateLimitInfo")}
-						</div>
+						</Card>
 					</div>
 				) : effectiveTab === "kimi" ? (
-					<div
-						className={
-							compact
-								? "space-y-3"
-								: "md:grid md:grid-cols-2 md:gap-4 space-y-3 md:space-y-0"
-						}
-					>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2">
-							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-xs font-medium text-th-text-secondary">
-									{t("dashboard.kimiUsage")}
-								</h3>
-							</div>
-							<div className="grid grid-cols-2 gap-3">
+					<div className={gridClass(compact)}>
+						<Card
+							className="md:col-span-2"
+							title={t("dashboard.kimiUsage")}
+							footnote={t("dashboard.kimiNoRateLimitInfo")}
+						>
+							<div className="grid grid-cols-2 gap-2.5">
 								{(
 									[
 										["kimiLast24h", kimiUsage?.last24h],
 										["kimiLast7d", kimiUsage?.last7d],
 									] as const
 								).map(([labelKey, window]) => (
-									<div
-										key={labelKey}
-										className="bg-white/[0.03] rounded-md p-3 border border-white/[0.06]"
-									>
-										<div className="text-[11px] text-th-text-muted mb-1">
-											{t(`dashboard.${labelKey}`)}
-										</div>
-										<div className="text-lg font-semibold text-th-text">
+									<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
+										<div className="text-lg font-semibold text-th-text tabular-nums">
 											{formatTokens(window?.totalTokens ?? 0)}
 										</div>
-										<div className="text-[11px] text-th-text-muted mt-0.5">
+										<div className="text-[11px] text-th-text-muted">
 											{t("dashboard.kimiTurns", { count: window?.turns ?? 0 })}
 										</div>
 										{window?.costUsd !== undefined && (
 											<div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
-												<span className="text-sm font-semibold text-emerald-300">
+												<span className="text-sm font-semibold text-emerald-300 tabular-nums">
 													{formatUsd(window.costUsd)}
 												</span>
 												<span className="ml-1 text-[10px] text-th-text-muted">
@@ -259,7 +268,7 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 												</span>
 											</div>
 										)}
-									</div>
+									</StatTile>
 								))}
 							</div>
 							{(kimiUsage?.models.length ?? 0) > 0 && (
@@ -287,18 +296,19 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 									))}
 								</div>
 							)}
-						</div>
+						</Card>
 						{openRouterUsage && (
-							<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2">
-								<div className="flex items-center justify-between mb-3">
-									<h3 className="text-xs font-medium text-th-text-secondary">
-										{t("dashboard.openRouterSpend")}
-									</h3>
-									<span className="text-[10px] text-th-text-muted">
+							<Card
+								className="md:col-span-2"
+								title={t("dashboard.openRouterSpend")}
+								aside={
+									<span className="text-[10px] text-th-text-muted shrink-0">
 										{t("dashboard.openRouterActual")}
 									</span>
-								</div>
-								<div className="grid grid-cols-3 gap-3">
+								}
+								footnote={t("dashboard.openRouterWindowNote")}
+							>
+								<div className="grid grid-cols-3 gap-2.5">
 									{(
 										[
 											["openRouterToday", openRouterUsage.usageDailyUsd],
@@ -306,17 +316,11 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 											["openRouterThisMonth", openRouterUsage.usageMonthlyUsd],
 										] as const
 									).map(([labelKey, usd]) => (
-										<div
-											key={labelKey}
-											className="bg-white/[0.03] rounded-md p-3 border border-white/[0.06]"
-										>
-											<div className="text-[11px] text-th-text-muted mb-1">
-												{t(`dashboard.${labelKey}`)}
-											</div>
+										<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
 											<div className="text-lg font-semibold text-th-text tabular-nums">
 												{usd === undefined ? "—" : formatUsd(usd)}
 											</div>
-										</div>
+										</StatTile>
 									))}
 								</div>
 								{openRouterUsage.creditsRemainingUsd !== undefined && (
@@ -348,70 +352,43 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 										</span>
 									</div>
 								)}
-								<div className="mt-2 text-[10px] text-th-text-muted">
-									{t("dashboard.openRouterWindowNote")}
-								</div>
-							</div>
+							</Card>
 						)}
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2 text-th-text-muted text-xs">
-							{t("dashboard.kimiNoRateLimitInfo")}
-						</div>
 					</div>
 				) : effectiveTab === "codex" ? (
-					<div
-						className={
-							compact
-								? "space-y-3"
-								: "md:grid md:grid-cols-2 md:gap-4 space-y-3 md:space-y-0"
-						}
-					>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2">
-							<UsageLimits
-								data={codexLimits || null}
-								history={[]}
-								title={t("dashboard.codexUsageLimits")}
-								showMissingCycles
-								badge={codexLimits?.planType}
-								banner={
-									codexLimits?.rateLimitExceeded
-										? {
-												message: t("dashboard.codexRateLimitExceeded"),
-												tone: "danger",
-											}
-										: undefined
-								}
-							/>
-						</div>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2 text-th-text-muted text-xs">
-							{t("dashboard.codexOtherMetricsComingSoon")}
-						</div>
+					<div className={gridClass(compact)}>
+						<UsageLimits
+							data={codexLimits || null}
+							history={[]}
+							title={t("dashboard.codexUsageLimits")}
+							showMissingCycles
+							badge={codexLimits?.planType}
+							banner={
+								codexLimits?.rateLimitExceeded
+									? {
+											message: t("dashboard.codexRateLimitExceeded"),
+											tone: "danger",
+										}
+									: undefined
+							}
+							footnote={t("dashboard.codexOtherMetricsComingSoon")}
+						/>
 					</div>
 				) : (
-					<div
-						className={
-							compact
-								? "space-y-3"
-								: "md:grid md:grid-cols-2 md:gap-4 space-y-3 md:space-y-0"
-						}
-					>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06]">
-							<UsageLimits
-								data={data?.usageLimits || null}
-								status={data?.usageLimitsStatus}
-								history={data?.usageHistory || []}
-							/>
-						</div>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06]">
-							<DailyUsageChart data={data?.dailyActivity || []} />
-						</div>
-						<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06]">
-							<ModelUsageChart data={data?.modelUsage || []} />
-						</div>
+					<div className={gridClass(compact)}>
+						<UsageLimits
+							data={data?.usageLimits || null}
+							status={data?.usageLimitsStatus}
+							history={data?.usageHistory || []}
+						/>
+						<DailyUsageChart data={data?.dailyActivity || []} />
+						<ModelUsageChart data={data?.modelUsage || []} />
 						{data?.hourlyActivity &&
 							Object.keys(data.hourlyActivity).length > 0 && (
-								<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06] md:col-span-2">
-									<HourlyHeatmap data={data.hourlyActivity} />
-								</div>
+								<HourlyHeatmap
+									data={data.hourlyActivity}
+									className="md:col-span-2"
+								/>
 							)}
 					</div>
 				)}
@@ -419,35 +396,32 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 
 			<section
 				aria-labelledby="dashboard-server-status"
-				className="mt-6 pt-4 border-t border-white/[0.06]"
+				className="mt-5 pt-4 border-t border-white/[0.06]"
 			>
-				<div className="flex items-center gap-2 mb-3">
-					<Server className="w-3.5 h-3.5 text-th-text-muted" />
-					<h2
-						id="dashboard-server-status"
-						className="text-xs font-medium text-th-text-secondary"
-					>
-						{t("dashboard.serverStatus")}
-					</h2>
-				</div>
-				<div
-					className={
-						compact
-							? "space-y-3"
-							: "md:grid md:grid-cols-2 md:gap-4 space-y-3 md:space-y-0"
-					}
+				<SectionHeading
+					id="dashboard-server-status"
+					icon={<Server className={ICON_CLASS} />}
 				>
-					<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06]">
-						<NetworkLatency />
-					</div>
+					{t("dashboard.serverStatus")}
+				</SectionHeading>
+				<div className={gridClass(compact)}>
+					<NetworkLatency />
 					{sortedPeers.map((peer) => (
 						<PeerServerCard key={peer.id} peer={peer} />
 					))}
 				</div>
 			</section>
 
-			{/* Settings section */}
-			<div className="mt-6 pt-4 border-t border-white/[0.06]">
+			<section
+				aria-labelledby="dashboard-settings"
+				className="mt-5 pt-4 border-t border-white/[0.06]"
+			>
+				<SectionHeading
+					id="dashboard-settings"
+					icon={<SlidersHorizontal className={ICON_CLASS} />}
+				>
+					{t("dashboard.settings")}
+				</SectionHeading>
 				<div className="flex flex-wrap items-center gap-2 max-w-lg">
 					<button
 						type="button"
@@ -526,10 +500,10 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 				</div>
 				{data?.version && (
 					<div className="text-[11px] text-zinc-700 mt-3">
-						CC Hub v{data.version}
+						{IDENTITY.productName} v{data.version}
 					</div>
 				)}
-			</div>
+			</section>
 
 			{/* Reset confirmation dialog */}
 			{showResetConfirm && (

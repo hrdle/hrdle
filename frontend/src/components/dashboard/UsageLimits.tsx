@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	UsageCycleInfo,
@@ -5,6 +6,7 @@ import type {
 	UsageScopedLimit,
 	UsageSnapshot,
 } from "../../../../shared/types";
+import { Card, CardTitle } from "./Card";
 import { type UsageChartOverlay, UsageChart } from "./UsageChart";
 
 interface UsageLimitsData {
@@ -51,6 +53,8 @@ interface UsageLimitsProps {
 	badge?: string;
 	/** Optional banner shown above the cycles, e.g. "rate limit exceeded". */
 	banner?: { message: string; tone?: "info" | "warning" | "danger" };
+	/** Muted line under the cycles, for what this agent's data cannot show. */
+	footnote?: ReactNode;
 }
 
 function formatTimeUntil(iso: string): string {
@@ -168,14 +172,15 @@ export function UsageLimits({
 	showMissingCycles = false,
 	badge,
 	banner,
+	footnote,
 }: UsageLimitsProps) {
 	const { t } = useTranslation();
 	const heading = title ?? t("dashboard.usageLimits");
 	const headingNode = (
-		<div className="flex items-center gap-2">
-			<span className="text-sm font-medium text-th-text">{heading}</span>
+		<div className="flex items-center gap-2 min-w-0">
+			<CardTitle>{heading}</CardTitle>
 			{badge && (
-				<span className="text-[10px] text-th-text-muted uppercase tracking-wide px-1.5 py-0.5 bg-white/[0.06] rounded">
+				<span className="text-[10px] text-th-text-muted uppercase tracking-wide px-1.5 py-0.5 bg-white/[0.06] rounded shrink-0">
 					{badge}
 				</span>
 			)}
@@ -184,8 +189,7 @@ export function UsageLimits({
 
 	if (!data || (!data.fiveHour && !data.sevenDay)) {
 		return (
-			<div className="p-3 bg-th-surface rounded-md">
-				<div className="mb-2">{headingNode}</div>
+			<Card title={headingNode} footnote={footnote}>
 				{status?.errorReason ? (
 					<ErrorMessage status={status} />
 				) : (
@@ -193,23 +197,24 @@ export function UsageLimits({
 						{t("dashboard.usageDataUnavailable")}
 					</div>
 				)}
-			</div>
+			</Card>
 		);
 	}
 
 	const missingMessage = t("dashboard.cycleNotInPlan");
 
 	return (
-		<div className="p-3 bg-th-surface rounded-md">
-			<div className="flex items-center justify-between mb-3">
-				{headingNode}
-				{status?.isStale && (
-					<div className="text-[10px] text-th-text-muted">
+		<Card
+			title={headingNode}
+			aside={
+				status?.isStale ? (
+					<span className="text-[10px] text-th-text-muted shrink-0">
 						{t("dashboard.usageStaleData")}
-					</div>
-				)}
-			</div>
-
+					</span>
+				) : undefined
+			}
+			footnote={footnote}
+		>
 			{status?.errorReason && <ErrorMessage status={status} />}
 			{banner && <Banner banner={banner} />}
 
@@ -262,6 +267,6 @@ export function UsageLimits({
 					/>
 				)
 			)}
-		</div>
+		</Card>
 	);
 }

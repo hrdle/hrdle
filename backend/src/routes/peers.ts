@@ -28,7 +28,7 @@ import { loginToPeer, verifyPeer, peerFetch, PeerAuthError } from '../services/p
 import { isSafePeerUrl } from '../services/peer-url';
 import { discoverPeers } from '../services/peer-discovery';
 import { buildSessionsList, sessionHistoryService, agentHistoryProviders } from './sessions';
-import { buildDashboard } from './dashboard';
+import { getDashboard } from './dashboard';
 import { saveUploadedImage } from './upload';
 import type { DashboardResponse } from '../../../shared/types';
 
@@ -476,8 +476,10 @@ peers.get('/:peerId/dashboard', async (c) => {
   if (!peer) return c.json({ error: 'Peer not found' }, 404);
 
   if (peer.url === SELF_PEER_URL) {
-    const data = await buildDashboard();
-    return c.json(data);
+    // Through the cache, not `buildDashboard` directly: the local server card
+    // polls this on its own timer, and an uncached call here would rebuild
+    // everything (including the Anthropic fetch) behind the panel's back.
+    return c.json(await getDashboard());
   }
 
   try {

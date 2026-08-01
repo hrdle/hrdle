@@ -720,11 +720,19 @@ export interface DashboardResponse {
   dailyActivity: DailyActivity[];
   modelUsage: ModelUsage[];
   hourlyActivity?: Record<number, number>; // Phase 3: Hour (0-23) -> session count
-  version?: string; // CC Hub version
+  version?: string; // Hrdle version
   systemMetrics?: SystemMetrics; // System CPU/memory metrics
   diskUsage?: { total: number; used: number; available: number; mountpoint: string };
   connectedClients?: number;
   herdrUpdate?: HerdrUpdateStatus;
+  /** When this payload's slow parts were assembled. */
+  generatedAt?: string;
+  /**
+   * The payload was served from cache past its freshness window while a rebuild
+   * runs in the background. The client should re-fetch shortly to pick up the
+   * refreshed numbers — see `useDashboard`.
+   */
+  stale?: boolean;
 }
 
 export interface ExtendedSessionResponse extends SessionResponse {

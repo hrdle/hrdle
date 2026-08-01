@@ -1,24 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { UsageSnapshot } from "../../../../shared/types";
 import { filterToCurrentCycle } from "../../../../shared/usage-cycle";
-
-function useIsLightMode() {
-	const [light, setLight] = useState(
-		() => document.documentElement.getAttribute("data-theme") === "light",
-	);
-	useEffect(() => {
-		const observer = new MutationObserver(() => {
-			setLight(document.documentElement.getAttribute("data-theme") === "light");
-		});
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ["data-theme"],
-		});
-		return () => observer.disconnect();
-	}, []);
-	return light;
-}
+import { useIsLightMode } from "../../hooks/useIsLightMode";
 
 /** A per-model limit drawn as an extra line over the cycle's own usage line. */
 export interface UsageChartOverlay {
@@ -298,7 +282,7 @@ export function UsageChart({
 	const yLabels = [0, 50, 100];
 
 	return (
-		<div className="mb-3">
+		<div className="mb-3 last:mb-0">
 			<div className="flex justify-between text-xs mb-1">
 				<span className="text-th-text-secondary">{label}</span>
 				<span className="text-th-text-secondary">
