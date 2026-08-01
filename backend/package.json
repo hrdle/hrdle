@@ -14,7 +14,7 @@
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@hono/zod-validator": "^0.7.6",
+    "@hono/zod-validator": "^0.9",
     "@mmmike/web-push": "^0.1.0",
     "hono": "^4.12.33",
     "qrcode": "^1.5.4",
