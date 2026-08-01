@@ -12,17 +12,17 @@
     "pack": "bun scripts/pack.ts",
     "test": "bun test",
     "lint": "echo 'no lint'",
-    "typecheck": "tsgo --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "^0.0.12",
+    "@evenrealities/even_hub_sdk": "^0.0.13",
     "@evenrealities/pretext": "^0.1.4",
     "jsqr": "^1.4.0"
   },
   "devDependencies": {
     "@evenrealities/evenhub-cli": "^0.1.13",
     "@types/bun": "^1.3.14",
-    "typescript": "~5.9.3",
+    "typescript": "^7",
     "vite": "^8.2.0"
   }
 }
