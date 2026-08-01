@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.28] - 2026-08-01
+
+### Added
+- **The glasses app takes a nine-character address instead of a Tailscale
+  FQDN.** `91.210.90` rather than
+  `https://beelink-arch.tail4459c9.ts.net:5924`. The server answers a plaintext
+  `/whoami` one port above its own, carrying only its FQDN, product name and
+  version, and only to callers on a private or CGNAT address
+  - Plaintext is the requirement rather than a shortcut: the certificate is
+    issued for the FQDN, so reaching the machine by IP or short hostname fails
+    TLS, and `fetch` has no way past a certificate error the way a browser's
+    warning page does. One unverified request buys the name; everything after
+    it is ordinary verified HTTPS, and a tailnet caller's packets are inside
+    WireGuard regardless
+  - A bare hostname works too (MagicDNS resolves it inside the tailnet), as
+    does a full URL. `100.` is the only part of a Tailscale address that can be
+    dropped - the second octet onwards is allocated per node, not per tailnet -
+    and it is enough
+  - `hrdle qr` and the server banner both print the short form
+- **The setup wizard's scan step is gone**, because the phone app's WebView
+  will not do it. Measured on device: it denies a camera to web content
+  (`permissions.query` still reads `prompt` while getUserMedia throws
+  `NotAllowedError`), opens no file chooser for `<input capture>`, and refuses
+  `clipboard.readText()`. All three are the host's unimplemented callbacks, not
+  anything this side can fix
+  - The QR code itself stays. Read with the phone's *own* camera app it opens
+    the server in a browser, which is a different job and one that works
+
+### Fixed
+- **Peer discovery finds the tailnet again.** It has probed a literal port 5923
+  since the rename, so a tailnet full of installs discovered nothing (#459).
+  The port is composed from identity now, and with one server reachable the
+  rest of the tailnet comes back as a list rather than more typing
+
 ## [0.3.27] - 2026-08-01
 
 ### Changed
