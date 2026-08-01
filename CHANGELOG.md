@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.31] - 2026-08-01
+
+### Fixed
+- **The conversation can be scrolled to its last line.** The transcript ended
+  flush against the bottom edge - on a phone, where the session bar and the home
+  indicator are - so the final lines sat under them with no scroll left to reach
+  them
+  - Measuring turned up a second cause: the virtualizer's `getTotalSize()` runs a
+    steady ~45px short of what the rows actually render to, so the last message
+    hung below the sized container and was clipped. One trailing space covers
+    both, 128px plus the safe-area inset
+  - The at-bottom threshold moves with it. Auto-follow aligns the last message to
+    the viewport edge and leaves that padding below as unconsumed scroll, which
+    the old 24px threshold would have read as "the reader scrolled away" -
+    following would have stopped after the first new message
+  - The history list ended the same way and gets the same treatment, smaller
+
 ## [0.3.30] - 2026-08-01
 
 ### Added
