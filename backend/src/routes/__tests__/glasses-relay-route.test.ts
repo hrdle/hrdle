@@ -79,7 +79,14 @@ describe('POST /api/glasses/relay — validation defense', () => {
 
   test('rejects a malformed paneId', async () => {
     expect((await post('/api/glasses/relay', { ...VALID, paneId: '2' })).status).toBe(400);
-    expect((await post('/api/glasses/relay', { ...VALID, paneId: '%x' })).status).toBe(400);
+    expect((await post('/api/glasses/relay', { ...VALID, paneId: '%' })).status).toBe(400);
+    expect((await post('/api/glasses/relay', { ...VALID, paneId: '%1:p2' })).status).toBe(400);
+  });
+
+  test('accepts a base36 paneId', async () => {
+    // herdr numbers panes in base36, so a busy workspace's panes are `%A`,
+    // `%B`, ... — rejecting those left the tenth pane onwards unaddressable.
+    expect((await post('/api/glasses/relay', { ...VALID, paneId: '%A' })).status).toBe(200);
   });
 
   test('rejects too many or empty choices', async () => {

@@ -57,7 +57,8 @@ const SIZING_TOLERANCE = 3;
 // herdr pane.read hard cap (server-side, not configurable in 0.7.x)
 const HERDR_READ_CAP = 1000;
 
-const PANE_ID_RE = /^%\d+$/;
+// Base36, not digits: herdr's pane token is `p1`..`p9`, `pA`, `pB`, ...
+const PANE_ID_RE = /^%[0-9A-Za-z]+$/;
 
 /**
  * Active-client sizing rule: which client drives the shared session size.

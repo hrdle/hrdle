@@ -10,6 +10,12 @@
  * tmux-style `%N` (PaneIdSchema). herdr ids are `w<K>:p<N>` with `N` unique
  * within a workspace, so `%N ↔ <workspaceId>:pN` is a lossless mapping as
  * long as one CC Hub session maps to one herdr workspace.
+ *
+ * `N` is base36, not decimal — a workspace's tenth pane is `pA` and its
+ * workspace may be `w5B`. The token is carried through verbatim rather than
+ * parsed as a number: matching `\d+` here silently mapped every pane past the
+ * ninth to null, which is how a split could create a pane herdr showed and
+ * this app never did.
  */
 
 import { existsSync } from 'node:fs';
@@ -319,7 +325,7 @@ export function eventWorkspaceId(ev: Record<string, unknown>): string | null {
 
 /** `w1:p3` → `%3` (null if the id doesn't match the herdr shape) */
 export function toTmuxPaneId(herdrPaneId: string): string | null {
-  const m = herdrPaneId.match(/:p(\d+)$/);
+  const m = herdrPaneId.match(/:p([0-9A-Za-z]+)$/);
   return m ? `%${m[1]}` : null;
 }
 

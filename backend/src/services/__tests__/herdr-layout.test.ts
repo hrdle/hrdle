@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { paneIdFromLayout } from '../../../../shared/types';
 import type { HerdrLayoutNode } from '../herdr-client';
 import { toTmuxPaneId } from '../herdr-client';
 import { herdrLayoutToNode, PaneLayoutTree } from '../herdr-layout';
@@ -222,6 +223,28 @@ describe('PaneLayoutTree.split duplicate guard', () => {
     t.split('%1', 'h', '%3');
     const ids = t.paneIds();
     expect(ids.filter((id) => id === '%3').length).toBe(1);
+  });
+});
+
+/**
+ * A leaf's id has to survive the trip to the client, and herdr's pane tokens
+ * are base36 — `Number.parseInt('A')` is NaN, JSON turns that into null, and
+ * the client read the pane back as `%0`. Numbers still travel as numbers so a
+ * peer running an older frontend keeps rendering the panes it always could.
+ */
+describe('toTmuxLayout leaf ids', () => {
+  test('a numeric pane travels as a number', () => {
+    const layout = twoPane().toTmuxLayout(160, 40);
+    expect(layout?.children?.map((c) => c.paneId)).toEqual([1, 2]);
+  });
+
+  test('a base36 pane travels as its whole %N string', () => {
+    const t = new PaneLayoutTree();
+    t.setInitialPanes(['%9']);
+    t.split('%9', 'h', '%A');
+    const layout = t.toTmuxLayout(160, 40);
+    expect(layout?.children?.map((c) => c.paneId)).toEqual([9, '%A']);
+    expect(paneIdFromLayout(layout?.children?.[1].paneId)).toBe('%A');
   });
 });
 

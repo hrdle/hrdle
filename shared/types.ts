@@ -182,8 +182,14 @@ export const LoginSchema = z.object({
 });
 
 
-// Pane ID validation (e.g., "%0", "%1")
-export const PaneIdSchema = z.string().regex(/^%\d+$/, 'Invalid pane ID');
+// Pane ID validation (e.g., "%0", "%1", "%A").
+//
+// NOT digits only: a pane id is herdr's own pane token behind a `%`, and that
+// token is base36 — the tenth pane of a workspace is `pA`, not `p10`. While
+// this was `/^%\d+$/` every pane past the ninth was rejected at the boundary
+// and dropped by toTmuxPaneId, so splitting a busy workspace created a pane in
+// herdr that no layout, viewport or input path could ever address.
+export const PaneIdSchema = z.string().regex(/^%[0-9A-Za-z]+$/, 'Invalid pane ID');
 
 // herdr tab id validation (e.g. "w1:t2", "w1W:t3"). Server-provided and echoed
 // back by the client to select/close a tab; bounded to the herdr id shape.
@@ -856,8 +862,17 @@ export interface TmuxLayoutNode {
   height: number;
   x: number;
   y: number;
-  paneId?: number; // leaf only: pane number
+  // Leaf only. A number for a numeric pane token (`%3`), the whole `%N` string
+  // for anything base36 (`%A`) — see paneWireId in herdr-layout.ts. Read it
+  // through paneIdFromLayout rather than interpolating it: `%${paneId}` on a
+  // string produces `%%A`.
+  paneId?: number | string;
   children?: TmuxLayoutNode[];
+}
+
+/** The `%N` pane id of a layout leaf, whichever form it arrived in. */
+export function paneIdFromLayout(paneId: number | string | undefined): string {
+  return typeof paneId === 'string' ? paneId : `%${paneId ?? 0}`;
 }
 
 // -----------------------------------------------------------------------------

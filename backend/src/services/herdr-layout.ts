@@ -361,7 +361,7 @@ export class PaneLayoutTree {
           height: r.height,
           x: r.x,
           y: r.y,
-          paneId: paneNumber(n.paneId),
+          paneId: paneWireId(n.paneId),
         };
       }
       const childRect = (child: LayoutNode): PaneRect => boundingRect(child, rects) ?? rect;
@@ -378,8 +378,19 @@ export class PaneLayoutTree {
   }
 }
 
-function paneNumber(tmuxPaneId: string): number {
-  return Number.parseInt(tmuxPaneId.slice(1), 10);
+/**
+ * The leaf id as it travels on the wire.
+ *
+ * herdr pane tokens are base36 (`p1`..`p9`, `pA`, ...), so a pane past the
+ * ninth has no number to carry and goes as the whole `%N` string instead —
+ * `Number.parseInt('A')` is NaN, which JSON turns into null and the client
+ * read as pane `%0`. A numeric token still goes as a number so an older
+ * client on the other end of a peer connection, which only knows how to build
+ * `%${paneId}`, keeps rendering the panes it always could.
+ */
+function paneWireId(tmuxPaneId: string): number | string {
+  const token = tmuxPaneId.slice(1);
+  return /^\d+$/.test(token) ? Number.parseInt(token, 10) : tmuxPaneId;
 }
 
 function boundingRect(n: LayoutNode, rects: Map<string, PaneRect>): PaneRect | null {
