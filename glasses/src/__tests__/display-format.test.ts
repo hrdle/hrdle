@@ -2166,3 +2166,47 @@ describe('the cursor does not shove its row sideways', () => {
     expect(width('  ')).toBe(width('>'))
   })
 })
+
+describe('following the phone yields to the ring', () => {
+  // A wearer swiping down the list had the cursor pulled back to whatever a
+  // browser tab elsewhere was showing, every five seconds, for as long as both
+  // were open. `followFocus` is worth having when nobody is holding the ring;
+  // the auto-advance clock already knew that rule and this did not.
+
+  function stubPlatform() {
+    return {
+      onDevice: false,
+      render: () => {},
+      renderHeader: () => {},
+      startMicCapture: async () => false,
+      stopMicCapture: async () => {},
+      transcribeAudio: async () => '',
+      saveState: () => {},
+      loadState: async () => null,
+      requestExit: () => {},
+      onForegroundRegained: () => {},
+    }
+  }
+  const sessions = ['a', 'b', 'c'].map((id) => ({ id, name: id, state: 'idle' as const }))
+  const push = (c: GlassesController, focus?: { sessionId: string }) =>
+    (c as unknown as { onSessionsUpdated: (s: unknown[], f?: unknown) => void })
+      .onSessionsUpdated(sessions, focus)
+
+  test('an untouched screen still follows the session opened elsewhere', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c)
+    push(c, { sessionId: 'c' })
+    expect(c.state.sessions[c.state.sessionIndex].id).toBe('c')
+  })
+
+  test('a screen the wearer is driving does not', async () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c)
+    c.swipeDown()
+    await Promise.resolve()
+    const here = c.state.sessions[c.state.sessionIndex].id
+    push(c, { sessionId: 'c' })
+    expect(c.state.sessions[c.state.sessionIndex].id).toBe(here)
+    expect(here).not.toBe('c')
+  })
+})

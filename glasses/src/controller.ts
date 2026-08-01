@@ -1269,6 +1269,13 @@ export class GlassesController {
    *  will, and the phone moving on cannot be allowed to redirect it. */
   private followFocus(focus: ClientFocus | undefined): boolean {
     if (!focus) return false // every client hidden → hold the current view
+    // The reader is working the ring; do not fight them for it. The same rule
+    // the auto-advance clock keeps, and for the same reason - a wearer swiping
+    // down the list had the cursor pulled back to whatever a browser tab
+    // elsewhere happened to be showing, every five seconds, for as long as
+    // both were open. Following a phone is worth having when nobody is
+    // holding the ring, and only then.
+    if (Date.now() - this.lastGestureAt < AUTO_ADVANCE_IDLE_MS) return false
     const st = this.state
     if (st.mode !== 'session_list' && st.mode !== 'conversation') return false
     if (focus.sessionId === st.sessions[st.sessionIndex]?.id) return false
