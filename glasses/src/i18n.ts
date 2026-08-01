@@ -59,6 +59,13 @@ const EN: Table = {
   'scan.cameraFailed': 'The camera could not be opened: {error}',
   'scan.cannotProcess': 'This device cannot process the camera image.',
 
+  'probe.title': 'The camera did not open',
+  'probe.hint':
+    'What the app could see of the platform. Copy it and send it on - it is what tells the possible causes apart.',
+  'probe.copy': 'Copy',
+  'probe.copied': 'Copied',
+  'probe.close': 'Close',
+
   'settings.title': 'Voice input',
   'settings.subtitle':
     'Transcription runs on the server through Groq. The key never leaves that host.',
@@ -115,6 +122,13 @@ const JA: Table = {
     'カメラの使用が拒否されました。端末の設定でこのアプリに許可するか、アドレスを手で入力してください。',
   'scan.cameraFailed': 'カメラを開けませんでした: {error}',
   'scan.cannotProcess': 'この端末ではカメラ映像を処理できません。',
+
+  'probe.title': 'カメラを開けませんでした',
+  'probe.hint':
+    'アプリから見えたプラットフォームの状態です。原因の切り分けに使うので、コピーしてそのまま共有してください。',
+  'probe.copy': 'コピー',
+  'probe.copied': 'コピーしました',
+  'probe.close': '閉じる',
 
   'settings.title': '音声入力',
   'settings.subtitle':

@@ -20,6 +20,7 @@
 // that has never once succeeded is a longer path to the same failure.
 
 import jsQR from 'jsqr'
+import { probeCamera, showCameraProbe } from './camera-probe.ts'
 import { t } from './i18n.ts'
 
 /**
@@ -133,7 +134,7 @@ function screenHtml(): string {
  * and without one it is the whole answer - and the two common causes want
  * opposite things from the user (change a setting, or type the address).
  */
-async function openCamera(): Promise<{ stream?: MediaStream; error?: string }> {
+async function openCamera(): Promise<{ stream?: MediaStream; error?: string; cause?: unknown }> {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') {
     return { error: t('scan.noCamera') }
   }
@@ -157,8 +158,10 @@ async function openCamera(): Promise<{ stream?: MediaStream; error?: string }> {
     return { stream }
   } catch (err) {
     const name = (err as { name?: string })?.name
-    if (name === 'NotAllowedError' || name === 'SecurityError') return { error: t('scan.denied') }
-    return { error: t('scan.cameraFailed', { error: message(err) }) }
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return { error: t('scan.denied'), cause: err }
+    }
+    return { error: t('scan.cameraFailed', { error: message(err) }), cause: err }
   }
 }
 
@@ -173,7 +176,14 @@ async function openCamera(): Promise<{ stream?: MediaStream; error?: string }> {
 export async function scanQr(): Promise<ScanOutcome> {
   if (typeof document === 'undefined') return { error: t('scan.noCamera') }
   const camera = await openCamera()
-  if (!camera.stream) return { error: camera.error ?? t('scan.noCamera') }
+  if (!camera.stream) {
+    // The one sentence the user sees cannot tell four different no's apart, and
+    // this one is being investigated rather than lived with. Show the report
+    // before answering the guide, which would otherwise close the screen.
+    const reason = camera.error ?? t('scan.noCamera')
+    await showCameraProbe(reason, await probeCamera(camera.cause))
+    return { error: reason }
+  }
   const stream = camera.stream
 
   const overlay = document.createElement('div')
