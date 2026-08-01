@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.36] - 2026-08-02
+
+### Changed
+- **The major dependency upgrades, all six.** i18next 25 -> 26, react-i18next
+  16 -> 17, lucide-react 0.577 -> 1.28 and @hono/zod-validator 0.7 -> 0.9 each
+  had their breaking changes looked up and then matched against the tree; none
+  of them land here. `react-i18next@17` peer-requires `i18next >= 26.2.0`, so
+  those two moved together
+- **TypeScript 5.9 -> 7.0, and the native preview is gone.** 7.0 is the Go
+  compiler moving out of `@typescript/native-preview` and into the `typescript`
+  package, which this repo had been typechecking with for months under the
+  preview name - so the upgrade was mostly deleting the second way of saying it.
+  The four `tsgo --noEmit` scripts are `tsc --noEmit`, that being the one binary
+  the package ships
+  - 7.0 ships **no public compiler API** until 7.1. Nothing here consumes one -
+    vite goes through rolldown, the react plugin through babel, biome is Rust,
+    and the glasses build calls the CLI - but a tool that did would stop working
+- **The glasses manifest says the Even App version the SDK actually needs.**
+  `min_app_version` was 2.0.0 while the SDK declares its own floor as 2.2.6, so
+  the manifest was promising a phone it cannot run on: an install that succeeds
+  and then does not work. Phones below 2.2.6 can no longer install it, which is
+  the point of the field
+
+### Fixed
+- **Following the phone yields to the ring.** A wearer swiping the session list
+  had the cursor pulled back to whatever a browser tab elsewhere was showing,
+  every five seconds, for as long as both were open. `AUTO_ADVANCE_IDLE_MS`
+  already exists so "a reader who is working the ring is never fought for
+  control" and the auto-advance clock keeps it; `followFocus` did not, and it is
+  the one that takes the cursor rather than the page. It yields on the same
+  clock now
+
 ## [0.3.35] - 2026-08-01
 
 ### Fixed
