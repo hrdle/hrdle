@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.34] - 2026-08-01
+
+### Changed
+- **The browser simulator draws through the device's own `updateDisplay()`.**
+  It supplies a bridge that records containers instead of sending them to a
+  host, and the canvas paints what that bridge holds - so the
+  rebuild-vs-upgrade decision, which container id a string is addressed to, and
+  every container's geometry are decided once, in `display.ts`, for both. It
+  used to lay the screen out a second time from `screenText()`, and every
+  divergence that cost real debugging time was of that shape
+- **Dependencies refreshed within their declared ranges** - hono, zod, react,
+  vite, tailwind, i18next and the rest. `backend/tsconfig.json` gained an
+  explicit `rootDir`: the backend compiles `src/**` and `../shared/**`
+  together, so the root they share is the repository, and the newer typechecker
+  stopped inferring that
+
+### Fixed
+- **Fullscreen on an upright phone was unreadable.** The panel is twice as wide
+  as it is tall and the fit took the smaller ratio, so a portrait phone fitted
+  it to its short edge - 312px of panel on a screen 844px long. It turns a
+  quarter now, room and all, and is fitted against the swapped axes: 624px on
+  the same screen. Turning the phone brings it upright
+  - The rotation goes on the children, not on the fullscreen element: that one
+    sits in the top layer, where the UA stylesheet pins `transform: none
+    !important` and an author `!important` does not outrank it
+
 ## [0.3.33] - 2026-08-01
 
 ### Added
