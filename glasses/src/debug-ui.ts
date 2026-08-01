@@ -14,7 +14,17 @@ import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { NOTICE_BORDER, NOTICE_BORDER_COLOR, NOTICE_PAD, noticeHeight, screenText, wrapForPanel } from './display.ts'
-import { BAR_H, LINE_H, PANEL_H, PANEL_W, advance } from './metrics.ts'
+import {
+  BAR_H,
+  CARD_BORDER,
+  CARD_BORDER_COLOR,
+  CARD_RADIUS,
+  LINE_H,
+  PANEL_H,
+  PANEL_W,
+  advance,
+  cardBox,
+} from './metrics.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
 
@@ -444,7 +454,7 @@ export function startDebugUI(): void {
     }
   }
 
-  function drawPanel(screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean }): void {
+  function drawPanel(screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean; card?: boolean }): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
@@ -463,22 +473,62 @@ export function startDebugUI(): void {
     // window stops being worth the phrase in its own subtitle.
     const noticeLines = screen.notice ? screen.notice.split('\n') : []
     const nHeight = noticeHeight(noticeLines.length)
+    // Without a header container there is no bar for the strip to sit under, so
+    // it starts at the top of the panel - the same place `buildSessionList` puts
+    // it. A strip drawn 36px lower than the device draws it is the kind of
+    // divergence this simulator exists to make visible, not to introduce.
+    const noticeTop = screen.headerless ? 0 : BAR_H
     for (const [i, line] of noticeLines.entries()) {
-      drawRow(ctx, line, 4 + NOTICE_PAD + NOTICE_BORDER, BAR_H + NOTICE_PAD + NOTICE_BORDER + BASELINE + i * LINE_H)
+      drawRow(ctx, line, 4 + NOTICE_PAD + NOTICE_BORDER, noticeTop + NOTICE_PAD + NOTICE_BORDER + BASELINE + i * LINE_H)
     }
     if (nHeight > 0) {
-      // The container's own border, at the panel's own width and grey level.
-      ctx.strokeStyle = `rgba(${GREEN}, ${NOTICE_BORDER_COLOR / 15})`
+      // The list's strip is a notification and is drawn to be noticed; the
+      // conversation's is a recap, and its rule only has to separate.
+      const level = screen.headerless ? CARD_BORDER_COLOR : NOTICE_BORDER_COLOR
+      ctx.strokeStyle = `rgba(${GREEN}, ${level / 15})`
       ctx.lineWidth = NOTICE_BORDER
-      ctx.strokeRect(4 + NOTICE_BORDER / 2, BAR_H + NOTICE_BORDER / 2, PANEL_W - 8 - NOTICE_BORDER, nHeight - NOTICE_BORDER)
+      ctx.beginPath()
+      ctx.roundRect(
+        4 + NOTICE_BORDER / 2,
+        noticeTop + NOTICE_BORDER / 2,
+        PANEL_W - 8 - NOTICE_BORDER,
+        nHeight - NOTICE_BORDER,
+        screen.headerless ? CARD_RADIUS : 0,
+      )
+      ctx.stroke()
       ctx.fillStyle = `rgb(${GREEN})`
     }
 
-    // Without a header container the body owns that band too, and starts where
-    // it does rather than a bar below it.
-    const bodyTop = screen.headerless ? BODY_PAD + BASELINE : BODY_TOP + nHeight
-    for (const [i, line] of screen.body.split('\n').entries()) {
-      drawRow(ctx, line, 4 + BODY_PAD, bodyTop + i * LINE_H)
+    if (screen.card) {
+      // A notification is a box laid over the panel, not another screen filling
+      // it. Drawn here at the same geometry `buildOverlay` gives the device -
+      // getting this wrong would put the simulator's border somewhere the G2's
+      // is not, which is the exact class of divergence that keeps turning up.
+      const lines = screen.body.split('\n')
+      const box = cardBox(lines.length)
+      ctx.strokeStyle = `rgba(${GREEN}, ${CARD_BORDER_COLOR / 15})`
+      ctx.lineWidth = CARD_BORDER
+      ctx.beginPath()
+      ctx.roundRect(
+        box.x + CARD_BORDER / 2,
+        box.y + CARD_BORDER / 2,
+        box.w - CARD_BORDER,
+        box.h - CARD_BORDER,
+        CARD_RADIUS,
+      )
+      ctx.stroke()
+      ctx.fillStyle = `rgb(${GREEN})`
+      const top = box.y + CARD_BORDER + BODY_PAD + BASELINE
+      for (const [i, line] of lines.entries()) {
+        drawRow(ctx, line, box.x + CARD_BORDER + BODY_PAD, top + i * LINE_H)
+      }
+    } else {
+      // Without a header container the body owns that band too, and starts where
+      // it does rather than a bar below it - but still below its own notice.
+      const bodyTop = screen.headerless ? nHeight + BODY_PAD + BASELINE : BODY_TOP + nHeight
+      for (const [i, line] of screen.body.split('\n').entries()) {
+        drawRow(ctx, line, 4 + BODY_PAD, bodyTop + i * LINE_H)
+      }
     }
 
     ctx.fillStyle = `rgba(${GREEN}, 0.78)`

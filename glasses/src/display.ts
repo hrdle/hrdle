@@ -11,6 +11,12 @@ import {
   BAR_H,
   BODY_PAD,
   BODY_WIDTH,
+  CARD_BORDER,
+  CARD_BORDER_COLOR,
+  CARD_LINES,
+  CARD_RADIUS,
+  CARD_WIDTH,
+  cardBox,
   HEADER_WIDTH,
   LINE_H,
   LIST_LINES,
@@ -280,7 +286,35 @@ function statusLabel(s: Session, frame: string): string {
   return s.indicatorState === 'processing' ? frame : BADGE_BLANK
 }
 
-const SEPARATOR = '-'.repeat(24)
+/**
+ * What tells a workspace from a pane inside it.
+ *
+ * The brackets are on *every* workspace, not only the ones that have panes
+ * showing. That is what makes the rule worth having: bracketed is a workspace,
+ * bare and indented is a pane of the one above. Bracketing only the expanded
+ * ones would leave a single-pane workspace looking exactly like a pane, which
+ * is the confusion this is here to remove.
+ *
+ * It replaces a box-drawing tree (`├` / `└`). The tree said which pane was
+ * last, which nobody was asking; what was being asked was which name owned
+ * which, and an indent under a bracketed name says that with less ink.
+ */
+const WS_OPEN = '['
+const WS_CLOSE = ']'
+/**
+ * What sits where the workspace's `[` does, plus two spaces.
+ *
+ * Measured rather than counted: the opening bracket is 8px against a 5px
+ * space, so the three spaces this started as put the pane name 2px right of
+ * the workspace name above it - an indent nobody could see. Five spaces is
+ * 25px against the name's 13px, the nearest the space width can get to the two
+ * clear spaces asked for.
+ */
+const PANE_INDENT = '     '
+
+/** The rule between a question's text and its choices, inside the card. Cut to
+ *  the card's width rather than the panel's, or it runs under the border. */
+const CARD_SEPARATOR = '-'.repeat(Math.floor(CARD_WIDTH / textWidth('-')))
 
 /**
  * The working indicator, one frame per tick.
@@ -533,6 +567,22 @@ function notificationRowText(state: AppState, marker: string): string {
   return wrapped.length > 1 ? ellipsize(line) : line
 }
 
+/**
+ * The pinned notification, as its own strip above the list.
+ *
+ * Split out of the list body so it can be drawn in a bordered container rather
+ * than as one more row of text. Sharing the list's background is how it kept
+ * being read as another session: the eye walks a column of names and a notice
+ * sitting in that column is a name. A box around it is not.
+ *
+ * Empty when there is nothing waiting, which is also what tells the renderers
+ * there is no strip to leave room for.
+ */
+function sessionListNotice(state: AppState): string {
+  if (!hasNotificationRow(state)) return ''
+  return notificationRowText(state, rowCursor(state) === 0 ? '>' : ' ')
+}
+
 function sessionListBody(state: AppState): string {
   const { sessions } = state
   // Relay waiting covers agent-declared items whose session indicator is not
@@ -543,11 +593,12 @@ function sessionListBody(state: AppState): string {
   // Pinned rather than scrolled with the rest. It replaces a banner that was
   // always on screen, and a notice that slid out of view as the reader walked
   // down thirteen workspaces would be a worse thing than the banner was.
+  // The strip itself is drawn by `sessionListNotice` into a container of its
+  // own; what is counted here is the row it costs the list.
   const pinned = hasNotificationRow(state) ? 1 : 0
-  const notice = pinned ? [notificationRowText(state, cursor === 0 ? '>' : ' ')] : []
   const rows = listRows(sessions, pinned === 1)
   const scrollable = rows.slice(pinned)
-  if (!scrollable.length) return [...notice, '(no sessions)'].join('\n')
+  if (!scrollable.length) return '(no sessions)'
   const listLines = LIST_LINES - pinned
   // The cursor's index within the scrolling part; the pinned row is index 0 of
   // the whole list and never part of the window.
@@ -566,21 +617,15 @@ function sessionListBody(state: AppState): string {
       // outlives the indicator that raised it; that one keeps its mark.
       const label = relayWaitingIds.has(s.id) ? '！' : statusLabel(s, frame)
       // A heading takes no cursor, so it never carries the marker.
-      return `${row.header ? ' ' : here}${label} ${sName(s)}`
+      return `${row.header ? ' ' : here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}`
     }
     const panes = s.panes ?? []
     const p = panes.find((x) => x.paneId === row.paneId)
     const detail = p ? paneDetail(p, panes) : ''
-    // Drawn as a tree so the panes read as belonging to the name above them
-    // rather than as more workspaces that happen to be indented. The firmware
-    // carries the light box-drawing set at full width, so the branch lines up
-    // with the badges either side of it.
-    const last = panes[panes.length - 1]?.paneId === row.paneId
-    const branch = last ? '└' : '├'
-    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${branch} ${paneName(p, row.paneId)}${detail ? `  ${detail}` : ''}`
+    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${PANE_INDENT}${paneName(p, row.paneId)}${detail ? `  ${detail}` : ''}`
   })
 
-  return [...notice, ...listBody].join('\n')
+  return listBody.join('\n')
 }
 
 /**
@@ -920,6 +965,12 @@ export function screenText(state: AppState): {
    *  of the panel rather than below a bar. Anything drawing these strings has
    *  to know, or it renders a row lower than the device does. */
   headerless?: boolean
+  /** The body is a bordered box inset from the panel edge, not the panel's own
+   *  width. Same reason as `notice`: the border and the margin are container
+   *  geometry on the device, so a renderer that ignores this draws a screen
+   *  the wearer is not looking at - and the whole point of the card is that it
+   *  does not look like the other screens. */
+  card?: boolean
 } {
   // Said before anything else, because a run that is closing itself has no mode
   // left worth drawing. A WebView that simply vanishes is indistinguishable
@@ -929,7 +980,13 @@ export function screenText(state: AppState): {
   switch (state.mode) {
     case 'session_list':
       // No header: the list screen gave that bar back to the list.
-      return { header: '', body: sessionListBody(state), footer: sessionListFooter(state), headerless: true }
+      return {
+        header: '',
+        notice: sessionListNotice(state) || undefined,
+        body: sessionListBody(state),
+        footer: sessionListFooter(state),
+        headerless: true,
+      }
     case 'conversation': {
       const { headerText, noticeText, bodyText, footerText } = conversationContent(state)
       return { header: headerText, notice: noticeText, body: bodyText, footer: footerText }
@@ -942,7 +999,7 @@ export function screenText(state: AppState): {
     }
     case 'overlay': {
       const { headerText, bodyText, footerText } = overlayContent(state)
-      return { header: headerText, body: bodyText, footer: footerText }
+      return { header: headerText, body: bodyText, footer: footerText, card: true }
     }
   }
 }
@@ -977,15 +1034,17 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
   const counter = items.length > 1 ? ` ${idx + 1}/${items.length}` : ''
   const headerText = withClock(`${relayLabel(state, item)} ${badge}${counter}`)
 
-  const lines = splitDisplayLines(item.text)
+  // Wrapped to the card, not to the panel. The box is narrower than the body it
+  // replaces, and text measured against the wider one runs under the border.
+  const lines = splitLines(item.text, CARD_WIDTH)
   if (item.choices?.length) {
-    lines.push(SEPARATOR)
+    lines.push(CARD_SEPARATOR)
     for (let i = 0; i < item.choices.length; i++) {
-      lines.push(...splitDisplayLines(` ${i + 1}. ${item.choices[i]}`))
+      lines.push(...splitLines(` ${i + 1}. ${item.choices[i]}`, CARD_WIDTH))
     }
   }
-  const bodyText = lines.length > MAX_LINES
-    ? [...lines.slice(0, MAX_LINES - 1), '…'].join('\n')
+  const bodyText = lines.length > CARD_LINES
+    ? [...lines.slice(0, CARD_LINES - 1), '…'].join('\n')
     : lines.join('\n')
   const next = items.length > 1 ? '  swipe:next' : ''
   // "later" is an answer to a question. A notification is not asking anything,
@@ -1034,12 +1093,30 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
  * includes panes needs.
  */
 function buildSessionList(state: AppState): RebuildPageContainer {
+  // The pinned notification, boxed. In the list's own column it read as one
+  // more session name; a border and the panel showing round it do not.
+  const noticeText = sessionListNotice(state)
+  const nHeight = noticeText ? noticeHeight(1) : 0
+  const notice = noticeText
+    ? new TextContainerProperty({
+        xPosition: 4, yPosition: 0,
+        width: W - 8, height: nHeight,
+        borderWidth: NOTICE_BORDER,
+        borderColor: CARD_BORDER_COLOR,
+        borderRadius: CARD_RADIUS,
+        paddingLength: NOTICE_PAD,
+        containerID: 1, containerName: 'notice',
+        isEventCapture: 0,
+        content: noticeText,
+      })
+    : null
+
   const list = new TextContainerProperty({
-    xPosition: 4, yPosition: 0,
-    width: W - 8, height: H - 36,
+    xPosition: 4, yPosition: nHeight,
+    width: W - 8, height: H - 36 - nHeight,
     borderWidth: 0,
     paddingLength: 6,
-    containerID: 1, containerName: 'list',
+    containerID: notice ? 2 : 1, containerName: 'list',
     isEventCapture: 0,
     content: sessionListBody(state),
   })
@@ -1049,14 +1126,15 @@ function buildSessionList(state: AppState): RebuildPageContainer {
     width: W, height: 36,
     borderWidth: 0,
     paddingLength: 4,
-    containerID: 2, containerName: 'footer',
+    containerID: notice ? 3 : 2, containerName: 'footer',
     isEventCapture: 1,
     content: sessionListFooter(state),
   })
 
+  const objects = notice ? [notice, list, footer] : [list, footer]
   return new RebuildPageContainer({
-    containerTotalNum: 2,
-    textObject: [list, footer],
+    containerTotalNum: objects.length,
+    textObject: objects,
   })
 }
 
@@ -1069,6 +1147,17 @@ function buildSessionList(state: AppState): RebuildPageContainer {
 function noticeLineCount(state: AppState): number {
   const { noticeText } = conversationContent(state)
   return noticeText ? noticeText.split('\n').length : 0
+}
+
+/**
+ * How tall the notification card is, in lines. The same job `noticeLineCount`
+ * does for the conversation: the card is drawn to fit its message, so a shorter
+ * notification replacing a longer one is a change of geometry, not of text, and
+ * upgrading the string in place would leave the border where the old message
+ * ended.
+ */
+function cardLineCount(state: AppState): number {
+  return overlayContent(state).bodyText.split('\n').length
 }
 
 function buildConversation(state: AppState): RebuildPageContainer {
@@ -1219,12 +1308,18 @@ function buildOverlay(state: AppState): RebuildPageContainer {
     content: headerText,
   })
 
+  // The card. Sized to its message, centred, and bordered - so what the wearer
+  // sees is a box laid over the panel rather than another screen filling it,
+  // which is what a notification kept being mistaken for.
+  const box = cardBox(bodyText.split('\n').length)
   const body = new TextContainerProperty({
-    xPosition: 4, yPosition: 36,
-    width: W - 8, height: H - 36 - 36,
-    borderWidth: 0,
-    paddingLength: 6,
-    containerID: 2, containerName: 'body',
+    xPosition: box.x, yPosition: box.y,
+    width: box.w, height: box.h,
+    borderWidth: CARD_BORDER,
+    borderColor: CARD_BORDER_COLOR,
+    borderRadius: CARD_RADIUS,
+    paddingLength: BODY_PAD,
+    containerID: 2, containerName: 'card',
     isEventCapture: 0,
     content: bodyText,
   })
@@ -1297,6 +1392,8 @@ let currentMode: Mode | null = null
 /** Notice-strip height last sent, so a change in it triggers the rebuild the
  *  new geometry needs. */
 let currentNoticeLines = 0
+/** The same, for the notification card, which is drawn to fit its message. */
+let currentCardLines = 0
 
 /**
  * Get the bridge and put the first frame on the panel.
@@ -1537,6 +1634,7 @@ function forgetDrawn(): void {
   drawn.clear()
   currentMode = null
   currentNoticeLines = 0
+  currentCardLines = 0
 }
 
 export function invalidatePanel(): void {
@@ -1558,7 +1656,8 @@ export async function updateHeader(bridge: Bridge | null, state: AppState): Prom
   // Whichever container the spinner lives in — the conversation's header, or
   // the list's rows. One container either way; a full update sends three.
   if (state.mode === 'session_list') {
-    await upgrade(bridge, 1, 'list', sessionListBody(state))
+    // Container 1 is the notice when there is one; the rows are behind it.
+    await upgrade(bridge, sessionListNotice(state) ? 2 : 1, 'list', sessionListBody(state))
     return
   }
   const { headerText } = conversationContent(state)
@@ -1569,12 +1668,23 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
   if (!bridge || gaveUp) return
 
   // Geometry, not content, is what forces a rebuild: the notice strip changes
-  // the body container's height and the ids below it. Content alone goes out
-  // as in-place upgrades, which is why the panel is not rebuilt every render.
-  const notice = state.mode === 'conversation' ? noticeLineCount(state) : 0
-  const needsRebuild = state.mode !== currentMode || notice !== currentNoticeLines
+  // the body container's height and the ids below it, and the notification card
+  // is sized to its own message. Content alone goes out as in-place upgrades,
+  // which is why the panel is not rebuilt every render.
+  // The list's notice is one row or none, but its presence shifts every
+  // container id below it - so it is watched the same way the strip's height is.
+  const notice =
+    state.mode === 'conversation'
+      ? noticeLineCount(state)
+      : state.mode === 'session_list'
+        ? (sessionListNotice(state) ? 1 : 0)
+        : 0
+  const card = state.mode === 'overlay' ? cardLineCount(state) : 0
+  const needsRebuild =
+    state.mode !== currentMode || notice !== currentNoticeLines || card !== currentCardLines
   currentMode = state.mode
   currentNoticeLines = notice
+  currentCardLines = card
 
   if (needsRebuild) {
     let container: RebuildPageContainer
@@ -1604,10 +1714,14 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
   // container is already showing; `Promise.all` over the ones that survive.
   switch (state.mode) {
     case 'session_list': {
+      // The notice takes container 1 when it is there, pushing the other two
+      // along. Sending the list to a fixed id would write it into the notice.
+      const n = sessionListNotice(state)
       await Promise.all([
-        upgrade(bridge, 1, 'list', sessionListBody(state)),
+        ...(n ? [upgrade(bridge, 1, 'notice', n)] : []),
+        upgrade(bridge, n ? 2 : 1, 'list', sessionListBody(state)),
         // The footer moves now — it holds the clock and the position.
-        upgrade(bridge, 2, 'footer', sessionListFooter(state)),
+        upgrade(bridge, n ? 3 : 2, 'footer', sessionListFooter(state)),
       ])
       break
     }
