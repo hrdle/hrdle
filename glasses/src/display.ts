@@ -31,7 +31,7 @@ import {
 // uses rather than a copy of it that can drift.
 import { GIVE_UP_AFTER_MS } from './ws-client.ts'
 import { formatMessage, recapBlockLines } from './types.ts'
-import type { Session, Pane, ConversationMessage, GlassesRelayItem } from './types.ts'
+import type { Session, Pane, RowMetrics, ConversationMessage, GlassesRelayItem } from './types.ts'
 
 const W = 576
 const H = 288
@@ -305,6 +305,27 @@ const CURSOR_HERE = '>'
 const CURSOR_NONE = '  '
 
 /**
+ * Pad a badge out to the width of the column it sits in.
+ *
+ * The badges no longer agree on a width: `！` is 320 units and the blank beside
+ * it the same, but the working dots are 80 and 144 — the whole reason to use
+ * them. Left as they are, every running row's name starts a third of a column
+ * left of every other one, and the list ripples sideways as rows change state.
+ *
+ * Ordinary spaces are 5 units, so the pad lands within one of the column rather
+ * than on it. Measured in a loop instead of divided out: `textWidth` charges
+ * for the kerning across each join, and this is the column everything else on
+ * the row is positioned from.
+ */
+const BADGE_W = textWidth(BADGE_BLANK)
+
+function padBadge(badge: string): string {
+  let out = badge
+  while (textWidth(`${out} `) <= BADGE_W) out += ' '
+  return out
+}
+
+/**
  * What a workspace's row says about its state.
  *
  * Only `processing` used to be marked, so `waiting_input` - the state most
@@ -323,8 +344,8 @@ function workspaceLabel(s: Session, frame: string): string {
   const panes = s.panes ?? []
   if (s.indicatorState === 'waiting_input') return WAITING_BADGE
   if (panes.some((p) => p.indicatorState === 'waiting_input')) return WAITING_BADGE
-  if (s.indicatorState === 'processing') return frame
-  if (panes.some((p) => p.indicatorState === 'processing')) return frame
+  if (s.indicatorState === 'processing') return padBadge(frame)
+  if (panes.some((p) => p.indicatorState === 'processing')) return padBadge(frame)
   return BADGE_BLANK
 }
 
@@ -361,14 +382,28 @@ const CARD_SEPARATOR = '-'.repeat(Math.floor(CARD_WIDTH / textWidth('-')))
 /**
  * The working indicator, one frame per tick.
  *
- * A static mark says the session was working when the screen was last drawn;
- * a moving one says it is working now, which is the question being asked. The
+ * A static mark says the session was working when the screen was last drawn; a
+ * moving one says it is working now, which is the question being asked. The
  * frames are all 320 units wide — an uneven set shifts everything after it on
- * each turn and reads as a shiver rather than a rotation, which is what ruled
- * out the ASCII `|/-\` and the Braille spinner the CLI world uses (the
- * firmware has no glyphs for the latter at all).
+ * each turn and reads as a shiver rather than a beat, which is what ruled out
+ * the ASCII `|/-\` and the Braille spinner the CLI world uses (the firmware has
+ * no glyphs for the latter at all).
+ *
+ * Two frames, not a rotation. At one frame per three seconds nobody sees a
+ * turning triangle — they see whichever of `▲▶▼◀` happened to be up when they
+ * looked, which is a different symbol each time and reads as four states rather
+ * than one. A dot that grows and shrinks reads as one thing, beating, however
+ * rarely it is sampled.
+ *
+ * These two are the only small glyphs the firmware carries that pair: `·` at 80
+ * units and `•` at 144, against the 320 of every full-width mark. Everything
+ * else this size is a punctuation mark on the baseline (`′ ″ ‘ ’`) or sits
+ * raised off it (`° º ⁰`), which beats vertically as well as in size. Being
+ * narrow is the point — a status mark should be the quietest thing on a row it
+ * shares with a name, and `●` was a bullet hole in the middle of one.
  */
-const SPINNER = ['▲', '▶', '▼', '◀']
+const SPINNER = ['·', '•']
+
 
 /** Slow on purpose: each frame costs a BLE round trip, and the question is
  *  only whether something is alive. */
@@ -529,7 +564,7 @@ export function rowCursor(state: AppState): number {
 /** The same for one pane. Waiting outranks working, for the same reason. */
 function paneStatusLabel(p: Pane, frame: string): string {
   if (p.indicatorState === 'waiting_input') return WAITING_BADGE
-  if (p.indicatorState === 'processing') return frame
+  if (p.indicatorState === 'processing') return padBadge(frame)
   return BADGE_BLANK
 }
 
@@ -556,17 +591,108 @@ function paneName(p: Pane | undefined, paneId: string): string {
   return label || paneId
 }
 
+/**
+ * Context use as one glyph.
+ *
+ * The eight block heights are the only ordered run of glyphs the firmware
+ * carries that is also one width throughout - `▁` measures the same 320 units
+ * as `█`, so a column of them is a bar chart and not a ragged edge. `░` and `▓`
+ * would have given a shading ramp instead, and the panel has neither.
+ *
+ * It fills as the context does, matching the web UI's bar: a row that is nearly
+ * out of runway is the tall one, which is the one worth finding. Eight steps is
+ * coarser than the figure beside it and that is the point - the glyph answers
+ * "how full", the number answers "how full exactly".
+ */
+const CTX_BLOCKS = '▁▂▃▄▅▆▇█'
+
+function ctxGlyph(pct: number): string {
+  const step = Math.ceil((pct / 100) * CTX_BLOCKS.length) - 1
+  return CTX_BLOCKS[Math.min(CTX_BLOCKS.length - 1, Math.max(0, step))]
+}
+
+/**
+ * Which model is running, short enough for a list row.
+ *
+ * `claude-opus-5-20260101` is thirty characters of which two matter: on a
+ * screen where every workspace runs `claude`, the family and its version are
+ * the whole difference between them. Anything not Claude's is left as the
+ * provider wrote it, minus the vendor prefix Kimi and the OpenRouter models
+ * carry (`moonshotai/kimi-k3`) - that names who sells it, not what is running.
+ */
+function modelShort(model: string | undefined): string {
+  if (!model) return ''
+  const bare = model.split('/').pop() ?? model
+  if (!bare.startsWith('claude-')) return bare
+  const tokens = bare
+    .slice('claude-'.length)
+    .split('-')
+    .filter((tok) => !/^\d{8}$/.test(tok))
+  const family = tokens.find((tok) => /^[a-z]/i.test(tok))
+  if (!family) return bare
+  const version = tokens.filter((tok) => /^\d+$/.test(tok)).join('.')
+  const name = family.charAt(0).toUpperCase() + family.slice(1)
+  return version ? `${name} ${version}` : name
+}
+
+/**
+ * What every row carries: how full, and nothing else.
+ *
+ * The figure and the model went to the footer. Thirteen rows each ending in
+ * `Opus 5 42%` is the same two facts printed thirteen times — the model is
+ * usually the same one throughout, and the exact percent is a number nobody
+ * compares digit by digit while walking a list. The glyph is what survives that
+ * cut: a column of block heights answers "which of these is filling up" at a
+ * glance, which is the only question the list itself is asked.
+ */
+function ctxMark(m: RowMetrics | undefined): string {
+  const pct = m?.contextPercent
+  return pct != null ? ctxGlyph(pct) : ''
+}
+
+/** The figures behind the glyph, for the one row the cursor is on. */
+function metricsDetail(m: RowMetrics | undefined): string {
+  const pct = m?.contextPercent
+  return [modelShort(m?.model), pct != null ? `${Math.round(pct)}%` : ''].filter(Boolean).join(' ')
+}
+
+/**
+ * The directory, on the panes that do not share one.
+ *
+ * Two panes of one repo repeat the same folder name and the reader learns
+ * nothing from the second, so it is shown only where it tells them apart.
+ *
+ * Which tab a pane sits in is not shown at all. It was, while a reply to one in
+ * another tab could not land — a mark for "readable but unanswerable". The
+ * server switches tabs to deliver now, so the pane behaves like any other and
+ * the label would be a fact with no decision attached to it.
+ */
 function paneDetail(p: Pane, siblings: Pane[]): string {
   const dirOf = (x: Pane) => x.currentPath?.split('/').filter(Boolean).pop() ?? ''
   const dirs = new Set(siblings.map(dirOf))
-  const pct = p.metrics?.contextPercent
-  // Which tab a pane sits in is not shown. It was, while a reply to one in
-  // another tab could not land — a mark for "readable but unanswerable". The
-  // server switches tabs to deliver now, so the pane behaves like any other
-  // and the label would be a fact with no decision attached to it.
-  return [pct != null ? `${Math.round(pct)}%` : '', dirs.size > 1 ? dirOf(p) : '']
-    .filter(Boolean)
-    .join('  ')
+  return dirs.size > 1 ? dirOf(p) : ''
+}
+
+/**
+ * A row's context mark, labelled and set beside the name it belongs to.
+ *
+ * Parked at the right edge it made a tidy column and read as a separate thing —
+ * a bar chart running down the panel that the eye had to travel to and then
+ * travel back from to see whose it was. Against the name it is one phrase:
+ * this workspace, this full. The label is what makes a lone block legible;
+ * `ctx:` follows the `tap:open` / `swipe:nav` shorthand the footer already uses.
+ *
+ * The name yields when the two will not fit — a name clipped to `…` still names
+ * its row, where a mark pushed off the edge says nothing about having gone.
+ * Overflow is never an option: the list wraps at `BODY_WIDTH`, so a row one
+ * pixel over costs a second of the seven lines.
+ */
+function withCtx(left: string, mark: string): string {
+  if (!mark) return left
+  const tail = ` ctx:${mark}`
+  const room = BODY_WIDTH - textWidth(tail)
+  const head = textWidth(left) > room ? ellipsize(left, room) : left
+  return `${head}${tail}`
 }
 
 /**
@@ -665,12 +791,16 @@ function sessionListBody(state: AppState): string {
       // indicator is consulted too rather than instead.
       const label = relayWaitingIds.has(s.id) ? WAITING_BADGE : workspaceLabel(s, frame)
       // A heading takes no cursor, so it never carries the marker.
-      return `${row.header ? CURSOR_NONE : here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}`
+      const name = `${row.header ? CURSOR_NONE : here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}`
+      // A heading's panes carry their own mark on the rows underneath it, and
+      // one bar covering three agents would be a level describing none of them.
+      return row.header ? name : withCtx(name, ctxMark(s.metrics))
     }
     const panes = s.panes ?? []
     const p = panes.find((x) => x.paneId === row.paneId)
-    const detail = p ? paneDetail(p, panes) : ''
-    return `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${PANE_INDENT}${paneName(p, row.paneId)}${detail ? `  ${detail}` : ''}`
+    const dir = p ? paneDetail(p, panes) : ''
+    const name = `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${PANE_INDENT}${paneName(p, row.paneId)}`
+    return withCtx(`${name}${dir ? ` ${dir}` : ''}`, ctxMark(p?.metrics))
   })
 
   return listBody.join('\n')
@@ -915,6 +1045,20 @@ function conversationContent(state: AppState): {
 // Footers that are fixed per mode (the rest are built with their content).
 // Named so the browser simulator renders the same string the G2 does instead
 // of a hand-copied approximation.
+/**
+ * The metrics of whatever the cursor is on — a workspace's own, or a pane's.
+ *
+ * The notification row stands for no session at all, so it reports nothing
+ * rather than the metrics of session zero.
+ */
+function cursorMetrics(state: AppState, row: ListRow | undefined): RowMetrics | undefined {
+  if (!row || row.notifications) return undefined
+  const s = state.sessions[row.sessionIndex]
+  if (!s) return undefined
+  if (!row.paneId) return s.metrics
+  return (s.panes ?? []).find((p) => p.paneId === row.paneId)?.metrics
+}
+
 /** Everything the list screen has to say, in the one bar it still has. */
 function sessionListFooter(state: AppState): string {
   // Counted among what can be opened; headings are not places to be.
@@ -928,7 +1072,12 @@ function sessionListFooter(state: AppState): string {
   // that promises `tap:open` and then shows a notice queue has misled the reader
   // about the only control they have.
   const open = at?.notifications ? 'tap:notices' : 'tap:open'
-  return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`)
+  // Which model, and how full, for the one row being pointed at. It rides as
+  // the tail so it outlives the gesture hints when the bar runs short: the
+  // hints say what every row does and can be learned once, where this changes
+  // with every swipe and is the reason to swipe at all.
+  const detail = metricsDetail(cursorMetrics(state, at))
+  return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`, detail ? `  ${detail}` : '')
 }
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 

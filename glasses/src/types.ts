@@ -3,6 +3,19 @@ import { BODY_WIDTH, clipToWidth, splitLines, stripUnrenderable, textWidth } fro
 
 type IndicatorState = 'processing' | 'waiting_input' | 'idle' | 'completed'
 
+/**
+ * The figures a list row can carry, as the server already sends them.
+ *
+ * Context use and the model are the two that differ between rows the reader is
+ * choosing between: how much runway an agent has left, and whether the one
+ * still thinking is the expensive one. The rest of `SessionMetrics` (token
+ * totals, memory) is for a screen with room to explain itself.
+ */
+export interface RowMetrics {
+  contextPercent?: number
+  model?: string
+}
+
 export interface Session {
   id: string
   name: string
@@ -30,6 +43,7 @@ export interface Session {
   durationMinutes?: number
   messageCount?: number
   gitBranch?: string
+  metrics?: RowMetrics
   panes?: Pane[]
 }
 
@@ -62,7 +76,7 @@ export interface Pane {
   /** Per-pane recap, sent only for multi-pane workspaces. */
   recap?: string
   recapAt?: string
-  metrics?: { contextPercent?: number }
+  metrics?: RowMetrics
 }
 
 /**
