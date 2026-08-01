@@ -18,6 +18,8 @@
 // moment when there is no server to log to yet.
 
 import { t } from './i18n.ts'
+import { takePhoto } from './photo-capture.ts'
+import { decodeImage, hasBarcodeDetector } from './qr-decode.ts'
 
 /** Never let a probe throw - it runs on the failure path already. */
 async function attempt<T>(fn: () => Promise<T>): Promise<T | string> {
@@ -41,7 +43,10 @@ function describe(err: unknown): string {
  * Plain lines rather than JSON: it is read off a phone screen, and half the time
  * it is retyped rather than copied.
  */
-export async function probeCamera(cause?: unknown): Promise<string> {
+export async function probeCamera(
+  cause?: unknown,
+  extra?: Record<string, string>,
+): Promise<string> {
   const lines: string[] = []
   const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices
 
@@ -77,6 +82,28 @@ export async function probeCamera(cause?: unknown): Promise<string> {
     lines.push('permission  (no permissions API)')
   }
 
+  // The second door and its decoder. When the diagnostics screen is on the
+  // display at all, the photo path has already been tried and did not open, so
+  // what these say is whether it was ever going to.
+  // Only whether a file input is a file input. Whether `capture` is honoured
+  // cannot be detected - Chrome accepts the attribute without exposing an IDL
+  // property for it, so `'capture' in input` reports absent on a browser that
+  // supports it perfectly well. The retry button below is the real test.
+  let fileInput = 'no document'
+  if (typeof document !== 'undefined') {
+    const probe = document.createElement('input')
+    probe.type = 'file'
+    fileInput = probe.type === 'file' ? 'yes' : 'unsupported'
+  }
+  lines.push(`fileInput   ${fileInput}`)
+  lines.push(`barcodeAPI  ${hasBarcodeDetector() ? 'yes' : 'no'}`)
+  lines.push(
+    `clipboard   ${typeof navigator?.clipboard?.readText === 'function' ? 'readText present' : 'no readText'}`,
+  )
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    lines.push(`${key.padEnd(11)} ${value}`)
+  }
+
   lines.push(`error       ${describe(cause)}`)
   // Which host globals are present, rather than a yes/no for "is this the Even
   // app": the names are the SDK's business and change between versions, so the
@@ -105,6 +132,11 @@ const CSS = `
                         font-size:14px; font-weight:600; cursor:pointer; }
   .cpr-copy { background:#1e1e1e; color:#ddd; }
   .cpr-close { background:#c9272e; color:#fff; }
+  .cpr-tests { display:flex; gap:10px; margin:16px 0 0; }
+  .cpr-tests button { flex:1; padding:11px 12px; border-radius:9px; border:1px solid #2c2c2c;
+                      background:#141414; color:#cfcfcf; font-size:13px; font-weight:600;
+                      cursor:pointer; }
+  .cpr-log:empty { display:none; }
 `
 
 /**
@@ -128,6 +160,11 @@ export function showCameraProbe(reason: string, report: string): Promise<void> {
       <button type="button" class="cpr-copy">${t('probe.copy')}</button>
       <button type="button" class="cpr-close">${t('probe.close')}</button>
     </div>
+    <div class="cpr-tests">
+      <button type="button" class="cpr-photo">${t('probe.tryPhoto')}</button>
+      <button type="button" class="cpr-clip">${t('probe.tryClipboard')}</button>
+    </div>
+    <pre class="cpr-log"></pre>
     <style>${CSS}</style>
   `
   // textContent, not innerHTML: the report carries a user agent string and an
@@ -135,6 +172,44 @@ export function showCameraProbe(reason: string, report: string): Promise<void> {
   const pre = overlay.querySelector('.cpr-report') as HTMLElement
   pre.textContent = report
   document.body.append(overlay)
+
+  // The two doors, retriable by hand. The report above says what the platform
+  // claims; these say what it actually does when asked, which is not always the
+  // same answer - and the photo path in particular is worth a second try after
+  // a permission dialog has been dealt with.
+  const log = overlay.querySelector('.cpr-log') as HTMLElement
+  const append = (line: string) => {
+    log.textContent = log.textContent ? `${log.textContent}\n${line}` : line
+  }
+
+  overlay.querySelector('.cpr-photo')?.addEventListener('click', () => {
+    append('photo: asking for the camera app...')
+    void takePhoto().then(async (photo) => {
+      const parts = [
+        photo.file ? `file ${photo.file.size}B ${photo.file.type || 'no type'}` : 'no file',
+        `background ${photo.wentAway ? 'yes' : 'no'}`,
+        `${photo.elapsedMs}ms`,
+      ]
+      if (photo.file) {
+        const result = await decodeImage(photo.file)
+        parts.push(result.payload ? `read by ${result.how}` : `not read (${result.how})`)
+        if (result.payload) parts.push(result.payload.slice(0, 60))
+      }
+      append(`photo: ${parts.join(', ')}`)
+    })
+  })
+
+  overlay.querySelector('.cpr-clip')?.addEventListener('click', () => {
+    const read = navigator.clipboard?.readText
+    if (!read) {
+      append('clipboard: no readText on this platform')
+      return
+    }
+    void navigator.clipboard.readText().then(
+      (text) => append(`clipboard: ${text ? `${text.length} chars, ${text.slice(0, 60)}` : 'empty'}`),
+      (err) => append(`clipboard: ${describe(err)}`),
+    )
+  })
 
   return new Promise<void>((resolve) => {
     const copy = overlay.querySelector('.cpr-copy') as HTMLButtonElement
@@ -145,7 +220,10 @@ export function showCameraProbe(reason: string, report: string): Promise<void> {
       const done = () => {
         copy.textContent = t('probe.copied')
       }
-      navigator.clipboard?.writeText(report).then(done, () => {
+      // Whatever the retry buttons have logged goes with it: that is the half
+      // of the report that says what actually happened, not what was claimed.
+      const full = log.textContent ? `${report}\n\n${log.textContent}` : report
+      navigator.clipboard?.writeText(full).then(done, () => {
         const range = document.createRange()
         range.selectNodeContents(pre)
         const selection = getSelection()

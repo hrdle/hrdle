@@ -53,6 +53,8 @@ const EN: Table = {
     'That code is not a web address - still looking for the one `{binary} qr` printed.',
   'scan.timedOut':
     'No code found. Move closer, or make the terminal window bigger, and try again.',
+  'scan.photoNoCode':
+    'No QR code in that photo. Fill more of the frame with it and try again.',
   'scan.noCamera': 'This app cannot open a camera here. Type the address instead.',
   'scan.denied':
     'Camera access was refused. Allow it for this app in the phone settings, or type the address instead.',
@@ -65,6 +67,8 @@ const EN: Table = {
   'probe.copy': 'Copy',
   'probe.copied': 'Copied',
   'probe.close': 'Close',
+  'probe.tryPhoto': 'Try the camera app',
+  'probe.tryClipboard': 'Try the clipboard',
 
   'settings.title': 'Voice input',
   'settings.subtitle':
@@ -117,6 +121,8 @@ const JA: Table = {
     'そのコードはウェブアドレスではありません。`{binary} qr` が表示したコードを探しています。',
   'scan.timedOut':
     'コードが見つかりませんでした。近づくか、ターミナルのウィンドウを大きくして、もう一度試してください。',
+  'scan.photoNoCode':
+    'その写真に QR コードが見つかりません。コードが画面いっぱいに写るようにして、もう一度試してください。',
   'scan.noCamera': 'ここではカメラを開けません。アドレスは手で入力してください。',
   'scan.denied':
     'カメラの使用が拒否されました。端末の設定でこのアプリに許可するか、アドレスを手で入力してください。',
@@ -129,6 +135,8 @@ const JA: Table = {
   'probe.copy': 'コピー',
   'probe.copied': 'コピーしました',
   'probe.close': '閉じる',
+  'probe.tryPhoto': 'カメラアプリを試す',
+  'probe.tryClipboard': 'クリップボードを試す',
 
   'settings.title': '音声入力',
   'settings.subtitle':

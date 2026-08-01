@@ -8,7 +8,8 @@
 // or squashes the code out of readability.
 
 import { describe, expect, test } from 'bun:test'
-import { frameSize, isAddress } from '../qr-scan.ts'
+import { frameSize } from '../qr-decode.ts'
+import { isAddress } from '../qr-scan.ts'
 
 describe('what counts as an address', () => {
   test('accepts what `hrdle qr` prints', () => {
