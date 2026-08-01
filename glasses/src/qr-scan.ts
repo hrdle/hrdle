@@ -6,24 +6,34 @@
 // of the whole setup. `hrdle qr` on the computer draws it as a code; this reads
 // it back.
 //
-// A live preview, decoding frames as they arrive.
+// Three doors, tried in order, because the device has been refusing the first
+// two for different reasons and the reasons were not visible from here.
 //
-// This began as a single still through the host SDK's `captureImageFromCamera`,
-// on the reasoning that it needs no getUserMedia, raises no permission prompt of
-// ours and works inside a WebView we do not control. In practice it did not read
-// codes: the one the terminal draws is small, low-contrast and often
-// light-on-dark, the photo comes back through the phone's own camera UI already
-// compressed, and the person gets no feedback until after the shutter - by which
-// point the only thing to do is take another one exactly as blind as the first.
-// A continuous scanner decodes dozens of frames a second and lets them see the
-// code being found. The still is gone rather than kept as a fallback: a fallback
-// that has never once succeeded is a longer path to the same failure.
+//   1. **A live preview** through `getUserMedia`. The best of the three when it
+//      works: dozens of frames a second, and the person watches the code being
+//      found. On the G2's phone app it is refused outright - the WebView is
+//      flutter_inappwebview, and a host that does not implement
+//      `onPermissionRequest` denies camera to web content no matter what the
+//      app itself holds. Measured on device: `permissions.query` still says
+//      `prompt` while `getUserMedia` throws `NotAllowedError`, which is what
+//      being refused without being asked looks like.
+//   2. **A photo through the phone's own camera app**, via `capture` on a file
+//      input. This is a different door in the same WebView - the file-chooser
+//      path rather than the permission path - and the picture is taken by the
+//      camera app under its own permission. It was in the code all along as the
+//      browser fallback and never once ran on the device, because the SDK
+//      branch shadowed it.
+//   3. **The diagnostics screen**, when neither door opens. Not a failure
+//      message: the report that says which of them was shut and why.
 
 import jsQR from 'jsqr'
+import { probeCamera, showCameraProbe } from './camera-probe.ts'
 import { t } from './i18n.ts'
+import { takePhoto } from './photo-capture.ts'
+import { decodeImage, frameSize } from './qr-decode.ts'
 
 /**
- * Longest edge a frame is decoded at.
+ * Longest edge a live frame is decoded at.
  *
  * jsQR walks every pixel, and this runs many times a second. A code that fills
  * the guide square is a few hundred pixels across at this size, which is several
@@ -41,12 +51,11 @@ const FRAME_EDGE = 720
 const DECODE_INTERVAL_MS = 90
 
 /**
- * How long the scanner runs before giving up.
+ * How long the live scanner runs before giving up.
  *
  * The guide waits 120s for an answer (`SCAN_TIMEOUT_MS` in its host-bridge), so
  * this has to come back inside that or the result is discarded and its button
- * stays spinning. Ninety seconds of pointing a camera at a terminal is already
- * well past the point where something else is wrong.
+ * stays spinning.
  */
 const TIMEOUT_MS = 90_000
 
@@ -74,22 +83,7 @@ export function isAddress(payload: string): boolean {
   return /^https?:\/\//i.test(payload)
 }
 
-/** The size a frame is decoded at, with its longest edge capped at `edge`. */
-export function frameSize(
-  width: number,
-  height: number,
-  edge: number,
-): { width: number; height: number } {
-  const longest = Math.max(width, height)
-  if (!longest) return { width: 0, height: 0 }
-  const scale = Math.min(1, edge / longest)
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  }
-}
-
-// ── The screen ──
+// ── The live preview ──
 
 const CSS = `
   .qrs { position:fixed; inset:0; z-index:2147483000; background:#000;
@@ -123,17 +117,14 @@ function screenHtml(): string {
   `
 }
 
-// ── The camera ──
-
 /**
  * A camera stream, or the reason there is none.
  *
- * Every refusal is worth its own sentence now that this is the only way in: with
- * a fallback behind it, "could not open the camera" was a detail nobody needed,
- * and without one it is the whole answer - and the two common causes want
- * opposite things from the user (change a setting, or type the address).
+ * Every refusal keeps its cause: with a photo path behind this one, the message
+ * is no longer the end of the road, but the diagnostics screen still needs to
+ * name which no it heard.
  */
-async function openCamera(): Promise<{ stream?: MediaStream; error?: string }> {
+async function openCamera(): Promise<{ stream?: MediaStream; error?: string; cause?: unknown }> {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') {
     return { error: t('scan.noCamera') }
   }
@@ -157,23 +148,18 @@ async function openCamera(): Promise<{ stream?: MediaStream; error?: string }> {
     return { stream }
   } catch (err) {
     const name = (err as { name?: string })?.name
-    if (name === 'NotAllowedError' || name === 'SecurityError') return { error: t('scan.denied') }
-    return { error: t('scan.cameraFailed', { error: message(err) }) }
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return { error: t('scan.denied'), cause: err }
+    }
+    return { error: t('scan.cameraFailed', { error: message(err) }), cause: err }
   }
 }
 
-/**
- * Point a camera at the code and read it as it goes.
- *
- * Never throws: every outcome the user can cause - backing out, a camera the
- * WebView will not hand over, a code that turns out to be a Wi-Fi password -
- * comes back as a field on the result, because this runs behind a button on a
- * setup screen and an unhandled rejection there leaves a spinner turning forever.
- */
-export async function scanQr(): Promise<ScanOutcome> {
+/** Point a camera at the code and read it as it goes, or null if refused. */
+async function scanLive(): Promise<{ outcome?: ScanOutcome; error?: string; cause?: unknown }> {
   if (typeof document === 'undefined') return { error: t('scan.noCamera') }
   const camera = await openCamera()
-  if (!camera.stream) return { error: camera.error ?? t('scan.noCamera') }
+  if (!camera.stream) return { error: camera.error ?? t('scan.noCamera'), cause: camera.cause }
   const stream = camera.stream
 
   const overlay = document.createElement('div')
@@ -186,13 +172,13 @@ export async function scanQr(): Promise<ScanOutcome> {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d', { willReadFrequently: true })
 
-  return new Promise<ScanOutcome>((resolve) => {
+  const outcome = await new Promise<ScanOutcome>((resolve) => {
     let frame = 0
     let timer = 0
     let lastAt = 0
     let settled = false
 
-    const finish = (outcome: ScanOutcome) => {
+    const finish = (value: ScanOutcome) => {
       if (settled) return
       settled = true
       if (frame) cancelAnimationFrame(frame)
@@ -203,7 +189,7 @@ export async function scanQr(): Promise<ScanOutcome> {
       for (const track of stream.getTracks()) track.stop()
       video.srcObject = null
       overlay.remove()
-      resolve(outcome)
+      resolve(value)
     }
 
     overlay.querySelector('.qrs-cancel')?.addEventListener('click', () => finish({ cancelled: true }))
@@ -227,9 +213,6 @@ export async function scanQr(): Promise<ScanOutcome> {
       let payload: string | null
       try {
         const { data } = ctx.getImageData(0, 0, size.width, size.height)
-        // A terminal draws the code in whichever way the shell's colours land,
-        // and half the time that is light-on-dark. Trying both costs one more
-        // pass over an already-downscaled frame.
         payload = jsQR(data, size.width, size.height, { inversionAttempts: 'attemptBoth' })?.data?.trim() || null
       } catch {
         // A frame that cannot be read back is a tainted or zero-sized canvas -
@@ -238,8 +221,6 @@ export async function scanQr(): Promise<ScanOutcome> {
       }
       if (!payload) return
       if (!isAddress(payload)) {
-        // Keep looking rather than fail: something else wandered into frame,
-        // and the code we want may be sitting right next to it.
         status.textContent = t('scan.notAnAddress', { binary: __BINARY_NAME__ })
         return
       }
@@ -255,16 +236,71 @@ export async function scanQr(): Promise<ScanOutcome> {
     video
       .play()
       .then(() => {
-        timer = setTimeout(
-          () => finish({ error: t('scan.timedOut') }),
-          TIMEOUT_MS,
-        ) as unknown as number
+        timer = setTimeout(() => finish({ error: t('scan.timedOut') }), TIMEOUT_MS) as unknown as number
         frame = requestAnimationFrame(tick)
       })
       .catch((err) => {
-        // Autoplay refused despite muted+playsinline. Nothing will ever appear,
-        // so say so rather than leave a black rectangle up for ninety seconds.
         finish({ error: t('scan.cameraFailed', { error: message(err) }) })
       })
   })
+
+  return { outcome }
+}
+
+// ── The photo ──
+
+/**
+ * Take one photo and read an address out of it.
+ *
+ * Returns null when nothing was taken and nothing opened - the caller shows the
+ * diagnostics rather than an error, because at that point both doors are shut
+ * and the useful thing is why.
+ */
+async function scanPhoto(): Promise<{ outcome: ScanOutcome | null; note: string }> {
+  if (typeof document === 'undefined') return { outcome: null, note: 'no document' }
+  const photo = await takePhoto()
+  const note = [
+    photo.file ? `file ${photo.file.size}B ${photo.file.type || 'no type'}` : 'no file',
+    `background ${photo.wentAway ? 'yes' : 'no'}`,
+    `${photo.elapsedMs}ms`,
+  ].join(', ')
+
+  if (!photo.file) {
+    // The camera app opened and they backed out: that is a decision, not a
+    // failure. Nothing opened at all: that is the thing worth reporting.
+    return { outcome: photo.wentAway ? { cancelled: true } : null, note }
+  }
+
+  const result = await decodeImage(photo.file)
+  if (!result.payload) {
+    return { outcome: { error: t('scan.photoNoCode') }, note: `${note}, ${result.how}` }
+  }
+  if (!isAddress(result.payload)) {
+    return {
+      outcome: { error: t('scan.notAnAddress', { binary: __BINARY_NAME__ }) },
+      note: `${note}, ${result.how}`,
+    }
+  }
+  return { outcome: { url: result.payload }, note: `${note}, ${result.how}` }
+}
+
+/**
+ * Read an address off a QR code.
+ *
+ * Never throws: every outcome the user can cause - backing out, a camera the
+ * WebView will not hand over, a code that turns out to be a Wi-Fi password -
+ * comes back as a field on the result, because this runs behind a button on a
+ * setup screen and an unhandled rejection there leaves a spinner turning forever.
+ */
+export async function scanQr(): Promise<ScanOutcome> {
+  const live = await scanLive()
+  if (live.outcome) return live.outcome
+
+  const photo = await scanPhoto()
+  if (photo.outcome) return photo.outcome
+
+  // Neither door opened. The report is the answer.
+  const reason = live.error ?? t('scan.noCamera')
+  await showCameraProbe(reason, await probeCamera(live.cause, { photo: photo.note }))
+  return { error: reason }
 }
