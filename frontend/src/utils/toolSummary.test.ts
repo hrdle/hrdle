@@ -30,6 +30,20 @@ describe("getToolSummary", () => {
 		expect(getToolSummary({ pattern: "TODO", query: "unused" })).toBe("TODO");
 	});
 
+	test("a scoped search shows what it looked for, not where it looked", () => {
+		// Grep carries a `path` as well whenever it is scoped, and reading that
+		// first named the directory instead of the search.
+		expect(
+			getToolSummary({ pattern: "getToolSummary", path: "frontend/src" }),
+		).toBe("getToolSummary");
+	});
+
+	test("Kimi names the file argument `path`, and the row has to read it", () => {
+		expect(getToolSummary({ path: "HANDOFF.md", line_offset: 0 })).toBe(
+			"HANDOFF.md",
+		);
+	});
+
 	test("a fetch shows its address rather than the question asked of it", () => {
 		expect(
 			getToolSummary({ url: "https://example.com/spec", prompt: "What pins?" }),

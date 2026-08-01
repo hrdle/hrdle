@@ -47,6 +47,13 @@ export function getToolSummary(input: Record<string, unknown>): string {
 	const description = str(input.description);
 	if (description) return oneLine(description);
 
+	// Grep/Glob, then search tools (WebSearch, ToolSearch, most MCP lookups).
+	// Ahead of the file block deliberately: a scoped Grep carries a `path` as
+	// well, and reading that first made the row name the directory it looked in
+	// rather than the thing it was looking for.
+	const pattern = str(input.pattern) ?? str(input.query);
+	if (pattern) return oneLine(pattern);
+
 	// File-based tools: the basename is what identifies the call, and the
 	// directory is the part that pushes it off the edge of a phone.
 	const filePath =
@@ -55,10 +62,6 @@ export function getToolSummary(input: Record<string, unknown>): string {
 		const parts = filePath.split("/");
 		return oneLine(parts[parts.length - 1] || filePath);
 	}
-
-	// Grep/Glob, then search tools (WebSearch, ToolSearch, most MCP lookups).
-	const pattern = str(input.pattern) ?? str(input.query);
-	if (pattern) return oneLine(pattern);
 
 	// Fetchers: the address is shorter and more identifying than the question.
 	const url = str(input.url);
