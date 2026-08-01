@@ -107,7 +107,8 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **AuthService** (`services/auth.ts`) - Password-based authentication with session tokens
 - **PeerRegistry** (`services/peer-registry.ts`) - Persists peer server metadata to `peers.json` (with mutation locking), records per-peer success/failure state
 - **PeerAuth** (`services/peer-auth.ts`) - Proxy login to peer servers (`POST /api/auth/login`), stores JWT tokens for subsequent API/WS calls, marks peers `unauthorized` on 401
-- **PeerDiscovery** (`services/peer-discovery.ts`) - Scans the Tailscale tailnet (`tailscale status --json`) and probes each peer's `:5923/health` in parallel to find running Hrdle instances. **The probe port is still a literal 5923** — it is the port of whatever we are looking for, not ours, so after the rename it finds nothing on a tailnet of Hrdle installs (#459). The fix is a list of probe ports rather than `IDENTITY.defaultPort`
+- **PeerDiscovery** (`services/peer-discovery.ts`) - Scans the Tailscale tailnet (`tailscale status --json`) and probes each peer's `/health` in parallel to find running Hrdle instances. The probe port was a literal 5923 from before the rename, so for months it found nothing on a tailnet full of installs (#459, fixed in 0.3.28); it composes the port from `IDENTITY.defaultPort` now
+- **Discovery** (`services/discovery.ts`) - One plaintext endpoint, `GET /whoami`, on `port + 1`, answering with the server's Tailscale FQDN, product name and version and nothing else. It exists so a phone can be told `91.210.90` instead of `https://beelink-arch.tail4459c9.ts.net:5924` — **plaintext is the requirement, not a shortcut**: the certificate is issued for the FQDN, so reaching the machine by IP or short hostname fails TLS, and `fetch` has no way past a certificate error the way a browser's warning page does. One unverified request buys the name; everything after it is ordinary verified HTTPS, and a tailnet caller's packets are inside WireGuard regardless. Only callers on a private or CGNAT address get an answer. `100.` is the only part of a Tailscale address that can be dropped — the second octet onwards is allocated per node, not per tailnet
 - **PeerUrl** (`services/peer-url.ts`) - SSRF guard for peer URLs (#235): only allows Tailscale hosts (`*.ts.net`, CGNAT `100.64.0.0/10`, ULA `fd7a:115c:a1e0::/48`)
 
 ### Key API Routes
@@ -626,6 +627,44 @@ carries its source opacity as an SVG presentation attribute so a stopped
 animation falls back to the artwork as drawn rather than to something flat.
 
 ## Rules for working on the glasses app (`glasses/`)
+
+### What the phone app's WebView will not do
+
+Measured on device on 2026-08-01, against an Android 16 phone with the app
+holding camera permission at the OS level. The WebView is
+**flutter_inappwebview** (it announces itself in `globalThis`), and it refuses
+web content three ways:
+
+| Asked for | What happens |
+|---|---|
+| `getUserMedia` | `NotAllowedError` while `permissions.query` still reads `prompt` — denied *without being asked*, which is what an unimplemented `onPermissionRequest` looks like |
+| `<input type=file capture>` | `click()` returns, nothing opens, and 15s later the page has not even been backgrounded. No `change`, no `cancel`. `onShowFileChooser` unimplemented |
+| `clipboard.readText()` | `NotAllowedError: Read permission denied` |
+
+All three are the host app's unimplemented callbacks. Nothing on this side fixes
+them, and `camera` in `app.json` does not help: it grants the SDK's
+`captureImageFromCamera()`, not the WebView. Reinstalling the plugin changed
+nothing, which is what ruled out "the permission was never granted".
+
+So **the setup screen asks for a short address instead of scanning anything**
+(`resolve-host.ts` → `services/discovery.ts`). What the WebView does do is
+accept typing, so the job was making the typing short: nine characters rather
+than forty-three.
+
+`qr-scan.ts`, `qr-decode.ts`, `photo-capture.ts` and `camera-probe.ts` are still
+here with **no route to them**. Deliberate: the moment the host implements
+`onPermissionRequest` they work, and the photo decoder is better than what it
+replaced (BarcodeDetector first, then jsQR over the full frame, a centre crop
+and native resolution — a 150px code in a 4000x3000 photo reads from the crop
+and fails everything else). `camera-probe.ts` is the screen that produced the
+table above; wire a button to it again before re-testing any of this rather than
+starting the investigation over.
+
+The QR code `hrdle qr` prints still has a job — read with the phone's **own**
+camera app it opens the server in a browser. That is a different thing from
+setting the glasses up.
+
+### The simulator
 
 **The simulator is part of the implementation, not a bonus. Fixing only the
 device does not count as done.**
