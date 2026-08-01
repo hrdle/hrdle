@@ -8,6 +8,12 @@
     "skipLibCheck": true,
     "declaration": true,
     "outDir": "dist",
+    // The inputs are backend/ *and* shared/, so the root they share is the
+    // repository, not this directory. Left to be inferred it came out as
+    // `backend`, and every `../../shared` import then read as a file outside
+    // the project. Nothing is emitted from here - `bun build` does the build
+    // and `typecheck` runs with --noEmit - so this only has to be true.
+    "rootDir": "..",
     "jsx": "react-jsx",
     "types": ["bun", "react"],
     "resolveJsonModule": true,
