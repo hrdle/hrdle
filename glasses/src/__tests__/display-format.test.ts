@@ -2,7 +2,19 @@ import { describe, expect, test } from 'bun:test'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { sanitizeForG2, formatMessage } from '../types.ts'
 import { invalidatePanel, panelDrops, screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
-import { BODY_WIDTH, HEADER_WIDTH, LIST_LINES, textWidth as width } from '../metrics.ts'
+import {
+  BAR_H,
+  BODY_WIDTH,
+  CARD_LINES,
+  CARD_WIDTH,
+  HEADER_WIDTH,
+  LINE_H,
+  LIST_LINES,
+  PANEL_H,
+  PANEL_W,
+  cardBox,
+  textWidth as width,
+} from '../metrics.ts'
 import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
 import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
@@ -753,10 +765,18 @@ describe('workspace and pane list', () => {
     expect(listRows(sessions)[rowCursor(st(1))].paneId).toBe('%1')
   })
 
-  test('panes are drawn as a tree under their workspace', () => {
+  test('a workspace is bracketed and its panes are indented under it', () => {
+    // Bracketed is a workspace, bare and indented is a pane of the one above.
+    // The rule only works if it holds for every workspace, so the single-pane
+    // one is bracketed too - otherwise it reads as a pane of nothing.
     const body = screenText(st(1)).body.split('\n')
-    expect(body[2]).toContain('├ %1')
-    expect(body[3]).toContain('└ %2')
+    expect(body[0]).toContain('[グラス開発]')
+    expect(body[1]).toContain('[2脚ロボ開発]')
+    expect(body[2]).toContain('     %1')
+    expect(body[3]).toContain('     %2')
+    // The tree it replaces: the branch said which pane was last, which was not
+    // the question anyone was asking of this screen.
+    expect(screenText(st(1)).body).not.toMatch(/[├└]/)
   })
 
   test('the list gets the row the header used to occupy', () => {
@@ -780,7 +800,7 @@ describe('workspace and pane list', () => {
     // Two panes of one repo repeat the same folder name; the second one
     // teaches the reader nothing.
     const body = screenText(st(1)).body
-    expect(body).toContain('├ %1  30%')
+    expect(body).toContain('     %1  30%')
     expect(body).not.toContain('wheel-leg-bot')
   })
 
@@ -863,7 +883,7 @@ describe('list badge', () => {
   })
 
   test('an unmarked row is padded to a badge width', () => {
-    expect(screenText(mk()).body).toContain('\u3000 グラス開発')
+    expect(screenText(mk()).body).toContain('\u3000 [グラス開発]')
   })
 
   test('a relay item still marks its workspace', () => {
@@ -873,7 +893,7 @@ describe('list badge', () => {
         { id: 'r', sessionId: 'a', kind: 'waiting' as const, text: 'x', source: 'auto' as const, createdAt: 1 },
       ],
     }
-    expect(screenText(withRelay).body).toContain('！ グラス開発')
+    expect(screenText(withRelay).body).toContain('！ [グラス開発]')
   })
 })
 
@@ -948,29 +968,32 @@ describe('notification banner on the list', () => {
   // that started one column to the left would not line up with them.
 
   test('a notification heads the list, named by its workspace', () => {
-    const body = screenText(mk([info('a', '応答が完了しました')])).body.split('\n')
-    expect(body[0]).toBe(' [i]グラス開発: 応答が完了しました')
-    // The list itself is still there, one row lower.
-    expect(body[1]).toContain('グラス開発')
+    // Its own strip, not the list's first row: on the device that is a
+    // container with a border round it, which is what stops the eye reading it
+    // as one more session name.
+    const screen = screenText(mk([info('a', '応答が完了しました')]))
+    expect(screen.notice).toBe(' [i]グラス開発: 応答が完了しました')
+    // The list itself is still there, below it.
+    expect(screen.body.split('\n')[0]).toContain('グラス開発')
   })
 
   test('an unknown workspace falls back to its id rather than vanishing', () => {
-    const body = screenText(mk([info('gone', '応答が完了しました')])).body
-    expect(body.split('\n')[0]).toBe(' [i]gone: 応答が完了しました')
+    expect(screenText(mk([info('gone', '応答が完了しました')])).notice).toBe(
+      ' [i]gone: 応答が完了しました',
+    )
   })
 
   test('the count of the others survives even when the text is cut', () => {
     const long = 'あ'.repeat(120)
-    const banner = screenText(mk([info('a', long, 2), info('s1', long, 1)], 2)).body.split('\n')[0]
+    const banner = screenText(mk([info('a', long, 2), info('s1', long, 1)], 2)).notice ?? ''
     expect(banner.startsWith(' [i]グラス開発+1: ')).toBe(true)
   })
 
   test('the cursor can rest on it', () => {
-    const body = screenText({ ...mk([info('a', '応答が完了しました')]), listOnNotifications: true })
-      .body.split('\n')
-    expect(body[0].startsWith('>')).toBe(true)
-    // And nothing below it is marked while it holds the cursor.
-    expect(body.slice(1).every((l) => !l.startsWith('>'))).toBe(true)
+    const screen = screenText({ ...mk([info('a', '応答が完了しました')]), listOnNotifications: true })
+    expect(screen.notice?.startsWith('>')).toBe(true)
+    // And nothing in the list is marked while the strip holds the cursor.
+    expect(screen.body.split('\n').every((l) => !l.startsWith('>'))).toBe(true)
   })
 
   test('a waiting question outranks a newer notification for the row', () => {
@@ -980,7 +1003,7 @@ describe('notification banner on the list', () => {
       ...mk([info('a', 'ただのお知らせ')]),
       relayWaiting: [{ ...info('a', '選んでください'), kind: 'waiting' as const }],
     }
-    const first = screenText(st).body.split('\n')[0]
+    const first = screenText(st).notice ?? ''
     expect(first).toContain('[!]')
     expect(first).toContain('選んでください')
     // Both are counted, so the reader knows the list holds more than the one.
@@ -991,9 +1014,9 @@ describe('notification banner on the list', () => {
     // It replaced a banner that was always on screen. A notice that scrolled out
     // of sight as the cursor moved down would be a worse thing than the banner.
     const st = { ...mk([info('a', '応答が完了しました')], 14), sessionIndex: 13 }
-    const body = screenText(st).body.split('\n')
-    expect(body[0]).toContain('応答が完了しました')
-    expect(body.at(-1)).toContain('ws13')
+    const screen = screenText(st)
+    expect(screen.notice).toContain('応答が完了しました')
+    expect(screen.body.split('\n').at(-1)).toContain('ws13')
   })
 
   test('the banner takes its line from the list, never from the panel', () => {
@@ -1001,7 +1024,9 @@ describe('notification banner on the list', () => {
     const rowsWithout = screenText(many).body.split('\n').length
     const rowsWith = screenText({ ...many, relayInfo: [info('a', 'x')] }).body.split('\n').length
     expect(rowsWithout).toBe(LIST_LINES)
-    expect(rowsWith).toBe(LIST_LINES)
+    // The strip is its own container now, so the row it costs comes off the
+    // list rather than out of the panel: same total, one fewer session shown.
+    expect(rowsWith).toBe(LIST_LINES - 1)
   })
 
   test('the cursor row stays on screen with the banner present', () => {
@@ -1191,11 +1216,10 @@ describe('no notification about what is already on screen', () => {
 
   test('the list is untouched: nothing there is "on screen"', () => {
     // sessionIndex is a cursor on the list, not a conversation being read.
-    const body = screenText(mk({
+    expect(screenText(mk({
       mode: 'session_list' as const,
       relayInfo: [info('a', '応答が完了しました')],
-    })).body
-    expect(body).toContain('[i]グラス開発: 応答が完了しました')
+    })).notice).toContain('[i]グラス開発: 応答が完了しました')
   })
 })
 
@@ -1848,5 +1872,74 @@ describe('the session list holds still while it is being read', () => {
     expect(ids(c)).toEqual(['d', 'a', 'b', 'c'])
     // The cursor followed its session rather than staying on row 1.
     expect(c.state.sessions[c.state.sessionIndex].id).toBe('b')
+  })
+})
+
+describe('a notification is drawn as a card, not as another screen', () => {
+  // It kept being missed. Every screen this app draws is a header, a panel of
+  // text and a footer, and a notification drawn that way says "you are looking
+  // at something else now" rather than "this arrived". So it is inset from the
+  // panel edge and bordered: a box with the panel showing on all four sides.
+
+  test('the box is the height of its message, not of the panel', () => {
+    const one = cardBox(1)
+    const three = cardBox(3)
+    expect(three.h - one.h).toBe(2 * LINE_H)
+    // A box the height of the screen with three lines in it is a page with a
+    // line drawn round it.
+    expect(cardBox(1).h).toBeLessThan(PANEL_H - 2 * BAR_H)
+  })
+
+  test('it is centred in the band between the bars', () => {
+    const box = cardBox(2)
+    const above = box.y - BAR_H
+    const below = PANEL_H - BAR_H - (box.y + box.h)
+    // Within a pixel: the band is not always evenly divisible.
+    expect(Math.abs(above - below)).toBeLessThanOrEqual(1)
+    expect(above).toBeGreaterThan(0)
+  })
+
+  test('it never grows past the panel, however long the message', () => {
+    const box = cardBox(999)
+    expect(box.y).toBeGreaterThanOrEqual(BAR_H)
+    expect(box.y + box.h).toBeLessThanOrEqual(PANEL_H - BAR_H)
+  })
+
+  test('it leaves the panel showing on the left and the right', () => {
+    const box = cardBox(1)
+    expect(box.x).toBeGreaterThan(0)
+    expect(box.x + box.w).toBeLessThan(PANEL_W)
+  })
+
+  test('the message is wrapped to the card, not to the panel it sits on', () => {
+    // Measured against the wider body, the text runs under the border.
+    expect(CARD_WIDTH).toBeLessThan(BODY_WIDTH)
+    const long = 'あ'.repeat(200)
+    const screen = screenText({
+      mode: 'overlay' as const,
+      sessions: [{ id: 'a', name: 'グラス開発', state: 'working' as const }],
+      sessionIndex: 0,
+      conversation: [],
+      conversationOffset: 0,
+      conversationPage: 0,
+      conversationLastLoaded: 0,
+      conversationHasMore: false,
+      conversationLoading: false,
+      choiceIndex: 0,
+      choiceOptions: [],
+      relayWaiting: [],
+      relayInfo: [
+        { id: 'i', sessionId: 'a', kind: 'info' as const, text: long, source: 'auto' as const, createdAt: 1 },
+      ],
+      overlayItemId: null,
+      spinnerTick: 0,
+    })
+    expect(screen.card).toBe(true)
+    for (const line of screen.body.split('\n')) {
+      expect(width(line)).toBeLessThanOrEqual(CARD_WIDTH)
+    }
+    // And clipped to what the box holds rather than to what the panel would.
+    expect(screen.body.split('\n').length).toBeLessThanOrEqual(CARD_LINES)
+    expect(CARD_LINES).toBeLessThan(MAX_LINES)
   })
 })

@@ -50,6 +50,61 @@ export const MAX_LINES = Math.floor((PANEL_H - 2 * BAR_H - 2 * BODY_PAD) / LINE_
  */
 export const LIST_LINES = Math.floor((PANEL_H - BAR_H - 2 * BODY_PAD) / LINE_H)
 
+// ─── The notification card ───
+//
+// A notification used to be drawn the way every other screen is: a header, the
+// panel filled with text, a footer. Which is why it was missed - nothing about
+// it said "this arrived", only "you are looking at something else now". A
+// wearer glancing up saw a screen, not an interruption.
+//
+// So it is inset from the panel edge and given a border. The margin is the
+// half of it that matters: a box drawn edge to edge is just a line around the
+// screen, while a box with the panel showing on all four sides reads as
+// something laid on top. It costs a line of text, which a notification can
+// afford and a conversation could not.
+
+/** How far the card sits in from the panel's left and right edges. */
+export const CARD_INSET_X = 36
+/** How far it sits below the header and above the footer. */
+export const CARD_INSET_Y = 12
+export const CARD_BORDER = 2
+/** Rounded, because nothing else on this panel is: the corner alone says the
+ *  box is not part of the layout underneath it. */
+export const CARD_RADIUS = 8
+/** 0-15 on this panel's 16 greens. Brighter than the notice strip's rule -
+ *  that one separates, this one has to be noticed. */
+export const CARD_BORDER_COLOR = 12
+
+export const CARD_X = CARD_INSET_X
+export const CARD_W = PANEL_W - 2 * CARD_INSET_X
+
+/** Usable width inside the card, once its border and padding are taken. */
+export const CARD_WIDTH = CARD_W - 2 * BODY_PAD - 2 * CARD_BORDER
+/** The tallest it may grow - one line fewer than the body it replaces, which is
+ *  the price of the frame. */
+export const CARD_LINES = Math.floor(
+  (PANEL_H - 2 * BAR_H - 2 * CARD_INSET_Y - 2 * BODY_PAD - 2 * CARD_BORDER) / LINE_H,
+)
+
+/**
+ * Where the card sits, for a message of `lines` lines.
+ *
+ * Sized to its content and centred, rather than filling the band between the
+ * bars. A box the height of the screen with three lines in it is a page with a
+ * line drawn round it; a box the height of its message is a message. Empty
+ * panel above and below is what makes it read as something laid on top.
+ *
+ * The height is container geometry on the device, so anything that changes the
+ * line count has to rebuild the page rather than upgrade the text in place -
+ * the same rule the notice strip follows.
+ */
+export function cardBox(lines: number): { x: number; y: number; w: number; h: number } {
+  const n = Math.max(1, Math.min(lines, CARD_LINES))
+  const h = n * LINE_H + 2 * BODY_PAD + 2 * CARD_BORDER
+  const band = PANEL_H - 2 * BAR_H
+  return { x: CARD_X, y: BAR_H + Math.round((band - h) / 2), w: CARD_W, h }
+}
+
 export const SPACE_W = getTextWidth(' ')
 
 // ─── Measuring ───
