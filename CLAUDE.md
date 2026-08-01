@@ -664,6 +664,30 @@ The QR code `hrdle qr` prints still has a job — read with the phone's **own**
 camera app it opens the server in a browser. That is a different thing from
 setting the glasses up.
 
+### What `app.json` asks for
+
+Two permissions, and the list is derived from the SDK calls rather than from
+what the app looks like it might want:
+
+| | Why |
+|---|---|
+| `network` | Every request to the server, and the guide iframe |
+| `g2-microphone` | `audioControl(true, AudioInputSource.Glasses)` in `display.ts` |
+
+`camera` was declared until 0.0.28 and never bought anything. It grants the
+SDK's `captureImageFromCamera()`, which **nothing in `glasses/src` calls** — the
+routeless scanners reach for `getUserMedia` and `<input capture>`, which are web
+APIs the manifest has no say over (the table above). So it asked a user to grant
+a camera that could not then be opened. If the host ever implements
+`onPermissionRequest` and those files are wired up again, it still will not be
+needed; `captureImageFromCamera()` would be.
+
+The valid names are fixed by the packer, not by us —
+`["g2-microphone", "phone-microphone", "album", "location", "network", "camera"]`
+in `evenhub-cli`'s schema, each with a `desc` of 1 to 300 characters. `desc` is
+shown to the user when the permission is asked for, so it is prose for an
+audience that is not us: same rule as the changelog.
+
 ### The simulator
 
 **The simulator is part of the implementation, not a bonus. Fixing only the

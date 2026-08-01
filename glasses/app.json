@@ -2,18 +2,18 @@
   "package_id": "com.hrdle.glasses",
   "edition": "202601",
   "name": "Hrdle",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "min_app_version": "2.0.0",
   "min_sdk_version": "0.0.7",
   "entrypoint": "index.html",
   "permissions": [
     {
       "name": "network",
-      "desc": "Connect to Hrdle server for terminal sessions"
+      "desc": "Reach your own Hrdle server over your tailnet, and load the setup guide the first time the app runs"
     },
     {
-      "name": "camera",
-      "desc": "Scan the QR code that carries your server's address, during setup"
+      "name": "g2-microphone",
+      "desc": "Speak instructions to your agent sessions. The audio goes to your own Hrdle server, which turns it into text"
     }
   ],
   "supported_languages": [
