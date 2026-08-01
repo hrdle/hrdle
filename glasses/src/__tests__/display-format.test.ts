@@ -1750,3 +1750,103 @@ describe('the root page hands the exit gesture back to the host', () => {
     expect(calls).not.toContain('onForegroundRegained')
   })
 })
+
+describe('the session list holds still while it is being read', () => {
+  // Reported from the device: the cursor moved on its own while swiping down
+  // the list, "depending on what the other sessions were doing".
+  //
+  // It was the sort. The order is by indicator state (waiting_input ->
+  // processing -> completed -> idle) and every five-second push re-applied it,
+  // so one other agent finishing a reply shuffled the rows. Measured on a live
+  // tailnet: a session answering one question moved from row 11 to row 2 and
+  // back inside ten seconds, carrying the nine rows between it each way.
+
+  function stubPlatform() {
+    return {
+      onDevice: false,
+      render: () => {},
+      renderHeader: () => {},
+      startMicCapture: async () => false,
+      stopMicCapture: async () => {},
+      transcribeAudio: async () => '',
+      saveState: () => {},
+      loadState: async () => null,
+      requestExit: () => {},
+      onForegroundRegained: () => {},
+    }
+  }
+
+  type Ind = 'waiting_input' | 'processing' | 'completed' | 'idle'
+  const session = (id: string, indicatorState: Ind) => ({
+    id,
+    name: id,
+    state: 'idle' as const,
+    indicatorState,
+  })
+  const idle = ['a', 'b', 'c', 'd'].map((id) => session(id, 'idle'))
+  const push = (c: GlassesController, sessions: unknown[]) =>
+    (c as unknown as { onSessionsUpdated: (s: unknown[]) => void }).onSessionsUpdated(sessions)
+  const ids = (c: GlassesController) => c.state.sessions.map((s) => s.id)
+
+  test('the first push sorts, so the list opens waiting-first', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c, [session('a', 'idle'), session('b', 'waiting_input'), session('c', 'processing')])
+    expect(ids(c)).toEqual(['b', 'c', 'a'])
+  })
+
+  test('a later push does not re-sort, whatever the others start doing', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c, idle)
+    expect(ids(c)).toEqual(['a', 'b', 'c', 'd'])
+
+    // 'd' starts waiting. Under the old code it jumped to the front.
+    push(c, [session('a', 'idle'), session('b', 'idle'), session('c', 'idle'), session('d', 'waiting_input')])
+    expect(ids(c)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  test('the row under the cursor stays the row under the cursor', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c, idle)
+    c.state.sessionIndex = 2 // on 'c'
+
+    push(c, [session('a', 'processing'), session('b', 'waiting_input'), session('c', 'idle'), session('d', 'idle')])
+    expect(c.state.sessionIndex).toBe(2)
+    expect(c.state.sessions[c.state.sessionIndex].id).toBe('c')
+  })
+
+  test('a session that appears joins at the end rather than in the middle', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c, idle)
+    push(c, [...idle, session('e', 'waiting_input')])
+    // Waiting or not, it does not get to push in ahead of the cursor.
+    expect(ids(c)).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
+  test('a session that goes away takes its row with it', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c, idle)
+    push(c, [session('a', 'idle'), session('c', 'idle'), session('d', 'idle')])
+    expect(ids(c)).toEqual(['a', 'c', 'd'])
+  })
+
+  test('coming back from a conversation is when the order is allowed to change', async () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c, idle)
+    c.state.sessionIndex = 1 // on 'b'
+    c.state.mode = 'conversation'
+
+    // While the conversation was open, 'd' started waiting.
+    push(c, [session('a', 'idle'), session('b', 'idle'), session('c', 'idle'), session('d', 'waiting_input')])
+    expect(ids(c)).toEqual(['a', 'b', 'c', 'd'])
+
+    c.doubleTap() // back out to the list
+    await Promise.resolve()
+    await Promise.resolve()
+    // Read out first: the assignment above narrows the type to that one mode.
+    const mode: string = c.state.mode
+    expect(mode).toBe('session_list')
+    expect(ids(c)).toEqual(['d', 'a', 'b', 'c'])
+    // The cursor followed its session rather than staying on row 1.
+    expect(c.state.sessions[c.state.sessionIndex].id).toBe('b')
+  })
+})

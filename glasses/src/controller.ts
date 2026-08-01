@@ -869,6 +869,10 @@ export class GlassesController {
           return
         }
         st.mode = 'session_list'
+        // The one moment the order is allowed to change: whatever started
+        // waiting while this conversation was open should be at the top when
+        // the list comes back, and the cursor is not moving yet.
+        this.resortSessions()
         this.render()
         return
       }
@@ -1216,8 +1220,20 @@ export class GlassesController {
   private onSessionsUpdated(sessions: Session[], focus?: ClientFocus): void {
     const st = this.state
     const prevId = st.sessions[st.sessionIndex]?.id
-    // Update session data in-place (preserve sort order during conversation/choice)
-    if (st.mode !== 'session_list' && prevId) {
+    // Update the session data in place and hold the order the list is already
+    // in. A refresh never re-sorts.
+    //
+    // Re-sorting here is what moved the cursor on its own. The order is by
+    // indicator state, so one other session finishing was enough to shuffle
+    // the row being aimed at somewhere else - measured on a live tailnet, a
+    // single agent answering a question moved its own row from 11 to 2 and
+    // shifted the nine between them, twice, inside ten seconds. A thumb
+    // walking down the list cannot aim at a row that moves.
+    //
+    // Waiting-first is worth having when the list *opens*, which is what
+    // `resortSessions` is for. It is not worth having while the list is being
+    // read, and the two were the same code path until now.
+    if (st.sessions.length) {
       const newMap = new Map(sessions.filter((s) => s.state !== 'lost').map((s) => [s.id, s]))
       st.sessions = st.sessions
         .map((s) => newMap.get(s.id) || s)
@@ -1335,6 +1351,23 @@ export class GlassesController {
   private sessionLabel(sessionId: string): string {
     const s = this.state.sessions.find((x) => x.id === sessionId)
     return s ? s.customTitle || s.name || s.id.slice(0, 8) : sessionId
+  }
+
+  /**
+   * Put the list back into waiting-first order, keeping the cursor on its
+   * session wherever that lands.
+   *
+   * Called when the session list is opened, and never while it is on screen -
+   * a list that rearranges under a moving thumb cannot be navigated. Between
+   * openings the order is held and only the session data behind it refreshes.
+   */
+  private resortSessions(): void {
+    const st = this.state
+    const currentId = st.sessions[st.sessionIndex]?.id
+    st.sessions = this.sortSessions(st.sessions)
+    if (!currentId) return
+    const idx = st.sessions.findIndex((s) => s.id === currentId)
+    if (idx >= 0) st.sessionIndex = idx
   }
 
   /** Waiting-first ordering: sessions with a relay waiting item lead, then the
