@@ -24,6 +24,6 @@
     "setup": "bun run scripts/setup.ts"
   },
   "devDependencies": {
-    "@typescript/native-preview": "^7.0.0-dev.20260707.2"
+    "typescript": "^7"
   }
 }
