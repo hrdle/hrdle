@@ -150,6 +150,24 @@ const STYLE = `
      already reduced, computed in JS because CSS cannot min() two ratios. */
   .lens.fs { width: 100vw; height: 100vh; border-radius: 0;
              transform: none !important; }
+  /* Held upright, the phone gives a 576x288 panel its short edge to live on,
+     and the fit lands on that edge: a third of the width the screen has. So
+     the view turns a quarter instead - room, panel and all, because the room is
+     what is being looked through and a level room under a tilted panel is not a
+     picture of anything. Turning the phone to match brings it upright, which is
+     the way this is meant to be held.
+
+     Turned on the children, not on .lens itself: the fullscreen element sits
+     in the top layer, where the UA stylesheet pins transform:none !important
+     and an author !important does not outrank it. Measured before it was
+     believed - the class landed, the rule matched, and the computed transform
+     came back none. */
+  .lens.fs.turned .scene {
+    inset: auto; left: 50%; top: 50%;
+    width: 100vh; height: 100vw;
+    transform: translate(-50%, -50%) rotate(90deg); }
+  .lens.fs.turned .hud-canvas, .lens.fs.turned .glass {
+    transform: translate(-50%, -50%) rotate(90deg); }
   .lens.fs .hud-canvas, .lens.fs .glass {
     inset: auto; left: 50%; top: 50%;
     width: calc(576px * var(--fs-scale, 1));
@@ -306,12 +324,23 @@ export function startDebugUI(): void {
     const lens = document.getElementById('lens')
     if (!box || !lens) return
     if (document.fullscreenElement === lens) {
+      // A phone held upright offers its short edge to a panel twice as wide as
+      // it is tall, and `min` obediently fits to that edge. Turning the view a
+      // quarter puts the panel along the long axis instead, which is most of
+      // the difference between reading it and squinting at it.
+      const turned = window.innerHeight > window.innerWidth
+      lens.classList.toggle('turned', turned)
+      // The axes the panel is fitted against are the turned ones, since that is
+      // what it will be laid along.
+      const across = turned ? window.innerHeight : window.innerWidth
+      const down = turned ? window.innerWidth : window.innerHeight
       // The backdrop owns the viewport; only the projected panel is scaled,
       // and CSS does that from --fs-scale.
-      const scale = Math.min(window.innerWidth / PANEL_W, window.innerHeight / PANEL_H)
+      const scale = Math.min(across / PANEL_W, down / PANEL_H)
       lens.style.setProperty('--fs-scale', String(scale * FS_PANEL_FRACTION))
       return
     }
+    lens.classList.remove('turned')
     const scale = Math.min(1, box.clientWidth / PANEL_W)
     lens.style.transform = `scale(${scale})`
     box.style.height = `${PANEL_H * scale}px`
@@ -855,6 +884,13 @@ export function startDebugUI(): void {
     fitPanel()
   })
   window.addEventListener('resize', fitPanel)
+  // Turning the phone is the gesture this is built around, and some browsers
+  // report the old dimensions to the `resize` that announces it - so ask again
+  // on the next frame, when they have settled.
+  window.addEventListener('orientationchange', () => {
+    fitPanel()
+    requestAnimationFrame(fitPanel)
+  })
 
   // ── Picture-in-picture ──
   //
