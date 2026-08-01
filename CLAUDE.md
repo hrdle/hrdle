@@ -694,12 +694,24 @@ audience that is not us: same rule as the changelog.
 device does not count as done.**
 
 The browser simulator in `src/debug-ui.ts` goes through the same
-`GlassesController` and `screenText()` the device does, so wrapping, the 7-line
-clamp and paging all match. And yet the places where they do **not** match keep
-turning up: character widths off by one, paging repeating the previous line on
-the device only, tofu on the device only, a recap missing in the simulator only -
-all four found on 2026-07-27 and 28. So the order is **check on the simulator,
-release, check on the device**, and the simulator alone is never the finish line.
+`GlassesController` **and the same `updateDisplay()`** the device does: it
+supplies a bridge that records containers rather than sending them to a host,
+and the canvas paints what that bridge holds. So the rebuild-vs-upgrade
+decision, the skip-if-unchanged record, which container id a string is addressed
+to, and every container's geometry are decided once, in `display.ts`, for both.
+
+It did not always. It used to lay the screen out itself from `screenText()` -
+same strings, second implementation of where they go - and every divergence that
+cost real debugging time was of that shape: character widths off by one, paging
+repeating the previous line on the device only, tofu on the device only, a recap
+missing in the simulator only (all four found on 2026-07-27 and 28), a notice
+strip 36px from where the device drew it.
+
+What is still **not** shared is the glyphs themselves: this window draws with a
+browser font at the firmware's own advances, so a character the panel has no
+glyph for can still appear here. `stripUnrenderable()` catches those it can
+measure. So the order remains **check on the simulator, release, check on the
+device**, and the simulator alone is never the finish line.
 
 While implementing:
 
@@ -707,8 +719,10 @@ While implementing:
   (`main.ts`) and the simulator (`debug-ui.ts`)**. The shared surface is
   `GlassesPlatform` in `controller.ts`. Doing one side is how you manufacture a
   symptom that only reproduces on the device
-- Wording and layout belong in `screenText()` in `display.ts`. Written straight
-  into a renderer, they appear on one side only
+- Wording belongs in `screenText()` and layout in the `build*()` container
+  definitions, both in `display.ts`. Written straight into a renderer, they
+  appear on one side only - and a position recomputed in `debug-ui.ts` is a copy
+  of one in `display.ts` that will drift without either side noticing
 - To show a symbol, add a substitute to `SUBSTITUTES` in `metrics.ts` (preserving
   the meaning, as a check mark becomes a circle). Anything without one is dropped
   by `stripUnrenderable()`, which also runs in the simulator
