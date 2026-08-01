@@ -73,12 +73,16 @@ export function DashboardPanel({
 				</div>
 			</div>
 
-			{/* Content */}
-			<div className="flex-1 min-h-0 overflow-y-auto">
+			{/* Content. Dashboard scrolls itself, so this wrapper must not — two
+			    nested scrollers meant a flick could move either one, and which
+			    depended on where the finger landed. */}
+			<div className="flex-1 min-h-0 flex flex-col">
 				{tab === "dashboard" ? (
-					<Dashboard className="h-full" compact />
+					<Dashboard className="flex-1 min-h-0" compact />
 				) : (
-					<PeerManager />
+					<div className="flex-1 min-h-0 overflow-y-auto">
+						<PeerManager />
+					</div>
 				)}
 			</div>
 		</div>

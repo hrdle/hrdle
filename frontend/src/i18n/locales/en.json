@@ -121,6 +121,7 @@
 	"dashboard": {
 		"title": "Dashboard",
 		"agentUsage": "Agent usage",
+		"settings": "Settings",
 		"serverStatus": "Server status",
 		"usageLimits": "Usage Limits",
 		"codexUsageLimits": "Codex Usage Limits",

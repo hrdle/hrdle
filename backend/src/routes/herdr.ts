@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { herdrUpdateService } from './dashboard';
+import { herdrUpdateService, invalidateDashboardCache } from './dashboard';
 
 export const herdr = new Hono();
 
@@ -16,5 +16,8 @@ herdr.post('/apply-update', async (c) => {
   if (!result.ok) {
     return c.json({ error: result.error ?? 'herdr update failed', output: result.output }, 500);
   }
+  // The dashboard re-polls right after this returns, and its payload cache
+  // would otherwise still carry the skew warning the apply just resolved.
+  invalidateDashboardCache();
   return c.json({ success: true, output: result.output });
 });

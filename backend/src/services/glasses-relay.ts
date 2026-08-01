@@ -306,7 +306,7 @@ async function assembleWaitingPayload(
   tmuxPaneId: string,
 ): Promise<{ text: string; choices?: string[] }> {
   const fallback = `Waiting for input: ${ws.id}`;
-  if (!ws.instanceId || !/^%\d+$/.test(tmuxPaneId)) return { text: fallback };
+  if (!ws.instanceId || !/^%[0-9A-Za-z]+$/.test(tmuxPaneId)) return { text: fallback };
   const herdrPaneId = toHerdrPaneId(ws.instanceId, tmuxPaneId);
   const raw = await glassesRelayDeps.readPaneText(herdrPaneId);
   if (!raw) return { text: fallback };

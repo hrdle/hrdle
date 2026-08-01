@@ -7,11 +7,12 @@ import {
 	useRef,
 	useState,
 } from "react";
-import type {
-	PaneViewport,
-	SessionState,
-	SessionTheme,
-	TmuxLayoutNode,
+import {
+	paneIdFromLayout,
+	type PaneViewport,
+	type SessionState,
+	type SessionTheme,
+	type TmuxLayoutNode,
 } from "../../../shared/types";
 import {
 	type ControlModeConfig,
@@ -440,7 +441,11 @@ export const TerminalPage = forwardRef<TerminalRef, TerminalPageProps>(
 function collectLeaves(node: TmuxLayoutNode): PaneLeafInfo[] {
 	if (node.type === "leaf" && node.paneId !== undefined) {
 		return [
-			{ paneId: `%${node.paneId}`, width: node.width, height: node.height },
+			{
+				paneId: paneIdFromLayout(node.paneId),
+				width: node.width,
+				height: node.height,
+			},
 		];
 	}
 	if (node.children) {

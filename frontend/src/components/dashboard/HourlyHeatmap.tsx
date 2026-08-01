@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Card } from "./Card";
 
 interface HourlyHeatmapProps {
 	data: Record<number, number>;
@@ -27,37 +28,39 @@ export function HourlyHeatmap({ data, className = "" }: HourlyHeatmapProps) {
 	const totalActivity = blockData.reduce((sum, b) => sum + b.total, 0);
 
 	return (
-		<div className={`bg-th-surface/50 rounded-md p-3 ${className}`}>
-			<h3 className="text-xs text-th-text-secondary mb-3">
-				{t("dashboard.hourlyActivity")}
-			</h3>
-
-			<div className="space-y-2">
+		<Card title={t("dashboard.hourlyActivity")} className={className}>
+			<div className="space-y-1.5">
 				{blockData.map((block) => {
 					const percentage =
 						totalActivity > 0
 							? Math.round((block.total / totalActivity) * 100)
 							: 0;
 					const barWidth = (block.total / maxValue) * 100;
+					const isPeak = block.total === maxValue && block.total > 0;
 
 					return (
 						<div key={block.key} className="flex items-center gap-2">
-							<span className="text-[11px] text-th-text-secondary w-14 shrink-0">
+							<span className="text-[11px] text-th-text-muted w-14 shrink-0 tabular-nums">
 								{block.label}
 							</span>
-							<div className="flex-1 h-4 bg-th-surface-hover rounded overflow-hidden">
+							<div className="flex-1 h-3 bg-th-surface-hover rounded-full overflow-hidden">
+								{/* One shade for the busiest block, one for the rest: the bars
+								    are already ranked by length, so a uniform fill spent
+								    colour without saying anything. */}
 								<div
-									className="h-full bg-green-500 rounded transition-all duration-300"
+									className={`h-full rounded-full transition-[width] duration-300 ${
+										isPeak ? "bg-emerald-400" : "bg-emerald-500/45"
+									}`}
 									style={{ width: `${barWidth}%` }}
 								/>
 							</div>
-							<span className="text-[10px] text-th-text-muted w-8 text-right">
+							<span className="text-[10px] text-th-text-muted w-8 text-right tabular-nums">
 								{percentage}%
 							</span>
 						</div>
 					);
 				})}
 			</div>
-		</div>
+		</Card>
 	);
 }

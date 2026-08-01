@@ -7,7 +7,7 @@ import { logs } from './routes/logs';
 import { sessions } from './routes/sessions';
 import { upload } from './routes/upload';
 import { files } from './routes/files';
-import { dashboard } from './routes/dashboard';
+import { dashboard, getDashboard } from './routes/dashboard';
 import { notify } from './routes/notify';
 import { peers } from './routes/peers';
 import { shortTailscaleIp, startDiscoveryServer } from './services/discovery';
@@ -484,6 +484,15 @@ if (discovery) {
     console.log(`   Short address: ${short}   (for the glasses app's setup screen)`);
   }
 }
+
+// Build the dashboard payload once in the background so the first client to ask
+// is served from cache like every one after it. Everything downstream of this
+// serves stale-while-revalidate, which only helps once there is something to
+// serve — without a warm-up the first open of each server's life still pays the
+// full upstream round trip. Delayed so it does not compete with startup.
+setTimeout(() => {
+  getDashboard().catch((err) => console.error('Dashboard warm-up failed:', err));
+}, 3000);
 
 export default {
   port,

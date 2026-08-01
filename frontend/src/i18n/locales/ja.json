@@ -119,6 +119,7 @@
 	"dashboard": {
 		"title": "ダッシュボード",
 		"agentUsage": "エージェント使用状況",
+		"settings": "設定",
 		"serverStatus": "サーバ状況",
 		"usageLimits": "使用量リミット",
 		"codexUsageLimits": "Codex 使用量リミット",

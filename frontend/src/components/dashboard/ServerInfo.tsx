@@ -1,4 +1,4 @@
-import { AlertTriangle, Users } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -6,26 +6,10 @@ import type {
 	SystemMetrics,
 	SystemMetricsSnapshot,
 } from "../../../../shared/types";
+import { useIsLightMode } from "../../hooks/useIsLightMode";
 import { authFetch } from "../../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
-
-function useIsLightMode() {
-	const [light, setLight] = useState(
-		() => document.documentElement.getAttribute("data-theme") === "light",
-	);
-	useEffect(() => {
-		const observer = new MutationObserver(() => {
-			setLight(document.documentElement.getAttribute("data-theme") === "light");
-		});
-		observer.observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ["data-theme"],
-		});
-		return () => observer.disconnect();
-	}, []);
-	return light;
-}
 
 // ─── Mini SVG chart ───
 const CHART_WIDTH = 300;
@@ -302,9 +286,6 @@ interface ServerInfoProps {
 		available: number;
 		mountpoint: string;
 	};
-	connectedClients?: number;
-	/** Label for the panel header; defaults to "Server". */
-	label?: string;
 	/** Hide the throughput chart (it tracks this browser's WS bytes, not the peer's). */
 	hideThroughput?: boolean;
 	/** herdr binary-vs-server skew for this server (#393). */
@@ -343,8 +324,6 @@ function buildThroughputPath(
 export function ServerInfo({
 	systemMetrics,
 	diskUsage,
-	connectedClients,
-	label,
 	hideThroughput = false,
 	herdrUpdate,
 	allowHerdrApply = false,
@@ -385,20 +364,11 @@ export function ServerInfo({
 	const swapPercent =
 		cur && cur.swapTotalMB > 0 ? (cur.swapUsedMB / cur.swapTotalMB) * 100 : 0;
 
+	// The server's name and client count live on the card's own title row
+	// (`PeerServerCard`) — drawing them again here printed "Local" twice, once
+	// muted and once bold, directly above each other.
 	return (
 		<div className="space-y-3">
-			<div className="flex items-center justify-between">
-				<h3 className="text-[13px] font-semibold text-zinc-300 truncate">
-					{label ?? "Server"}
-				</h3>
-				<div className="flex items-center gap-1.5">
-					<Users className="w-3 h-3 text-teal-400" />
-					<span className="text-[12px] text-teal-400 font-mono tabular-nums">
-						{connectedClients ?? 0}
-					</span>
-				</div>
-			</div>
-
 			{herdrUpdate?.restartNeeded && (
 				<HerdrUpdateNotice
 					status={herdrUpdate}

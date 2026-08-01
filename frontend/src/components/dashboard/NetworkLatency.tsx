@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useNetworkLatency } from "../../hooks/useNetworkLatency";
 import type { LatencyDataPoint } from "../../services/latency-store";
+import { Card } from "./Card";
 
 function getLatencyColor(value: number): string {
 	if (value < 50) return "text-green-400";
@@ -86,10 +87,7 @@ export function NetworkLatency({ className = "" }: { className?: string }) {
 		useNetworkLatency();
 
 	return (
-		<div className={`bg-th-surface/50 rounded-md p-3 ${className}`}>
-			<h3 className="text-xs text-th-text-secondary mb-3">
-				{t("dashboard.networkLatency")}
-			</h3>
+		<Card title={t("dashboard.networkLatency")} className={className}>
 			<div className="space-y-1.5">
 				<LatencyRow
 					label={t("dashboard.websocket")}
@@ -105,6 +103,6 @@ export function NetworkLatency({ className = "" }: { className?: string }) {
 					naText={t("dashboard.latencyNA")}
 				/>
 			</div>
-		</div>
+		</Card>
 	);
 }

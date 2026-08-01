@@ -1447,11 +1447,15 @@ export function App() {
 							</button>
 						</div>
 					</div>
-					<div className="flex-1 min-h-0 overflow-y-auto">
+					{/* Dashboard brings its own scroller; nesting a second one here made
+					    a flick land on whichever the finger happened to be over. */}
+					<div className="flex-1 min-h-0 flex flex-col">
 						{mobileDashboardTab === "dashboard" ? (
-							<Dashboard className="h-full" />
+							<Dashboard className="flex-1 min-h-0" />
 						) : (
-							<PeerManager />
+							<div className="flex-1 min-h-0 overflow-y-auto">
+								<PeerManager />
+							</div>
 						)}
 					</div>
 				</div>

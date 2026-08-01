@@ -10,6 +10,7 @@ import { UsageHistoryService } from '../services/usage-history';
 import { SystemMetricsService } from '../services/system-metrics';
 import { HerdrUpdateService } from '../services/herdr-update';
 import { getConnectedClientCount } from './terminal-mux';
+import { staleWhileRevalidate } from '../utils/stale-while-revalidate';
 import { VERSION } from '../cli';
 import type { DashboardResponse } from '../../../shared/types';
 
@@ -90,13 +91,51 @@ export async function buildDashboard(): Promise<DashboardResponse> {
     diskUsage: diskUsage || undefined,
     connectedClients: getConnectedClientCount(),
     herdrUpdate,
+    generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * The payload is served stale-while-revalidate.
+ *
+ * Every leg of `buildDashboard` is a cache that *blocks* on expiry: the
+ * Anthropic call alone is 60s-TTL'd and ~1.2s cold, and `Promise.all` makes the
+ * slowest leg the response time. Nothing polls while the panel is closed, so
+ * the TTL had always lapsed by the time it was reopened — the common case was
+ * the worst case, on every single open. See `stale-while-revalidate.ts`.
+ */
+const FRESH_MS = 15_000;
+const cache = staleWhileRevalidate(buildDashboard, FRESH_MS);
+
+export async function getDashboard(): Promise<DashboardResponse> {
+  const { value, stale } = await cache.get();
+  // System metrics and the client count are synchronous reads, so a cached
+  // payload can carry current ones. Without this the CPU line and client count
+  // would sit at whatever the last build saw, which reads as a hung panel
+  // rather than a fast one.
+  const payload: DashboardResponse = {
+    ...value,
+    systemMetrics: systemMetricsService.getMetrics(),
+    connectedClients: getConnectedClientCount(),
+  };
+  return stale ? { ...payload, stale: true } : payload;
+}
+
+/**
+ * Force the next `getDashboard` to rebuild and wait.
+ *
+ * For the one case where a user action changes the payload and then asks for it
+ * back: applying a herdr update clears that service's own cache, but the
+ * assembled payload here would still carry `restartNeeded: true` and put the
+ * warning banner back on screen right after the button that dismissed it.
+ */
+export function invalidateDashboardCache(): void {
+  cache.invalidate();
 }
 
 export const dashboard = new Hono();
 
 // GET /dashboard - Get dashboard data
 dashboard.get('/', async (c) => {
-  const response = await buildDashboard();
-  return c.json(response);
+  return c.json(await getDashboard());
 });

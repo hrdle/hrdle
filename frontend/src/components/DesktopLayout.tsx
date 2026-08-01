@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+	paneIdFromLayout,
 	type PaneViewport,
 	samePeerId,
 	type SessionState,
@@ -350,7 +351,7 @@ function tmuxLayoutToPaneNode(
 		return {
 			type: "terminal",
 			sessionKey,
-			id: `%${node.paneId ?? 0}`,
+			id: paneIdFromLayout(node.paneId),
 		};
 	}
 
@@ -386,7 +387,7 @@ function extractPaneSizes(
 	const sizes = new Map<string, { cols: number; rows: number }>();
 	function walk(n: TmuxLayoutNode) {
 		if (n.type === "leaf" && n.paneId !== undefined) {
-			sizes.set(`%${n.paneId}`, { cols: n.width, rows: n.height });
+			sizes.set(paneIdFromLayout(n.paneId), { cols: n.width, rows: n.height });
 		}
 		if (n.children) {
 			n.children.forEach(walk);

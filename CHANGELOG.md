@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.35] - 2026-08-01
+
+### Fixed
+- **Splitting a workspace that already holds nine panes puts the pane on
+  screen.** herdr numbers panes in base36 - the tenth is `pA`, not `p10` - and
+  every pane-id boundary here matched `\d+`. So `pA` onwards mapped to null,
+  was rejected before it reached the split tree, and the split created a pane
+  herdr listed and this app never drew. The log said it plainly: a tab herdr
+  reported with eight panes came up as `panes=1`
+  - One unmappable id also collapsed the whole exported layout, so such a
+    workspace lost its pane geometry as well as its panes and fell back to a
+    flat chain of whatever did map
+  - The token travels verbatim now rather than parsed as a number. A numeric id
+    still goes on the wire as a number, so a peer on an older frontend keeps
+    rendering the panes it always could
+
+### Changed
+- **The dashboard opens on the numbers instead of a spinner.** Nothing polls
+  while the panel is closed and every leg of the payload blocks on its own
+  expiry, so the TTL had always lapsed by the time it was reopened - the common
+  case was the worst case, every time. The assembled payload is now served
+  stale-while-revalidate, with a warm-up shortly after boot so the first open of
+  a server's life is served the same way, and the client holds the last payload
+  outside React so a reopen paints what you were last shown
+  - System metrics and the client count are stitched in fresh on every answer.
+    A frozen CPU line reads as a hung panel rather than a fast one
+- **The dashboard's widgets look like one list.** Each drew its own box inside
+  the panel's box - two borders and 28px of padding around an 80px chart - and
+  titled it in one of two styles. One `Card` draws the box now and the widgets
+  render content. The panel's own scroller is gone too: Dashboard brings one,
+  and two nested scrollers meant a flick moved whichever the finger was over
+
 ## [0.3.34] - 2026-08-01
 
 ### Changed

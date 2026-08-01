@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { ModelUsage } from "../../../../shared/types";
 import { formatTokens } from "../../utils/format";
+import { Card } from "./Card";
 
 interface ModelUsageChartProps {
 	data: ModelUsage[];
@@ -36,12 +37,11 @@ export function ModelUsageChart({ data }: ModelUsageChartProps) {
 
 	if (data.length === 0) {
 		return (
-			<div className="p-3 bg-th-surface rounded-md">
-				<div className="text-sm font-medium text-th-text mb-1">
-					{t("dashboard.modelUsageWindow")}
+			<Card title={t("dashboard.modelUsageWindow")}>
+				<div className="text-th-text-muted text-xs">
+					{t("dashboard.noData")}
 				</div>
-				<div className="text-th-text-muted text-xs">No model usage data</div>
-			</div>
+			</Card>
 		);
 	}
 
@@ -53,13 +53,16 @@ export function ModelUsageChart({ data }: ModelUsageChartProps) {
 	const colorMap = buildColorMap(sorted.map((m) => m.model));
 
 	return (
-		<div className="p-3 bg-th-surface rounded-md">
-			<div className="text-sm font-medium text-th-text mb-2">
-				{t("dashboard.modelUsageWindow")}
-			</div>
-
+		<Card
+			title={t("dashboard.modelUsageWindow")}
+			aside={
+				<span className="text-[11px] text-th-text-muted tabular-nums shrink-0">
+					{formatTokens(total)}
+				</span>
+			}
+		>
 			{/* Bar chart */}
-			<div className="h-4 bg-th-surface-hover rounded-full overflow-hidden flex">
+			<div className="h-3 bg-th-surface-hover rounded-full overflow-hidden flex">
 				{sorted.map((model) => {
 					const pct = (modelTotal(model) / total) * 100;
 					if (pct < 1) return null;
@@ -75,26 +78,25 @@ export function ModelUsageChart({ data }: ModelUsageChartProps) {
 			</div>
 
 			{/* Legend */}
-			<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-				{sorted.map((model) => {
-					const pct = (modelTotal(model) / total) * 100;
-					return (
-						<div
-							key={model.model}
-							className="flex items-center gap-1 whitespace-nowrap"
-							title={`${model.model}: in ${formatTokens(model.totalTokensIn)} / out ${formatTokens(model.totalTokensOut)} / cache ${formatTokens(model.totalCacheRead)}`}
-						>
-							<div
-								className={`w-2 h-2 rounded-full shrink-0 ${colorMap.get(model.model)}`}
-							/>
-							<span className="text-th-text-secondary">{model.model}</span>
-							<span className="text-th-text-muted">
-								{formatTokens(modelTotal(model))} ({pct.toFixed(0)}%)
-							</span>
-						</div>
-					);
-				})}
+			{/* The bar already carries the share, so the legend carries the number it
+			    cannot — a percentage next to it was the same fact twice. */}
+			<div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+				{sorted.map((model) => (
+					<div
+						key={model.model}
+						className="flex items-center gap-1 whitespace-nowrap"
+						title={`${model.model}: in ${formatTokens(model.totalTokensIn)} / out ${formatTokens(model.totalTokensOut)} / cache ${formatTokens(model.totalCacheRead)}`}
+					>
+						<span
+							className={`w-1.5 h-1.5 rounded-full shrink-0 ${colorMap.get(model.model)}`}
+						/>
+						<span className="text-th-text-secondary">{model.model}</span>
+						<span className="text-th-text-muted tabular-nums">
+							{formatTokens(modelTotal(model))}
+						</span>
+					</div>
+				))}
 			</div>
-		</div>
+		</Card>
 	);
 }

@@ -14,7 +14,8 @@ import { dismissRelayItem, postAgentRelay } from '../services/glasses-relay';
 // Same alphabet as SessionIdSchema / the notify flood guard (#254).
 const SESSION_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
 const ITEM_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
-const PANE_ID_RE = /^%\d+$/;
+// Base36 like herdr's own pane token, not digits (`%A` is the tenth pane).
+const PANE_ID_RE = /^%[0-9A-Za-z]+$/;
 const MAX_TEXT_LEN = 4000; // pre-clamp; the service trims to one G2 page
 const MAX_CHOICES = 9;
 const MAX_CHOICE_LEN = 200;

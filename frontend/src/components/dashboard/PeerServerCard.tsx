@@ -1,6 +1,8 @@
+import { Users } from "lucide-react";
 import type { PeerClientView } from "../../../../shared/types";
 import { LOCAL_PEER_ID } from "../../../../shared/types";
 import { usePeerServerMetrics } from "../../hooks/usePeerServerMetrics";
+import { Card, CardTitle } from "./Card";
 import { ServerInfo } from "./ServerInfo";
 
 interface PeerServerCardProps {
@@ -14,39 +16,52 @@ interface PeerServerCardProps {
  */
 export function PeerServerCard({ peer }: PeerServerCardProps) {
 	const isLocal = peer.id === LOCAL_PEER_ID;
-	const { systemMetrics, diskUsage, connectedClients, herdrUpdate, error, refetch } =
-		usePeerServerMetrics(peer.id);
+	const {
+		systemMetrics,
+		diskUsage,
+		connectedClients,
+		herdrUpdate,
+		error,
+		refetch,
+	} = usePeerServerMetrics(peer.id);
 
 	return (
-		<div className="bg-white/[0.03] rounded-lg p-4 border border-white/[0.06]">
-			<div className="flex items-center gap-1.5 mb-2">
-				<span
-					aria-hidden="true"
-					className="w-2 h-2 rounded-full shrink-0"
-					style={{ backgroundColor: peer.color }}
-				/>
-				<span className="text-[11px] text-th-text-muted truncate">
-					{peer.nickname}
-				</span>
-				{error && (
+		<Card
+			title={
+				<div className="flex items-center gap-1.5 min-w-0">
 					<span
-						className="text-[10px] text-amber-400 ml-auto truncate"
-						title={error}
+						aria-hidden="true"
+						className="w-2 h-2 rounded-full shrink-0"
+						style={{ backgroundColor: peer.color }}
+					/>
+					<CardTitle>{peer.nickname}</CardTitle>
+				</div>
+			}
+			aside={
+				<div className="flex items-center gap-2 shrink-0">
+					{error && (
+						<span className="text-[10px] text-amber-400 truncate" title={error}>
+							offline
+						</span>
+					)}
+					<span
+						className="flex items-center gap-1 text-[11px] text-teal-400 tabular-nums"
+						title="Connected clients"
 					>
-						offline
+						<Users className="w-3 h-3" />
+						{connectedClients ?? 0}
 					</span>
-				)}
-			</div>
+				</div>
+			}
+		>
 			<ServerInfo
 				systemMetrics={systemMetrics}
 				diskUsage={diskUsage}
-				connectedClients={connectedClients}
-				label={peer.nickname}
 				hideThroughput={!isLocal}
 				herdrUpdate={herdrUpdate}
 				allowHerdrApply={isLocal}
 				onHerdrApplied={refetch}
 			/>
-		</div>
+		</Card>
 	);
 }
