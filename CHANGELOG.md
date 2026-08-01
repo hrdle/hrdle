@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.33] - 2026-08-01
+
+### Added
+- **The glasses list says how full each agent's context is.** It reported which
+  workspaces were running and nothing about the agents inside them: context use
+  existed only on the pane rows of multi-pane workspaces, so the single-pane
+  ones that make up most of the list carried nothing, and the model was never
+  declared in the glasses' own types although the server had been sending it all
+  along
+  - Every row carries `ctx:` and one of eight block heights, beside the name it
+    belongs to. Eight steps is coarser than a figure on purpose - the list
+    answers "which of these is filling up"
+  - The model and the exact percentage are in the footer, for the row the cursor
+    is on. On all thirteen rows they were the same two facts thirteen times
+  - A heading leaves the mark to its pane rows, since one level covering three
+    agents describes none of them
+
+### Changed
+- **The glasses' working indicator beats instead of turning.** `▲▶▼◀` rotated
+  one frame every three seconds, which is never seen turning - only sampled -
+  and four sampled triangles read as four states rather than one thing running.
+  It is now a small dot alternating between `·` and `•`
+  - Those two are also the only small glyphs the firmware pairs: 80 and 144
+    units against the 320 of every full-width mark, where everything else that
+    size is punctuation on the baseline or sits raised off it. Braille, the
+    obvious candidate, has no glyph at all - all 256 codepoints of U+2800-28FF
+    measure zero and would be dropped before reaching the panel
+  - Being narrower, they would have started every running row's name a third of
+    a column to the left; the badge is padded back out to the column in 5px
+    spaces
+
 ## [0.3.32] - 2026-08-01
 
 ### Fixed
