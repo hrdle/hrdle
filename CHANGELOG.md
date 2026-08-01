@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.30] - 2026-08-01
+
+### Added
+- **A collapsed workspace card now says what its panes are doing.** A workspace
+  with more than one pane or tab showed only its title, path and the `3 panes` /
+  `2 tabs` badges until it was expanded: model, ctx, memory and the recap moved
+  to the pane rows because one card-level number cannot say which pane it
+  describes. That made the workspaces with the most going on the least readable
+  rows in the list
+  - One pane speaks for the card while it is collapsed - the one waiting on the
+    user, else the one still working, else whichever spoke last - showing its
+    name, tab, model, ctx gauge, memory and recap
+  - The other panes shrink to a chip each, carrying a status dot, the name and
+    the context percent, so three panes cost about three lines
+  - Expanding still swaps in the tab/pane tree, so nothing is drawn twice, and
+    the lead pane's recap replaces the summary line it would have repeated
+  - The tab name is left off a single-tab workspace, where `Tab 1` says nothing
+
 ## [0.3.29] - 2026-08-01
 
 ### Fixed
