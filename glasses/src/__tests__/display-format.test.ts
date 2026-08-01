@@ -415,8 +415,11 @@ describe('session list', () => {
     // they are not, and the pixels agree with the eye.
     const starts = screenText(state)
       .body.split('\n')
-      .map((l) => width(l.slice(0, l.search(/[^ >\u3000！▲▶▼◀]/))))
-    expect(new Set(starts).size).toBe(1)
+      .map((l) => width(l.slice(0, l.search(/[^ >\u3000！·•]/))))
+    // Within a space, not identical: the working dots are 5px and 9px against
+    // the column's 20, and the pad that makes up the difference is built from
+    // 5px spaces — the bullet leaves 1px it cannot fill.
+    expect(Math.max(...starts) - Math.min(...starts)).toBeLessThan(SPACE_W)
   })
 })
 
@@ -595,18 +598,25 @@ describe('working indicator', () => {
   const mark = (tick: number) => screenText(st(tick, 'processing')).header.replace(/^グラス開発\s+|\s+\d\d:\d\d$/g, '')
 
   test('moves while the session is working', () => {
-    const frames = [0, 1, 2, 3].map(mark)
-    expect(new Set(frames).size).toBe(4)
+    // Two frames, not four: at one frame per three seconds a rotation is never
+    // seen turning, only sampled — and four sampled triangles read as four
+    // states. Filled against hollow reads as one thing, beating.
+    const frames = [0, 1].map(mark)
+    expect(new Set(frames).size).toBe(2)
   })
 
   test('comes back round', () => {
-    expect(mark(4)).toBe(mark(0))
+    expect(mark(2)).toBe(mark(0))
   })
 
-  test('every frame is the same width, so nothing after it shifts', () => {
-    // An uneven set reads as a shiver rather than a rotation.
-    const widths = [0, 1, 2, 3].map((t) => width(mark(t)))
-    expect(new Set(widths).size).toBe(1)
+  test('a frame change does not move the name beside it', () => {
+    // The two dots differ in width by design — that is what makes them small.
+    // The pad after them is what holds the column, so this tests the pad.
+    const nameStart = (tick: number) => {
+      const line = screenText({ ...st(tick, 'processing'), mode: 'session_list' as const }).body.split('\n')[0]
+      return width(line.slice(0, line.indexOf('[')))
+    }
+    expect(Math.abs(nameStart(0) - nameStart(1))).toBeLessThan(SPACE_W)
   })
 
   test('the header still fits at every frame', () => {
@@ -805,8 +815,35 @@ describe('workspace and pane list', () => {
     // Two panes of one repo repeat the same folder name; the second one
     // teaches the reader nothing.
     const body = screenText(st(1)).body
-    expect(body).toContain('     %1  30%')
+    expect(body).toContain('     %1 ctx:▃')
     expect(body).not.toContain('wheel-leg-bot')
+  })
+
+  test('a row sets its mark beside the name it belongs to', () => {
+    // Parked at the right edge it read as a chart of its own, which the eye had
+    // to travel to and back from to see whose row it was. The label is what
+    // makes a lone block legible.
+    const lines = screenText(st(1)).body.split('\n')
+    const marked = lines.filter((l) => /ctx:[▁▂▃▄▅▆▇█]$/.test(l))
+    expect(marked.length).toBeGreaterThan(1)
+    for (const line of marked) expect(width(line)).toBeLessThanOrEqual(BODY_WIDTH)
+  })
+
+  test('the list shows how full without spelling it out', () => {
+    // Eight block heights, filling as the context does - the tall row is the
+    // one running out, findable without reading a single number. The figure
+    // itself is one row's worth of detail and lives in the footer.
+    const body = screenText(st(1)).body
+    expect(body).toContain('▃')
+    expect(body).toContain('▂')
+    expect(body).not.toMatch(/\d+%/)
+  })
+
+  test('a heading leaves the mark to the panes under it', () => {
+    // One bar covering three agents describes none of them.
+    const heading = screenText(st(1)).body.split('\n')[1]
+    expect(heading).toContain('[2脚ロボ開発]')
+    expect(heading).not.toMatch(/[▁▂▃▄▅▆▇█]/)
   })
 
   test('the conversation header names the pane being read', () => {
@@ -849,9 +886,97 @@ describe('panes across tabs', () => {
     // It was marked while a reply to it could not land. The server switches
     // tabs to deliver now, so the tab is a fact with no decision attached.
     const body = screenText(st).body
-    expect(body).toContain('%1  31%')
-    expect(body).toContain('%4  6%')
+    expect(body).toContain('%1 ctx:▃')
+    expect(body).toContain('%4 ctx:▁')
     expect(body).not.toContain('別タブ')
+  })
+})
+
+describe('what a list row says about the agent', () => {
+  const mk = (metrics: { contextPercent?: number; model?: string }) => ({
+    mode: 'session_list' as const,
+    sessions: [{ id: 'a', name: 'hrdle', state: 'idle' as const, metrics }],
+    sessionIndex: 0,
+    conversation: [],
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 0,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceIndex: 0,
+    choiceOptions: [],
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+  })
+
+  test('a single-pane workspace carries its own mark', () => {
+    // It has no pane rows to put one on, and it is most of the list.
+    expect(screenText(mk({ contextPercent: 42.1, model: 'claude-opus-5' })).body).toContain(
+      '[hrdle] ctx:▄'
+    )
+  })
+
+  test('the figures belong to the row being pointed at', () => {
+    // Printed on all thirteen rows they are the same two facts thirteen times;
+    // the model rarely differs, and nobody compares percents digit by digit
+    // while walking a list.
+    const { body, footer } = screenText(mk({ contextPercent: 42.1, model: 'claude-opus-5' }))
+    expect(footer).toContain('Opus 5 42%')
+    expect(body).not.toContain('Opus')
+    expect(body).not.toContain('42%')
+  })
+
+  test('the model is the family and its version, not the id', () => {
+    const footer = screenText(mk({ model: 'claude-sonnet-5-20260101' })).footer
+    expect(footer).toContain('Sonnet 5')
+    expect(footer).not.toContain('20260101')
+  })
+
+  test('a model from another provider keeps the name it was given', () => {
+    // Minus the vendor prefix, which names who sells it rather than what runs.
+    expect(screenText(mk({ model: 'moonshotai/kimi-k3' })).footer).toContain('kimi-k3')
+  })
+
+  test('the glyph fills as the context does', () => {
+    expect(screenText(mk({ contextPercent: 0 })).body).toContain('▁')
+    expect(screenText(mk({ contextPercent: 100 })).body).toContain('█')
+    // Rounded to the figure the footer shows, so 99.6% is not a full bar
+    // beside a number that says otherwise.
+    expect(screenText(mk({ contextPercent: 99.6 })).body).toContain('█')
+    expect(screenText(mk({ contextPercent: 99.6 })).footer).toContain('100%')
+  })
+
+  test('a workspace with neither says nothing in their place', () => {
+    const { body, footer } = screenText(mk({}))
+    expect(body).toContain('[hrdle]')
+    expect(body.trimEnd()).toBe(body)
+    expect(footer).not.toMatch(/%\D*$/)
+  })
+
+  test('the footer keeps the figures when the bar runs short', () => {
+    // The hints say what every row does and are learned once; the figures
+    // change with every swipe, which is the reason to swipe.
+    const footer = screenText({
+      ...mk({ contextPercent: 42, model: 'claude-opus-5' }),
+      relayWaiting: [
+        { id: 'r1', sessionId: 'a', kind: 'waiting' as const, text: 'x', source: 'auto' as const, createdAt: 0 },
+      ],
+    }).footer
+    expect(footer).toContain('Opus 5 42%')
+    expect(width(footer)).toBeLessThanOrEqual(HEADER_WIDTH)
+  })
+
+  test('a name too long for the mark is what gives way', () => {
+    const long = 'あ'.repeat(40)
+    const body = screenText({
+      ...mk({ contextPercent: 42, model: 'claude-opus-5' }),
+      sessions: [{ id: 'a', name: long, state: 'idle' as const, metrics: { contextPercent: 42, model: 'claude-opus-5' } }],
+    }).body
+    // The mark was the part added; a clipped name still names its row.
+    expect(body).toMatch(/ctx:▄$/)
+    expect(body).toContain('…')
+    expect(width(body)).toBeLessThanOrEqual(BODY_WIDTH)
   })
 })
 
@@ -875,8 +1000,8 @@ describe('list badge', () => {
   })
 
   test('a working row turns', () => {
-    expect(screenText({ ...mk('processing'), spinnerTick: 0 }).body).toContain('▲')
-    expect(screenText({ ...mk('processing'), spinnerTick: 1 }).body).toContain('▶')
+    expect(screenText({ ...mk('processing'), spinnerTick: 0 }).body).toContain('·')
+    expect(screenText({ ...mk('processing'), spinnerTick: 1 }).body).toContain('•')
   })
 
   test('waiting is no longer marked', () => {
@@ -884,7 +1009,7 @@ describe('list badge', () => {
     // everything has stops distinguishing anything.
     const body = screenText(mk('waiting_input')).body
     expect(body).not.toContain('[!]')
-    expect(body).not.toContain('▲')
+    expect(body).not.toContain('•')
   })
 
   test('an unmarked row is padded to a badge width', () => {
@@ -2026,8 +2151,10 @@ describe('the list marks the sessions that want you', () => {
 
   test('the mark keeps the badge column, so the names still line up', () => {
     const body = rows([ws('a', 'waiting_input'), ws('b', 'idle'), ws('c', 'processing')])
-    const starts = body.map((l) => width(l.slice(0, l.search(/[^ >　！▲▶▼◀]/))))
-    expect(new Set(starts).size).toBe(1)
+    const starts = body.map((l) => width(l.slice(0, l.search(/[^ >　！·•]/))))
+    // See the list-screen alignment test: 5px spaces cannot pad a 9px bullet
+    // to exactly 20, and 1px is under the eye's threshold as well as a space's.
+    expect(Math.max(...starts) - Math.min(...starts)).toBeLessThan(SPACE_W)
   })
 })
 
