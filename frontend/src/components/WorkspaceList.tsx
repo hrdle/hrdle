@@ -6,6 +6,7 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import type { TFunction } from "i18next";
 import {
 	ArrowRight,
 	BarChart3,
@@ -35,6 +36,7 @@ import {
 	LOCAL_PEER_ID,
 	type PaneInfo,
 	type PeerClientView,
+	type SessionMetrics,
 	type SessionResponse,
 	type SessionTheme,
 	type TabInfo,
@@ -780,6 +782,188 @@ function useRowLongPress(onLongPress: (() => void) | undefined) {
 	};
 }
 
+/**
+ * A name the user typed outranks one we derived: `herdr pane rename` is them
+ * saying what the pane is for, where `claude` only says what is running.
+ */
+function paneDisplayName(pane: PaneInfo): string {
+	return pane.label || pane.agentName || pane.currentCommand || "shell";
+}
+
+function paneNameColorClass(pane: PaneInfo): string {
+	if (pane.agentColor && AGENT_NAME_COLORS[pane.agentColor]) {
+		return AGENT_NAME_COLORS[pane.agentColor];
+	}
+	const isAgentPane =
+		isAgentProvider(pane.currentCommand ?? "") || !!pane.agentName;
+	return isAgentPane ? "text-green-300" : "text-zinc-300";
+}
+
+function paneDotClass(state: IndicatorState | undefined): string {
+	return state === "processing"
+		? "bg-blue-400"
+		: state === "waiting_input"
+			? "bg-yellow-400 animate-pulse"
+			: "bg-zinc-600";
+}
+
+/**
+ * herdr labels a tab with its number until it is renamed. "Tab 3" reads better
+ * than a bare "3", but a renamed tab ("Recipes") wants no prefix.
+ */
+function tabDisplayLabel(label: string, t: TFunction): string {
+	return /^\d+$/.test(label) ? `${t("session.tab")} ${label}` : label;
+}
+
+/**
+ * The pane a collapsed card speaks for. Priority is what the user would have to
+ * act on: a pane waiting on them, then one still working, then whichever spoke
+ * most recently.
+ */
+function pickLeadPane(panes: PaneInfo[]): PaneInfo | undefined {
+	const rank = (p: PaneInfo) =>
+		p.indicatorState === "waiting_input"
+			? 0
+			: p.indicatorState === "processing"
+				? 1
+				: 2;
+	const spokeAt = (p: PaneInfo) => (p.recapAt ? Date.parse(p.recapAt) : 0);
+	// sort() is stable, so panes that tie on every key keep herdr's order.
+	return [...panes].sort(
+		(a, b) =>
+			rank(a) - rank(b) ||
+			spokeAt(b) - spokeAt(a) ||
+			Number(b.isActive) - Number(a.isActive),
+	)[0];
+}
+
+/**
+ * Context-window gauge. The card header, the pane rows and the collapsed
+ * summary all draw the same one — the color thresholds are what make it
+ * readable at a glance, so they live in a single place.
+ */
+function ContextMeter({ metrics }: { metrics: SessionMetrics }) {
+	if (typeof metrics.contextPercent !== "number") return null;
+	const percent = metrics.contextPercent;
+	return (
+		<div
+			className="inline-flex items-center gap-1.5"
+			title={`${formatTokenCount(metrics.contextTokens ?? 0)} / ${formatTokenCount(metrics.contextMaxTokens ?? 0)}`}
+		>
+			<span className="text-zinc-600">ctx</span>
+			<div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
+				<div
+					className={`h-full transition-all ${
+						percent >= 80
+							? "bg-red-500"
+							: percent >= 60
+								? "bg-amber-500"
+								: "bg-emerald-500"
+					}`}
+					style={{ width: `${Math.max(2, percent)}%` }}
+				/>
+			</div>
+			<span className="font-mono tabular-nums">{percent.toFixed(1)}%</span>
+		</div>
+	);
+}
+
+function MemoryLabel({ bytes }: { bytes?: number }) {
+	if (typeof bytes !== "number" || bytes <= 0) return null;
+	return (
+		<span className="font-mono tabular-nums" title={`${bytes} bytes`}>
+			<span className="text-zinc-600">mem</span> {formatBytes(bytes)}
+		</span>
+	);
+}
+
+/**
+ * What a multi-pane / multi-tab workspace says while collapsed.
+ *
+ * Model, ctx and recap live on the pane rows because one card-level number
+ * cannot say which pane it describes — but that left the busiest workspaces as
+ * the least informative rows in the list: a title, a "3 panes" badge, nothing
+ * else. So the pane that most wants attention speaks for the card, and the
+ * others shrink to a chip carrying only their state and context use.
+ */
+function CollapsedWorkspaceSummary({
+	lead,
+	panes,
+	tabs,
+}: {
+	lead: PaneInfo;
+	panes: PaneInfo[];
+	tabs?: TabInfo[];
+}) {
+	const { t, i18n } = useTranslation();
+	const rest = panes.filter((p) => p.paneId !== lead.paneId);
+	const leadTab =
+		tabs && tabs.length > 1
+			? tabs.find((tab) => tab.id === lead.tabId)
+			: undefined;
+
+	return (
+		<div className="mt-1.5">
+			<div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] text-zinc-500">
+				<span className="inline-flex items-center gap-1.5 min-w-0">
+					<span
+						className={`w-1.5 h-1.5 rounded-full shrink-0 ${paneDotClass(lead.indicatorState)}`}
+					/>
+					<span
+						className={`text-[12px] font-medium truncate ${paneNameColorClass(lead)}`}
+					>
+						{paneDisplayName(lead)}
+					</span>
+				</span>
+				{leadTab && (
+					<span className="text-zinc-600 shrink-0">
+						{tabDisplayLabel(leadTab.label, t)}
+					</span>
+				)}
+				{lead.metrics?.model && (
+					<span title={lead.metrics.model}>
+						{formatModelName(lead.metrics.model)}
+					</span>
+				)}
+				{lead.metrics && <ContextMeter metrics={lead.metrics} />}
+				<MemoryLabel bytes={lead.metrics?.memoryRssBytes} />
+			</div>
+			{lead.recap && (
+				<p className="mt-1 text-[12px] text-amber-200 leading-relaxed line-clamp-2">
+					{lead.recap}
+					{lead.recapAt && (
+						<span className="ml-2 text-[10px] text-zinc-500">
+							{formatRelativeTime(lead.recapAt, t, i18n.language)}
+						</span>
+					)}
+				</p>
+			)}
+			{rest.length > 0 && (
+				<div className="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px]">
+					{rest.map((pane) => (
+						<span
+							key={pane.paneId}
+							className="inline-flex items-center gap-1.5 min-w-0"
+						>
+							<span
+								className={`w-1.5 h-1.5 rounded-full shrink-0 ${paneDotClass(pane.indicatorState)}`}
+							/>
+							<span className="truncate max-w-[9rem] text-zinc-400">
+								{paneDisplayName(pane)}
+							</span>
+							{typeof pane.metrics?.contextPercent === "number" && (
+								<span className="font-mono tabular-nums text-zinc-600 shrink-0">
+									{pane.metrics.contextPercent.toFixed(1)}%
+								</span>
+							)}
+						</span>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
 /** One pane of a tab: status dot, agent name, then its metrics and recap. */
 function PaneRow({
 	session,
@@ -804,24 +988,10 @@ function PaneRow({
 	activateTab?: () => void | Promise<void>;
 }) {
 	const { t, i18n } = useTranslation();
-	const cmd = pane.currentCommand || "shell";
-	const isAgentPane = isAgentProvider(cmd) || !!pane.agentName;
-	// A name the user typed outranks one we derived: `herdr pane rename` is them
-	// saying what the pane is for, where `claude` only says what is running.
-	const displayName = pane.label || pane.agentName || cmd;
-	const nameColor =
-		pane.agentColor && AGENT_NAME_COLORS[pane.agentColor]
-			? AGENT_NAME_COLORS[pane.agentColor]
-			: isAgentPane
-				? "text-green-300"
-				: "text-zinc-300";
+	const displayName = paneDisplayName(pane);
+	const nameColor = paneNameColorClass(pane);
 	const paneIndicator = pane.indicatorState;
-	const paneDotClass =
-		paneIndicator === "processing"
-			? "bg-blue-400"
-			: paneIndicator === "waiting_input"
-				? "bg-yellow-400 animate-pulse"
-				: "bg-zinc-600";
+	const dotClass = paneDotClass(paneIndicator);
 
 	const { consumeLongPress, handlers } = useRowLongPress(
 		onClosePane
@@ -848,7 +1018,7 @@ function PaneRow({
 				{...handlers}
 				className="w-full min-h-11 flex items-center gap-2 px-3 py-1.5 rounded-md text-left transition-colors hover:bg-white/[0.04]"
 			>
-				<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${paneDotClass}`} />
+				<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotClass}`} />
 				<span className={`text-[13px] font-medium truncate ${nameColor}`}>
 					{displayName}
 				</span>
@@ -872,41 +1042,8 @@ function PaneRow({
 							{formatModelName(pane.metrics.model)}
 						</span>
 					)}
-					{typeof pane.metrics.contextPercent === "number" && (
-						<div
-							className="inline-flex items-center gap-1.5"
-							title={`${formatTokenCount(pane.metrics.contextTokens ?? 0)} / ${formatTokenCount(pane.metrics.contextMaxTokens ?? 0)}`}
-						>
-							<span className="text-zinc-600">ctx</span>
-							<div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
-								<div
-									className={`h-full ${
-										pane.metrics.contextPercent >= 80
-											? "bg-red-500"
-											: pane.metrics.contextPercent >= 60
-												? "bg-amber-500"
-												: "bg-emerald-500"
-									}`}
-									style={{
-										width: `${Math.max(2, pane.metrics.contextPercent)}%`,
-									}}
-								/>
-							</div>
-							<span className="font-mono tabular-nums">
-								{pane.metrics.contextPercent.toFixed(1)}%
-							</span>
-						</div>
-					)}
-					{typeof pane.metrics.memoryRssBytes === "number" &&
-						pane.metrics.memoryRssBytes > 0 && (
-							<span
-								className="font-mono tabular-nums"
-								title={`${pane.metrics.memoryRssBytes} bytes`}
-							>
-								<span className="text-zinc-600">mem</span>{" "}
-								{formatBytes(pane.metrics.memoryRssBytes)}
-							</span>
-						)}
+					<ContextMeter metrics={pane.metrics} />
+					<MemoryLabel bytes={pane.metrics.memoryRssBytes} />
 				</div>
 			)}
 			{pane.recap && (
@@ -962,11 +1099,7 @@ function TabRow({
 	) => void;
 }) {
 	const { t } = useTranslation();
-	// herdr labels a tab with its number until it is renamed. "Tab 3" reads
-	// better than a bare "3", but a renamed tab ("Recipes") wants no prefix.
-	const label = /^\d+$/.test(tab.label)
-		? `${t("session.tab")} ${tab.label}`
-		: tab.label;
+	const label = tabDisplayLabel(tab.label, t);
 
 	const closeTab =
 		canClose && onCloseTab
@@ -1170,6 +1303,12 @@ function SessionItem({
 	// A single-tab workspace has no hierarchy worth drawing — its panes are
 	// listed flat, with the "new tab" action still available underneath.
 	const hasTabTree = (extSession.tabs?.length ?? 0) > 1;
+	// ...but a collapsed card would then carry nothing but its badges, so one
+	// pane stands in for the workspace until the rows themselves are on screen.
+	const collapsedLead =
+		isMultiWorkspace && !panesExpanded
+			? pickLeadPane(extSession.panes ?? [])
+			: undefined;
 	// Derive card-level indicatorState from panes (priority: waiting_input > processing > idle)
 	const cardIndicator: IndicatorState | undefined = (() => {
 		if (extSession.panes && extSession.panes.length > 0) {
@@ -1391,8 +1530,10 @@ function SessionItem({
 					</p>
 				)}
 
-				{/* Last prompt / summary — hide when recap is present (recap already covers it) */}
+				{/* Last prompt / summary — hide when a recap is present (the recap
+				    already covers it), including the lead pane's own recap below. */}
 				{!extSession.ccRecap &&
+					!collapsedLead?.recap &&
 					(extSession.ccSummary || extSession.ccFirstPrompt) && (
 						<p className="mt-1.5 text-[12px] text-zinc-600 leading-relaxed line-clamp-2">
 							{extSession.ccSummary || extSession.ccFirstPrompt}
@@ -1432,43 +1573,23 @@ function SessionItem({
 								)}
 							</span>
 						)}
-						{!isMultiWorkspace && typeof extSession.metrics?.contextPercent === "number" && (
-							<div
-								className="inline-flex items-center gap-1.5"
-								title={`${formatTokenCount(extSession.metrics.contextTokens ?? 0)} / ${formatTokenCount(extSession.metrics.contextMaxTokens ?? 0)}`}
-							>
-								<span className="text-zinc-600">ctx</span>
-								<div className="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
-									<div
-										className={`h-full transition-all ${
-											extSession.metrics.contextPercent >= 80
-												? "bg-red-500"
-												: extSession.metrics.contextPercent >= 60
-													? "bg-amber-500"
-													: "bg-emerald-500"
-										}`}
-										style={{
-											width: `${Math.max(2, extSession.metrics.contextPercent)}%`,
-										}}
-									/>
-								</div>
-								<span className="font-mono tabular-nums">
-									{extSession.metrics.contextPercent.toFixed(1)}%
-								</span>
-							</div>
+						{!isMultiWorkspace && extSession.metrics && (
+							<ContextMeter metrics={extSession.metrics} />
 						)}
-						{!isMultiWorkspace &&
-							typeof extSession.metrics?.memoryRssBytes === "number" &&
-							extSession.metrics.memoryRssBytes > 0 && (
-								<span
-									className="font-mono tabular-nums"
-									title={`${extSession.metrics.memoryRssBytes} bytes`}
-								>
-									<span className="text-zinc-600">mem</span>{" "}
-									{formatBytes(extSession.metrics.memoryRssBytes)}
-								</span>
-							)}
+						{!isMultiWorkspace && (
+							<MemoryLabel bytes={extSession.metrics?.memoryRssBytes} />
+						)}
 					</div>
+				)}
+
+				{/* Collapsed multi-pane workspace: one pane speaks for the card so the
+				    list still says what is going on without being expanded. */}
+				{collapsedLead && (
+					<CollapsedWorkspaceSummary
+						lead={collapsedLead}
+						panes={extSession.panes ?? []}
+						tabs={extSession.tabs}
+					/>
 				)}
 
 				{!hintSeen && (
