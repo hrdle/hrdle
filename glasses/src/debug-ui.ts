@@ -2,18 +2,38 @@
 // can be driven from a browser with no G2 on your face (vite dev on 8391, or
 // served by the server itself at /glasses).
 //
-// It consumes the SAME GlassesController as the real G2 path AND renders
-// through the same `screenText()` the device renders through, so what you see
-// here is the device's own output: identical wrapping at 52 columns, identical
-// 7-line clamp, identical pagination. Copying the screen therefore quotes what
-// the glasses actually showed. Mic/STT are faked: the "STT result" textbox
-// injects what the Groq transcription would have returned.
+// It consumes the SAME GlassesController as the real G2 path AND draws through
+// the same `updateDisplay()` the device draws through: this file supplies a
+// bridge that records containers instead of sending them to a host, and the
+// canvas paints what that bridge is holding. So the rebuild-vs-upgrade
+// decision, the skip-if-unchanged record, which container id a string is
+// addressed to, and every container's own geometry are decided once, in
+// `display.ts`, for the device and for this window alike.
+//
+// That is the point. It used to lay the screen out here from `screenText()` —
+// same strings, second implementation of where they go — and every divergence
+// that has cost real debugging time was of that shape: a border 36px from
+// where the device puts it, a page repeating its previous line on the device
+// only. Copying the screen quotes the containers, so it says what the panel is
+// holding rather than what it ought to be.
+//
+// Mic/STT are faked: the "STT result" textbox injects what the Groq
+// transcription would have returned.
 
 import { setBaseUrl, transcribe } from './api.ts'
 import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
-import { NOTICE_BORDER, NOTICE_BORDER_COLOR, NOTICE_PAD, noticeHeight, screenText, wrapForPanel } from './display.ts'
+import {
+  NOTICE_BORDER,
+  NOTICE_BORDER_COLOR,
+  NOTICE_PAD,
+  noticeHeight,
+  screenText,
+  updateDisplay,
+  updateHeader,
+  wrapForPanel,
+} from './display.ts'
 import {
   BAR_H,
   CARD_BORDER,
@@ -24,6 +44,8 @@ import {
   PANEL_W,
   advance,
   cardBox,
+  splitLines,
+  textWidth,
 } from './metrics.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
@@ -379,11 +401,82 @@ export function startDebugUI(): void {
   }
   let lastMode = 'session_list'
 
+  /**
+   * A container as the panel is holding it.
+   *
+   * Geometry included, and taken from what `updateDisplay` actually sent rather
+   * than recomputed here. This window used to lay the screen out itself from
+   * `screenText` — same strings, second implementation of where they go — and
+   * every constant it kept (the notice strip's top, the card's border, the
+   * body's first baseline) was a copy of one in `display.ts` that could drift
+   * without either side noticing. The four divergences found on 2026-07-27/28
+   * were all of that shape.
+   */
+  type PanelContainer = {
+    id: number
+    name: string
+    x: number
+    y: number
+    w: number
+    h: number
+    pad: number
+    border: number
+    borderColor: number
+    radius: number
+    content: string
+  }
+  let panel: PanelContainer[] = []
+
+  /**
+   * The host, as far as `updateDisplay` can tell.
+   *
+   * The point is not that it records the containers — it is that the simulator
+   * now goes through the same path the device does. Skip-if-unchanged, the
+   * rebuild-vs-upgrade decision, and which container id a string is addressed
+   * to are all decided in `display.ts` for both of us now. A stale upgrade or
+   * an id that means the list on one screen and the header on another shows up
+   * here, on a desk, rather than only on someone's face.
+   */
+  const panelBridge = {
+    rebuildPageContainer(container: { textObject?: unknown[] }): boolean {
+      const objects = (container.textObject ?? []) as Array<Record<string, unknown>>
+      panel = objects.map((t) => ({
+        id: (t.containerID as number) ?? 0,
+        name: (t.containerName as string) ?? '',
+        x: (t.xPosition as number) ?? 0,
+        y: (t.yPosition as number) ?? 0,
+        w: (t.width as number) ?? PANEL_W,
+        h: (t.height as number) ?? LINE_H,
+        pad: (t.paddingLength as number) ?? 0,
+        border: (t.borderWidth as number) ?? 0,
+        borderColor: (t.borderColor as number) ?? CARD_BORDER_COLOR,
+        radius: (t.borderRadius as number) ?? 0,
+        content: (t.content as string) ?? '',
+      }))
+      return true
+    },
+    textContainerUpgrade(up: { containerID?: number; content?: string }): boolean {
+      const target = panel.find((c) => c.id === up.containerID)
+      // A miss is not silently ignored: an upgrade addressed to a container
+      // this page does not have is the id bug this simulator exists to catch.
+      if (!target) {
+        setVoiceStatus(`upgrade addressed container ${up.containerID}, which this page does not have`)
+        return true
+      }
+      target.content = up.content ?? ''
+      return true
+    },
+  }
+
   // ── Device mirror (demo) ──
   //
   // The device publishes the three strings it just drew; this panel paints
   // them with the same painter it uses for its own state. What the audience
   // sees is the wearer's screen, not a second interpretation of it.
+  //
+  // This one stays on the `screenText` path: it is handed three strings off the
+  // wire with no state behind them, so there is no `updateDisplay` to run and
+  // nothing to be faithful to beyond the text itself.
   let mirroring = false
   let localScreen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean } = { header: '', body: '', footer: '' }
   let localMode = 'session_list'
@@ -454,17 +547,94 @@ export function startDebugUI(): void {
     }
   }
 
-  function drawPanel(screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean; card?: boolean }): void {
+  /**
+   * Draw what the panel is holding, container by container.
+   *
+   * Everything positional comes off the container: where it starts, how wide it
+   * is, how much padding it keeps, whether it draws a border. Nothing is
+   * recomputed from the mode, so a screen whose geometry changes in
+   * `display.ts` moves here without this file being touched.
+   *
+   * Two things LVGL does that have to be done here as well, or the window stops
+   * earning its subtitle:
+   *
+   * - **Wrapping happens inside the container**, at its inner width, not at a
+   *   panel-wide constant. A container narrower than the body wraps sooner, and
+   *   pre-wrapping to `BODY_WIDTH` would have hidden that.
+   * - **A container clips what it cannot fit.** Text past its height is not
+   *   drawn — it does not spill onto the container below. A page that overflows
+   *   silently loses its last line on the device, and it now does so here.
+   */
+  function drawContainers(ctx: CanvasRenderingContext2D): void {
+    for (const c of panel) {
+      if (c.border > 0) {
+        ctx.strokeStyle = `rgba(${GREEN}, ${c.borderColor / 15})`
+        ctx.lineWidth = c.border
+        ctx.beginPath()
+        ctx.roundRect(c.x + c.border / 2, c.y + c.border / 2, c.w - c.border, c.h - c.border, c.radius)
+        ctx.stroke()
+      }
+      // The footer is the one thing drawn dimmer than the rest — it carries the
+      // gestures and the clock, which are reference rather than content.
+      ctx.fillStyle = c.name === 'footer' ? `rgba(${GREEN}, 0.78)` : `rgb(${GREEN})`
+      const inset = c.border + c.pad
+      const innerW = c.w - 2 * inset
+      const lines = c.content
+        .split('\n')
+        .flatMap((line) => (textWidth(line) <= innerW ? [line] : splitLines(line, innerW)))
+      const room = Math.floor((c.h - 2 * inset) / LINE_H)
+      for (const [i, line] of lines.slice(0, Math.max(0, room)).entries()) {
+        drawRow(ctx, line, c.x + inset, c.y + inset + BASELINE + i * LINE_H)
+      }
+    }
+  }
+
+  function beginFrame(): CanvasRenderingContext2D | null {
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) return null
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     ctx.font = FONT
     ctx.textBaseline = 'alphabetic'
     // Optics bloom a little; keep it subtle or quantising turns it to mud.
     ctx.shadowColor = `rgba(${GREEN}, 0.55)`
     ctx.shadowBlur = 6
-
     ctx.fillStyle = `rgb(${GREEN})`
+    return ctx
+  }
+
+  function endFrame(ctx: CanvasRenderingContext2D): void {
+    ctx.shadowBlur = 0
+    // 4-bit: 16 alpha levels, nothing in between.
+    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const px = frame.data
+    for (let i = 3; i < px.length; i += 4) {
+      px[i] = Math.round((px[i] / 255) * 15) * 17
+    }
+    ctx.putImageData(frame, 0, 0)
+    // The little window is a copy of this one; keep it in step.
+    pumpPip()
+  }
+
+  /** This simulator's own screen: whatever `updateDisplay` left in the panel. */
+  function paintPanel(): void {
+    const ctx = beginFrame()
+    if (!ctx) return
+    drawContainers(ctx)
+    endFrame(ctx)
+  }
+
+  /**
+   * The mirrored device screen, laid out from three strings.
+   *
+   * Kept on its own path because that is all a mirror is given — text off the
+   * wire, with no state behind it to run `updateDisplay` against. It is the one
+   * place this file still positions anything itself, and it is not claiming to
+   * show where the device put things, only what it said.
+   */
+  function drawPanel(screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean; card?: boolean }): void {
+    const ctx = beginFrame()
+    if (!ctx) return
+
     if (!screen.headerless) drawRow(ctx, screen.header, HEADER_PAD, HEADER_BASE)
 
     // The notice strip is its own container on the device, with a drawn border
@@ -534,18 +704,7 @@ export function startDebugUI(): void {
     ctx.fillStyle = `rgba(${GREEN}, 0.78)`
     drawRow(ctx, screen.footer, HEADER_PAD, FOOTER_BASE)
 
-    ctx.shadowBlur = 0
-
-    // 4-bit: 16 alpha levels, nothing in between.
-    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    const px = frame.data
-    for (let i = 3; i < px.length; i += 4) {
-      px[i] = Math.round((px[i] / 255) * 15) * 17
-    }
-    ctx.putImageData(frame, 0, 0)
-
-    // The little window is a copy of this one; keep it in step.
-    pumpPip()
+    endFrame(ctx)
   }
 
   // ── Microphone ──
@@ -607,19 +766,36 @@ export function startDebugUI(): void {
     // wearer's browser notifications for as long as this tab stayed open.
     onDevice: false,
     render(state) {
+      // Kept for the mirror to fall back to and for `Copy screen` to quote
+      // while the device owns the panel; the drawing below does not read it.
       const raw = screenText(state)
-      // The device's container wraps for it; this panel has to do it itself.
-      const screen = { ...raw, body: wrapForPanel(raw.body) }
-      localScreen = screen
+      localScreen = { ...raw, body: wrapForPanel(raw.body) }
       localMode = state.mode
       renderDiag(state)
       // While mirroring the device owns the panel; this connection's own
       // state keeps running underneath so switching back is instant.
-      if (!mirroring) paint(screen, state.mode)
+      if (mirroring) return
+      lastScreen = localScreen
+      lastMode = state.mode
+      modeJp.textContent = MODE_LABEL[state.mode] ?? state.mode
+      modeId.textContent = state.mode
+      // The same call the device makes. Every write goes to `panelBridge`,
+      // which resolves synchronously, so the `then` runs on a microtask and the
+      // panel is drawn before anything else can render over it.
+      void updateDisplay(panelBridge as never, state).then(paintPanel)
     },
-    // Drawing costs nothing here, so the header tick is just a render.
+    // Drawing costs nothing here, so the header tick is just a render. It still
+    // goes through `updateHeader` rather than a full render: which single
+    // container the device settles for is exactly the sort of decision that
+    // wants exercising on a desk.
     renderHeader(state) {
-      platform.render(state)
+      const raw = screenText(state)
+      localScreen = { ...raw, body: wrapForPanel(raw.body) }
+      localMode = state.mode
+      renderDiag(state)
+      if (mirroring) return
+      lastScreen = localScreen
+      void updateHeader(panelBridge as never, state).then(paintPanel)
     },
     // There is no host here to show an exit dialogue and no app to be exited
     // from, so this reports rather than acts — the simulator's job is to make
@@ -699,22 +875,38 @@ export function startDebugUI(): void {
   /** The screen as pasteable text: three framed sections, same strings the G2
    *  drew. This is the point of the simulator — quoting a screen in a report
    *  should not require retyping it. */
+  /**
+   * The screen as text, quoted from the containers rather than rebuilt.
+   *
+   * `screenText(state)` would say what the screen *should* show; these are the
+   * strings the panel is actually holding, which is the same thing right up
+   * until the moment it is not — a skipped upgrade, or one addressed to the
+   * wrong id, differs in exactly this. Each block is named for its container so
+   * a copied screen says where a wrong line came from.
+   *
+   * Mirroring has no containers to quote: three strings arrive off the wire
+   * with no state behind them, so that path prints what it was handed.
+   */
   function screenAsText(): string {
     const rule = '─'.repeat(52)
-    return [
-      `[${MODE_LABEL[lastMode] ?? lastMode} / ${lastMode}]${mirroring ? ' mirroring the device' : ''}`,
-      rule,
-      lastScreen.header,
-      rule,
-      // The panel draws this rule as a container border rather than a row of
-      // text; here it is a row like the others, so the copy reads the way the
-      // screen looks.
-      ...(lastScreen.notice ? [lastScreen.notice, rule] : []),
-      lastScreen.body,
-      rule,
-      lastScreen.footer,
-      rule,
-    ].join('\n')
+    const head = `[${MODE_LABEL[lastMode] ?? lastMode} / ${lastMode}]${mirroring ? ' mirroring the device' : ''}`
+    if (mirroring) {
+      return [
+        head,
+        rule,
+        lastScreen.header,
+        rule,
+        // The panel draws this rule as a container border rather than a row of
+        // text; here it is a row like the others, so the copy reads the way the
+        // screen looks.
+        ...(lastScreen.notice ? [lastScreen.notice, rule] : []),
+        lastScreen.body,
+        rule,
+        lastScreen.footer,
+        rule,
+      ].join('\n')
+    }
+    return [head, rule, ...panel.flatMap((c) => [`${c.name}:`, c.content, rule])].join('\n')
   }
 
   // The voice-input settings live on the server; the simulator talks to the
@@ -1167,7 +1359,14 @@ export function startDebugUI(): void {
     } else {
       controller.ws.unsubscribeGlassesScreen()
       setMirrorUi(false, '')
-      paint(localScreen, localMode)
+      // Back to this simulator's own panel, which has been kept up to date
+      // underneath the mirror — repaint it rather than re-running a render,
+      // which would find every container unchanged and draw nothing.
+      lastScreen = localScreen
+      lastMode = localMode
+      modeJp.textContent = MODE_LABEL[localMode] ?? localMode
+      modeId.textContent = localMode
+      paintPanel()
     }
   })
 
