@@ -41,6 +41,20 @@ import { getToolSummary } from "../utils/toolSummary";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 // Conversation font size (shared across all sessions)
+/**
+ * Space kept under the last message.
+ *
+ * Without it the transcript ends flush against the bottom edge, where a phone
+ * puts its home indicator and the app puts its session bar: the last line was
+ * there, and unreachable, because there was nothing left to scroll.
+ *
+ * It covers a second thing, measured on the way in. The virtualizer's
+ * `getTotalSize()` runs a steady ~45px short of what the rows actually render
+ * to, so the tail of the final message hung below the sized container and was
+ * clipped. This space absorbs that too.
+ */
+const CV_BOTTOM_SPACE = 128;
+
 const CV_FONT_SIZE_KEY = storageKey("conversation-font-size");
 const CV_DEFAULT_FONT_SIZE = 15;
 const CV_MIN_FONT_SIZE = 11;
@@ -892,7 +906,12 @@ export function ConversationViewer({
 	useEffect(() => {
 		const el = parentRef.current;
 		if (!el) return;
-		const BOTTOM_THRESHOLD = 24;
+		// The trailing space counts as "at the bottom". Auto-follow aligns the
+		// last message to the viewport edge, which leaves the column's own
+		// padding below it — `pt + pb` of unconsumed scroll — so a bare 24px
+		// threshold would read that as "the reader scrolled away" and stop
+		// following after the first message.
+		const BOTTOM_THRESHOLD = CV_BOTTOM_SPACE + 48;
 		const onScroll = () => {
 			atBottomRef.current =
 				el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_THRESHOLD;
@@ -1057,7 +1076,12 @@ export function ConversationViewer({
 					["--cv-fs-meta" as never]: `${Math.max(10, fontSize - 3)}px`,
 				}}
 			>
-				<div className="mx-auto w-full max-w-[46rem] px-4 py-5">
+				<div
+					className="mx-auto w-full max-w-[46rem] px-4 pt-5"
+					style={{
+						paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${CV_BOTTOM_SPACE}px)`,
+					}}
+				>
 					{isLoading ? (
 						<div className="py-10 text-center text-cv-text-muted">
 							{t("common.loading")}

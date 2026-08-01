@@ -49,6 +49,11 @@ export function VirtualizedHistoryList({
 		<div
 			ref={parentRef}
 			className="h-full overflow-y-auto overscroll-contain bg-cv-bg"
+			// Same reason as the transcript: the last row ended flush against the
+			// bottom edge, under the phone's home indicator.
+			style={{
+				paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 48px)",
+			}}
 		>
 			<div
 				style={{
