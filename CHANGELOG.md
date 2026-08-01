@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.32] - 2026-08-01
+
+### Fixed
+- **The G2 session list marks the sessions that are waiting for you.**
+  `statusLabel` returned a badge only for `processing`, so `waiting_input` - the
+  state most worth finding on that screen - looked exactly like idle and
+  completed. Survivable while waiting sessions floated to the top; freezing the
+  order so the cursor would hold still (#102) left the state with neither a mark
+  nor a position
+  - Waiting outranks working, on the row and in the heading: a session that is
+    running will finish on its own and one that is asking will not. A heading
+    reads its panes rather than only its own indicator, because the panes can be
+    below the fold exactly when the summary is all there is to go on
+  - `completed` and `idle` stay unmarked on purpose - most sessions are one of
+    the two, and a mark on most rows is not a mark
+  - The cursor no longer shoves its own row sideways: `>` is 10px against a
+    space's 5, so the row under it sat 5px right of every other row, and the
+    cursor moves on every swipe
+
+### Changed
+- Glasses app built to v0.0.30 ehpk
+
 ## [0.3.31] - 2026-08-01
 
 ### Fixed
