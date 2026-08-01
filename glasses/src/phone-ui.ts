@@ -41,6 +41,7 @@ import {
 } from './api.ts'
 import type { Bridge } from './display.ts'
 import { scanQr } from './qr-scan.ts'
+import { resolveAddress } from './resolve-host.ts'
 import { clearStored, clearStoredSync, readStored, readStoredSync, storageKey, writeStoredSync } from './storage.ts'
 
 const URL_SUFFIX = 'url'
@@ -65,6 +66,8 @@ const LOAD_TIMEOUT_MS = 12_000
 interface FromGuide {
   type: string
   url?: string
+  /** What was typed into the address field: a short address, a hostname or a URL. */
+  host?: string
   patch?: { groqApiKey?: string | null; sttLang?: string | null; sttPrompt?: string | null }
 }
 
@@ -182,6 +185,15 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       case 'hrdle:scan-qr': {
         const outcome = await scanQr()
         reply({ type: 'hrdle:qr-result', ...outcome })
+        break
+      }
+
+      case 'hrdle:resolve-host': {
+        // Typed short, resolved here. The guide cannot make this request itself
+        // for the same reason it cannot make any other: a public origin is not
+        // allowed to reach a CGNAT address, and the tailnet is entirely CGNAT.
+        const outcome = await resolveAddress(typeof data.host === 'string' ? data.host : '')
+        reply({ type: 'hrdle:resolved', ...outcome })
         break
       }
 

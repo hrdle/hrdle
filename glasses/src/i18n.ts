@@ -70,6 +70,13 @@ const EN: Table = {
   'probe.tryPhoto': 'Try the camera app',
   'probe.tryClipboard': 'Try the clipboard',
 
+  'resolve.empty': 'Type the address first.',
+  'resolve.notThere':
+    'Something answered at {host}, but it was not a {product} server. Check the address.',
+  'resolve.badAnswer': '{host} answered, but not with an address. Is that the right machine?',
+  'resolve.unreachable': 'Could not reach {host}: {error}',
+  'resolve.timedOut': 'no answer. Is the machine awake, and is Tailscale connected on this phone?',
+
   'settings.title': 'Voice input',
   'settings.subtitle':
     'Transcription runs on the server through Groq. The key never leaves that host.',
@@ -137,6 +144,14 @@ const JA: Table = {
   'probe.close': '閉じる',
   'probe.tryPhoto': 'カメラアプリを試す',
   'probe.tryClipboard': 'クリップボードを試す',
+
+  'resolve.empty': '先にアドレスを入力してください。',
+  'resolve.notThere':
+    '{host} から応答がありましたが、{product} サーバーではありませんでした。アドレスを確認してください。',
+  'resolve.badAnswer': '{host} は応答しましたが、アドレスを返しませんでした。マシンは合っていますか。',
+  'resolve.unreachable': '{host} に接続できませんでした: {error}',
+  'resolve.timedOut':
+    '応答がありません。マシンは起動していますか。この端末で Tailscale は接続されていますか。',
 
   'settings.title': '音声入力',
   'settings.subtitle':

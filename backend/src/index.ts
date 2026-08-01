@@ -10,6 +10,7 @@ import { files } from './routes/files';
 import { dashboard } from './routes/dashboard';
 import { notify } from './routes/notify';
 import { peers } from './routes/peers';
+import { shortTailscaleIp, startDiscoveryServer } from './services/discovery';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
 import { glassesRelay } from './routes/glasses-relay';
@@ -361,6 +362,8 @@ if (statusResult.exitCode !== 0) {
 }
 
 let tailscaleHostname: string;
+/** This machine's own tailnet address, for the short form the setup screen takes. */
+let tailscaleIp: string | null = null;
 try {
   const status = JSON.parse(statusResult.stdout.toString());
   const dnsName = status.Self?.DNSName;
@@ -369,6 +372,8 @@ try {
   }
   // Remove trailing dot if present
   tailscaleHostname = dnsName.replace(/\.$/, '');
+  const ips = status.Self?.TailscaleIPs;
+  tailscaleIp = Array.isArray(ips) ? (ips.find((ip: unknown) => typeof ip === 'string' && ip.includes('.')) ?? null) : null;
 } catch (_e) {
   console.error(`${t('server.tailscaleParseError')}`);
   process.exit(1);
@@ -459,9 +464,26 @@ const port = args.port;
 const host = args.host;
 process.env[envVar('PORT')] = String(port);
 
+const serverUrl = `https://${tailscaleHostname}:${port}`;
+
 console.log(`${IDENTITY.productName} v${VERSION}`);
-console.log(`   URL: https://${tailscaleHostname}:${port}`);
+console.log(`   URL: ${serverUrl}`);
 console.log(`   Static: ${EMBEDDED_MODE ? '(embedded)' : staticRoot}`);
+
+// The plaintext signpost, one port up. A phone that has only been told
+// `91.210.90` cannot reach the HTTPS port - the certificate is for the FQDN -
+// so this is what turns a short address into the real one.
+const discovery = startDiscoveryServer(port + 1, {
+  product: IDENTITY.productName,
+  version: VERSION,
+  url: serverUrl,
+});
+if (discovery) {
+  const short = tailscaleIp ? shortTailscaleIp(tailscaleIp) : null;
+  if (short) {
+    console.log(`   Short address: ${short}   (for the glasses app's setup screen)`);
+  }
+}
 
 export default {
   port,

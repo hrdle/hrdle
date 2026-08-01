@@ -2,16 +2,25 @@
  * peer-discovery: scans the Tailscale tailnet for peers running hrdle.
  *
  * - Lists the online peers via `tailscale status --json`
- * - Fetches every peer's :5923/health in parallel (3s timeout)
+ * - Fetches every peer's health endpoint in parallel (3s timeout)
  * - A 200 means hrdle is there, and its version is read from the response
  * - Skips this machine itself (matched by DNSName)
  */
 
 import { listPeers } from './peer-registry';
+import { IDENTITY } from '../../../shared/identity';
 import { SELF_PEER_URL, type DiscoveredPeer } from '../../../shared/types';
 
 const DISCOVERY_TIMEOUT_MS = 3_000;
-const DEFAULT_PORT = 5923;
+/**
+ * The port a peer is expected to answer on.
+ *
+ * Composed from identity rather than written here: this was a literal 5923 from
+ * before the rename, so after it every probe went to a port nothing listens on
+ * and a tailnet full of installs discovered nothing (#459). A port number is
+ * exactly the kind of constant that looks too obvious to be wrong.
+ */
+const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface TailscaleStatus {
   Self?: { DNSName?: string };
