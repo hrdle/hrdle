@@ -13,9 +13,10 @@
 import QRCode from 'qrcode';
 import { IDENTITY } from '../../../shared/identity';
 import { VERSION } from '../cli';
+import { shortTailscaleIp } from '../services/discovery';
 
 interface TailscaleStatus {
-  Self?: { DNSName?: string };
+  Self?: { DNSName?: string; TailscaleIPs?: string[] };
 }
 
 /**
@@ -26,7 +27,7 @@ interface TailscaleStatus {
  * any other way - `hostname`, a config value - would produce an address that
  * resolves and then fails TLS, which is a worse failure than not printing one.
  */
-function tailscaleHost(): string | null {
+function tailscaleSelf(): { host: string; ip: string | null } | null {
   const result = Bun.spawnSync(['tailscale', 'status', '--json'], {
     stdout: 'pipe',
     stderr: 'pipe',
@@ -43,7 +44,8 @@ function tailscaleHost(): string | null {
       console.error('error: Tailscale reported no DNSName for this machine.');
       return null;
     }
-    return dnsName;
+    const ip = status.Self?.TailscaleIPs?.find((candidate) => candidate.includes('.')) ?? null;
+    return { host: dnsName, ip };
   } catch {
     console.error('error: could not read the output of `tailscale status --json`.');
     return null;
@@ -51,13 +53,13 @@ function tailscaleHost(): string | null {
 }
 
 export async function showQr(port: number): Promise<void> {
-  const host = tailscaleHost();
-  if (!host) {
+  const self = tailscaleSelf();
+  if (!self) {
     process.exitCode = 1;
     return;
   }
 
-  const url = `https://${host}:${port}`;
+  const url = `https://${self.host}:${port}`;
 
   // Error correction stays at the lowest level on purpose. It is the setting
   // that decides how big the code is, and this one is read off a terminal by a
@@ -76,7 +78,13 @@ export async function showQr(port: number): Promise<void> {
   console.log(qr);
   console.log(`  ${url}`);
   console.log('');
-  console.log(`  Scan this from the ${IDENTITY.productName} app on your phone`);
-  console.log('  (the Connect step of the setup wizard), or type the address by hand.');
+  console.log(`  Scan this with your phone's own camera app - it opens ${IDENTITY.productName}`);
+  console.log('  in the browser. The glasses app cannot use a camera: its WebView');
+  console.log('  refuses one to web content.');
+  const short = self.ip ? shortTailscaleIp(self.ip) : null;
+  if (short) {
+    console.log('');
+    console.log(`  For the glasses app's setup screen, type this instead:  ${short}`);
+  }
   console.log('');
 }
