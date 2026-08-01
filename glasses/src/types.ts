@@ -308,47 +308,75 @@ export function recapBlockLines(recap: string | undefined, _maxLines = 2): strin
 }
 
 
+/** Argument names that carry the file a call is about, in the order to prefer them. */
+const PATH_KEYS = ['file_path', 'path', 'notebook_path', 'target_file', 'target_directory']
+
+/** Argument names that identify or configure rather than describe. */
+const SKIP_KEYS = new Set([
+  'id',
+  'uuid',
+  'session_id',
+  'sessionId',
+  'tool_use_id',
+  'toolUseId',
+  'task_id',
+  'type',
+  'format',
+  'encoding',
+  'model',
+  'agent',
+  'subagent_type',
+])
+
 /**
  * The one thing worth knowing about a tool call.
  *
- * A bare list of tool names ("[tools] Bash, Bash, Read") says nothing about
- * what the agent is doing, which is the only reason to look at this screen.
- * Bash carries a human-written `description` — use it over the command, since
- * it is already a sentence about intent rather than shell to decipher.
+ * A bare list of tool names ("[Read] [Read] [Bash]") says nothing about what the
+ * agent is doing, which is the only reason to look at this screen.
+ *
+ * Read by field, not by tool name. Every agent names its arguments differently —
+ * Claude reads a `file_path`, Kimi a `path`, Grok a `target_file` — and a switch
+ * on the name has to be taught each one. It also fails *silently* when it has
+ * not been: `case 'Read'` returning an empty `file_path` shadowed the fallback
+ * that would have found `path`, so every Kimi file call on this screen read
+ * `[Read]` and nothing more, and so did `[Edit]` and `[Write]`.
+ *
+ * The order is what a reader wants first: an author's own description, then the
+ * thing being searched for, then the file, then the instruction given.
  */
 function describeToolUse(tool: { name: string; input?: Record<string, unknown> }): string {
   const input = tool.input ?? {}
-  const str = (key: string): string => (typeof input[key] === 'string' ? (input[key] as string) : '')
-
-  switch (tool.name) {
-    case 'Bash':
-      return str('description') || str('command')
-    case 'Read':
-    case 'Edit':
-    case 'Write':
-    case 'NotebookEdit':
-      return shortenPath(str('file_path'))
-    case 'Grep':
-    case 'Glob':
-      return str('pattern')
-    case 'Task':
-    case 'Agent':
-      return str('description')
-    case 'WebFetch':
-      return str('url')
-    case 'WebSearch':
-      return str('query')
-    case 'TodoWrite':
-      return ''
-    default: {
-      // Unknown tool: the first non-empty string argument is usually the
-      // interesting one (a path, a query, a name).
-      for (const value of Object.values(input)) {
-        if (typeof value === 'string' && value.trim()) return value.trim()
-      }
-      return ''
-    }
+  const str = (key: string): string => {
+    const value = input[key]
+    return typeof value === 'string' ? value.trim() : ''
   }
+
+  // Written to be read, by whoever made the call. Nothing derived beats it.
+  const description = str('description')
+  if (description) return description
+
+  // Ahead of the path deliberately: a Grep carries both, and the pattern is what
+  // the call was about while the path is only where it looked.
+  const pattern = str('pattern') || str('query')
+  if (pattern) return pattern
+
+  for (const key of PATH_KEYS) {
+    const path = str(key)
+    if (path) return shortenPath(path)
+  }
+
+  const rest = str('url') || str('command') || str('prompt')
+  if (rest) return rest
+
+  // A tool nobody anticipated still says something about itself: the first short
+  // string it was given is usually a name, a path or a query.
+  for (const [key, value] of Object.entries(input)) {
+    if (SKIP_KEYS.has(key)) continue
+    if (typeof value !== 'string') continue
+    const text = value.trim()
+    if (text && text.length <= 120) return text
+  }
+  return ''
 }
 
 function shortenPath(p: string): string {

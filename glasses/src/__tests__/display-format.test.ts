@@ -165,6 +165,69 @@ describe('formatMessage', () => {
     })
     expect(out).toBe('[Bash] テストを流す')
   })
+
+  // Every agent names its arguments its own way, and the screen has to read all
+  // of them. These are the shapes taken off real transcripts, not invented.
+  const detail = (name: string, input: Record<string, unknown>) =>
+    formatMessage({ role: 'assistant', content: '', toolUse: [{ name, input }] })
+
+  describe('says what a call did whichever agent made it', () => {
+    test("Claude's file argument", () => {
+      expect(detail('Read', { file_path: '/home/m0a/repos/app/src/index.ts' })).toBe(
+        '[Read] .../src/index.ts',
+      )
+    })
+
+    test("Kimi's, which used to leave the line bare", () => {
+      // The whole bug: `path`, not `file_path`, and the named case returned an
+      // empty string rather than letting the fallback find it.
+      expect(detail('Read', { path: 'HANDOFF.md', line_offset: 0 })).toBe('[Read] HANDOFF.md')
+      expect(detail('Edit', { path: 'src/app.ts', old_string: 'a', new_string: 'b' })).toBe(
+        '[Edit] src/app.ts',
+      )
+      expect(detail('Write', { path: '/tmp/a/b/out.txt', content: 'x' })).toBe(
+        '[Write] .../b/out.txt',
+      )
+    })
+
+    test("Grok's, which names the same argument a third way", () => {
+      expect(detail('read_file', { target_file: 'wrangler.jsonc', limit: 40 })).toBe(
+        '[read_file] wrangler.jsonc',
+      )
+      expect(detail('list_dir', { target_directory: '/home/m0a/repos/app' })).toBe(
+        '[list_dir] .../repos/app',
+      )
+    })
+
+    test('a scoped search shows what it looked for, not where', () => {
+      // Kimi's Grep carries both. The path is the least interesting half.
+      expect(detail('Grep', { pattern: 'getToolSummary', path: 'frontend/src', '-n': true })).toBe(
+        '[Grep] getToolSummary',
+      )
+    })
+
+    test('a description still outranks everything derived', () => {
+      expect(detail('run_terminal_command', { command: 'bun test', description: 'Run the tests' })).toBe(
+        '[run_terminal_command] Run the tests',
+      )
+    })
+
+    test('a tool nobody anticipated says something about itself', () => {
+      expect(detail('Skill', { skill: 'glasses-upload', args: '' })).toBe('[Skill] glasses-upload')
+      expect(detail('FetchURL', { url: 'https://example.com/spec' })).toBe(
+        '[FetchURL] https://example.com/spec',
+      )
+    })
+
+    test('nothing to say leaves the name alone rather than inventing something', () => {
+      expect(detail('TodoList', { todos: [{ content: 'a' }] })).toBe('[TodoList]')
+      expect(detail('EnterPlanMode', {})).toBe('[EnterPlanMode]')
+      // An identifier is not a summary; the reason beside it is.
+      expect(detail('TaskStop', { task_id: 'abc-123', reason: 'superseded' })).toBe(
+        '[TaskStop] superseded',
+      )
+    })
+  })
 })
 
 describe('conversation body', () => {
