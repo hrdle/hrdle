@@ -10,6 +10,7 @@ import {
   glassesRecordingEnabled,
   listRecordingDays,
   readRecordingDay,
+  recordGlassesFocus,
   recordGlassesInput,
   recordGlassesScreen,
   resetGlassesRecorderForTest,
@@ -167,6 +168,31 @@ describe('recordGlassesScreen', () => {
 
     const lines = await readLines();
     expect(lines.map((l) => l.input ?? l.gap ?? l.body)).toEqual(['x', true, 'swipeUp', true]);
+  });
+
+  it('records focus changes once per change, clearing included', async () => {
+    recordGlassesFocus({ sessionId: 'dev', deviceType: 'mobile', at: 111 });
+    recordGlassesFocus({ sessionId: 'dev', deviceType: 'mobile', at: 222 }); // unchanged
+    recordGlassesFocus({ sessionId: 'docs', deviceType: 'tablet', at: 333 });
+    recordGlassesFocus(undefined);
+    recordGlassesFocus(undefined); // still cleared
+    await flushGlassesRecorder();
+
+    const lines = await readLines();
+    expect(lines.map((l) => l.focus)).toEqual(['dev', 'docs', null]);
+    expect(lines[0]).toMatchObject({ focus: 'dev', deviceType: 'mobile', at: 111 });
+    expect(typeof lines[2]?.receivedAt).toBe('number');
+  });
+
+  it('a frame carrying session metadata records it, and a session change alone re-records', async () => {
+    const base = Date.now();
+    const session = { id: 'w1', name: 'dev' };
+    recordGlassesScreen({ ...frame({ body: 'same', at: base }), session });
+    recordGlassesScreen({ ...frame({ body: 'same', at: base + 1 }), session: { id: 'w2', name: 'docs' } });
+    await flushGlassesRecorder();
+
+    const lines = await readLines();
+    expect(lines.map((l) => (l.session as { id: string }).id)).toEqual(['w1', 'w2']);
   });
 
   it('lists recorded days and reads one back', async () => {

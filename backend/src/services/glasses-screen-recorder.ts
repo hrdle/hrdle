@@ -21,7 +21,7 @@
 import { appendFile, mkdir, readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { envVar } from '../../../shared/identity';
-import type { GlassesInput, GlassesScreen } from '../../../shared/types';
+import type { ClientFocus, GlassesInput, GlassesScreen } from '../../../shared/types';
 import { getDataDir } from '../utils/storage';
 
 const RECORD_ENV = envVar('GLASSES_RECORD');
@@ -43,7 +43,16 @@ const RETENTION_DAYS = 365;
 export type RecordedGlassesLine =
   | (GlassesScreen & { receivedAt: number })
   | { gap: true; at: number }
-  | { input: GlassesInput['kind']; at: number; receivedAt: number };
+  | { input: GlassesInput['kind']; at: number; receivedAt: number }
+  | {
+      /** Session the focus election picked, `null` when it cleared. */
+      focus: string | null;
+      deviceType?: string;
+      /** When the focus was claimed — can predate the surrounding lines,
+       *  since a claim outlives the moment it was made. Order by receivedAt. */
+      at: number;
+      receivedAt: number;
+    };
 
 /** Local date stamp — the user reviews footage in their own timezone. */
 function dayStamp(at: number): string {
@@ -132,7 +141,7 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
     return;
   }
 
-  const key = JSON.stringify([screen.mode, screen.header, screen.notice, screen.body, screen.footer]);
+  const key = JSON.stringify([screen.mode, screen.session?.id, screen.header, screen.notice, screen.body, screen.footer]);
   if (key === lastFrameKey) return;
   lastFrameKey = key;
   recordedSinceGap = true;
@@ -157,6 +166,28 @@ export function recordGlassesInput(input: GlassesInput): void {
   }
   recordedSinceGap = true;
   const line: RecordedGlassesLine = { input: input.kind, at: input.at, receivedAt: Date.now() };
+  enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
+}
+
+let lastFocusKey: string | null = null;
+
+/**
+ * Record which session the user is working in, whenever the focus election's
+ * answer changes. This is the phone/tablet's focus, not the glasses' cursor —
+ * the latter rides on the frames themselves (`GlassesScreen.session`). Both
+ * are written so analysis can group a recording by what was being worked on.
+ *
+ * Not a liveness signal: focus changes with no glasses anywhere, so it never
+ * touches the gap bookkeeping.
+ */
+export function recordGlassesFocus(focus: ClientFocus | undefined): void {
+  if (!glassesRecordingEnabled()) return;
+  const key = focus ? `${focus.sessionId}:${focus.deviceType}` : '';
+  if (key === lastFocusKey) return;
+  lastFocusKey = key;
+  const line: RecordedGlassesLine = focus
+    ? { focus: focus.sessionId, deviceType: focus.deviceType, at: focus.at, receivedAt: Date.now() }
+    : { focus: null, at: Date.now(), receivedAt: Date.now() };
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
 }
 
@@ -230,5 +261,6 @@ export function resetGlassesRecorderForTest(): void {
   announced = false;
   lastFrameKey = null;
   recordedSinceGap = false;
+  lastFocusKey = null;
   lastPrunedDay = null;
 }

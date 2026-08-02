@@ -159,10 +159,21 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   function publishScreen(state: AppState): void {
     try {
       const { header, body, footer, notice } = screenText(state)
-      const key = `${state.mode}\u0000${header}\u0000${notice ?? ''}\u0000${body}\u0000${footer}`
+      // The session under the cursor, as data: the recording (#127) groups by
+      // it, and the header string is for eyes, not for parsing back apart.
+      const cursor = state.sessions[state.sessionIndex]
+      const session =
+        cursor && !state.listOnNotifications
+          ? {
+              id: cursor.id,
+              name: cursor.customTitle ?? cursor.name,
+              ...(state.selectedPaneId ? { paneId: state.selectedPaneId } : {}),
+            }
+          : undefined
+      const key = `${state.mode}\u0000${session?.id ?? ''}\u0000${session?.paneId ?? ''}\u0000${header}\u0000${notice ?? ''}\u0000${body}\u0000${footer}`
       if (key === lastPublished) return
       lastPublished = key
-      controller.ws.publishScreen({ header, body, footer, notice, mode: state.mode, at: Date.now() })
+      controller.ws.publishScreen({ header, body, footer, notice, mode: state.mode, session, at: Date.now() })
     } catch (err) {
       // A mirror is a nicety; never let it take the panel down with it.
       trace(`publishScreen failed: ${err}`, 'error', (err as Error)?.stack)

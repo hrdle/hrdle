@@ -133,9 +133,18 @@ export function startPlayerUI(): void {
   let timer: number | undefined
 
   /** Timeline position of a line — the server's arrival clock, falling back
-   *  to the device's own stamp for recordings that predate `receivedAt`. */
-  const timeOf = (line: RecordedGlassesLine): number =>
-    'gap' in line || 'input' in line ? line.at : (line.receivedAt ?? line.at)
+   *  to the device's own stamp for recordings that predate `receivedAt`. A
+   *  focus line orders by arrival only: its `at` is when the focus was
+   *  claimed, which can predate the whole recording. */
+  const timeOf = (line: RecordedGlassesLine): number => {
+    if ('focus' in line) return line.receivedAt
+    if ('gap' in line || 'input' in line) return line.at
+    return line.receivedAt ?? line.at
+  }
+
+  /** A drawable screen, as opposed to the event lines (gap, gesture, focus). */
+  const isFrame = (line: RecordedGlassesLine): line is GlassesScreen & { receivedAt: number } =>
+    !('gap' in line) && !('input' in line) && !('focus' in line)
 
   const GESTURE_LABEL: Record<GlassesInputKind, string> = {
     tap: '● tap',
@@ -180,8 +189,8 @@ export function startPlayerUI(): void {
       status.textContent = `${pos} - device disconnected`
       return
     }
-    if ('input' in line) {
-      // The gesture rides over whichever frame was on screen when it
+    if ('input' in line || 'focus' in line) {
+      // An event line rides over whichever frame was on screen when it
       // happened; after a seek that frame has to be found and repainted.
       for (let j = i - 1; j >= 0; j--) {
         const prev = lines[j]
@@ -192,17 +201,24 @@ export function startPlayerUI(): void {
           }
           break
         }
-        if (!('input' in prev)) {
+        if (isFrame(prev)) {
           if (drawnIndex !== j) drawFrameLine(prev, j)
           break
         }
       }
-      flashGesture(line.input)
-      status.textContent = `${pos} - ${GESTURE_LABEL[line.input]}`
+      if ('input' in line) {
+        flashGesture(line.input)
+        status.textContent = `${pos} - ${GESTURE_LABEL[line.input]}`
+      } else {
+        status.textContent = line.focus
+          ? `${pos} - working in ${line.focus}${line.deviceType ? ` (${line.deviceType})` : ''}`
+          : `${pos} - focus cleared`
+      }
       return
     }
     drawFrameLine(line, i)
-    status.textContent = `${pos} - ${line.mode}${playing ? '' : ' (paused)'}`
+    const inSession = line.session?.name ?? line.session?.id
+    status.textContent = `${pos} - ${line.mode}${inSession ? ` · ${inSession}` : ''}${playing ? '' : ' (paused)'}`
   }
 
   function pause(): void {

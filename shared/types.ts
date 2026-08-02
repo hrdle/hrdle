@@ -1071,6 +1071,13 @@ export interface GlassesScreen {
   notice?: string;
   /** Which screen this is, for the mirror's status line. */
   mode: string;
+  /**
+   * The session under the cursor / on screen, as structured data (#129
+   * follow-up). The header already shows a name, but analysis of a recording
+   * should not have to parse display text back apart. Absent on ehpks that
+   * predate the field and on screens with no session (empty list, fatal).
+   */
+  session?: { id: string; name?: string; paneId?: string };
   /** Epoch ms the frame was produced, so a stalled mirror is visible. */
   at: number;
 }
@@ -1261,6 +1268,13 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
       footer: z.string().max(500),
       notice: z.string().max(1000).optional(),
       mode: z.string().max(40),
+      session: z
+        .object({
+          id: z.string().max(200),
+          name: z.string().max(500).optional(),
+          paneId: z.string().max(50).optional(),
+        })
+        .optional(),
       at: z.number(),
     }),
   }),
