@@ -143,6 +143,9 @@ export interface GlassesScreen {
   /** Recap / waiting banner strip, drawn above the body with a rule between.
    *  Separate because that rule is a container border, not a row of text. */
   notice?: string
+  /** The body is an inset, bordered notification card rather than the
+   *  full-width body. Mirrored so the replay draws the notice as a notice. */
+  card?: boolean
   mode: string
   /** The session under the cursor / on screen, as structured data — analysis
    *  of a recording should not have to parse the header back apart. */

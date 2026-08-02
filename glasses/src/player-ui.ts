@@ -108,6 +108,7 @@ export function startPlayerUI(): void {
           <option value="20" selected>20x</option>
           <option value="60">60x</option>
         </select>
+        <button type="button" id="png" disabled>Save PNG</button>
       </div>
       <div class="status" id="status">Loading recordings...</div>
       <div class="keys"><kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> step · <kbd>Home</kbd>/<kbd>End</kbd> jump</div>
@@ -123,6 +124,7 @@ export function startPlayerUI(): void {
   const clock = document.getElementById('clock') as HTMLSpanElement
   const speedSel = document.getElementById('speed') as HTMLSelectElement
   const status = document.getElementById('status') as HTMLDivElement
+  const pngBtn = document.getElementById('png') as HTMLButtonElement
 
   const gesture = document.getElementById('gesture') as HTMLDivElement
   const painter = createPanelPainter(canvas)
@@ -171,6 +173,7 @@ export function startPlayerUI(): void {
       notice: line.notice ? wrapForPanel(line.notice) : undefined,
       body: wrapForPanel(line.body),
       footer: line.footer,
+      card: line.card,
     })
   }
 
@@ -267,6 +270,7 @@ export function startPlayerUI(): void {
       seek.max = String(Math.max(lines.length - 1, 0))
       seek.disabled = lines.length === 0
       playBtn.disabled = lines.length === 0
+      pngBtn.disabled = lines.length === 0
       if (lines.length === 0) {
         status.textContent = `${day} is empty.`
         return
@@ -287,6 +291,7 @@ export function startPlayerUI(): void {
         daySel.appendChild(new Option('(no recordings)', ''))
         playBtn.disabled = true
         seek.disabled = true
+        pngBtn.disabled = true
         status.textContent = enabled
           ? 'Recording is on; nothing captured yet.'
           : 'No recordings. Set HRDLE_GLASSES_RECORD=1 on the server to start capturing.'
@@ -317,6 +322,25 @@ export function startPlayerUI(): void {
 
   daySel.addEventListener('change', () => void loadDay(daySel.value))
   reloadBtn.addEventListener('click', () => void loadDays())
+
+  // The frame on the canvas is already what a store listing wants: 576x288,
+  // transparent, lit pixels in green. The EVEN Hub listing composites its own
+  // Environment photo behind the drawing, so anything with a backdrop baked in
+  // is unusable — which rules out screenshotting `.lens`, background and all.
+  // Same reasoning, and same two lines, as the simulator's own button.
+  pngBtn.addEventListener('click', () => {
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    const line = lines[index]
+    const mode = line && 'mode' in line ? line.mode : 'replay'
+    try {
+      const a = document.createElement('a')
+      a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${mode}-${stamp}.png`
+      a.href = canvas.toDataURL('image/png')
+      a.click()
+    } catch {
+      status.textContent = 'Could not save the PNG'
+    }
+  })
 
   seek.addEventListener('input', () => {
     if (lines.length === 0) return
