@@ -1,7 +1,5 @@
 import { useTranslation } from "react-i18next";
 import { useNetworkLatency } from "../../hooks/useNetworkLatency";
-import type { LatencyDataPoint } from "../../services/latency-store";
-import { Card } from "./Card";
 
 function getLatencyColor(value: number): string {
 	if (value < 50) return "text-green-400";
@@ -9,100 +7,44 @@ function getLatencyColor(value: number): string {
 	return "text-red-400";
 }
 
-function getDotColor(value: number | null): string {
-	if (value === null) return "bg-th-surface-active";
-	if (value < 50) return "bg-green-500";
-	if (value < 150) return "bg-yellow-500";
-	return "bg-red-500";
-}
-
-function getBarColor(value: number): string {
-	if (value < 50) return "bg-green-500";
-	if (value < 150) return "bg-yellow-500";
-	return "bg-red-500";
-}
-
-function Sparkline({ data }: { data: LatencyDataPoint[] }) {
-	if (data.length === 0) return null;
-
-	const maxVal = Math.max(...data.map((d) => d.value), 1);
-
-	return (
-		<div className="flex items-end gap-px h-4 flex-1 min-w-0">
-			{data.map((point, i) => {
-				const height = Math.max(2, (point.value / maxVal) * 16);
-				return (
-					<div
-						// biome-ignore lint/suspicious/noArrayIndexKey: chart bars are a rolling time window keyed by position
-						key={i}
-						className={`w-[3px] shrink-0 rounded-sm ${getBarColor(point.value)}`}
-						style={{
-							height: `${height}px`,
-							opacity: 0.4 + (i / data.length) * 0.6,
-						}}
-					/>
-				);
-			})}
-		</div>
-	);
-}
-
-interface LatencyRowProps {
-	label: string;
-	value: number | null;
-	history: LatencyDataPoint[];
-	naText: string;
-	stale?: boolean;
-}
-
-function LatencyRow({ label, value, history, naText, stale }: LatencyRowProps) {
-	const valueColor =
-		value !== null
-			? stale
-				? "text-th-text-muted"
-				: getLatencyColor(value)
-			: "text-th-text-muted";
-
-	return (
-		<div className={`flex items-center gap-2 ${stale ? "opacity-60" : ""}`}>
-			<div
-				className={`w-1.5 h-1.5 rounded-full shrink-0 ${stale ? "bg-th-surface-active" : getDotColor(value)}`}
-			/>
-			<span className="text-[11px] text-th-text-secondary w-16 shrink-0">
-				{label}
-			</span>
-			<span
-				className={`text-[11px] w-12 shrink-0 text-right tabular-nums ${valueColor}`}
-			>
-				{value !== null ? `${value}ms` : naText}
-			</span>
-			<Sparkline data={history} />
-		</div>
-	);
-}
-
-export function NetworkLatency({ className = "" }: { className?: string }) {
+/**
+ * WebSocket and API round-trip, as a title-row aside.
+ *
+ * This was a card of its own and spent 116px on two numbers, most of it the
+ * box. It also sat above the list of peer servers while describing only the
+ * link to one of them, so it now rides on that server's card instead.
+ *
+ * The sparklines did not come along: at three pixels a bar they were texture,
+ * and the colour of the number already says good, slow or bad.
+ */
+export function NetworkLatencyInline() {
 	const { t } = useTranslation();
-	const { wsLatency, apiLatency, wsHistory, apiHistory, wsConnected } =
-		useNetworkLatency();
+	const { wsLatency, apiLatency, wsConnected } = useNetworkLatency();
+	// A reading from a socket that has since dropped is history, not status.
+	const stale = !wsConnected && wsLatency !== null;
 
 	return (
-		<Card title={t("dashboard.networkLatency")} className={className}>
-			<div className="space-y-1.5">
-				<LatencyRow
-					label={t("dashboard.websocket")}
-					value={wsLatency}
-					history={wsHistory}
-					naText={t("dashboard.latencyNA")}
-					stale={!wsConnected && wsLatency !== null}
-				/>
-				<LatencyRow
-					label={t("dashboard.api")}
-					value={apiLatency}
-					history={apiHistory}
-					naText={t("dashboard.latencyNA")}
-				/>
-			</div>
-		</Card>
+		<span
+			className="text-[10px] tabular-nums whitespace-nowrap text-th-text-muted"
+			title={`${t("dashboard.websocket")} / ${t("dashboard.api")} — ${t("dashboard.networkLatency")}`}
+		>
+			<span
+				className={
+					stale || wsLatency === null
+						? "text-th-text-muted"
+						: getLatencyColor(wsLatency)
+				}
+			>
+				{wsLatency !== null ? `${wsLatency}ms` : t("dashboard.latencyNA")}
+			</span>
+			<span className="mx-1 opacity-40">·</span>
+			<span
+				className={
+					apiLatency !== null ? getLatencyColor(apiLatency) : "text-th-text-muted"
+				}
+			>
+				{apiLatency !== null ? `${apiLatency}ms` : t("dashboard.latencyNA")}
+			</span>
+		</span>
 	);
 }

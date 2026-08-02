@@ -13,6 +13,7 @@
 import { getRecordingDay, getRecordingDays, setBaseUrl } from './api.ts'
 import { wrapForPanel } from './display.ts'
 import { createPanelPainter } from './panel-paint.ts'
+import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { GlassesInputKind, GlassesScreen, RecordedGlassesLine } from './types.ts'
 
 /** Real-time cap on one wait between frames. The recording is a transition
@@ -63,6 +64,13 @@ const STYLE = `
   .keys { font-size: 11px; color: #4d554b; }
   kbd { border: 1px solid #33402f; border-radius: 4px; padding: 0 5px;
         font: 11px ui-monospace, Menlo, monospace; }
+  .bg-row { display: flex; gap: 8px; align-items: center; }
+  .bg-row .label { font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+                   color: #7d867a; font-weight: 700; }
+  .bg-row input[type=text] { flex: 1; font: inherit; font-size: 13px; padding: 7px 9px;
+                             border-radius: 6px; border: 1px solid #33402f;
+                             background: #0f140e; color: #d8ded6; }
+  body.dropping .lens { outline: 2px dashed #7cc98f; outline-offset: -8px; }
 `
 
 export function startPlayerUI(): void {
@@ -75,10 +83,14 @@ export function startPlayerUI(): void {
   style.textContent = STYLE
   document.head.appendChild(style)
 
-  // Same default backdrop as the simulator: the G2 is a see-through display,
-  // and frames replayed over a room read as what they are - a recording of
-  // something worn, not a green terminal.
-  const bgUrl = params.get('bg') ?? `${import.meta.env.BASE_URL}scene-meeting.jpg`
+  // Same default backdrop as the simulator, and the same stored choice: the
+  // G2 is a see-through display, and frames replayed over a room read as what
+  // they are - a recording of something worn, not a green terminal. The
+  // `glasses-bg` key is shared with the simulator on purpose; both windows
+  // are the same lens.
+  const DEFAULT_BG = `${import.meta.env.BASE_URL}scene-meeting.jpg`
+  const BG_SUFFIX = 'glasses-bg'
+  const bgUrl = params.get('bg') ?? readStoredSync(BG_SUFFIX) ?? DEFAULT_BG
   const simHref = hubUrl ? `./?hub=${encodeURIComponent(hubUrl)}` : './'
 
   const app = document.querySelector<HTMLDivElement>('#app')!
@@ -108,13 +120,19 @@ export function startPlayerUI(): void {
           <option value="20" selected>20x</option>
           <option value="60">60x</option>
         </select>
-        <button type="button" id="png" disabled>Save PNG</button>
+        <button type="button" id="png" title="Save the current frame as a transparent 576x288 PNG (store-listing material)">Save PNG</button>
       </div>
       <div class="status" id="status">Loading recordings...</div>
       <div class="keys"><kbd>Space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> step · <kbd>Home</kbd>/<kbd>End</kbd> jump</div>
+      <div class="bg-row">
+        <span class="label">Backdrop</span>
+        <button type="button" id="bg-pick">Pick an image</button>
+        <button type="button" id="bg-reset">Reset</button>
+        <input type="file" id="bg-file" accept="image/*" hidden />
+        <input type="text" id="bg-url" placeholder="Paste an image URL (Enter) - or drop an image onto the screen" />
+      </div>
     </div>
   `
-  ;(document.getElementById('lens') as HTMLDivElement).style.backgroundImage = `url("${bgUrl}")`
 
   const canvas = document.getElementById('screen') as HTMLCanvasElement
   const daySel = document.getElementById('day') as HTMLSelectElement
@@ -124,10 +142,72 @@ export function startPlayerUI(): void {
   const clock = document.getElementById('clock') as HTMLSpanElement
   const speedSel = document.getElementById('speed') as HTMLSelectElement
   const status = document.getElementById('status') as HTMLDivElement
-  const pngBtn = document.getElementById('png') as HTMLButtonElement
 
   const gesture = document.getElementById('gesture') as HTMLDivElement
+  const lens = document.getElementById('lens') as HTMLDivElement
   const painter = createPanelPainter(canvas)
+
+  // ── Backdrop ──
+
+  /** Swap the backdrop, but only once the image has actually decoded — a
+   *  missing file would otherwise leave nothing at all behind the text. */
+  function applyBackdrop(url: string, remember: boolean): void {
+    const probe = new Image()
+    probe.addEventListener('load', () => {
+      // Quotes and backslashes stripped: the URL can come from the query
+      // string or a text field and lands inside a CSS url().
+      lens.style.backgroundImage = `url("${url.replace(/["\\]/g, '')}")`
+      if (remember) writeStoredSync(BG_SUFFIX, url)
+    })
+    probe.addEventListener('error', () => {
+      status.textContent = 'Could not load the backdrop image'
+    })
+    probe.src = url
+  }
+
+  /** Show a local file without persisting it: a blob URL is dead on reload. */
+  function useLocalFile(file: File): void {
+    if (!file.type.startsWith('image/')) {
+      status.textContent = 'That is not an image file'
+      return
+    }
+    applyBackdrop(URL.createObjectURL(file), false)
+  }
+
+  const bgFile = document.getElementById('bg-file') as HTMLInputElement
+  const bgUrlInput = document.getElementById('bg-url') as HTMLInputElement
+  ;(document.getElementById('bg-pick') as HTMLButtonElement).addEventListener('click', () => bgFile.click())
+  bgFile.addEventListener('change', () => {
+    const file = bgFile.files?.[0]
+    if (file) useLocalFile(file)
+    bgFile.value = ''
+  })
+  bgUrlInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return
+    const url = bgUrlInput.value.trim()
+    if (url) applyBackdrop(url, true)
+  })
+  ;(document.getElementById('bg-reset') as HTMLButtonElement).addEventListener('click', () => {
+    clearStoredSync(BG_SUFFIX)
+    bgUrlInput.value = ''
+    applyBackdrop(DEFAULT_BG, false)
+  })
+  for (const type of ['dragenter', 'dragover']) {
+    window.addEventListener(type, (e) => {
+      e.preventDefault()
+      document.body.classList.add('dropping')
+    })
+  }
+  for (const type of ['dragleave', 'drop']) {
+    window.addEventListener(type, () => document.body.classList.remove('dropping'))
+  }
+  window.addEventListener('drop', (e) => {
+    e.preventDefault()
+    const file = (e as DragEvent).dataTransfer?.files?.[0]
+    if (file) useLocalFile(file)
+  })
+
+  applyBackdrop(bgUrl, false)
 
   let lines: RecordedGlassesLine[] = []
   let index = 0
@@ -166,8 +246,12 @@ export function startPlayerUI(): void {
   // Which line's frame is on the canvas, so a gesture line (which draws
   // nothing itself) only repaints when a seek landed it somewhere new.
   let drawnIndex = -1
+  /** Mode of the frame on the canvas — the PNG filename carries it, same
+   *  naming as the simulator's own Save PNG. */
+  let drawnMode = 'replay'
   function drawFrameLine(line: GlassesScreen, i: number): void {
     drawnIndex = i
+    drawnMode = line.mode
     painter.drawScreen({
       header: line.header,
       notice: line.notice ? wrapForPanel(line.notice) : undefined,
@@ -270,7 +354,6 @@ export function startPlayerUI(): void {
       seek.max = String(Math.max(lines.length - 1, 0))
       seek.disabled = lines.length === 0
       playBtn.disabled = lines.length === 0
-      pngBtn.disabled = lines.length === 0
       if (lines.length === 0) {
         status.textContent = `${day} is empty.`
         return
@@ -291,7 +374,6 @@ export function startPlayerUI(): void {
         daySel.appendChild(new Option('(no recordings)', ''))
         playBtn.disabled = true
         seek.disabled = true
-        pngBtn.disabled = true
         status.textContent = enabled
           ? 'Recording is on; nothing captured yet.'
           : 'No recordings. Set HRDLE_GLASSES_RECORD=1 on the server to start capturing.'
@@ -323,20 +405,18 @@ export function startPlayerUI(): void {
   daySel.addEventListener('change', () => void loadDay(daySel.value))
   reloadBtn.addEventListener('click', () => void loadDays())
 
-  // The frame on the canvas is already what a store listing wants: 576x288,
-  // transparent, lit pixels in green. The EVEN Hub listing composites its own
-  // Environment photo behind the drawing, so anything with a backdrop baked in
-  // is unusable — which rules out screenshotting `.lens`, background and all.
-  // Same reasoning, and same two lines, as the simulator's own button.
-  pngBtn.addEventListener('click', () => {
-    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-    const line = lines[index]
-    const mode = line && 'mode' in line ? line.mode : 'replay'
+  // Store-listing material: the canvas alone, transparent, 576x288 — the EVEN
+  // Hub listing composites its own room photo behind a submitted image, so
+  // the drawing and nothing else is what a submission must be. Same reasoning
+  // and naming as the simulator's Save PNG button.
+  ;(document.getElementById('png') as HTMLButtonElement).addEventListener('click', () => {
     try {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const a = document.createElement('a')
-      a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${mode}-${stamp}.png`
+      a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${drawnMode}-${stamp}.png`
       a.href = canvas.toDataURL('image/png')
       a.click()
+      status.textContent = 'Saved the PNG (transparent, 576x288)'
     } catch {
       status.textContent = 'Could not save the PNG'
     }

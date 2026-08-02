@@ -3,6 +3,7 @@ import type { PeerClientView } from "../../../../shared/types";
 import { LOCAL_PEER_ID } from "../../../../shared/types";
 import { usePeerServerMetrics } from "../../hooks/usePeerServerMetrics";
 import { Card, CardTitle } from "./Card";
+import { NetworkLatencyInline } from "./NetworkLatency";
 import { ServerInfo } from "./ServerInfo";
 
 interface PeerServerCardProps {
@@ -44,6 +45,9 @@ export function PeerServerCard({ peer }: PeerServerCardProps) {
 							offline
 						</span>
 					)}
+					{/* Local only: it measures this browser's link, so on a peer's card
+					    it would be the wrong server's number under the right name. */}
+					{isLocal && <NetworkLatencyInline />}
 					<span
 						className="flex items-center gap-1 text-[11px] text-teal-400 tabular-nums"
 						title="Connected clients"
