@@ -20,6 +20,10 @@ import { screenText } from '../display.ts'
 import { WsClient, GIVE_UP_AFTER_MS } from '../ws-client.ts'
 import type { AppState } from '../display.ts'
 
+// Supplied by `define` in vite.config.ts, so under `bun test` it has to be put
+// there by hand — the closing screen names the product in its instructions.
+;(globalThis as unknown as { __PRODUCT_NAME__: string }).__PRODUCT_NAME__ = 'Hrdle'
+
 const TRIES = Math.round(GIVE_UP_AFTER_MS / 3000)
 
 /** Drive one failed attempt without waiting three seconds for it. Every failure
