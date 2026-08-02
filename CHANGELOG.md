@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.37] - 2026-08-02
+
+### Added
+- **The glasses screen mirror can be recorded, and recordings replayed.** (#127)
+  With `HRDLE_GLASSES_RECORD=1` set, the server appends every mirror frame to a
+  per-day JSONL file under the data directory - one line per screen transition,
+  a gap marker where the device disconnected, and the server's own arrival
+  clock next to the device's stamp. Off by default: the recording is the
+  user's own prompts and notification text. 365-day rolling window
+  - The simulator gains a replay player (day picker, seek bar, 1x-60x with
+    long stills capped at 2.5s) that feeds a recorded day through the same
+    painter the live mirror uses, so wrapping, the 7-line clamp and the notice
+    strip match what the wearer saw
+  - `GET /api/glasses/recording` / `GET /api/glasses/recording/:day` (inside
+    the auth glob) list and read recordings; old footage stays replayable
+    after recording is switched off
+
 ## [0.3.36] - 2026-08-02
 
 ### Changed
