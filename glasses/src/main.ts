@@ -315,6 +315,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
    */
   let deviceNote = ''
   let statusProbed = false
+  let lastConnect: string | undefined
   function applyDeviceStatus(s: {
     connectType?: string
     isWearing?: boolean
@@ -334,6 +335,15 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       } catch {
         trace('device status first event: (not serialisable)')
       }
+    }
+    // Whether it ever moves off `none`. The first event is traced already, and
+    // it has been `none` in every run looked at - so the fields behind it are
+    // `createDefault()`'s filler and the exit line has been silent about the
+    // glasses this whole time. Only a transition would change that, and only a
+    // line here would show one.
+    if (s.connectType !== lastConnect) {
+      trace(`device status: connectType ${lastConnect ?? '(first)'} -> ${s.connectType ?? '?'}`)
+      lastConnect = s.connectType
     }
     // `none` is the SDK's uninitialised marker, and everything alongside it is
     // `createDefault()`'s filler rather than a reading: zero battery, false
@@ -378,6 +388,51 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       ` dev=${s.connectType ?? '?'}${flags.length ? `,${flags.join(',')}` : ''}` +
       (s.batteryLevel === undefined ? '' : ` batt=${s.batteryLevel}%`)
   }
+
+  /**
+   * The phone's power state, beside every heartbeat and on the exit line.
+   *
+   * Whatever closes this app runs on the phone, so whether the phone is on a
+   * charger - and how full it is - are variables the record has been missing
+   * while every other one was ruled out. The glasses' own reading is the
+   * obvious thing to reach for and is not available: `onDeviceStatusChanged`
+   * has only ever delivered `connectType: "none"` with `createDefault()`'s
+   * filler behind it, which is why `dev=` and `batt=` never appear.
+   *
+   * The Battery Status API is deprecated on the open web and still implemented
+   * in Chromium on Android, which is what this WebView is. Where it is missing
+   * the note is simply absent, as it was before.
+   */
+  let powerNote = ''
+  type BatteryLike = {
+    charging: boolean
+    level: number
+    addEventListener(type: string, listener: () => void): void
+  }
+  void (async () => {
+    try {
+      const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryLike> }
+      if (!nav.getBattery) {
+        trace('battery: getBattery unavailable')
+        return
+      }
+      const battery = await nav.getBattery()
+      const apply = (): void => {
+        powerNote = ` pwr=${battery.charging ? 'chg' : 'bat'},${Math.round(battery.level * 100)}%`
+      }
+      apply()
+      trace(`battery: ${battery.charging ? 'charging' : 'on battery'} ${Math.round(battery.level * 100)}%`)
+      // Both, and both worth a line: a charger going in mid-run is exactly the
+      // kind of change the kill rate is being compared against.
+      battery.addEventListener('chargingchange', () => {
+        apply()
+        trace(`battery: ${battery.charging ? 'charger in' : 'charger out'} ${Math.round(battery.level * 100)}%`)
+      })
+      battery.addEventListener('levelchange', apply)
+    } catch (err) {
+      trace(`battery: ${err}`, 'error')
+    }
+  })()
 
   // Static identity once, live state by subscription. `model` and `sn` never
   // change; everything that does arrives on the event.
@@ -466,7 +521,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       // are the host's own account, and both were being thrown away here.
       const g = controller.lastGesture()
       trace(
-        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${deviceNote}${detail ?? ''}`,
+        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${powerNote}${deviceNote}${detail ?? ''}`,
         'error',
       )
       // Traced first, released second: this is the last line the run gets to
@@ -551,7 +606,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   heartbeat = setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${deviceNote}${drift.note()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${powerNote}${deviceNote}${drift.note()}`,
     )
   }, HEARTBEAT_MS)
 }
