@@ -626,6 +626,14 @@ export interface KimiUsageDay {
    * genuinely 0.
    */
   costUsd?: number;
+  /**
+   * False when this server never saw the day at all: it predates the history
+   * file, or the machine was down for the whole week the day belonged to.
+   * Distinct from an observed day with no usage, and a chart must not draw
+   * the two the same way — one is "you spent nothing", the other is "nobody
+   * was watching".
+   */
+  observed: boolean;
 }
 
 export interface KimiUsageSummary {
@@ -634,9 +642,13 @@ export interface KimiUsageSummary {
   /** Per-model totals over the 7-day window, largest first. */
   models: KimiUsageModelTotal[];
   /**
-   * The last 7 local calendar days, oldest first, today last. Always 7 entries
-   * — a day with no usage is present with zeroes, because a gap in a bar chart
-   * has to be a bar of height zero rather than a missing column.
+   * Local calendar days, oldest first, today last. Contiguous — a day with no
+   * usage is present with zeroes, because a gap in a bar chart has to be a bar
+   * of height zero rather than a missing column.
+   *
+   * Seven entries on a fresh install, growing daily as completed days are
+   * written to the history file, up to a month. Seven is what the log files
+   * can still be read for; everything older comes from that file.
    */
   daily: KimiUsageDay[];
   /** Sessions with usage in the 7-day window. */

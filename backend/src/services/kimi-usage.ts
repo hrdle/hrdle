@@ -7,6 +7,7 @@ import type {
   KimiUsageWindow,
 } from '../../../shared/types';
 import { KimiSessionStore } from './kimi';
+import { KimiUsageStore, type StoredDay } from './kimi-usage-store';
 import { KimiConfigService } from './kimi-config';
 import { costOf, type ModelPricing, OpenRouterPricingService } from './openrouter';
 
@@ -101,13 +102,14 @@ export function startOfDayBefore(now: number, daysBack: number): number {
 }
 
 /**
- * The chart's axis: every day in the range, oldest first, today last.
+ * The days the log files can still be read for, oldest first, today last.
  *
  * Days with nothing in them are present with zeroes - a quiet day is a bar of
  * height zero, not a column that is not there, and a chart whose gaps close up
- * is a chart that lies about when the spending happened.
+ * is a chart that lies about when the spending happened. Every day in this
+ * range was looked at, so all of them are `observed`.
  */
-export function buildDailySeries(
+export function buildLiveDays(
   days: Map<string, DayAccumulator>,
   now: number,
   dayCount: number,
@@ -123,7 +125,49 @@ export function buildDailySeries(
       // A day with no turns really did cost nothing; a day whose models had no
       // price is unknown, and the two must not look alike.
       costUsd: day ? (day.cost.priced ? roundUsd(day.cost.usd) : undefined) : 0,
+      observed: true,
     });
+  }
+  return series;
+}
+
+/**
+ * The chart's axis: the stored history and the live days as one contiguous
+ * run ending today, capped at `maxDays`.
+ *
+ * The live days win where the two overlap - they were computed from the logs
+ * just now, the stored ones from the same logs earlier, and if they disagree
+ * the fresher reading is the one to trust.
+ *
+ * It starts at the oldest day either source knows about rather than always at
+ * `maxDays` back, so a week-old install shows a week rather than three weeks
+ * of invented emptiness.
+ */
+export function buildDailySeries(
+  stored: Map<string, StoredDay>,
+  live: KimiUsageDay[],
+  now: number,
+  maxDays: number,
+): KimiUsageDay[] {
+  const known = new Map<string, StoredDay>(stored);
+  for (const day of live) {
+    known.set(day.date, { turns: day.turns, totalTokens: day.totalTokens, costUsd: day.costUsd });
+  }
+  const floor = localDateKey(startOfDayBefore(now, maxDays - 1));
+  const oldest = [...known.keys()].filter((d) => d >= floor).sort()[0] ?? floor;
+
+  const series: KimiUsageDay[] = [];
+  for (let i = maxDays - 1; i >= 0; i--) {
+    const date = localDateKey(startOfDayBefore(now, i));
+    if (date < oldest) continue;
+    const day = known.get(date);
+    series.push(
+      day
+        ? { date, turns: day.turns, totalTokens: day.totalTokens, costUsd: day.costUsd, observed: true }
+        : // A hole inside the range: the server was down for the whole week
+          // this day could have been read in. Not a quiet day - an unseen one.
+          { date, turns: 0, totalTokens: 0, costUsd: undefined, observed: false },
+    );
   }
   return series;
 }
@@ -140,13 +184,17 @@ export class KimiUsageService {
   private static readonly CACHE_TTL = 30_000;
   private static readonly WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
   private static readonly WINDOW_24H_MS = 24 * 60 * 60 * 1000;
-  /** Days on the daily chart, today included. Bounded by the 7-day read. */
+  /** Days the logs can still be read for, today included. */
   private static readonly DAILY_DAYS = 7;
+  /** Days the chart may show, once the history file has that many. */
+  private static readonly CHART_DAYS = 30;
 
   constructor(
     store = new KimiSessionStore(),
     private readonly config = new KimiConfigService(),
     private readonly pricing = new OpenRouterPricingService(),
+    /** Completed days, so the chart outlives the log files' seven. */
+    private readonly history = new KimiUsageStore(),
   ) {
     this.store = store;
   }
@@ -256,7 +304,25 @@ export class KimiUsageService {
       }))
       .sort((a, b) => b.totalTokens - a.totalTokens);
 
-    const daily = buildDailySeries(days, now, KimiUsageService.DAILY_DAYS);
+    const live = buildLiveDays(days, now, KimiUsageService.DAILY_DAYS);
+    // Only the finished days are written down. Today is still being added to,
+    // and a partial day stored as final would freeze at whatever the clock
+    // read when the dashboard was last built.
+    const today = localDateKey(now);
+    await this.history.record(
+      new Map(
+        live
+          .filter((d) => d.date !== today)
+          .map((d) => [d.date, { turns: d.turns, totalTokens: d.totalTokens, costUsd: d.costUsd }]),
+      ),
+      localDateKey(startOfDayBefore(now, KimiUsageStore.retainDays - 1)),
+    );
+    const daily = buildDailySeries(
+      await this.history.load(),
+      live,
+      now,
+      KimiUsageService.CHART_DAYS,
+    );
 
     return {
       last24h,
