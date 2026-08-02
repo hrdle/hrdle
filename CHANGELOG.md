@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.43] - 2026-08-02
+
+### Fixed
+- **The notification card is carried through the screen mirror.**
+  `screenText()` marks the overlay screen as a card - inset, bordered, sized to
+  its message - but `publishScreen` destructured only header/body/footer/notice,
+  so the flag never left the device. The browser mirror, the recording and the
+  replay player all drew a notice as plain body text
+  - `debug-ui.ts` already carried a comment about this exact shape: a screen
+    rebuilt field by field drops anything not named, which is how the notice
+    strip went missing once before. `GlassesScreen` now carries `card` and
+    every field-by-field rebuild names it
+  - Not cosmetic. The border was added so a notification reads as a
+    notification rather than as more body text, and until now there was no way
+    to see on the simulator whether that had worked
+- **The screen shown when the server cannot be reached says what to do about
+  it.** It named the failure and then closed, which reads as the app being
+  broken - and whoever meets that screen is usually meeting the app for the
+  first time, with the address wrong or the machine off. It now names both
+  things to check before it closes
+
+### Changed
+- **The README says what Hrdle is rather than which category it is in.** It is
+  herdr plus handle: herdr runs the sessions, this is the handle you take hold
+  of them by. And the machine being headless is the case it was built for, not
+  a caveat - both now in the first screenful, in English and Japanese. The same
+  framing leads the EVEN Hub store description
+- **`min_sdk_version` raised to 0.0.12**, the floor the EVEN Hub review rubric
+  names. The bundled SDK was already `^0.0.12`
+- Glasses app built as v0.0.37 and submitted to the EVEN Hub store for review
+
 ## [0.3.42] - 2026-08-02
 
 ### Added
