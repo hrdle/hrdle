@@ -13,6 +13,7 @@ import { nukeClientCache } from "../../utils/nuke-cache";
 import { Card, StatTile } from "./Card";
 import { DailyUsageChart } from "./DailyUsageChart";
 import { HourlyHeatmap } from "./HourlyHeatmap";
+import { KimiDailyCostChart } from "./KimiDailyCostChart";
 import { ModelUsageChart } from "./ModelUsageChart";
 import { NetworkLatency } from "./NetworkLatency";
 import { PeerServerCard } from "./PeerServerCard";
@@ -297,6 +298,11 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 								</div>
 							)}
 						</Card>
+						{kimiUsage?.daily && (
+							<div className="md:col-span-2">
+								<KimiDailyCostChart daily={kimiUsage.daily} />
+							</div>
+						)}
 						{openRouterUsage && (
 							<Card
 								className="md:col-span-2"
