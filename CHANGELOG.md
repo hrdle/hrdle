@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.41] - 2026-08-02
+
+### Changed
+- **The dashboard panel fits in two screens instead of four.** Measured at its
+  real width, the Claude tab ran to 1565px of scroll, and the space went to the
+  things with least to say: 116px on two latency numbers, 502px on three charts
+  that were mostly axis in a column too narrow for an axis. Now 1179px, with
+  more in it
+  - **Hourly activity is a heatmap, which is what it was called.** The payload
+    has been hour-by-hour all along and the card summed it into four blocks —
+    170px to say "mornings are busy". Twenty-four cells fit in less room and
+    answer when the day actually starts, with the peak hour on the title row.
+    Stepped on the square root of each hour's share, because one batch hour can
+    hold five times any other and a linear scale left the rest a single shade
+  - **The server card is one line per metric**: name, value, and an inline
+    sparkline. The full charts are a tap away and the choice is remembered
+  - **Latency moved onto the local server's own title row.** It measures this
+    browser's link to that server, so a card of its own above a list of peers
+    described none of them
+  - Usage limits are untouched. The burn-down projection earns its space when
+    the limit is close, which is the moment it exists for
+
 ## [0.3.40] - 2026-08-02
 
 ### Fixed
