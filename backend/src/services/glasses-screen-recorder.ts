@@ -21,7 +21,7 @@
 import { appendFile, mkdir, readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { envVar } from '../../../shared/identity';
-import type { GlassesScreen } from '../../../shared/types';
+import type { GlassesInput, GlassesScreen } from '../../../shared/types';
 import { getDataDir } from '../utils/storage';
 
 const RECORD_ENV = envVar('GLASSES_RECORD');
@@ -33,14 +33,17 @@ const DIR_NAME = 'glasses-screen-recording';
 const RETENTION_DAYS = 365;
 
 /** A recorded line: a frame as published plus the server's own arrival
- *  clock, or a gap marker written when the publisher disconnects, so replay
- *  can tell "screen unchanged for an hour" from "glasses were off for an
- *  hour". `receivedAt` guards the timeline against a skewed device clock —
- *  and the `at`/`receivedAt` gap itself is diagnostic (clock drift, WebView
- *  background throttling). */
+ *  clock, a gap marker written when the publisher disconnects (so replay can
+ *  tell "screen unchanged for an hour" from "glasses were off for an hour"),
+ *  or a ring gesture (#129) so replay shows the wearer driving. `receivedAt`
+ *  guards the timeline against a skewed device clock — and the
+ *  `at`/`receivedAt` gap itself is diagnostic (clock drift, WebView
+ *  background throttling). The three shapes are discriminated by their own
+ *  keys, so old recordings read back unchanged. */
 export type RecordedGlassesLine =
   | (GlassesScreen & { receivedAt: number })
-  | { gap: true; at: number };
+  | { gap: true; at: number }
+  | { input: GlassesInput['kind']; at: number; receivedAt: number };
 
 /** Local date stamp — the user reviews footage in their own timezone. */
 function dayStamp(at: number): string {
@@ -66,7 +69,10 @@ function recordingDir(): string {
 let queue: Promise<void> = Promise.resolve();
 let announced = false;
 let lastFrameKey: string | null = null;
-let lastLineWasGap = false;
+/** False until a frame or gesture lands, and again after each gap: a gap
+ *  marker is only worth writing when something showed life since the last
+ *  one, and never before anything was recorded at all. */
+let recordedSinceGap = false;
 let lastPrunedDay: string | null = null;
 
 function enqueue(work: () => Promise<void>): void {
@@ -118,9 +124,9 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
   }
 
   if (screen === null) {
-    if (lastLineWasGap || lastFrameKey === null) return;
+    if (!recordedSinceGap) return;
     lastFrameKey = null;
-    lastLineWasGap = true;
+    recordedSinceGap = false;
     const marker: RecordedGlassesLine = { gap: true, at: Date.now() };
     enqueue(() => appendLine(marker, dayStamp(marker.at)));
     return;
@@ -129,11 +135,28 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
   const key = JSON.stringify([screen.mode, screen.header, screen.notice, screen.body, screen.footer]);
   if (key === lastFrameKey) return;
   lastFrameKey = key;
-  lastLineWasGap = false;
+  recordedSinceGap = true;
   // Stamp arrival now, not when the queued write runs. File choice follows
   // the server clock too: a device clock a day off must not scatter one
   // evening across two files.
   const line: RecordedGlassesLine = { ...screen, receivedAt: Date.now() };
+  enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
+}
+
+/**
+ * Record one ring gesture (#129). No dedup — every gesture happened — and no
+ * effect on frame dedup: the gesture's consequence arrives as its own frame.
+ * A gesture proves the device is alive, so the next disconnect writes a fresh
+ * gap marker even if no frame made it through in between.
+ */
+export function recordGlassesInput(input: GlassesInput): void {
+  if (!glassesRecordingEnabled()) return;
+  if (!announced) {
+    announced = true;
+    console.log(`[glasses-recorder] recording to ${recordingDir()} (${RECORD_ENV} is set)`);
+  }
+  recordedSinceGap = true;
+  const line: RecordedGlassesLine = { input: input.kind, at: input.at, receivedAt: Date.now() };
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
 }
 
@@ -206,6 +229,6 @@ export function resetGlassesRecorderForTest(): void {
   queue = Promise.resolve();
   announced = false;
   lastFrameKey = null;
-  lastLineWasGap = false;
+  recordedSinceGap = false;
   lastPrunedDay = null;
 }

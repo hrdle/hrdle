@@ -147,13 +147,20 @@ export interface GlassesScreen {
   at: number
 }
 
+/** A ring gesture published by the device for the recording (#129).
+ *  Mirror of GlassesInput in shared/types.ts. */
+export type GlassesInputKind = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
+
 /**
  * One line of the server's screen-mirror recording (#127): a frame as it was
- * recorded (with the server's own arrival clock), or a gap marking the device
- * disconnecting. The simulator's replay player feeds these back through the
- * same painter the live mirror uses.
+ * recorded (with the server's own arrival clock), a gap marking the device
+ * disconnecting, or a ring gesture (#129). The replay player feeds frames
+ * back through the same painter the live mirror uses and overlays gestures.
  */
-export type RecordedGlassesLine = (GlassesScreen & { receivedAt: number }) | { gap: true; at: number }
+export type RecordedGlassesLine =
+  | (GlassesScreen & { receivedAt: number })
+  | { gap: true; at: number }
+  | { input: GlassesInputKind; at: number; receivedAt: number }
 
 export interface RecordingDaySummary {
   /** YYYY-MM-DD, server-local. */

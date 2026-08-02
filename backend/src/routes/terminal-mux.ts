@@ -12,7 +12,7 @@ import {
   trackGlassesRelay,
   unsubscribeGlassesRelay,
 } from '../services/glasses-relay';
-import { recordGlassesScreen } from '../services/glasses-screen-recorder';
+import { recordGlassesInput, recordGlassesScreen } from '../services/glasses-screen-recorder';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
@@ -339,6 +339,13 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     // it must see every frame whether or not a mirror is open.
     recordGlassesScreen(msg.screen);
     broadcastGlassesScreen(msg.screen);
+    return;
+  }
+
+  // Ring gestures (#129). Recording-only: viewers of the live mirror need the
+  // resulting frame, not the finger, so nothing is broadcast.
+  if (msg.type === 'glasses-input') {
+    recordGlassesInput(msg.input);
     return;
   }
 

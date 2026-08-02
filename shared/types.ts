@@ -1076,6 +1076,17 @@ export interface GlassesScreen {
 }
 
 /**
+ * One ring gesture on the device (#129), named after the controller's own
+ * RingAction. Published only while the screen mirror is live, and only ever
+ * recorded — a mirror viewer needs the resulting frame, not the finger.
+ */
+export interface GlassesInput {
+  kind: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown';
+  /** Epoch ms the device handled the gesture. */
+  at: number;
+}
+
+/**
  * One relay item for the G2 glasses channel (#504): a single piece of
  * information the user needs to make a decision, not a summary. `waiting`
  * items are created by the blocked-transition tracker (source 'auto') or by
@@ -1161,6 +1172,11 @@ export type MuxClientMessage =
   | { type: 'glasses-screen'; screen: GlassesScreen }
   | { type: 'subscribe-glasses-screen' }
   | { type: 'unsubscribe-glasses-screen' }
+  // A ring gesture, published by the device alongside its screen frames
+  // (#129). Recording-only today: the replay player overlays them so demo
+  // footage shows the wearer driving, and a debugging trail shows whether the
+  // user was mid-interaction right before an app death (#45).
+  | { type: 'glasses-input'; input: GlassesInput }
   | (ControlClientMessage & { sessionId: string });
 
 // Runtime validation for client→server /ws/mux frames. The unions above are
@@ -1250,6 +1266,13 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('subscribe-glasses-screen') }),
   z.object({ type: z.literal('unsubscribe-glasses-screen') }),
+  z.object({
+    type: z.literal('glasses-input'),
+    input: z.object({
+      kind: z.enum(['tap', 'doubleTap', 'swipeUp', 'swipeDown']),
+      at: z.number(),
+    }),
+  }),
   // Control frames carry a sessionId in the mux protocol (ping may send "").
   ...controlClientMessageOptions.map((o) => o.extend({ sessionId: z.string() })),
 ]);
