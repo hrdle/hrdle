@@ -735,8 +735,14 @@ The simulator:
 
 ```
 https://<host>:5924/glasses          # served by production
+https://<host>:5924/glasses?player   # screen-mirror recording replay player (#127)
 bun run --filter glasses dev         # vite dev -> :8391
 ```
+
+The replay player is its own page on purpose — its first version lived in the
+simulator's side panel, a whole screen away from the panel it was driving. It
+shares the simulator's canvas painter (`panel-paint.ts`), so a replayed frame
+wraps and clamps exactly as the wearer saw it.
 
 `?hub=<url>` points at another server and `?bg=<image URL>` replaces the
 background. **The microphone is real** - it calls `getUserMedia` and hits

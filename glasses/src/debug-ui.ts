@@ -20,36 +20,15 @@
 // Mic/STT are faked: the "STT result" textbox injects what the Groq
 // transcription would have returned.
 
-import { getRecordingDay, getRecordingDays, setBaseUrl, transcribe } from './api.ts'
+import { setBaseUrl, transcribe } from './api.ts'
 import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
-import {
-  NOTICE_BORDER,
-  NOTICE_BORDER_COLOR,
-  NOTICE_PAD,
-  noticeHeight,
-  screenText,
-  updateDisplay,
-  updateHeader,
-  wrapForPanel,
-} from './display.ts'
-import {
-  BAR_H,
-  CARD_BORDER,
-  CARD_BORDER_COLOR,
-  CARD_RADIUS,
-  LINE_H,
-  PANEL_H,
-  PANEL_W,
-  advance,
-  cardBox,
-  splitLines,
-  textWidth,
-} from './metrics.ts'
+import { screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
+import { CARD_BORDER_COLOR, LINE_H, PANEL_H, PANEL_W, splitLines, textWidth } from './metrics.ts'
+import { BASELINE, GREEN, createPanelPainter } from './panel-paint.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
-import type { RecordedGlassesLine } from './types.ts'
 
 /** Screen names — the shared vocabulary used when reporting issues. */
 const MODE_LABEL: Record<string, string> = {
@@ -319,24 +298,7 @@ export function startDebugUI(): void {
           ${settingsPanelHtml()}
 
           <h2>Replay recording</h2>
-          <div class="bg-row">
-            <select id="rp-day"><option value="">(no days loaded)</option></select>
-            <button type="button" id="rp-load">Load days</button>
-          </div>
-          <div class="bg-row">
-            <button type="button" id="rp-play" disabled>Play</button>
-            <select id="rp-speed">
-              <option value="1">1x</option>
-              <option value="1.5">1.5x</option>
-              <option value="2">2x</option>
-              <option value="5">5x</option>
-              <option value="20" selected>20x</option>
-              <option value="60">60x</option>
-            </select>
-            <button type="button" id="rp-stop" disabled>Stop</button>
-          </div>
-          <input type="range" id="rp-seek" min="0" max="0" value="0" disabled />
-          <p class="hint" id="rp-status">Replays the server's screen-mirror recording through this panel's own painter. Recording is opt-in on the server (HRDLE_GLASSES_RECORD=1).</p>
+          <p class="hint">The recording player is its own page now — the controls sit under the screen there. <a id="rp-open" href="?player">Open the player</a></p>
 
           <h2>Background</h2>
           <div class="bg-row">
@@ -531,11 +493,6 @@ export function startDebugUI(): void {
   // wire with no state behind them, so there is no `updateDisplay` to run and
   // nothing to be faithful to beyond the text itself.
   let mirroring = false
-  // While the replay player owns the panel (playing or paused on a frame),
-  // local renders keep updating state underneath but stay off the screen —
-  // same arrangement as mirroring. Declared here, not with the player wiring:
-  // platform.render closes over it and runs before that wiring does.
-  let replayOwns = false
   let localScreen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean } = { header: '', body: '', footer: '' }
   let localMode = 'session_list'
 
@@ -550,60 +507,12 @@ export function startDebugUI(): void {
     modeId.textContent = mode
   }
 
-  // Panel geometry, straight from the container definitions in display.ts.
-  // Text starts below the container's own padding, and LVGL stacks lines at a
-  // fixed 27px — drawing them 28px apart put the last of seven a full line's
-  // eighth out of place.
-  const HEADER_PAD = 4
-  const BODY_PAD = 6
-  /** Baseline within a 27px line box, for the font this canvas draws with. */
-  const BASELINE = 21
-  const HEADER_BASE = HEADER_PAD + BASELINE
-  const BODY_TOP = BAR_H + BODY_PAD + BASELINE
-  const FOOTER_BASE = PANEL_H - BAR_H + HEADER_PAD + BASELINE
-  // Proportional, not monospace: the G2 font is proportional (a space is 5px,
-  // `i` is 4, `W` is 16) and drawing into those cells with a monospace face
-  // meant squeezing almost every ASCII glyph. A plain sans lands within about
-  // 1px of the firmware's advances instead of 4.
-  const FONT = '19px system-ui, "Noto Sans", "DejaVu Sans", sans-serif'
-  // The panel's phosphor green, bright enough to hold against a lit room.
-  // The panel's phosphor green. Pulled toward pure green — the G2 is a
-  // monochrome green display and the paler mint read as a generic HUD.
-  const GREEN = '76, 255, 100'
-
-  /** Draw one screen at the hardware's real pixel count, then crush it to the
-   *  panel's 16 levels of green. Anti-aliasing finer than 4 bits is exactly
-   *  what the wearer does not get. */
-  // Every glyph lands where the firmware puts it.
-  //
-  // Letting the browser lay out a whole string drifts badly: the G2 font is
-  // proportional (a space is 5px, `i` is 4, `W` is 16) and no browser
-  // monospace comes close, so a right-aligned clock ended up near the middle
-  // of the panel. Advancing by the firmware's own per-character widths —
-  // kerning included - is the only way this window earns the phrase "draws
-  // exactly what the device draws" in its own subtitle.
-  function drawRow(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-    let dx = 0
-    let prev = ''
-    for (const ch of text) {
-      const cell = advance(prev, ch)
-      const natural = ctx.measureText(ch).width
-      if (natural > cell + 0.5) {
-        // The browser's glyph is wider than the cell the firmware gives it —
-        // an emoji, a box-drawing rune. Squeeze it in rather than let it run
-        // over its neighbour, which is also what the reader needs to know.
-        ctx.save()
-        ctx.translate(x + dx, y)
-        ctx.scale(cell / natural, 1)
-        ctx.fillText(ch, 0, 0)
-        ctx.restore()
-      } else {
-        ctx.fillText(ch, x + dx, y)
-      }
-      dx += cell
-      prev = ch
-    }
-  }
+  // The painter is shared with the replay player (panel-paint.ts); this file
+  // keeps only what is simulator-specific — container-faithful drawing from
+  // `panel`, and the picture-in-picture copy pumped after every frame.
+  const painter = createPanelPainter(canvas, () => pumpPip())
+  const { drawRow, beginFrame, endFrame } = painter
+  const drawPanel = painter.drawScreen
 
   /**
    * Draw what the panel is holding, container by container.
@@ -647,121 +556,11 @@ export function startDebugUI(): void {
     }
   }
 
-  function beginFrame(): CanvasRenderingContext2D | null {
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ctx.font = FONT
-    ctx.textBaseline = 'alphabetic'
-    // Optics bloom a little; keep it subtle or quantising turns it to mud.
-    ctx.shadowColor = `rgba(${GREEN}, 0.55)`
-    ctx.shadowBlur = 6
-    ctx.fillStyle = `rgb(${GREEN})`
-    return ctx
-  }
-
-  function endFrame(ctx: CanvasRenderingContext2D): void {
-    ctx.shadowBlur = 0
-    // 4-bit: 16 alpha levels, nothing in between.
-    const frame = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    const px = frame.data
-    for (let i = 3; i < px.length; i += 4) {
-      px[i] = Math.round((px[i] / 255) * 15) * 17
-    }
-    ctx.putImageData(frame, 0, 0)
-    // The little window is a copy of this one; keep it in step.
-    pumpPip()
-  }
-
   /** This simulator's own screen: whatever `updateDisplay` left in the panel. */
   function paintPanel(): void {
     const ctx = beginFrame()
     if (!ctx) return
     drawContainers(ctx)
-    endFrame(ctx)
-  }
-
-  /**
-   * The mirrored device screen, laid out from three strings.
-   *
-   * Kept on its own path because that is all a mirror is given — text off the
-   * wire, with no state behind it to run `updateDisplay` against. It is the one
-   * place this file still positions anything itself, and it is not claiming to
-   * show where the device put things, only what it said.
-   */
-  function drawPanel(screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean; card?: boolean }): void {
-    const ctx = beginFrame()
-    if (!ctx) return
-
-    if (!screen.headerless) drawRow(ctx, screen.header, HEADER_PAD, HEADER_BASE)
-
-    // The notice strip is its own container on the device, with a drawn border
-    // where a row of dashes used to be. Its height decides where the
-    // conversation starts, so this has to match the device's arithmetic or the
-    // window stops being worth the phrase in its own subtitle.
-    const noticeLines = screen.notice ? screen.notice.split('\n') : []
-    const nHeight = noticeHeight(noticeLines.length)
-    // Without a header container there is no bar for the strip to sit under, so
-    // it starts at the top of the panel - the same place `buildSessionList` puts
-    // it. A strip drawn 36px lower than the device draws it is the kind of
-    // divergence this simulator exists to make visible, not to introduce.
-    const noticeTop = screen.headerless ? 0 : BAR_H
-    for (const [i, line] of noticeLines.entries()) {
-      drawRow(ctx, line, 4 + NOTICE_PAD + NOTICE_BORDER, noticeTop + NOTICE_PAD + NOTICE_BORDER + BASELINE + i * LINE_H)
-    }
-    if (nHeight > 0) {
-      // The list's strip is a notification and is drawn to be noticed; the
-      // conversation's is a recap, and its rule only has to separate.
-      const level = screen.headerless ? CARD_BORDER_COLOR : NOTICE_BORDER_COLOR
-      ctx.strokeStyle = `rgba(${GREEN}, ${level / 15})`
-      ctx.lineWidth = NOTICE_BORDER
-      ctx.beginPath()
-      ctx.roundRect(
-        4 + NOTICE_BORDER / 2,
-        noticeTop + NOTICE_BORDER / 2,
-        PANEL_W - 8 - NOTICE_BORDER,
-        nHeight - NOTICE_BORDER,
-        screen.headerless ? CARD_RADIUS : 0,
-      )
-      ctx.stroke()
-      ctx.fillStyle = `rgb(${GREEN})`
-    }
-
-    if (screen.card) {
-      // A notification is a box laid over the panel, not another screen filling
-      // it. Drawn here at the same geometry `buildOverlay` gives the device -
-      // getting this wrong would put the simulator's border somewhere the G2's
-      // is not, which is the exact class of divergence that keeps turning up.
-      const lines = screen.body.split('\n')
-      const box = cardBox(lines.length)
-      ctx.strokeStyle = `rgba(${GREEN}, ${CARD_BORDER_COLOR / 15})`
-      ctx.lineWidth = CARD_BORDER
-      ctx.beginPath()
-      ctx.roundRect(
-        box.x + CARD_BORDER / 2,
-        box.y + CARD_BORDER / 2,
-        box.w - CARD_BORDER,
-        box.h - CARD_BORDER,
-        CARD_RADIUS,
-      )
-      ctx.stroke()
-      ctx.fillStyle = `rgb(${GREEN})`
-      const top = box.y + CARD_BORDER + BODY_PAD + BASELINE
-      for (const [i, line] of lines.entries()) {
-        drawRow(ctx, line, box.x + CARD_BORDER + BODY_PAD, top + i * LINE_H)
-      }
-    } else {
-      // Without a header container the body owns that band too, and starts where
-      // it does rather than a bar below it - but still below its own notice.
-      const bodyTop = screen.headerless ? nHeight + BODY_PAD + BASELINE : BODY_TOP + nHeight
-      for (const [i, line] of screen.body.split('\n').entries()) {
-        drawRow(ctx, line, 4 + BODY_PAD, bodyTop + i * LINE_H)
-      }
-    }
-
-    ctx.fillStyle = `rgba(${GREEN}, 0.78)`
-    drawRow(ctx, screen.footer, HEADER_PAD, FOOTER_BASE)
-
     endFrame(ctx)
   }
 
@@ -830,10 +629,9 @@ export function startDebugUI(): void {
       localScreen = { ...raw, body: wrapForPanel(raw.body) }
       localMode = state.mode
       renderDiag(state)
-      // While mirroring the device owns the panel (and while replaying, the
-      // recording does); this connection's own state keeps running underneath
-      // so switching back is instant.
-      if (mirroring || replayOwns) return
+      // While mirroring the device owns the panel; this connection's own
+      // state keeps running underneath so switching back is instant.
+      if (mirroring) return
       lastScreen = localScreen
       lastMode = state.mode
       modeJp.textContent = MODE_LABEL[state.mode] ?? state.mode
@@ -852,7 +650,7 @@ export function startDebugUI(): void {
       localScreen = { ...raw, body: wrapForPanel(raw.body) }
       localMode = state.mode
       renderDiag(state)
-      if (mirroring || replayOwns) return
+      if (mirroring) return
       lastScreen = localScreen
       void updateHeader(panelBridge as never, state).then(paintPanel)
     },
@@ -1418,9 +1216,6 @@ export function startDebugUI(): void {
   })
 
   mirrorToggle.addEventListener('change', () => {
-    // The mirror and the replay player both claim the panel; whichever the
-    // user reached for last wins.
-    if (mirrorToggle.checked && replayOwns) rpRelease()
     mirroring = mirrorToggle.checked
     if (mirroring) {
       controller.ws.subscribeGlassesScreen()
@@ -1439,198 +1234,11 @@ export function startDebugUI(): void {
     }
   })
 
-  // ── Replay player (#127) ──
-  //
-  // Feeds the server's screen-mirror recording back through paint() — the
-  // same painter the local app and the device mirror use, so wrapping and the
-  // 7-line clamp match what the wearer saw. The recording is a transition log
-  // (one line per screen change, gap markers where the device disconnected),
-  // so playback walks line to line and scales the recorded interval.
-
-  const rpDay = document.getElementById('rp-day') as HTMLSelectElement
-  const rpSpeed = document.getElementById('rp-speed') as HTMLSelectElement
-  const rpSeek = document.getElementById('rp-seek') as HTMLInputElement
-  const rpLoad = document.getElementById('rp-load') as HTMLButtonElement
-  const rpPlay = document.getElementById('rp-play') as HTMLButtonElement
-  const rpStop = document.getElementById('rp-stop') as HTMLButtonElement
-  const rpStatus = el('rp-status')
-
-  /** Real-time cap on one wait between frames. A quiet hour is one line in
-   *  the log, and a demo should skim it rather than sit through it. */
-  const RP_MAX_WAIT_MS = 2500
-  /** Floor, so a burst of quick transitions stays watchable. */
-  const RP_MIN_WAIT_MS = 120
-
-  let rpLines: RecordedGlassesLine[] = []
-  let rpIndex = 0
-  let rpPlaying = false
-  let rpTimer: number | undefined
-
-  /** Timeline position of a line — the server's arrival clock, falling back
-   *  to the device's own stamp for recordings that predate `receivedAt`. */
-  const rpTime = (line: RecordedGlassesLine): number =>
-    'gap' in line ? line.at : (line.receivedAt ?? line.at)
-
-  function rpPaint(index: number): void {
-    const line = rpLines[index]
-    if (!line) return
-    rpIndex = index
-    rpSeek.value = String(index)
-    const when = new Date(rpTime(line)).toLocaleTimeString()
-    const pos = `${index + 1}/${rpLines.length} at ${when}`
-    if ('gap' in line) {
-      // An empty panel — exactly what the live mirror's audience gets when
-      // the device goes away.
-      paint({ header: '', body: '', footer: '' }, lastMode)
-      rpStatus.textContent = `${pos} - device disconnected`
-      return
-    }
-    paint(
-      {
-        header: line.header,
-        notice: line.notice ? wrapForPanel(line.notice) : undefined,
-        body: wrapForPanel(line.body),
-        footer: line.footer,
-      },
-      line.mode,
-    )
-    rpStatus.textContent = rpPlaying ? pos : `${pos} (paused)`
-  }
-
-  function rpScheduleNext(): void {
-    if (!rpPlaying) return
-    const next = rpLines[rpIndex + 1]
-    if (!next) {
-      rpPlaying = false
-      rpPlay.textContent = 'Play'
-      rpStatus.textContent = `Finished (${rpLines.length} frames). Stop returns the panel to the local app.`
-      return
-    }
-    const cur = rpLines[rpIndex]
-    const speed = Number(rpSpeed.value) || 1
-    const recorded = cur ? (rpTime(next) - rpTime(cur)) / speed : 0
-    const wait = Math.min(Math.max(recorded, RP_MIN_WAIT_MS), RP_MAX_WAIT_MS)
-    rpTimer = window.setTimeout(() => {
-      rpPaint(rpIndex + 1)
-      rpScheduleNext()
-    }, wait)
-  }
-
-  function rpTakePanel(): void {
-    if (replayOwns) return
-    replayOwns = true
-    if (mirroring) {
-      mirrorToggle.checked = false
-      mirroring = false
-      controller.ws.unsubscribeGlassesScreen()
-      setMirrorUi(false, '')
-    }
-    // Same reasoning as the mirror: the ring would fight the recording for
-    // the screen, and replaying is for watching.
-    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = true
-    rpStop.disabled = false
-  }
-
-  function rpPause(): void {
-    rpPlaying = false
-    if (rpTimer !== undefined) {
-      clearTimeout(rpTimer)
-      rpTimer = undefined
-    }
-    rpPlay.textContent = 'Play'
-  }
-
-  function rpRelease(): void {
-    rpPause()
-    replayOwns = false
-    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = mirroring
-    rpStop.disabled = true
-    rpStatus.textContent = ''
-    // Same return path as switching the mirror off: repaint the local panel
-    // kept up to date underneath, rather than re-running a render that would
-    // find every container unchanged and draw nothing.
-    lastScreen = localScreen
-    lastMode = localMode
-    modeJp.textContent = MODE_LABEL[localMode] ?? localMode
-    modeId.textContent = localMode
-    paintPanel()
-  }
-
-  async function rpLoadDay(day: string): Promise<void> {
-    if (!day) return
-    try {
-      const { lines } = await getRecordingDay(day)
-      rpLines = lines
-      rpIndex = 0
-      rpSeek.max = String(Math.max(lines.length - 1, 0))
-      rpSeek.value = '0'
-      rpSeek.disabled = lines.length === 0
-      rpPlay.disabled = lines.length === 0
-      rpStatus.textContent = `${lines.length} frames loaded from ${day}. Play, or scrub the timeline.`
-    } catch (err) {
-      rpStatus.textContent = `Failed to load ${day}: ${err instanceof Error ? err.message : String(err)}`
-    }
-  }
-
-  rpLoad.addEventListener('click', async () => {
-    rpStatus.textContent = 'Loading...'
-    try {
-      const { enabled, days } = await getRecordingDays()
-      rpDay.innerHTML = ''
-      if (days.length === 0) {
-        rpDay.appendChild(new Option('(no recordings)', ''))
-        rpStatus.textContent = enabled
-          ? 'Recording is on; nothing captured yet.'
-          : 'No recordings. Set HRDLE_GLASSES_RECORD=1 on the server to start capturing.'
-        return
-      }
-      for (const d of days) {
-        rpDay.appendChild(new Option(`${d.day} (${(d.bytes / 1024).toFixed(1)} KB)`, d.day))
-      }
-      // Jump straight to the newest day - the reason the panel was opened.
-      const newest = days[days.length - 1]
-      if (newest) {
-        rpDay.value = newest.day
-        await rpLoadDay(newest.day)
-      }
-    } catch (err) {
-      rpStatus.textContent = `Failed to list recordings: ${err instanceof Error ? err.message : String(err)}`
-    }
-  })
-
-  rpDay.addEventListener('change', () => {
-    rpPause()
-    void rpLoadDay(rpDay.value)
-  })
-
-  rpPlay.addEventListener('click', () => {
-    if (rpPlaying) {
-      rpPause()
-      rpPaint(rpIndex)
-      return
-    }
-    if (rpLines.length === 0) return
-    rpTakePanel()
-    rpPlaying = true
-    rpPlay.textContent = 'Pause'
-    // Play after finishing starts over; play after pause resumes.
-    if (rpIndex >= rpLines.length - 1) rpIndex = 0
-    rpPaint(rpIndex)
-    rpScheduleNext()
-  })
-
-  rpStop.addEventListener('click', rpRelease)
-
-  rpSeek.addEventListener('input', () => {
-    if (rpLines.length === 0) return
-    rpTakePanel()
-    if (rpTimer !== undefined) {
-      clearTimeout(rpTimer)
-      rpTimer = undefined
-    }
-    rpPaint(Number(rpSeek.value))
-    if (rpPlaying) rpScheduleNext()
-  })
+  // The replay player lives on its own page now (player-ui.ts, `?player`) —
+  // its controls sat a whole panel away from the screen here. The link keeps
+  // whatever `?hub=` this window was opened with.
+  const rpOpen = document.getElementById('rp-open') as HTMLAnchorElement
+  rpOpen.href = hubUrl ? `?player&hub=${encodeURIComponent(hubUrl)}` : '?player'
 
   setInterval(() => renderDiag(controller.state), 500)
 
