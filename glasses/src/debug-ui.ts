@@ -20,7 +20,7 @@
 // Mic/STT are faked: the "STT result" textbox injects what the Groq
 // transcription would have returned.
 
-import { setBaseUrl, transcribe } from './api.ts'
+import { getRecordingDay, getRecordingDays, setBaseUrl, transcribe } from './api.ts'
 import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
@@ -49,6 +49,7 @@ import {
 } from './metrics.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
+import type { RecordedGlassesLine } from './types.ts'
 
 /** Screen names — the shared vocabulary used when reporting issues. */
 const MODE_LABEL: Record<string, string> = {
@@ -218,6 +219,9 @@ const STYLE = `
   input[type=text] { font: inherit; font-size: 13px; padding: 7px 9px; border-radius: 6px;
                      border: 1px solid #33402f; background: #0f140e; color: #d8ded6; width: 100%;
                      box-sizing: border-box; }
+  select { font: inherit; font-size: 13px; padding: 7px 9px; border-radius: 6px;
+           border: 1px solid #33402f; background: #0f140e; color: #d8ded6; }
+  input[type=range] { width: 100%; accent-color: #6affa0; }
   .hint { font-size: 11px; color: #6b736a; line-height: 1.6; }
   .bg-row { display: flex; gap: 8px; }
   .bg-row button { flex: 1; }
@@ -313,6 +317,26 @@ export function startDebugUI(): void {
           <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
           <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
           ${settingsPanelHtml()}
+
+          <h2>Replay recording</h2>
+          <div class="bg-row">
+            <select id="rp-day"><option value="">(no days loaded)</option></select>
+            <button type="button" id="rp-load">Load days</button>
+          </div>
+          <div class="bg-row">
+            <button type="button" id="rp-play" disabled>Play</button>
+            <select id="rp-speed">
+              <option value="1">1x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+              <option value="5">5x</option>
+              <option value="20" selected>20x</option>
+              <option value="60">60x</option>
+            </select>
+            <button type="button" id="rp-stop" disabled>Stop</button>
+          </div>
+          <input type="range" id="rp-seek" min="0" max="0" value="0" disabled />
+          <p class="hint" id="rp-status">Replays the server's screen-mirror recording through this panel's own painter. Recording is opt-in on the server (HRDLE_GLASSES_RECORD=1).</p>
 
           <h2>Background</h2>
           <div class="bg-row">
@@ -507,6 +531,11 @@ export function startDebugUI(): void {
   // wire with no state behind them, so there is no `updateDisplay` to run and
   // nothing to be faithful to beyond the text itself.
   let mirroring = false
+  // While the replay player owns the panel (playing or paused on a frame),
+  // local renders keep updating state underneath but stay off the screen —
+  // same arrangement as mirroring. Declared here, not with the player wiring:
+  // platform.render closes over it and runs before that wiring does.
+  let replayOwns = false
   let localScreen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean } = { header: '', body: '', footer: '' }
   let localMode = 'session_list'
 
@@ -801,9 +830,10 @@ export function startDebugUI(): void {
       localScreen = { ...raw, body: wrapForPanel(raw.body) }
       localMode = state.mode
       renderDiag(state)
-      // While mirroring the device owns the panel; this connection's own
-      // state keeps running underneath so switching back is instant.
-      if (mirroring) return
+      // While mirroring the device owns the panel (and while replaying, the
+      // recording does); this connection's own state keeps running underneath
+      // so switching back is instant.
+      if (mirroring || replayOwns) return
       lastScreen = localScreen
       lastMode = state.mode
       modeJp.textContent = MODE_LABEL[state.mode] ?? state.mode
@@ -822,7 +852,7 @@ export function startDebugUI(): void {
       localScreen = { ...raw, body: wrapForPanel(raw.body) }
       localMode = state.mode
       renderDiag(state)
-      if (mirroring) return
+      if (mirroring || replayOwns) return
       lastScreen = localScreen
       void updateHeader(panelBridge as never, state).then(paintPanel)
     },
@@ -1388,6 +1418,9 @@ export function startDebugUI(): void {
   })
 
   mirrorToggle.addEventListener('change', () => {
+    // The mirror and the replay player both claim the panel; whichever the
+    // user reached for last wins.
+    if (mirrorToggle.checked && replayOwns) rpRelease()
     mirroring = mirrorToggle.checked
     if (mirroring) {
       controller.ws.subscribeGlassesScreen()
@@ -1404,6 +1437,199 @@ export function startDebugUI(): void {
       modeId.textContent = localMode
       paintPanel()
     }
+  })
+
+  // ── Replay player (#127) ──
+  //
+  // Feeds the server's screen-mirror recording back through paint() — the
+  // same painter the local app and the device mirror use, so wrapping and the
+  // 7-line clamp match what the wearer saw. The recording is a transition log
+  // (one line per screen change, gap markers where the device disconnected),
+  // so playback walks line to line and scales the recorded interval.
+
+  const rpDay = document.getElementById('rp-day') as HTMLSelectElement
+  const rpSpeed = document.getElementById('rp-speed') as HTMLSelectElement
+  const rpSeek = document.getElementById('rp-seek') as HTMLInputElement
+  const rpLoad = document.getElementById('rp-load') as HTMLButtonElement
+  const rpPlay = document.getElementById('rp-play') as HTMLButtonElement
+  const rpStop = document.getElementById('rp-stop') as HTMLButtonElement
+  const rpStatus = el('rp-status')
+
+  /** Real-time cap on one wait between frames. A quiet hour is one line in
+   *  the log, and a demo should skim it rather than sit through it. */
+  const RP_MAX_WAIT_MS = 2500
+  /** Floor, so a burst of quick transitions stays watchable. */
+  const RP_MIN_WAIT_MS = 120
+
+  let rpLines: RecordedGlassesLine[] = []
+  let rpIndex = 0
+  let rpPlaying = false
+  let rpTimer: number | undefined
+
+  /** Timeline position of a line — the server's arrival clock, falling back
+   *  to the device's own stamp for recordings that predate `receivedAt`. */
+  const rpTime = (line: RecordedGlassesLine): number =>
+    'gap' in line ? line.at : (line.receivedAt ?? line.at)
+
+  function rpPaint(index: number): void {
+    const line = rpLines[index]
+    if (!line) return
+    rpIndex = index
+    rpSeek.value = String(index)
+    const when = new Date(rpTime(line)).toLocaleTimeString()
+    const pos = `${index + 1}/${rpLines.length} at ${when}`
+    if ('gap' in line) {
+      // An empty panel — exactly what the live mirror's audience gets when
+      // the device goes away.
+      paint({ header: '', body: '', footer: '' }, lastMode)
+      rpStatus.textContent = `${pos} - device disconnected`
+      return
+    }
+    paint(
+      {
+        header: line.header,
+        notice: line.notice ? wrapForPanel(line.notice) : undefined,
+        body: wrapForPanel(line.body),
+        footer: line.footer,
+      },
+      line.mode,
+    )
+    rpStatus.textContent = rpPlaying ? pos : `${pos} (paused)`
+  }
+
+  function rpScheduleNext(): void {
+    if (!rpPlaying) return
+    const next = rpLines[rpIndex + 1]
+    if (!next) {
+      rpPlaying = false
+      rpPlay.textContent = 'Play'
+      rpStatus.textContent = `Finished (${rpLines.length} frames). Stop returns the panel to the local app.`
+      return
+    }
+    const cur = rpLines[rpIndex]
+    const speed = Number(rpSpeed.value) || 1
+    const recorded = cur ? (rpTime(next) - rpTime(cur)) / speed : 0
+    const wait = Math.min(Math.max(recorded, RP_MIN_WAIT_MS), RP_MAX_WAIT_MS)
+    rpTimer = window.setTimeout(() => {
+      rpPaint(rpIndex + 1)
+      rpScheduleNext()
+    }, wait)
+  }
+
+  function rpTakePanel(): void {
+    if (replayOwns) return
+    replayOwns = true
+    if (mirroring) {
+      mirrorToggle.checked = false
+      mirroring = false
+      controller.ws.unsubscribeGlassesScreen()
+      setMirrorUi(false, '')
+    }
+    // Same reasoning as the mirror: the ring would fight the recording for
+    // the screen, and replaying is for watching.
+    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = true
+    rpStop.disabled = false
+  }
+
+  function rpPause(): void {
+    rpPlaying = false
+    if (rpTimer !== undefined) {
+      clearTimeout(rpTimer)
+      rpTimer = undefined
+    }
+    rpPlay.textContent = 'Play'
+  }
+
+  function rpRelease(): void {
+    rpPause()
+    replayOwns = false
+    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = mirroring
+    rpStop.disabled = true
+    rpStatus.textContent = ''
+    // Same return path as switching the mirror off: repaint the local panel
+    // kept up to date underneath, rather than re-running a render that would
+    // find every container unchanged and draw nothing.
+    lastScreen = localScreen
+    lastMode = localMode
+    modeJp.textContent = MODE_LABEL[localMode] ?? localMode
+    modeId.textContent = localMode
+    paintPanel()
+  }
+
+  async function rpLoadDay(day: string): Promise<void> {
+    if (!day) return
+    try {
+      const { lines } = await getRecordingDay(day)
+      rpLines = lines
+      rpIndex = 0
+      rpSeek.max = String(Math.max(lines.length - 1, 0))
+      rpSeek.value = '0'
+      rpSeek.disabled = lines.length === 0
+      rpPlay.disabled = lines.length === 0
+      rpStatus.textContent = `${lines.length} frames loaded from ${day}. Play, or scrub the timeline.`
+    } catch (err) {
+      rpStatus.textContent = `Failed to load ${day}: ${err instanceof Error ? err.message : String(err)}`
+    }
+  }
+
+  rpLoad.addEventListener('click', async () => {
+    rpStatus.textContent = 'Loading...'
+    try {
+      const { enabled, days } = await getRecordingDays()
+      rpDay.innerHTML = ''
+      if (days.length === 0) {
+        rpDay.appendChild(new Option('(no recordings)', ''))
+        rpStatus.textContent = enabled
+          ? 'Recording is on; nothing captured yet.'
+          : 'No recordings. Set HRDLE_GLASSES_RECORD=1 on the server to start capturing.'
+        return
+      }
+      for (const d of days) {
+        rpDay.appendChild(new Option(`${d.day} (${(d.bytes / 1024).toFixed(1)} KB)`, d.day))
+      }
+      // Jump straight to the newest day - the reason the panel was opened.
+      const newest = days[days.length - 1]
+      if (newest) {
+        rpDay.value = newest.day
+        await rpLoadDay(newest.day)
+      }
+    } catch (err) {
+      rpStatus.textContent = `Failed to list recordings: ${err instanceof Error ? err.message : String(err)}`
+    }
+  })
+
+  rpDay.addEventListener('change', () => {
+    rpPause()
+    void rpLoadDay(rpDay.value)
+  })
+
+  rpPlay.addEventListener('click', () => {
+    if (rpPlaying) {
+      rpPause()
+      rpPaint(rpIndex)
+      return
+    }
+    if (rpLines.length === 0) return
+    rpTakePanel()
+    rpPlaying = true
+    rpPlay.textContent = 'Pause'
+    // Play after finishing starts over; play after pause resumes.
+    if (rpIndex >= rpLines.length - 1) rpIndex = 0
+    rpPaint(rpIndex)
+    rpScheduleNext()
+  })
+
+  rpStop.addEventListener('click', rpRelease)
+
+  rpSeek.addEventListener('input', () => {
+    if (rpLines.length === 0) return
+    rpTakePanel()
+    if (rpTimer !== undefined) {
+      clearTimeout(rpTimer)
+      rpTimer = undefined
+    }
+    rpPaint(Number(rpSeek.value))
+    if (rpPlaying) rpScheduleNext()
   })
 
   setInterval(() => renderDiag(controller.state), 500)

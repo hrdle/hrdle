@@ -148,6 +148,20 @@ export interface GlassesScreen {
 }
 
 /**
+ * One line of the server's screen-mirror recording (#127): a frame as it was
+ * recorded (with the server's own arrival clock), or a gap marking the device
+ * disconnecting. The simulator's replay player feeds these back through the
+ * same painter the live mirror uses.
+ */
+export type RecordedGlassesLine = (GlassesScreen & { receivedAt: number }) | { gap: true; at: number }
+
+export interface RecordingDaySummary {
+  /** YYYY-MM-DD, server-local. */
+  day: string
+  bytes: number
+}
+
+/**
  * One relay item for the G2 glasses channel: a single piece of information the
  * user needs to make a decision, not a summary. `waiting` items live until the
  * blocked epoch ends or they are dismissed; `info` items are FYI with a TTL.

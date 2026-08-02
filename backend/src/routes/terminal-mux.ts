@@ -12,6 +12,7 @@ import {
   trackGlassesRelay,
   unsubscribeGlassesRelay,
 } from '../services/glasses-relay';
+import { recordGlassesScreen } from '../services/glasses-screen-recorder';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
@@ -334,6 +335,9 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
   if (msg.type === 'glasses-screen') {
     lastGlassesScreen = msg.screen;
     glassesScreenPublisher = ws;
+    // Demo recording (#127) taps the stream here, before the viewer check:
+    // it must see every frame whether or not a mirror is open.
+    recordGlassesScreen(msg.screen);
     broadcastGlassesScreen(msg.screen);
     return;
   }
@@ -390,6 +394,7 @@ export function muxClose(ws: ServerWebSocket<MuxData>, code: number, reason: str
   if (glassesScreenPublisher === ws) {
     glassesScreenPublisher = null;
     lastGlassesScreen = null;
+    recordGlassesScreen(null);
     broadcastGlassesScreen(null);
   }
   if (activeMuxConnections.size === 0) stopSessionsPush();

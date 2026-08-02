@@ -1,4 +1,11 @@
-import type { SessionsResponse, DashboardResponse, ConversationResponse, ConversationMessage } from './types.ts'
+import type {
+  SessionsResponse,
+  DashboardResponse,
+  ConversationResponse,
+  ConversationMessage,
+  RecordedGlassesLine,
+  RecordingDaySummary,
+} from './types.ts'
 import { threadAgentOf } from './types.ts'
 
 let baseUrl = ''
@@ -23,6 +30,16 @@ export function getSessions(): Promise<SessionsResponse> {
 
 export function getDashboard(): Promise<DashboardResponse> {
   return fetchJson('/api/dashboard')
+}
+
+/** Days with screen-mirror recordings (#127), for the replay player. */
+export function getRecordingDays(): Promise<{ enabled: boolean; days: RecordingDaySummary[] }> {
+  return fetchJson('/api/glasses/recording')
+}
+
+/** All recorded lines of one day, in recorded order. */
+export function getRecordingDay(day: string): Promise<{ day: string; lines: RecordedGlassesLine[] }> {
+  return fetchJson(`/api/glasses/recording/${encodeURIComponent(day)}`)
 }
 
 /** Conversation history for one agent session.
