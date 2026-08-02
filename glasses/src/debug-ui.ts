@@ -1219,6 +1219,7 @@ export function startDebugUI(): void {
       body: wrapForPanel(screen.body),
       footer: screen.footer,
       card: screen.card,
+      headerless: screen.headerless,
     }, screen.mode)
     setMirrorUi(true, 'In sync with the device')
   })

@@ -11,6 +11,7 @@ import {
   CARD_BORDER_COLOR,
   CARD_RADIUS,
   LINE_H,
+  LIST_PAD,
   PANEL_H,
   PANEL_W,
   advance,
@@ -189,9 +190,13 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
     } else {
       // Without a header container the body owns that band too, and starts where
       // it does rather than a bar below it - but still below its own notice.
-      const bodyTop = screen.headerless ? nHeight + BODY_PAD + BASELINE : BODY_TOP + nHeight
+      // Headerless means the list container, which pads tighter than the body
+      // does - `LIST_PAD` is what buys its ninth row, and padding it like a
+      // body here would draw eight rows 4px lower than the device draws nine.
+      const pad = screen.headerless ? LIST_PAD : BODY_PAD
+      const bodyTop = screen.headerless ? nHeight + pad + BASELINE : BODY_TOP + nHeight
       for (const [i, line] of screen.body.split('\n').entries()) {
-        drawRow(ctx, line, 4 + BODY_PAD, bodyTop + i * LINE_H)
+        drawRow(ctx, line, 4 + pad, bodyTop + i * LINE_H)
       }
     }
 
