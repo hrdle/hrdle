@@ -12,6 +12,7 @@ import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
 import { startDebugUI } from './debug-ui.ts'
+import { startPlayerUI } from './player-ui.ts'
 import { readStored, storageKey } from './storage.ts'
 import { DriftMonitor } from './drift.ts'
 
@@ -610,6 +611,11 @@ async function main(): Promise<void> {
     startPhoneUI(null)
       .then(() => trace('phone UI ready'))
       .catch((err) => trace(`phone UI failed: ${err}`, 'error', (err as Error)?.stack))
+  } else if (new URLSearchParams(location.search).has('player')) {
+    // The recording replay player - its own page, so the transport controls
+    // sit under the screen instead of a side panel away (#127).
+    trace('player UI (browser)')
+    startPlayerUI()
   } else {
     // Browser debug mode
     startDebugUI()
