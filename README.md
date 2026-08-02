@@ -2,7 +2,9 @@
 
 [日本語](README.ja.md) | English
 
-A web-based terminal manager for coding agent sessions. Run Claude Code, Codex, Grok and Kimi on a server and drive them from your tablet or smartphone.
+**Hrdle is herdr plus handle.** herdr runs your coding agents — Claude Code, Codex, Grok and Kimi — in terminal workspaces on a machine of yours. Hrdle is the handle you take hold of them by, from a tablet, a phone, or a pair of EVEN Realities G2 glasses. Not a view of them: a grip on them, so what you would do at the keyboard you do from wherever you are.
+
+**The machine can be headless.** No display, no keyboard, nobody sitting at it — you reach it over Tailscale, so the only thing it owes you is staying awake.
 
 > **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here — the name said Claude Code, and this had long since stopped being only that. Existing installs keep working: that repository stays readable, so its releases and `install.sh` remain available and `cchub update` still resolves. Hrdle installs alongside rather than over it (separate binary, service, port and herdr session), so both can run on one machine.
 
