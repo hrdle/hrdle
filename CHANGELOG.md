@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.39] - 2026-08-02
+
+### Added
+- **Ring gestures are recorded with the screen mirror, and replay shows them.**
+  (#129) The device publishes each tap / double tap / swipe just before acting
+  on it, the recorder writes it as its own line kind next to frames and gap
+  markers, and the player overlays a fading badge on the lens so demo footage
+  shows the wearer driving. A gesture also proves the device alive, so a
+  disconnect right after one still writes its gap marker. Requires the updated
+  glasses app; older ehpks simply record no gestures
+
+### Changed
+- **The replay player is its own page** (`/glasses?player`). The first player
+  lived in the simulator's side panel, a whole screen away from the panel it
+  was driving; now the screen sits large in the middle with play/pause, seek
+  bar, wall-clock and speed directly beneath, Space / arrows / Home / End on
+  the keyboard, and the newest day loaded on open. The canvas painter moved to
+  `panel-paint.ts`, shared by simulator and player, so a replayed frame wraps
+  and clamps exactly as the wearer saw it
+
 ## [0.3.38] - 2026-08-02
 
 ### Added
