@@ -15,7 +15,6 @@ import { DailyUsageChart } from "./DailyUsageChart";
 import { HourlyHeatmap } from "./HourlyHeatmap";
 import { KimiDailyCostChart } from "./KimiDailyCostChart";
 import { ModelUsageChart } from "./ModelUsageChart";
-import { NetworkLatency } from "./NetworkLatency";
 import { PeerServerCard } from "./PeerServerCard";
 import { UsageLimits } from "./UsageLimits";
 import { storageKey } from "../../utils/app-storage";
@@ -411,7 +410,9 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 					{t("dashboard.serverStatus")}
 				</SectionHeading>
 				<div className={gridClass(compact)}>
-					<NetworkLatency />
+					{/* Latency is on the local server's own card now — see
+					    NetworkLatencyInline. A card of its own spent 116px on two
+					    numbers, above a list of peers it did not describe. */}
 					{sortedPeers.map((peer) => (
 						<PeerServerCard key={peer.id} peer={peer} />
 					))}
@@ -476,7 +477,7 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 						{cacheClearing ? t("common.loading") : t("dashboard.clearCache")}
 					</button>
 				</div>
-				<div className="mt-3 flex flex-wrap items-center gap-2 max-w-lg">
+				<div className="mt-2 flex flex-wrap items-center gap-2 max-w-lg">
 					<span className="text-[12px] text-zinc-500">
 						{t("appearance.uiScale")}
 					</span>
@@ -503,12 +504,15 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 							);
 						})}
 					</fieldset>
+					{/* On the scale row's own line rather than under it: a version
+					    string is not a setting, and a row of its own gave it the
+					    weight of one. */}
+					{data?.version && (
+						<span className="text-[11px] text-zinc-700 ml-auto shrink-0">
+							{IDENTITY.productName} v{data.version}
+						</span>
+					)}
 				</div>
-				{data?.version && (
-					<div className="text-[11px] text-zinc-700 mt-3">
-						{IDENTITY.productName} v{data.version}
-					</div>
-				)}
 			</section>
 
 			{/* Reset confirmation dialog */}

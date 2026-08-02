@@ -8,8 +8,11 @@ import type {
 } from "../../../../shared/types";
 import { useIsLightMode } from "../../hooks/useIsLightMode";
 import { authFetch } from "../../services/api";
+import { storageKey } from "../../utils/app-storage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+/** Shared by every server card: the choice is about the reading, not the host. */
+const CHART_PREF_KEY = storageKey("server-charts-expanded");
 
 // ─── Mini SVG chart ───
 const CHART_WIDTH = 300;
@@ -40,6 +43,85 @@ function buildPath(
 	const baseline = valueToY(0);
 	const areaPath = `${linePath} L${points[points.length - 1].x.toFixed(1)},${baseline.toFixed(1)} L${points[0].x.toFixed(1)},${baseline.toFixed(1)} Z`;
 	return { linePath, areaPath };
+}
+
+// ─── Inline sparkline ───
+//
+// The same series as MiniChart with everything explanatory removed: no axis,
+// no gridlines, no fill. It sits on the metric's own row beside the number,
+// where its job is the shape of the last few minutes and the number carries
+// the value. Three of those rows replace three 50px charts that were mostly
+// axis - and on a panel this narrow the axis was the part that did not fit.
+const SPARK_W = 72;
+const SPARK_H = 16;
+
+function Sparkline({
+	snapshots,
+	getValue,
+	lineColor,
+}: {
+	snapshots: SystemMetricsSnapshot[];
+	getValue: (s: SystemMetricsSnapshot) => number;
+	lineColor: string;
+}) {
+	const path = useMemo(() => {
+		if (snapshots.length < 2) return "";
+		const minTs = snapshots[0].timestamp;
+		const range = snapshots[snapshots.length - 1].timestamp - minTs || 1;
+		return snapshots
+			.map((s, i) => {
+				const x = ((s.timestamp - minTs) / range) * SPARK_W;
+				const y = SPARK_H - (Math.min(getValue(s), 100) / 100) * (SPARK_H - 2) - 1;
+				return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+			})
+			.join(" ");
+	}, [snapshots, getValue]);
+
+	if (!path) return <div style={{ width: SPARK_W, height: SPARK_H }} />;
+	return (
+		<svg
+			aria-hidden="true"
+			viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+			width={SPARK_W}
+			height={SPARK_H}
+			className="shrink-0 overflow-visible"
+			preserveAspectRatio="none"
+		>
+			<path
+				d={path}
+				fill="none"
+				stroke={lineColor}
+				strokeWidth="1.25"
+				strokeLinejoin="round"
+				vectorEffect="non-scaling-stroke"
+			/>
+		</svg>
+	);
+}
+
+/** One compact metric line: name, value, and the shape of its recent history. */
+function MetricRow({
+	label,
+	value,
+	valueClass,
+	children,
+}: {
+	label: string;
+	value: string;
+	valueClass: string;
+	children?: React.ReactNode;
+}) {
+	return (
+		<div className="flex items-center gap-2">
+			<span className="text-[11px] text-zinc-500 w-[4.5rem] shrink-0">
+				{label}
+			</span>
+			<span className={`text-[11px] tabular-nums shrink-0 ${valueClass}`}>
+				{value}
+			</span>
+			<div className="flex-1 min-w-0 flex justify-end">{children}</div>
+		</div>
+	);
 }
 
 function MiniChart({
@@ -329,6 +411,7 @@ export function ServerInfo({
 	allowHerdrApply = false,
 	onHerdrApplied,
 }: ServerInfoProps) {
+	const { t } = useTranslation();
 	const isLight = useIsLightMode();
 
 	const [throughput, setThroughput] = useState(0);
@@ -349,6 +432,19 @@ export function ServerInfo({
 		}, 1000);
 		return () => clearInterval(interval);
 	}, [hideThroughput]);
+
+	// Compact by default. The full charts are still a tap away, and the choice
+	// outlives the panel - it unmounts when closed, so component state alone
+	// would put the charts away again every time it was reopened.
+	const [expanded, setExpanded] = useState(
+		() => localStorage.getItem(CHART_PREF_KEY) === "true",
+	);
+	const toggleExpanded = useCallback(() => {
+		setExpanded((was) => {
+			localStorage.setItem(CHART_PREF_KEY, String(!was));
+			return !was;
+		});
+	}, []);
 
 	const getCpu = useMemo(() => (s: SystemMetricsSnapshot) => s.cpuPercent, []);
 	const getMem = useMemo(
@@ -377,8 +473,43 @@ export function ServerInfo({
 				/>
 			)}
 
+			{/* One line per metric. The full charts are behind the toggle below. */}
+			{cur && !expanded && (
+				<div className="space-y-1.5">
+					<MetricRow
+						label="CPU"
+						value={`${cur.cpuPercent.toFixed(1)}%`}
+						valueClass="text-blue-400"
+					>
+						<Sparkline
+							snapshots={history}
+							getValue={getCpu}
+							lineColor="#3b82f6"
+						/>
+					</MetricRow>
+					<MetricRow
+						label="Memory"
+						value={`${(cur.memUsedMB / 1024).toFixed(1)} / ${(cur.memTotalMB / 1024).toFixed(1)} GB`}
+						valueClass="text-purple-400"
+					>
+						<Sparkline
+							snapshots={history}
+							getValue={getMem}
+							lineColor="#a855f7"
+						/>
+					</MetricRow>
+					{!hideThroughput && (
+						<MetricRow
+							label="Throughput"
+							value={formatSpeed(throughput)}
+							valueClass="text-teal-400"
+						/>
+					)}
+				</div>
+			)}
+
 			{/* Charts: CPU, Memory, Throughput */}
-			{cur && (
+			{cur && expanded && (
 				<div className="space-y-2.5">
 					{/* CPU */}
 					<div>
@@ -488,51 +619,67 @@ export function ServerInfo({
 				</div>
 			)}
 
-			{/* Bars: Swap + Disk */}
-			<div className="space-y-2 pt-1 border-t border-white/[0.04]">
+			{/* Swap + Disk. The bar rides on the row rather than under it: these
+			    are ratios of a fixed total, so the number carries the fact and the
+			    bar only has to show how full it is. */}
+			<div className="space-y-1.5 pt-2 border-t border-white/[0.04]">
 				{cur && cur.swapTotalMB > 0 && (
-					<div>
-						<div className="flex items-center justify-between mb-0.5">
-							<span className="text-[11px] text-zinc-500">Swap</span>
-							<span className="text-[11px] text-amber-400 tabular-nums">
-								{(cur.swapUsedMB / 1024).toFixed(1)} /{" "}
-								{(cur.swapTotalMB / 1024).toFixed(1)} GB
-							</span>
+					<MetricRow
+						label="Swap"
+						value={`${(cur.swapUsedMB / 1024).toFixed(1)} / ${(cur.swapTotalMB / 1024).toFixed(1)} GB`}
+						valueClass="text-amber-400"
+					>
+						<div className="w-[72px] shrink-0">
+							<ProgressBar percent={swapPercent} color="bg-amber-500" />
 						</div>
-						<ProgressBar percent={swapPercent} color="bg-amber-500" />
-					</div>
+					</MetricRow>
 				)}
 				{diskUsage && (
-					<div>
-						<div className="flex items-center justify-between mb-0.5">
-							<span className="text-[11px] text-zinc-500">Disk</span>
-							<span
-								className={`text-[11px] tabular-nums ${diskPercent > 90 ? "text-red-400" : diskPercent > 75 ? "text-amber-400" : "text-emerald-400"}`}
-							>
-								{formatBytes(diskUsage.used)} / {formatBytes(diskUsage.total)}
-							</span>
+					<MetricRow
+						label="Disk"
+						value={`${formatBytes(diskUsage.used)} / ${formatBytes(diskUsage.total)}`}
+						valueClass={
+							diskPercent > 90
+								? "text-red-400"
+								: diskPercent > 75
+									? "text-amber-400"
+									: "text-emerald-400"
+						}
+					>
+						<div className="w-[72px] shrink-0">
+							<ProgressBar
+								percent={diskPercent}
+								color={
+									diskPercent > 90
+										? "bg-red-500"
+										: diskPercent > 75
+											? "bg-amber-500"
+											: "bg-emerald-500"
+								}
+							/>
 						</div>
-						<ProgressBar
-							percent={diskPercent}
-							color={
-								diskPercent > 90
-									? "bg-red-500"
-									: diskPercent > 75
-										? "bg-amber-500"
-										: "bg-emerald-500"
-							}
-						/>
-					</div>
+					</MetricRow>
 				)}
 			</div>
 
-			{/* Footer: load average */}
-			{systemMetrics?.loadAvg && (
-				<div className="text-[10px] text-th-text-muted">
-					Load: {systemMetrics.loadAvg.map((v) => v.toFixed(2)).join(" / ")} (
-					{systemMetrics.cpuCount} cores)
-				</div>
-			)}
+			{/* Footer: load average, and the way back to the full charts */}
+			<div className="flex items-center justify-between gap-2 text-[10px] text-th-text-muted">
+				<span className="truncate">
+					{systemMetrics?.loadAvg
+						? `Load: ${systemMetrics.loadAvg.map((v) => v.toFixed(2)).join(" / ")} (${systemMetrics.cpuCount} cores)`
+						: ""}
+				</span>
+				{cur && (
+					<button
+						type="button"
+						onClick={toggleExpanded}
+						className="shrink-0 text-[10px] text-th-text-muted hover:text-th-text-secondary underline underline-offset-2 decoration-dotted"
+						aria-expanded={expanded}
+					>
+						{expanded ? t("dashboard.chartsHide") : t("dashboard.chartsShow")}
+					</button>
+				)}
+			</div>
 		</div>
 	);
 }
