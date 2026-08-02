@@ -144,6 +144,9 @@ export interface GlassesScreen {
    *  Separate because that rule is a container border, not a row of text. */
   notice?: string
   mode: string
+  /** The session under the cursor / on screen, as structured data — analysis
+   *  of a recording should not have to parse the header back apart. */
+  session?: { id: string; name?: string; paneId?: string }
   at: number
 }
 
@@ -161,6 +164,7 @@ export type RecordedGlassesLine =
   | (GlassesScreen & { receivedAt: number })
   | { gap: true; at: number }
   | { input: GlassesInputKind; at: number; receivedAt: number }
+  | { focus: string | null; deviceType?: string; at: number; receivedAt: number }
 
 export interface RecordingDaySummary {
   /** YYYY-MM-DD, server-local. */

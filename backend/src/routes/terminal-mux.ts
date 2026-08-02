@@ -12,7 +12,7 @@ import {
   trackGlassesRelay,
   unsubscribeGlassesRelay,
 } from '../services/glasses-relay';
-import { recordGlassesInput, recordGlassesScreen } from '../services/glasses-screen-recorder';
+import { recordGlassesFocus, recordGlassesInput, recordGlassesScreen } from '../services/glasses-screen-recorder';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
@@ -150,6 +150,10 @@ function maybePushFocus(): void {
 function sessionsUpdatedPayload(sessions: SessionResponse[]): string {
   const focus = computeClientFocus();
   lastFocusKey = focusKey(focus);
+  // Every payload passes through here (periodic and pushed), so this is the
+  // one place the demo recording (#127) learns which session the user is
+  // working in. The recorder dedups; unchanged focus costs nothing.
+  recordGlassesFocus(focus);
   return JSON.stringify({ type: 'sessions-updated', sessions, ...(focus ? { focus } : {}) });
 }
 
