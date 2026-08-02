@@ -8,8 +8,67 @@ interface KimiDailyCostChartProps {
 }
 
 const BAR_HEIGHT_PX = 64;
+/** Room above the tallest bar for its amount. */
+const LABEL_BAND_PX = 14;
 /** Up to this many bars, weekday initials fit under them; past it they blur. */
 const WEEKDAY_LABEL_MAX = 8;
+/** Amounts that fit across the panel at its narrowest before they collide. */
+const MAX_AMOUNT_LABELS = 6;
+
+/**
+ * A bar's amount, short enough to sit inside its column.
+ *
+ * `formatUsd` keeps four decimals below a cent, which is right in a stat tile
+ * and two characters too many here - a seven-character label in a column a
+ * finger wide overprints its neighbours. The exact figure is a tap away.
+ */
+function barAmount(usd: number): string {
+	return usd > 0 && usd < 0.01 ? '<$0.01' : formatUsd(usd);
+}
+
+/**
+ * Which bars get their amount printed on them.
+ *
+ * Every one that fits, because the tooltips this replaces do not exist on a
+ * touch screen - the panel is read on a tablet more often than not, and a
+ * chart whose figures are reachable only by hovering has no figures there.
+ *
+ * Past a handful they have to be thinned or they overprint each other, and two
+ * of them are then reserved before anything else competes for the room: the
+ * most expensive day, which is what a spending chart is scanned for, and
+ * today, which is the day being asked about.
+ *
+ * In that order. Ranking today first cost the peak its label whenever the two
+ * fell side by side - a $4.32 spike went unmarked next to a labelled $0.58,
+ * with five middling days labelled behind it. When they collide the peak wins;
+ * today's figure is on the title row regardless.
+ */
+export function amountLabelDates(daily: KimiUsageDay[]): Set<string> {
+	const worthLabelling = daily
+		.map((day, index) => ({ cost: day.costUsd ?? 0, index }))
+		.filter(({ cost }) => cost > 0);
+	if (worthLabelling.length === 0) return new Set();
+
+	const minGap = daily.length <= WEEKDAY_LABEL_MAX ? 1 : 2;
+	const byCost = [...worthLabelling].sort((a, b) => b.cost - a.cost);
+	const todayIndex = daily.length - 1;
+
+	const taken: number[] = [];
+	const fits = (index: number) =>
+		taken.length < MAX_AMOUNT_LABELS &&
+		!taken.some((other) => Math.abs(other - index) < minGap);
+
+	taken.push(byCost[0].index);
+	if (worthLabelling.some(({ index }) => index === todayIndex) && fits(todayIndex)) {
+		taken.push(todayIndex);
+	}
+	for (const { index } of byCost) {
+		if (taken.includes(index)) continue;
+		if (!fits(index)) continue;
+		taken.push(index);
+	}
+	return new Set(taken.map((index) => daily[index].date));
+}
 
 /**
  * What each day cost, and today's figure on the title row.
@@ -39,6 +98,7 @@ export function KimiDailyCostChart({ daily }: KimiDailyCostChartProps) {
 	const total = daily.reduce((sum, d) => sum + (d.costUsd ?? 0), 0);
 	const unseen = daily.filter((d) => !d.observed).length;
 	const perDayLabels = daily.length <= WEEKDAY_LABEL_MAX;
+	const amountLabels = amountLabelDates(daily);
 
 	const dateLabel = (date: string, opts: Intl.DateTimeFormatOptions) => {
 		// Parse as local midnight: `new Date('2026-08-02')` is UTC and lands on
@@ -70,7 +130,10 @@ export function KimiDailyCostChart({ daily }: KimiDailyCostChartProps) {
 		>
 			<div
 				className="flex items-end gap-px sm:gap-1"
-				style={{ height: `${BAR_HEIGHT_PX}px` }}
+				// The band on top is the tallest bar's amount. Without it that one
+				// label would be clipped by the card, which is the label the eye
+				// goes to first.
+				style={{ height: `${BAR_HEIGHT_PX + LABEL_BAND_PX}px` }}
 			>
 				{daily.map((day, i) => {
 					const isToday = i === daily.length - 1;
@@ -85,9 +148,20 @@ export function KimiDailyCostChart({ daily }: KimiDailyCostChartProps) {
 					return (
 						<div
 							key={day.date}
-							className="flex-1 flex flex-col items-center justify-end h-full"
+							className="flex-1 flex flex-col items-center justify-end h-full min-w-0"
 							title={label}
 						>
+							{amountLabels.has(day.date) && (
+								// Muted ink, not the bar's green: the colour is the mark's
+								// job, and a row of green numerals competes with it.
+								<span
+									className={`text-[9px] leading-none tabular-nums whitespace-nowrap mb-0.5 ${
+										isToday ? "text-th-text-secondary" : "text-th-text-muted"
+									}`}
+								>
+									{barAmount(day.costUsd ?? 0)}
+								</span>
+							)}
 							<div
 								className={`w-full rounded-t transition-colors ${
 									isToday ? "bg-emerald-400" : "bg-emerald-500/50"
