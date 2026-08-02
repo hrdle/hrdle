@@ -257,6 +257,7 @@ export function startPlayerUI(): void {
       notice: line.notice ? wrapForPanel(line.notice) : undefined,
       body: wrapForPanel(line.body),
       footer: line.footer,
+      card: line.card,
     })
   }
 

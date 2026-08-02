@@ -497,7 +497,14 @@ export function startDebugUI(): void {
   let localMode = 'session_list'
 
   function paint(
-    screen: { header: string; body: string; footer: string; notice?: string; headerless?: boolean },
+    screen: {
+      header: string
+      body: string
+      footer: string
+      notice?: string
+      headerless?: boolean
+      card?: boolean
+    },
     mode: string,
   ): void {
     lastScreen = screen
@@ -1211,6 +1218,7 @@ export function startDebugUI(): void {
       notice: screen.notice ? wrapForPanel(screen.notice) : undefined,
       body: wrapForPanel(screen.body),
       footer: screen.footer,
+      card: screen.card,
     }, screen.mode)
     setMirrorUi(true, 'In sync with the device')
   })

@@ -1069,6 +1069,14 @@ export interface GlassesScreen {
    * screen the wearer is not looking at.
    */
   notice?: string;
+  /**
+   * The body is a notification card: inset, bordered, sized to its message,
+   * rather than the full-width body every other screen draws. Carried because
+   * it is the whole point of that screen — a notice the wearer is meant to
+   * read as a notice — and a mirror that drew it flat showed a screen nobody
+   * was looking at.
+   */
+  card?: boolean;
   /** Which screen this is, for the mirror's status line. */
   mode: string;
   /**
@@ -1267,6 +1275,7 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
       body: z.string().max(4000),
       footer: z.string().max(500),
       notice: z.string().max(1000).optional(),
+      card: z.boolean().optional(),
       mode: z.string().max(40),
       session: z
         .object({
