@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.40] - 2026-08-02
+
+### Fixed
+- **The Kimi cost chart shows its figures on a tablet.** They were in a `title`
+  tooltip, which on a touch screen does not exist — so the chart had bars and
+  no numbers, and the question it was built to answer needed a mouse to ask.
+  Each day's amount now sits above its bar
+  - Muted ink rather than the bar's green: the colour is the mark's job, and a
+    row of green numerals competes with it
+  - Every day that cost something is labelled while the range is short. Past a
+    week they thin out, with the most expensive day and today reserved first —
+    in that order, because ranking today first cost the peak its label whenever
+    the two fell side by side. Today's figure is on the title row regardless
+  - Sub-cent days print as `<$0.01`; four decimals is right in a stat tile and
+    two characters too many in a column a finger wide
+
 ## [0.3.39] - 2026-08-02
 
 ### Added
