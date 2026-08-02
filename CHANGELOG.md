@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.42] - 2026-08-02
+
+### Added
+- **The replay player's backdrop can be swapped, and a frame exported as a
+  transparent PNG.** Pick a file, paste a URL (persisted, sharing the
+  simulator's `glasses-bg` key - both windows are the same lens) or drop an
+  image onto the screen; Reset returns the default room. Save PNG writes the
+  current frame as the canvas alone (transparent, 576x288) for the EVEN Hub
+  store listing, which composites its own room photo behind submissions
+
 ## [0.3.41] - 2026-08-02
 
 ### Changed
