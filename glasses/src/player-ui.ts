@@ -13,7 +13,7 @@
 import { getRecordingDay, getRecordingDays, setBaseUrl } from './api.ts'
 import { wrapForPanel } from './display.ts'
 import { createPanelPainter } from './panel-paint.ts'
-import type { RecordedGlassesLine } from './types.ts'
+import type { GlassesInputKind, GlassesScreen, RecordedGlassesLine } from './types.ts'
 
 /** Real-time cap on one wait between frames. The recording is a transition
  *  log — a quiet hour is one line — and a demo should skim it, not sit
@@ -47,6 +47,12 @@ const STYLE = `
   .lens::after { content: ''; position: absolute; inset: 0;
                  background: linear-gradient(180deg, rgba(4,8,6,.22), rgba(4,8,6,.30)); }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
+
+  .gesture { position: absolute; right: 14px; bottom: 12px; z-index: 2; padding: 4px 12px;
+             border-radius: 999px; background: rgba(10,16,10,.78); border: 1px solid #3a5c3f;
+             color: #6affa0; font-size: 15px; opacity: 0; transition: opacity .15s;
+             pointer-events: none; }
+  .gesture.show { opacity: 1; }
 
   .transport { display: flex; align-items: center; gap: 10px; }
   .transport button.play { min-width: 84px; }
@@ -88,6 +94,7 @@ export function startPlayerUI(): void {
       </header>
       <div class="lens" id="lens">
         <canvas id="screen" width="576" height="288"></canvas>
+        <div class="gesture" id="gesture"></div>
       </div>
       <div class="transport">
         <button type="button" class="play" id="play" disabled>Play</button>
@@ -117,6 +124,7 @@ export function startPlayerUI(): void {
   const speedSel = document.getElementById('speed') as HTMLSelectElement
   const status = document.getElementById('status') as HTMLDivElement
 
+  const gesture = document.getElementById('gesture') as HTMLDivElement
   const painter = createPanelPainter(canvas)
 
   let lines: RecordedGlassesLine[] = []
@@ -127,7 +135,35 @@ export function startPlayerUI(): void {
   /** Timeline position of a line — the server's arrival clock, falling back
    *  to the device's own stamp for recordings that predate `receivedAt`. */
   const timeOf = (line: RecordedGlassesLine): number =>
-    'gap' in line ? line.at : (line.receivedAt ?? line.at)
+    'gap' in line || 'input' in line ? line.at : (line.receivedAt ?? line.at)
+
+  const GESTURE_LABEL: Record<GlassesInputKind, string> = {
+    tap: '● tap',
+    doubleTap: '●● double tap',
+    swipeUp: '↑ swipe up',
+    swipeDown: '↓ swipe down',
+  }
+
+  let gestureTimer: number | undefined
+  function flashGesture(kind: GlassesInputKind): void {
+    gesture.textContent = GESTURE_LABEL[kind]
+    gesture.classList.add('show')
+    if (gestureTimer !== undefined) clearTimeout(gestureTimer)
+    gestureTimer = window.setTimeout(() => gesture.classList.remove('show'), 900)
+  }
+
+  // Which line's frame is on the canvas, so a gesture line (which draws
+  // nothing itself) only repaints when a seek landed it somewhere new.
+  let drawnIndex = -1
+  function drawFrameLine(line: GlassesScreen, i: number): void {
+    drawnIndex = i
+    painter.drawScreen({
+      header: line.header,
+      notice: line.notice ? wrapForPanel(line.notice) : undefined,
+      body: wrapForPanel(line.body),
+      footer: line.footer,
+    })
+  }
 
   function showFrame(i: number): void {
     const line = lines[i]
@@ -139,16 +175,33 @@ export function startPlayerUI(): void {
     if ('gap' in line) {
       // An empty panel — what the live mirror's audience gets when the device
       // goes away.
+      drawnIndex = -1
       painter.drawScreen({ header: '', body: '', footer: '' })
       status.textContent = `${pos} - device disconnected`
       return
     }
-    painter.drawScreen({
-      header: line.header,
-      notice: line.notice ? wrapForPanel(line.notice) : undefined,
-      body: wrapForPanel(line.body),
-      footer: line.footer,
-    })
+    if ('input' in line) {
+      // The gesture rides over whichever frame was on screen when it
+      // happened; after a seek that frame has to be found and repainted.
+      for (let j = i - 1; j >= 0; j--) {
+        const prev = lines[j]
+        if (!prev || 'gap' in prev) {
+          if (drawnIndex !== -1) {
+            drawnIndex = -1
+            painter.drawScreen({ header: '', body: '', footer: '' })
+          }
+          break
+        }
+        if (!('input' in prev)) {
+          if (drawnIndex !== j) drawFrameLine(prev, j)
+          break
+        }
+      }
+      flashGesture(line.input)
+      status.textContent = `${pos} - ${GESTURE_LABEL[line.input]}`
+      return
+    }
+    drawFrameLine(line, i)
     status.textContent = `${pos} - ${line.mode}${playing ? '' : ' (paused)'}`
   }
 

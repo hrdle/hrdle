@@ -10,6 +10,7 @@ import {
   glassesRecordingEnabled,
   listRecordingDays,
   readRecordingDay,
+  recordGlassesInput,
   recordGlassesScreen,
   resetGlassesRecorderForTest,
 } from '../glasses-screen-recorder';
@@ -143,6 +144,29 @@ describe('recordGlassesScreen', () => {
 
     const lines = await readLines();
     expect(lines.map((l) => l.gap ?? l.body)).toEqual(['same', true, 'same']);
+  });
+
+  it('records ring gestures between frames, with the server clock', async () => {
+    recordGlassesScreen(frame({ body: 'before' }));
+    recordGlassesInput({ kind: 'tap', at: 123 });
+    recordGlassesScreen(frame({ body: 'after' }));
+    await flushGlassesRecorder();
+
+    const lines = await readLines();
+    expect(lines.map((l) => l.input ?? l.body)).toEqual(['before', 'tap', 'after']);
+    expect(lines[1]?.at).toBe(123);
+    expect(typeof lines[1]?.receivedAt).toBe('number');
+  });
+
+  it('a gesture after a gap lets the next disconnect write a fresh gap', async () => {
+    recordGlassesScreen(frame({ body: 'x' }));
+    recordGlassesScreen(null);
+    recordGlassesInput({ kind: 'swipeUp', at: Date.now() });
+    recordGlassesScreen(null);
+    await flushGlassesRecorder();
+
+    const lines = await readLines();
+    expect(lines.map((l) => l.input ?? l.gap ?? l.body)).toEqual(['x', true, 'swipeUp', true]);
   });
 
   it('lists recorded days and reads one back', async () => {

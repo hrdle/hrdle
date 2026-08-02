@@ -1,5 +1,5 @@
 import { getBaseUrl } from './api.ts'
-import type { Session, GlassesRelayItem, ClientFocus, GlassesScreen } from './types.ts'
+import type { Session, GlassesRelayItem, ClientFocus, GlassesScreen, GlassesInputKind } from './types.ts'
 
 export interface WsCallbacks {
   /** `focus` is the session the phone/tablet in the user's hand is
@@ -256,6 +256,12 @@ export class WsClient {
    *  its own frames back at itself. */
   publishScreen(screen: GlassesScreen): void {
     this.send({ type: 'glasses-screen', screen })
+  }
+
+  /** Publish a ring gesture for the recording (#129). Device-only, like
+   *  publishScreen — a simulator click is not the wearer driving. */
+  publishInput(kind: GlassesInputKind): void {
+    this.send({ type: 'glasses-input', input: { kind, at: Date.now() } })
   }
 
   /** Late-bound because only the browser simulator listens, and it is built
