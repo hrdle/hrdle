@@ -1136,13 +1136,21 @@ function fatalScreen(reason: NonNullable<AppState['fatal']>): {
   const body =
     reason === 'offline'
       ? [
-          // Four lines, no blanks between them: an empty string does not
-          // survive the render, so spacing written that way is spacing that
-          // only exists in this file. Checked on the simulator.
+          // No blanks between the lines: an empty string does not survive the
+          // render, so spacing written that way is spacing that only exists
+          // in this file. Checked on the simulator.
+          //
+          // It says what to do, not only what went wrong. Someone meeting
+          // this screen is usually meeting the app for the first time - the
+          // address is wrong, or the machine is off - and a report of a
+          // failure they cannot act on reads as the app being broken. Same
+          // reason the unconfigured screen (`buildSetupGuide`) lists steps.
           'Cannot reach the server.',
           `Tried for ${minutes} minutes.`,
+          `Start ${__PRODUCT_NAME__} on the machine`,
+          'it runs on, and check the address',
+          'in the phone app.',
           'Closing to free the glasses.',
-          'Open again once it is back.',
         ].join('\n')
       : 'Closing.'
   return { header: '', body, footer: '', headerless: true }
