@@ -607,11 +607,50 @@ export interface KimiUsageModelTotal {
   pricedAs?: string;
 }
 
+/**
+ * One calendar day of Kimi usage, in the server's local time.
+ *
+ * Local rather than UTC because the question this answers is "what did today
+ * cost me" — and a day that ends at 09:00 local is not the day anyone means.
+ * The rolling windows above cannot answer it: `last24h` at 10:00 is mostly
+ * yesterday.
+ */
+export interface KimiUsageDay {
+  /** Local calendar day, `YYYY-MM-DD`. */
+  date: string;
+  turns: number;
+  totalTokens: number;
+  /**
+   * Estimated spend for the day, USD. Absent means unknown — a day whose
+   * models could not be priced — never "free". A day with no turns at all is
+   * genuinely 0.
+   */
+  costUsd?: number;
+  /**
+   * False when this server never saw the day at all: it predates the history
+   * file, or the machine was down for the whole week the day belonged to.
+   * Distinct from an observed day with no usage, and a chart must not draw
+   * the two the same way — one is "you spent nothing", the other is "nobody
+   * was watching".
+   */
+  observed: boolean;
+}
+
 export interface KimiUsageSummary {
   last24h: KimiUsageWindow;
   last7d: KimiUsageWindow;
   /** Per-model totals over the 7-day window, largest first. */
   models: KimiUsageModelTotal[];
+  /**
+   * Local calendar days, oldest first, today last. Contiguous — a day with no
+   * usage is present with zeroes, because a gap in a bar chart has to be a bar
+   * of height zero rather than a missing column.
+   *
+   * Seven entries on a fresh install, growing daily as completed days are
+   * written to the history file, up to a month. Seven is what the log files
+   * can still be read for; everything older comes from that file.
+   */
+  daily: KimiUsageDay[];
   /** Sessions with usage in the 7-day window. */
   sessions7d: number;
   /** ISO timestamp of the most recent usage record seen. */

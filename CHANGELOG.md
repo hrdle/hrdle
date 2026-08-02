@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.38] - 2026-08-02
+
+### Added
+- **The Kimi tab says what today cost, and shows the days before it.** The two
+  figures it had were rolling windows, and neither answers the question: a
+  24-hour window read at 10:00 is mostly yesterday. The new chart buckets by
+  your own calendar day, with today's figure on the title row
+  - Cost only. Tokens are in each bar's tooltip rather than on a second axis
+  - A day whose models could not be priced stays unknown instead of being drawn
+    as zero. `$0.00` says you spent nothing, which is a different claim
+- **The chart outgrows the seven days the logs can be read for.** Completed
+  days are written to `kimi-daily-usage.json` in the data directory and joined
+  onto the live week, up to a month
+  - No timer: a finished day never changes, so it is written during the
+    aggregation that was going to run anyway, and only when its figure is new.
+    A day is lost only if the server saw none of the week it belonged to
+  - A day this server never saw is drawn as a hole, not as zero, and the
+    footnote counts them. Past a week the axis labels its two ends rather than
+    every day - twenty weekday initials are a grey smear
+  - Stored days keep the list price in force when they were recorded, which is
+    nearer what was billed than re-pricing history at today's rates
+
 ## [0.3.37] - 2026-08-02
 
 ### Added
