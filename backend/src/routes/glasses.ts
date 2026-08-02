@@ -7,6 +7,11 @@ import {
   resolveSttLang,
   updateGlassesSettings,
 } from '../services/glasses-settings';
+import {
+  glassesRecordingEnabled,
+  listRecordingDays,
+  readRecordingDay,
+} from '../services/glasses-screen-recorder';
 
 const glasses = new Hono();
 
@@ -146,6 +151,26 @@ const GlassesSettingsPatchSchema = z.object({
     .nullable()
     .optional(),
   sttPrompt: z.string().max(2000).nullable().optional(),
+});
+
+/**
+ * The screen-mirror recording (#127), for the simulator's replay player.
+ *
+ * Recorded frames are this user's own prompts and notification text, so both
+ * endpoints sit inside the auth glob (unlike `/relay*`). Reading works even
+ * with recording switched off — old footage stays replayable.
+ */
+glasses.get('/recording', async (c) => {
+  return c.json({ enabled: glassesRecordingEnabled(), days: await listRecordingDays() });
+});
+
+glasses.get('/recording/:day', async (c) => {
+  const day = c.req.param('day');
+  // readRecordingDay validates the YYYY-MM-DD shape itself (its regex is the
+  // path-traversal guard), so a bad param and a missing day both land here.
+  const lines = await readRecordingDay(day);
+  if (lines === null) return c.json({ error: 'no recording for that day' }, 404);
+  return c.json({ day, lines });
 });
 
 glasses.put('/settings', async (c) => {
