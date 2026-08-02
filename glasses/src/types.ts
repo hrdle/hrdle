@@ -146,6 +146,9 @@ export interface GlassesScreen {
   /** The body is an inset, bordered notification card rather than the
    *  full-width body. Mirrored so the replay draws the notice as a notice. */
   card?: boolean
+  /** No header bar; the body owns that band too. Mirrored so the replay does
+   *  not draw the screen a bar lower than the device does. */
+  headerless?: boolean
   mode: string
   /** The session under the cursor / on screen, as structured data — analysis
    *  of a recording should not have to parse the header back apart. */

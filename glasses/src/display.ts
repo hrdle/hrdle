@@ -20,6 +20,7 @@ import {
   HEADER_WIDTH,
   LINE_H,
   LIST_LINES,
+  LIST_PAD,
   MAX_LINES,
   PANEL_H,
   SPACE_W,
@@ -239,7 +240,14 @@ function sName(s: Session): string {
  */
 function withClock(title: string, tail = ''): string {
   const now = new Date()
-  const clock = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  // The date rides with the time. A wearer reading a session list has often
+  // been away from it for longer than a clock can say - `06:38` is the same
+  // string whichever morning it is, and the question the panel was being asked
+  // was which one. ISO order rather than a locale's: the panel draws English,
+  // and this way the fields never swap meaning on the reader.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const clock = `${date} ${pad(now.getHours())}:${pad(now.getMinutes())}`
   const clockPx = textWidth(clock)
   const build = (h: string, spaces: number) => `${h}${tail}${' '.repeat(spaces)}${clock}`
   let head = title
@@ -1320,7 +1328,7 @@ function buildSessionList(state: AppState): RebuildPageContainer {
     xPosition: 4, yPosition: nHeight,
     width: W - 8, height: H - 36 - nHeight,
     borderWidth: 0,
-    paddingLength: 6,
+    paddingLength: LIST_PAD,
     containerID: notice ? 2 : 1, containerName: 'list',
     isEventCapture: 0,
     content: sessionListBody(state),

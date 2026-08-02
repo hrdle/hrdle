@@ -19,7 +19,7 @@ import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
 import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
-import { MAX_LINES } from '../metrics.ts'
+import { LIST_PAD, MAX_LINES } from '../metrics.ts'
 
 describe('sanitizeForG2: tables', () => {
   const table = [
@@ -794,8 +794,14 @@ describe('workspace and pane list', () => {
     expect(screenText(st(1)).body).not.toMatch(/[├└]/)
   })
 
-  test('the list gets the row the header used to occupy', () => {
-    expect(LIST_LINES).toBe(MAX_LINES + 1)
+  test('the list gets the row the header used to occupy, and the one the padding held', () => {
+    // Dropping the header bought the first. The second was already paid for
+    // and going to waste: at BODY_PAD the container had 240px for rows of 27,
+    // which is eight rows and 24px of remainder - a gap above the footer wide
+    // enough that it got asked about. LIST_PAD leaves 248px, so the ninth row
+    // fits with 5px to spare rather than missing by 3.
+    expect(LIST_LINES).toBe(MAX_LINES + 2)
+    expect(LIST_LINES * LINE_H).toBeLessThanOrEqual(PANEL_H - BAR_H - 2 * LIST_PAD)
   })
 
   test('the footer carries the position and the clock', () => {

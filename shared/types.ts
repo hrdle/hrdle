@@ -1077,6 +1077,12 @@ export interface GlassesScreen {
    * was looking at.
    */
   card?: boolean;
+  /**
+   * The screen has no header bar and its body owns that band too - the list
+   * gives the 36px back to the rows. A mirror that assumes a header draws the
+   * whole screen a bar lower than the device does.
+   */
+  headerless?: boolean;
   /** Which screen this is, for the mirror's status line. */
   mode: string;
   /**
@@ -1276,6 +1282,7 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
       footer: z.string().max(500),
       notice: z.string().max(1000).optional(),
       card: z.boolean().optional(),
+      headerless: z.boolean().optional(),
       mode: z.string().max(40),
       session: z
         .object({

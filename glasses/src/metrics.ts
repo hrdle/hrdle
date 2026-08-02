@@ -41,14 +41,26 @@ export const BODY_WIDTH = PANEL_W - 8 - 2 * BODY_PAD
 export const MAX_LINES = Math.floor((PANEL_H - 2 * BAR_H - 2 * BODY_PAD) / LINE_H)
 
 /**
- * Lines the list gets, which is one more.
+ * The list's own padding, tighter than `BODY_PAD`.
+ *
+ * At 6 the container had 240px for rows of 27, which is 8 rows and 24px of
+ * remainder — a gap above the footer wide enough to be asked about, holding a
+ * row that would not fit by 3px. At 2 there are 248px, so the ninth row fits
+ * with 5px to spare. The horizontal padding goes with it (the container is
+ * already inset 4px from the panel edge, so text still clears it).
+ */
+export const LIST_PAD = 2
+
+/**
+ * Lines the list gets, which is two more than the body.
  *
  * The list screen carries no header: a title bar over a list of titles is a
  * line spent saying nothing, and the counter and clock it held fit in the
  * footer beside the gestures. Giving the container that 36px back buys a
  * whole row — which is exactly what a list that now includes panes needs.
+ * `LIST_PAD` buys the next one.
  */
-export const LIST_LINES = Math.floor((PANEL_H - BAR_H - 2 * BODY_PAD) / LINE_H)
+export const LIST_LINES = Math.floor((PANEL_H - BAR_H - 2 * LIST_PAD) / LINE_H)
 
 // ─── The notification card ───
 //

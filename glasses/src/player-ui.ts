@@ -258,6 +258,7 @@ export function startPlayerUI(): void {
       body: wrapForPanel(line.body),
       footer: line.footer,
       card: line.card,
+      headerless: line.headerless,
     })
   }
 
