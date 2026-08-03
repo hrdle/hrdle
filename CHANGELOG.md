@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.45] - 2026-08-03
+
+### Fixed
+- **The ring works on the screen that comes before a server.** Everything that
+  handles a gesture lives below an await that only resolves once a server
+  address has been stored, so a wearer who has not set one up sat on "not
+  connected" with no working input of any kind — not a tap, not a swipe, and no
+  way to close the app. An EVEN Hub reviewer has no server at all, so that
+  screen was the whole of what they saw; they reported it as double-tap failing
+  to bring up the exit dialog and the submission was rejected for it. Reading
+  the code, the root page does call `shutDownPageContainer(1)` — the reviewer
+  never reached the root page
+- **The title takes the header bar, and the clock gives way.** The clock always
+  survived and the title was clipped to make room; adding the date took the
+  right-hand side from 52px to 173px, so a workspace name that fitted yesterday
+  lost ten characters today. The title says which session is being read, which
+  is the question — so it is served first, and the clock takes what is left:
+  the date and time together, the time alone, or nothing
+
+### Changed
+- **An eighth line in the conversation, out of padding nobody was using.** The
+  band between the bars was 204px usable, which is seven rows and 15px of
+  remainder — a row that could not fit however the padding was tuned. A bar
+  holds exactly one line either way (its inner height stays 28 against a 27px
+  line), so `BAR_H` went 36 → 32 and gave the body 220px: eight rows with 4px
+  to spare. The list keeps its nine; the notification card gains one
+- Every `36` in the container definitions is `BAR_H` now, and `panel-paint.ts`
+  no longer keeps its own copies of `HEADER_PAD` and `BODY_PAD` — the panel's
+  geometry had two homes with only one of them authoritative
+
 ## [0.3.44] - 2026-08-03
 
 ### Added
