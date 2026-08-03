@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.56] - 2026-08-04
 
 ### Fixed
 - **Starting a second server printed a crash where one sentence would do.** The
