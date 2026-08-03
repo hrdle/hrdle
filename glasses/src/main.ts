@@ -9,6 +9,7 @@ import { setBaseUrl, transcribe, reportLog } from './api.ts'
 import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, panelDrops, setPanelTrace, invalidatePanel, startMic, stopMic } from './display.ts'
 import type { AppState, Bridge } from './display.ts'
 import { GlassesController } from './controller.ts'
+import { createSetupGate } from './setup-gate.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
 import { startDebugUI } from './debug-ui.ts'
@@ -255,36 +256,15 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     // A double-tap is the way out of every screen in this app; it has to be the
     // way out of the first one. Torn down as soon as the address arrives, so
     // the real wiring below is the only handler from then on.
-    let inDemo = false
-    const setupGate = setupEvents(bridge, {
-      onSwipeUp: () => { if (inDemo) controller.swipeUp() },
-      onSwipeDown: () => { if (inDemo) controller.swipeDown() },
-      // A reviewer has no server and is not going to install one, so without
-      // this the app they were asked to judge is a paragraph of instructions.
-      // The demo is the same app on canned data - same screens, same
-      // gestures, same controller - and says DEMO on every one of them.
-      onTap: () => {
-        if (inDemo) {
-          controller.tap()
-          return
-        }
-        inDemo = true
-        trace('demo started from the setup guide')
-        // Same reason as above, in the other direction: the guide was not
-        // drawn through `updateDisplay`, so it has to be told the panel is
-        // not what it last saw.
-        invalidatePanel()
-        controller.startDemo()
-      },
-      onDoubleTap: () => {
-        // Inside the demo the controller owns this gesture: it walks back out
-        // of a conversation or a picker, and from the demo's own root it calls
-        // `exitDemo`, which lands back here.
-        if (inDemo) {
-          controller.doubleTap()
-          return
-        }
-        trace('exit dialogue requested (setup guide double-tap)')
+    const gate = createSetupGate({
+      startDemo: () => controller.startDemo(),
+      tap: () => controller.tap(),
+      doubleTap: () => controller.doubleTap(),
+      swipeUp: () => controller.swipeUp(),
+      swipeDown: () => controller.swipeDown(),
+      invalidatePanel,
+      trace: (m) => trace(m),
+      requestExit: () => {
         try {
           void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {
             if (ok === false) trace('shutDownPageContainer refused by host', 'error')
@@ -293,6 +273,12 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
           trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
         }
       },
+    })
+    const setupGate = setupEvents(bridge, {
+      onSwipeUp: () => gate.onSwipeUp(),
+      onSwipeDown: () => gate.onSwipeDown(),
+      onTap: () => gate.onTap(),
+      onDoubleTap: () => gate.onDoubleTap(),
     })
     try {
       savedUrl = await new Promise<string>((resolve) => {

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.48] - 2026-08-03
+
+### Changed
+- **The setup gate has a seam the tests can hold.** It shipped broken twice,
+  both times as one line, both times because nothing could reach it: four
+  callbacks inside an async function, behind a branch that only runs on a
+  device with no server address. 0.3.45 wired a way out and no way around;
+  0.3.46 wired a way into the demo and left the demo's own gestures going to a
+  noop. Both are cases in `setup-gate-wiring.test.ts` now, and the gate is a
+  plain function over its dependencies
+
 ## [0.3.47] - 2026-08-03
 
 ### Fixed
