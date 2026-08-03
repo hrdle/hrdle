@@ -8,6 +8,12 @@ import {
   updateGlassesSettings,
 } from '../services/glasses-settings';
 import {
+  groqSttUsageService,
+  pcmSeconds,
+  readRateLimitHeaders,
+  wavSeconds,
+} from '../services/groq-stt-usage';
+import {
   glassesRecordingEnabled,
   listRecordingDays,
   readRecordingDay,
@@ -108,6 +114,16 @@ glasses.post('/stt', async (c) => {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
+    });
+
+    // Recorded before the status is acted on: a rejected request still spends
+    // quota, and the headers on a 429 are the ones worth having. Not awaited -
+    // the user is waiting on the transcript, not on a tally.
+    void groqSttUsageService.record({
+      audioSeconds:
+        format === 'wav' ? wavSeconds(raw) : pcmSeconds(raw.length, sampleRate),
+      ok: res.ok,
+      rateLimit: readRateLimitHeaders(res.headers, new Date().toISOString()),
     });
 
     if (!res.ok) {

@@ -658,6 +658,59 @@ export interface KimiUsageSummary {
 }
 
 /**
+ * Groq's remaining transcription quota, as reported by `x-ratelimit-*` headers
+ * on the last transcription this server made. Not polled - Groq has no usage
+ * endpoint, so asking would itself spend a request.
+ */
+export interface GroqSttRateLimit {
+  /** Requests allowed per day, and how many of them are left. */
+  limitRequests?: number;
+  remainingRequests?: number;
+  /** Audio seconds allowed per hour, and how many are left. */
+  limitAudioSeconds?: number;
+  remainingAudioSeconds?: number;
+  /** Time until each bucket is full again, as Groq words it (`1m26.4s`). */
+  resetRequests?: string;
+  resetAudioSeconds?: string;
+  observedAt: string;
+}
+
+export interface GroqSttUsageWindow {
+  requests: number;
+  /** Requests that failed. Counted within `requests`, not on top of it. */
+  failures: number;
+  audioSeconds: number;
+  /** Estimated at the list price per hour of audio, never a billed figure. */
+  costUsd: number;
+}
+
+export interface GroqSttUsageDay extends GroqSttUsageWindow {
+  date: string; // local YYYY-MM-DD
+  /**
+   * False when this server was not running for any of the day. Distinct from
+   * an observed day with no speech - one is "you said nothing", the other is
+   * "nobody was listening".
+   */
+  observed: boolean;
+}
+
+/**
+ * Groq speech-to-text consumption by the glasses (`POST /api/glasses/stt`).
+ *
+ * Recorded as requests happen rather than aggregated from logs: unlike the
+ * agents, Groq leaves nothing on this host to re-read afterwards.
+ */
+export interface GroqSttUsageSummary {
+  /** The transcription model these figures were priced and spent against. */
+  model: string;
+  today: GroqSttUsageWindow;
+  last7d: GroqSttUsageWindow;
+  /** Local calendar days, oldest first, today last. Contiguous. */
+  daily: GroqSttUsageDay[];
+  rateLimit?: GroqSttRateLimit;
+}
+
+/**
  * Actual OpenRouter spend, read from OpenRouter's own accounting for the API
  * key configured in `~/.kimi-code/config.toml`. Unlike `KimiUsageWindow.costUsd`
  * (a local estimate over rolling windows), these are billed figures over
@@ -755,6 +808,9 @@ export interface DashboardResponse {
   // Billed OpenRouter spend for the key in ~/.kimi-code/config.toml. Null when
   // no OpenRouter provider is configured or the account can't be reached.
   openRouterUsage?: OpenRouterAccountUsage | null;
+  // Groq speech-to-text spend by the glasses. Null until this server has made
+  // a transcription; there is no history to read back from Groq.
+  groqSttUsage?: GroqSttUsageSummary | null;
   usageHistory: UsageSnapshot[]; // Usage history for line chart
   dailyActivity: DailyActivity[];
   modelUsage: ModelUsage[];
