@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.55] - 2026-08-04
+
+### Changed
+- **The demo's workspaces are named for the states they are in.** They were
+  named for gestures, which the footer already carries - so the marks down the
+  left edge went unexplained, and those are what a wearer has to learn to read
+  at a glance. A row says what that row is now: waiting on you, working right
+  now, done with nothing to answer, two panes under one workspace, and the one
+  that closes the app. The exclamation, the dot and the blank each have a row
+  saying what they mean
+
 ## [0.3.54] - 2026-08-04
 
 ### Changed
