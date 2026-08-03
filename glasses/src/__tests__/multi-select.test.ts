@@ -11,7 +11,7 @@
 // a row.
 
 import { describe, expect, test } from 'bun:test'
-import { CHOICE_SEND, choiceRows, looksMultiSelect, onChoiceSend, screenText } from '../display.ts'
+import { CHOICE_SEND, choiceRows, looksMultiSelect, onChoiceSend, screenText, updateDisplay } from '../display.ts'
 import type { AppState } from '../display.ts'
 
 function st(options: string[], index = 0): AppState {
@@ -89,5 +89,36 @@ describe('what the panel says', () => {
     const body = screenText(st(MULTI)).body
     expect(body).toContain('[x] 日本円でも表示')
     expect(body).toContain(CHOICE_SEND)
+  })
+})
+
+describe('what the device draws', () => {
+  // The panel the wearer sees is built by `buildChoice`, not by `screenText` —
+  // the second is the copyable transcript of the first. `buildChoice` held the
+  // single-pick footer as a constant, so on the device the multi-select
+  // promised "tap:confirm" over the one screen where a tap does not confirm.
+  // The simulator, drawing the same containers, was wrong in the same way.
+
+  async function drawnFooter(state: AppState): Promise<string> {
+    const contents: string[] = []
+    const bridge = {
+      textContainerUpgrade: () => Promise.resolve(),
+      rebuildPageContainer: (c: { textObject: Array<{ content: string }> }) => {
+        contents.push(...c.textObject.map((t) => t.content))
+        return Promise.resolve(true)
+      },
+    }
+    // A mode change is what forces the rebuild this reads.
+    await updateDisplay(bridge as never, { ...state, mode: 'session_list' } as AppState)
+    await updateDisplay(bridge as never, state)
+    return contents[contents.length - 1]
+  }
+
+  test('the multi-select footer reaches the panel, not just the transcript', async () => {
+    expect(await drawnFooter(st(MULTI))).toBe(screenText(st(MULTI)).footer)
+  })
+
+  test('a single pick still gets its own', async () => {
+    expect(await drawnFooter(st(SINGLE))).toBe('swipe:select  tap:confirm  dbl:skip')
   })
 })

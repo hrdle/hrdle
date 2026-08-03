@@ -13,18 +13,34 @@
 import { describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
 import { screenText } from '../display.ts'
-import { demoChoices, demoConversation, demoSessions } from '../demo.ts'
+import { DEMO_REPLY_MS, DEMO_TRANSCRIPT, demoChoices, demoConversation, demoSessions } from '../demo.ts'
 import type { GlassesPlatform } from '../controller.ts'
 
-function platform(): GlassesPlatform & { exits: number } {
+function platform(): GlassesPlatform & { exits: number; micStarts: number } {
   const p = {
     onDevice: false,
     exits: 0,
+    micStarts: 0,
     render() {},
     renderHeader() {},
     requestExit() { p.exits++ },
+    async startMicCapture() { p.micStarts++; return true },
+    async stopMicCapture() {},
+    async transcribeAudio() { throw new Error('a demo has no server to transcribe against') },
   }
-  return p as unknown as GlassesPlatform & { exits: number }
+  return p as unknown as GlassesPlatform & { exits: number; micStarts: number }
+}
+
+/** A ring gesture, awaited. The public methods are fire-and-forget because the
+ *  host has nothing to await; a test does. */
+function ring(c: GlassesController, action: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'): Promise<void> {
+  return (c as unknown as { handle(a: string): Promise<void> }).handle(action)
+}
+
+const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms))
+
+function lastMessage(c: GlassesController) {
+  return c.state.conversation[c.state.conversation.length - 1]
 }
 
 describe('the demo', () => {
@@ -82,6 +98,83 @@ describe('the demo', () => {
     // was broken until today.
     expect(demoChoices().every((o) => o.startsWith('[ ]'))).toBe(true)
     expect(demoChoices().length).toBeGreaterThan(1)
+  })
+
+  test('a spoken answer is recognized and the conversation moves on', async () => {
+    // The one thing this app is for - answering an agent without a keyboard -
+    // and it used to stop one step short of showing that the words got out of
+    // the panel: the send said what it would have done and nothing happened.
+    const p = platform()
+    const c = new GlassesController(p)
+    c.startDemo()
+    // A workspace that is not holding a question, so a tap goes to the mic
+    // rather than to the picker.
+    c.state.sessionIndex = demoSessions().findIndex((s) => s.id === 'demo-docs')
+    await ring(c, 'tap')
+    expect(c.state.mode).toBe('conversation')
+
+    await ring(c, 'tap')
+    expect(c.state.mode).toBe('voice')
+    expect(c.state.voicePhase).toBe('recording')
+    // Transcription is the server's job and there is no server: opening the
+    // microphone could only ever arrive at "(nothing was recognized)".
+    expect(p.micStarts).toBe(0)
+
+    await ring(c, 'tap')
+    expect(c.state.voicePhase).toBe('confirm')
+    expect(c.state.voiceText).toBe(DEMO_TRANSCRIPT)
+
+    await ring(c, 'tap')
+    await settle()
+    expect(c.state.mode).toBe('conversation')
+    expect(lastMessage(c)).toMatchObject({ role: 'user', content: DEMO_TRANSCRIPT })
+
+    await settle(DEMO_REPLY_MS + 50)
+    expect(lastMessage(c)?.role).toBe('assistant')
+    expect(lastMessage(c)?.content).toContain(DEMO_TRANSCRIPT)
+  })
+
+  test('a picked option ticks its box and is answered with', async () => {
+    const p = platform()
+    const c = new GlassesController(p)
+    c.startDemo()
+    // The workspace that is waiting on an answer.
+    c.state.sessionIndex = demoSessions().findIndex((s) => s.id === 'demo-api')
+    await ring(c, 'tap')
+    await ring(c, 'tap')
+    expect(c.state.mode).toBe('choice')
+    expect(c.state.choiceMulti).toBe(true)
+
+    // No pane to read the box back from, so the toggle has to be visible here
+    // or the screen that exists to demonstrate it demonstrates nothing.
+    await ring(c, 'tap')
+    expect(c.state.choiceOptions[0]).toStartWith('[x]')
+
+    // Down to the send row, past the options.
+    for (let i = 0; i < demoChoices().length; i++) await ring(c, 'swipeDown')
+    await ring(c, 'tap')
+    await settle()
+    expect(c.state.mode).toBe('conversation')
+    expect(lastMessage(c)).toMatchObject({ role: 'user', content: 'Postgres' })
+
+    await settle(DEMO_REPLY_MS + 50)
+    expect(lastMessage(c)?.role).toBe('assistant')
+  })
+
+  test('leaving takes a reply still in flight with it', async () => {
+    // The agent's answer arrives on a timer. Leaving the demo before it lands
+    // would otherwise drop a canned message onto whatever is on screen next.
+    const p = platform()
+    const c = new GlassesController(p)
+    c.startDemo()
+    c.state.sessionIndex = demoSessions().findIndex((s) => s.id === 'demo-docs')
+    await ring(c, 'tap')
+    await ring(c, 'tap')
+    await ring(c, 'tap')
+    await ring(c, 'tap')
+    c.stopDemo()
+    await settle(DEMO_REPLY_MS + 50)
+    expect(c.state.conversation).toEqual([])
   })
 
   test('a demo session is waiting, so there is something to answer', () => {

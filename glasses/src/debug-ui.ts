@@ -292,6 +292,11 @@ export function startDebugUI(): void {
             <button type="button" id="btn-gave-up">Server unreachable</button>
           </div>
           <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
+          <h2>First run</h2>
+          <div class="ring">
+            <button type="button" id="btn-demo">Demo mode</button>
+          </div>
+          <p class="hint" id="demo-status">What a wearer sees before a server address exists: a tap on the setup guide starts the app on canned data. Speech is canned too — there is no server to transcribe against — and an answer, spoken or picked, is followed by the agent's reply.</p>
           <h2>Voice input</h2>
           <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
           <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
@@ -1163,6 +1168,24 @@ export function startDebugUI(): void {
       'Server unreachable: the closing message is up, and on the device the WebView goes away a few seconds later.'
     renderDiag(controller.state)
   })
+  // The demo is the only screen sequence a simulator cannot otherwise reach:
+  // it lives behind "no server address", and the simulator always has one. It
+  // is also the sequence an EVEN Hub reviewer sees, so verifying it here beats
+  // clearing the address on a device to find out.
+  let inDemo = false
+  const demoStatus = el('demo-status')
+  el('btn-demo').addEventListener('click', () => {
+    inDemo = !inDemo
+    if (inDemo) controller.startDemo()
+    else controller.stopDemo()
+    ;(controller as unknown as { render(): void }).render()
+    el('btn-demo').textContent = inDemo ? 'Leave the demo' : 'Demo mode'
+    demoStatus.textContent = inDemo
+      ? 'Canned data. Open the waiting workspace to answer with the picker, or a quiet one to answer by voice - both are followed by the agent’s reply.'
+      : 'What a wearer sees before a server address exists: a tap on the setup guide starts the app on canned data.'
+    renderDiag(controller.state)
+  })
+
   el('btn-superseded').addEventListener('click', () => {
     // What the server sends when a newer run of the app connects. Same release
     // as a host exit, minus the resume point — the newcomer owns that.

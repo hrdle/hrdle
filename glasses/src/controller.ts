@@ -26,9 +26,18 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
-import { SPINNER_INTERVAL_MS, choiceRows, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
-import { DEMO_SENT, demoChoices, demoConversation, demoSessions } from './demo.ts'
+import {
+  DEMO_REPLY_MS,
+  DEMO_TRANSCRIBE_MS,
+  DEMO_TRANSCRIPT,
+  demoAgentReply,
+  demoAnswer,
+  demoChoices,
+  demoConversation,
+  demoSessions,
+} from './demo.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { WsClient } from './ws-client.ts'
 import type { Session, Pane, ConversationMessage, GlassesRelayItem, ClientFocus } from './types.ts'
@@ -258,6 +267,12 @@ export class GlassesController {
    * ones nobody is looking at.
    */
   private demo = false
+  /** Turns the demo's own answers have added to the canned transcript, so a
+   *  reply the wearer spoke or picked survives the next reload of it. */
+  private demoExtra: ConversationMessage[] = []
+  /** The agent's pending reply to one of them. Held so leaving the demo can
+   *  stop it landing on a screen that is no longer the demo's. */
+  private demoTimer: ReturnType<typeof setTimeout> | null = null
   private readonly platform: GlassesPlatform
   private readonly queue = new RelayQueue()
 
@@ -369,6 +384,8 @@ export class GlassesController {
   startDemo(): void {
     this.demo = true
     this.state.demo = true
+    this.demoExtra = []
+    this.clearDemoTimer()
     this.onSessionsUpdated(demoSessions())
     this.render()
   }
@@ -378,10 +395,49 @@ export class GlassesController {
   stopDemo(): void {
     this.demo = false
     this.state.demo = false
+    this.clearDemoTimer()
+    this.demoExtra = []
     this.state.sessions = []
     this.state.sessionIndex = 0
     this.state.conversation = []
     this.state.mode = 'session_list'
+  }
+
+  /**
+   * An answer, taken as far as a real one goes.
+   *
+   * A demo that accepts a reply and shows nothing for it demonstrates the one
+   * thing this app is for - answering an agent without a keyboard - stopping
+   * one step short of the part that proves it worked. So the answer joins the
+   * transcript as the wearer's turn, the workspace goes to work, and the agent
+   * answers it.
+   */
+  private demoReply(text: string): void {
+    this.demoExtra.push(demoAnswer(text))
+    this.setDemoIndicator('processing')
+    this.state.mode = 'conversation'
+    void this.loadConversation().then(() => this.render())
+    this.clearDemoTimer()
+    this.demoTimer = setTimeout(() => {
+      this.demoTimer = null
+      if (!this.demo || this.stopped) return
+      this.demoExtra.push(demoAgentReply(text))
+      this.setDemoIndicator('completed')
+      void this.loadConversation().then(() => this.render())
+    }, DEMO_REPLY_MS)
+  }
+
+  /** The answered workspace's own indicator, so the list behind the transcript
+   *  tells the same story: asked, working, done. */
+  private setDemoIndicator(state: Session['indicatorState']): void {
+    const target = this.state.sessions[this.state.sessionIndex]
+    if (target) target.indicatorState = state
+  }
+
+  private clearDemoTimer(): void {
+    if (!this.demoTimer) return
+    clearTimeout(this.demoTimer)
+    this.demoTimer = null
   }
 
   /** Connect the WS and mark this connection as "glasses present" (#504). The
@@ -986,6 +1042,13 @@ export class GlassesController {
         // an option is a space, exactly as the TUI expects; the send row is the
         // Enter that a single-pick list gets from any row.
         if (st.choiceMulti && !onChoiceSend(st)) {
+          // No pane to read the box back from, so the demo ticks its own -
+          // otherwise a toggle in a demo is a gesture with no visible effect,
+          // on the screen that exists to show the toggle working.
+          if (this.demo) {
+            this.toggleDemoChoice()
+            return Promise.resolve()
+          }
           this.sendChoiceKey(' ')
           // The pane redraws with the box ticked; read it back so the panel
           // shows what was actually recorded rather than what was asked for.
@@ -994,6 +1057,13 @@ export class GlassesController {
         }
         this.sendChoiceKey('\r')
         this.answeredItem(this.choiceTarget?.itemId)
+        if (this.demo) {
+          const picked = this.demoPickedText()
+          if (picked) this.demoReply(picked)
+          else st.mode = 'conversation'
+          this.render()
+          return Promise.resolve()
+        }
         st.mode = 'conversation'
         this.render()
         void this.loadConversation().then(() => this.render())
@@ -1006,6 +1076,33 @@ export class GlassesController {
         this.render()
         return Promise.resolve()
     }
+  }
+
+  /** Tick or untick the option under the cursor, in the demo's own copy of the
+   *  options. The pane's redraw is what does this for real. */
+  private toggleDemoChoice(): void {
+    const st = this.state
+    const opt = st.choiceOptions[st.choiceIndex]
+    if (opt === undefined) return
+    st.choiceOptions = st.choiceOptions.map((o, i) =>
+      i === st.choiceIndex ? (isChecked(o) ? o.replace(/\[[xX*\u2713]\]/, '[ ]') : o.replace('[ ]', '[x]')) : o,
+    )
+    this.render()
+  }
+
+  /** What the wearer answered, as a sentence: the ticked options in a
+   *  multi-select, the option under the cursor in a single-pick list. Null when
+   *  a multi-select was sent with nothing ticked - there is no answer to relay
+   *  and the demo should not invent one. */
+  private demoPickedText(): string | null {
+    const st = this.state
+    const label = (o: string) => o.replace(/^\s*\[[ xX*\u2713]\]\s*/, '').trim()
+    if (!st.choiceMulti) {
+      const one = st.choiceOptions[st.choiceIndex]
+      return one ? label(one) : null
+    }
+    const picked = st.choiceOptions.filter(isChecked).map(label)
+    return picked.length ? picked.join(', ') : null
   }
 
   /** Re-read the pane after a toggle, so the boxes on the panel are the pane's
@@ -1072,6 +1169,11 @@ export class GlassesController {
     this.state.voiceSessionName = this.sessionLabel(target.sessionId)
     this.render()
     this.recording = true
+    // Nothing to open a microphone for: transcription is the server's job and
+    // a demo has no server, so a real recording would arrive at "(nothing was
+    // recognized)" every time. The screens and the gestures are unchanged;
+    // only the audio is not real.
+    if (this.demo) return
     const ok = await this.platform.startMicCapture()
     if (!ok) {
       this.recording = false
@@ -1084,6 +1186,15 @@ export class GlassesController {
   private async stopAndTranscribe(): Promise<void> {
     if (!this.recording) return
     this.recording = false
+    if (this.demo) {
+      this.state.voicePhase = 'transcribing'
+      this.render()
+      await new Promise((resolve) => setTimeout(resolve, DEMO_TRANSCRIBE_MS))
+      this.state.voiceText = DEMO_TRANSCRIPT
+      this.state.voicePhase = 'confirm'
+      this.render()
+      return
+    }
     await this.platform.stopMicCapture()
     this.state.voicePhase = 'transcribing'
     this.render()
@@ -1111,11 +1222,10 @@ export class GlassesController {
     const text = this.state.voiceText?.trim()
     if (t && text) {
       try {
-        // The one place a demo could quietly claim something happened, so it
-        // says outright that nothing did.
+        // Nothing is sent - there is no agent - but the conversation moves on
+        // as it would have, which is the point of demonstrating this at all.
         if (this.demo) {
-          this.state.voiceText = DEMO_SENT
-          this.render()
+          this.demoReply(text)
           return
         }
         await sendPrompt(t.sessionId, text, t.paneId)
@@ -1532,7 +1642,7 @@ export class GlassesController {
       return
     }
     const raw = this.demo
-      ? demoConversation()
+      ? [...demoConversation(), ...this.demoExtra]
       : await getConversation(target.id, INITIAL_LOAD_COUNT, target.agent)
     this.state.conversation = filterConversation(raw)
     this.state.conversationLastLoaded = INITIAL_LOAD_COUNT

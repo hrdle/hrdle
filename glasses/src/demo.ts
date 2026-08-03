@@ -16,12 +16,20 @@
 
 import type { ConversationMessage, Session } from './types.ts'
 
-/** Workspaces, in the state they would be in mid-afternoon: one waiting on an
- *  answer, one working, one with panes, one quiet. */
+/**
+ * Workspaces, in the state they would be in mid-afternoon: one waiting on an
+ * answer, one working, one with panes, one quiet.
+ *
+ * Each carries an `agentSessionId` because a transcript is addressed to an
+ * agent session rather than to a workspace. Without one the conversation
+ * screen resolves to no target and opens empty - which is the screen the whole
+ * demo leads to.
+ */
 export function demoSessions(): Session[] {
   return [
     {
       id: 'demo-api',
+      agentSessionId: 'demo-api-thread',
       name: 'api-refactor',
       state: 'idle',
       indicatorState: 'waiting_input',
@@ -30,6 +38,7 @@ export function demoSessions(): Session[] {
     },
     {
       id: 'demo-glasses',
+      agentSessionId: 'demo-glasses-thread',
       name: 'glasses-app',
       state: 'working',
       indicatorState: 'processing',
@@ -38,6 +47,7 @@ export function demoSessions(): Session[] {
     },
     {
       id: 'demo-infra',
+      agentSessionId: 'demo-infra-thread',
       name: 'infra',
       state: 'idle',
       indicatorState: 'completed',
@@ -49,6 +59,7 @@ export function demoSessions(): Session[] {
     },
     {
       id: 'demo-docs',
+      agentSessionId: 'demo-docs-thread',
       name: 'docs-site',
       state: 'idle',
       indicatorState: 'completed',
@@ -92,6 +103,46 @@ export function demoChoices(): string[] {
   return ['[ ] Postgres', '[ ] SQLite', '[ ] Whatever the others use']
 }
 
-/** What a send says instead of sending. Shown where the reply would have gone,
- *  so the gesture completes and nothing is claimed that did not happen. */
-export const DEMO_SENT = 'Demo: this would go to the agent.'
+/**
+ * What the recognizer hears.
+ *
+ * There is no server in a demo, and transcription is the server's job (Groq,
+ * via `/api/glasses/stt`), so the microphone is not opened at all: a real
+ * recording would have nowhere to go and the screen would arrive at "(nothing
+ * was recognized)" every time - the gesture that matters most, demonstrated as
+ * a failure.
+ *
+ * It answers the question the transcript ends on, because a reply that does not
+ * fit what was asked reads as a canned string rather than as speech.
+ */
+export const DEMO_TRANSCRIPT = 'Postgres, and keep the old path behind a flag.'
+
+/** The answer, as the wearer's own turn. Spoken or picked - the transcript
+ *  cannot tell the difference and neither should this. */
+export function demoAnswer(text: string): ConversationMessage {
+  return { role: 'user', content: text }
+}
+
+/**
+ * What the agent does with it.
+ *
+ * Quoting the answer back is not decoration: it is the only thing on screen
+ * that shows the words made it out of the panel and into the conversation,
+ * which is the whole of what a wearer is checking when they answer from the
+ * glasses.
+ */
+export function demoAgentReply(text: string): ConversationMessage {
+  return {
+    role: 'assistant',
+    content: `Taking that as the answer - ${text}\n\nWriting the connection change now. The old path stays behind a flag, so a rollback needs no code change.`,
+    toolUse: [{ name: 'Edit', input: { file_path: 'backend/src/db/client.ts' } }],
+  }
+}
+
+/** How long the agent appears to think about it. Long enough that the reply is
+ *  visibly an answer to what was just sent rather than something that was
+ *  already there. */
+export const DEMO_REPLY_MS = 1400
+
+/** How long the transcription takes. The real one is a round trip to Groq. */
+export const DEMO_TRANSCRIBE_MS = 700
