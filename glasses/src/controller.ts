@@ -31,11 +31,11 @@ import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
   DEMO_TRANSCRIBE_MS,
-  DEMO_TRANSCRIPT,
   demoAgentReply,
   demoAnswer,
   demoChoices,
   demoRecap,
+  demoTranscript,
   demoConversation,
   demoSessions,
 } from './demo.ts'
@@ -1195,7 +1195,7 @@ export class GlassesController {
       this.state.voicePhase = 'transcribing'
       this.render()
       await new Promise((resolve) => setTimeout(resolve, DEMO_TRANSCRIBE_MS))
-      this.state.voiceText = DEMO_TRANSCRIPT
+      this.state.voiceText = demoTranscript()
       this.state.voicePhase = 'confirm'
       this.render()
       return

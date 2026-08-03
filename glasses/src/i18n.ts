@@ -9,10 +9,13 @@
 // and the ehpk pays for every kilobyte it carries. What a wizard needs is a
 // lookup, a language, and a way to change it.
 //
-// Only the phone screens. What the G2 itself draws stays English for now:
-// Japanese is full-width, so `metrics.ts` line widths and the seven-line clamp
-// would all have to be re-reckoned, and that is its own piece of work rather
-// than a translation.
+// Mostly the phone screens. The exception is the demo (`demo.*`), which the G2
+// draws itself: it is the first thing a new wearer reads, and a tutorial in a
+// language you do not have is not a tutorial. The panel measures real glyph
+// advances and already wraps Japanese - it does it every day for what the
+// agents send back - so this costs no re-reckoning of `metrics.ts`. What it
+// costs is room: full-width is about half the characters per line, so the two
+// tables are the same lesson written twice, each to its own budget.
 
 import { readStoredSync, writeStoredSync } from './storage.ts'
 
@@ -103,6 +106,31 @@ const EN: Table = {
   'settings.promptComposed':
     'Using the prompt composed from your workspace names and the glossary.',
   'settings.failed': 'Failed: {error}',
+
+  // The demo, which is a tutorial: every string is a caption for the thing it
+  // sits in. Unlike the rest of this table these are drawn by the G2 itself,
+  // so a line's length is a pixel budget rather than a paragraph - see the
+  // note above about what the panel holds.
+  'demo.open.name': 'Tap opens this one',
+  'demo.open.recap': 'The agent\'s last line. It is waiting for an answer.',
+  'demo.working.name': 'Swipe moves the cursor',
+  'demo.working.recap': 'Working now. The bar after a name is context left.',
+  'demo.panes.name': 'A workspace can hold panes',
+  'demo.panes.pane1': 'they are listed under it',
+  'demo.panes.pane2': 'each with its own agent',
+  'demo.back.name': 'Double-tap goes back',
+  'demo.back.recap': 'It leaves every screen, and offers to close the app from here.',
+  'demo.conv.ask': 'What am I looking at?',
+  'demo.conv.paging': 'Newest message last - swipe up for the older ones.',
+  'demo.conv.tool': 'A line in brackets is what the agent did, not said.',
+  'demo.conv.answer': 'A tap answers: options open the picker, otherwise the microphone. Try it - tap now.',
+  'demo.choice1': 'A tap checks a box',
+  'demo.choice2': 'Check as many as you like',
+  'demo.choice3': 'Swipe down to the Send row',
+  'demo.transcript': 'Spoken words land here, ready to send.',
+  'demo.reply': 'That is your answer, in the conversation - {text}\n\nOn a real workspace it reaches the agent from here, and the reply comes back to this screen. That is the whole loop: read, answer, carry on.',
+  'demo.recap.processing': 'Working on what you just sent.',
+  'demo.recap.completed': 'Answered. Double-tap goes back to the list.',
 }
 
 const JA: Table = {
@@ -178,6 +206,29 @@ const JA: Table = {
   'settings.promptEnv': 'サーバー環境変数の HRDLE_STT_PROMPT を使っています。',
   'settings.promptComposed': 'ワークスペース名と用語集から組み立てたプロンプトを使っています。',
   'settings.failed': '失敗しました: {error}',
+
+  // The demo. Japanese is full-width, so each of these has half the room the
+  // English does - the panel fits about 30 of these characters to a line.
+  'demo.open.name': 'タップで開く',
+  'demo.open.recap': 'エージェントの最後の一言。返答を待っています。',
+  'demo.working.name': 'スワイプでカーソル移動',
+  'demo.working.recap': '作業中。名前の後のバーは残りコンテキスト。',
+  'demo.panes.name': 'ペインを持てるワークスペース',
+  'demo.panes.pane1': 'この下に並びます',
+  'demo.panes.pane2': 'それぞれ別のエージェント',
+  'demo.back.name': 'ダブルタップで戻る',
+  'demo.back.recap': 'どの画面からも戻れます。ここでは終了を確認します。',
+  'demo.conv.ask': 'これは何の画面?',
+  'demo.conv.paging': '新しいものが下。上スワイプで過去、下で戻る。',
+  'demo.conv.tool': '角括弧の行は、言ったことではなくやったこと。',
+  'demo.conv.answer': 'タップで返答。選択肢があれば一覧、なければマイク。試しにタップ。',
+  'demo.choice1': 'タップでチェック',
+  'demo.choice2': 'いくつ選んでもいい',
+  'demo.choice3': '下へスワイプで Send 行',
+  'demo.transcript': '話した言葉はここに入ります。',
+  'demo.reply': 'これがあなたの返答です - {text}\n\n実際のワークスペースでは、ここからエージェントに届き、返事がこの画面に戻ります。読んで、答えて、進む。それだけです。',
+  'demo.recap.processing': '送った内容を処理中。',
+  'demo.recap.completed': '返答済み。ダブルタップで一覧へ。',
 }
 
 const TABLES: Record<Lang, Table> = { en: EN, ja: JA }
