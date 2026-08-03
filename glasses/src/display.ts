@@ -1636,7 +1636,9 @@ export function buildSetupGuide(): RebuildPageContainer {
     paddingLength: 4,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
-    content: 'Setup from phone app',
+    // The gesture is live here now, so the footer can promise it. Before, a
+    // wearer with no server had no way out of this screen at all.
+    content: 'Setup from phone app                                    dbl:exit',
   })
 
   return new RebuildPageContainer({

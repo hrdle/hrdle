@@ -97,15 +97,47 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   if (!savedUrl) {
     // Show setup guide and poll for URL
     await bridge.rebuildPageContainer(buildSetupGuide())
-    savedUrl = await new Promise<string>((resolve) => {
-      const poll = setInterval(async () => {
-        const url = await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)
-        if (url) {
-          clearInterval(poll)
-          resolve(url)
+    // The ring, while we wait.
+    //
+    // Everything below this point - the controller, the gestures, the way out -
+    // is behind an await that only resolves once a server address exists. So a
+    // wearer who has not set one up yet sat on this screen with no working
+    // input of any kind: not a tap, not a swipe, and no way to close the app.
+    // An Even Hub reviewer, who has no server at all, met exactly that and
+    // reported it as double-tap failing to bring up the exit dialog (#148).
+    //
+    // A double-tap is the way out of every screen in this app; it has to be the
+    // way out of the first one. Torn down as soon as the address arrives, so
+    // the real wiring below is the only handler from then on.
+    const noop = (): void => {}
+    const setupGate = setupEvents(bridge, {
+      onSwipeUp: noop,
+      onSwipeDown: noop,
+      onTap: noop,
+      onDoubleTap: () => {
+        trace('exit dialogue requested (setup guide double-tap)')
+        try {
+          void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {
+            if (ok === false) trace('shutDownPageContainer refused by host', 'error')
+          })
+        } catch (err) {
+          trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
         }
-      }, 2000)
+      },
     })
+    try {
+      savedUrl = await new Promise<string>((resolve) => {
+        const poll = setInterval(async () => {
+          const url = await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)
+          if (url) {
+            clearInterval(poll)
+            resolve(url)
+          }
+        }, 2000)
+      })
+    } finally {
+      setupGate?.()
+    }
   }
 
   setBaseUrl(savedUrl)
