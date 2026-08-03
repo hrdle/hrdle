@@ -94,55 +94,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     savedUrl = location.origin
     await bridge.setLocalStorage(storageKey(URL_SUFFIX), savedUrl)
   }
-  if (!savedUrl) {
-    // Show setup guide and poll for URL
-    await bridge.rebuildPageContainer(buildSetupGuide())
-    // The ring, while we wait.
-    //
-    // Everything below this point - the controller, the gestures, the way out -
-    // is behind an await that only resolves once a server address exists. So a
-    // wearer who has not set one up yet sat on this screen with no working
-    // input of any kind: not a tap, not a swipe, and no way to close the app.
-    // An Even Hub reviewer, who has no server at all, met exactly that and
-    // reported it as double-tap failing to bring up the exit dialog (#148).
-    //
-    // A double-tap is the way out of every screen in this app; it has to be the
-    // way out of the first one. Torn down as soon as the address arrives, so
-    // the real wiring below is the only handler from then on.
-    const noop = (): void => {}
-    const setupGate = setupEvents(bridge, {
-      onSwipeUp: noop,
-      onSwipeDown: noop,
-      onTap: noop,
-      onDoubleTap: () => {
-        trace('exit dialogue requested (setup guide double-tap)')
-        try {
-          void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {
-            if (ok === false) trace('shutDownPageContainer refused by host', 'error')
-          })
-        } catch (err) {
-          trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
-        }
-      },
-    })
-    try {
-      savedUrl = await new Promise<string>((resolve) => {
-        const poll = setInterval(async () => {
-          const url = await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)
-          if (url) {
-            clearInterval(poll)
-            resolve(url)
-          }
-        }, 2000)
-      })
-    } finally {
-      setupGate?.()
-    }
-  }
-
-  setBaseUrl(savedUrl)
-  flushLogs() // hub URL known — everything buffered so far can now be shipped
-  trace(`glasses mode: url=${savedUrl}`)
 
   // Draw one frame at a time.
   //
@@ -212,6 +163,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     }
   }
 
+  /** Set while the setup screen is up and a demo can be left. The controller
+   *  calls it through `exitDemo`; off that screen there is nothing to leave. */
+  let demoExit: (() => void) | null = null
+
   const platform: GlassesPlatform = {
     // startGlassesMode only runs with a real Even Hub bridge.
     onDevice: true,
@@ -242,6 +197,9 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
     transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
+    exitDemo() {
+      demoExit?.()
+    },
     requestExit() {
       // Mode 1 — the host's own confirmation, which the user can cancel. Only
       // if they confirm does `SYSTEM_EXIT_EVENT` arrive, and the cleanup goes
@@ -289,6 +247,80 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   }
   const controller = new GlassesController(platform)
   trace('controller constructed')
+  if (!savedUrl) {
+    // Show setup guide and poll for URL
+    await bridge.rebuildPageContainer(buildSetupGuide())
+    // The ring, while we wait.
+    //
+    // Everything below this point - the controller, the gestures, the way out -
+    // is behind an await that only resolves once a server address exists. So a
+    // wearer who has not set one up yet sat on this screen with no working
+    // input of any kind: not a tap, not a swipe, and no way to close the app.
+    // An Even Hub reviewer, who has no server at all, met exactly that and
+    // reported it as double-tap failing to bring up the exit dialog (#148).
+    //
+    // A double-tap is the way out of every screen in this app; it has to be the
+    // way out of the first one. Torn down as soon as the address arrives, so
+    // the real wiring below is the only handler from then on.
+    const noop = (): void => {}
+    let inDemo = false
+    /** Back to the setup screen. The demo is something the wearer stepped
+     *  into, so the gesture that leaves every other screen leaves this too -
+     *  and the exit dialogue is one more double-tap away, from there. */
+    const leaveDemo = (): void => {
+      if (!inDemo) return
+      inDemo = false
+      trace('demo left; setup guide restored')
+      controller.stopDemo()
+      void bridge.rebuildPageContainer(buildSetupGuide())
+    }
+    demoExit = leaveDemo
+    const setupGate = setupEvents(bridge, {
+      onSwipeUp: noop,
+      onSwipeDown: noop,
+      // A reviewer has no server and is not going to install one, so without
+      // this the app they were asked to judge is a paragraph of instructions.
+      // The demo is the same app on canned data - same screens, same
+      // gestures, same controller - and says DEMO on every one of them.
+      onTap: () => {
+        if (inDemo) return
+        inDemo = true
+        trace('demo started from the setup guide')
+        controller.startDemo()
+      },
+      onDoubleTap: () => {
+        // Inside the demo the controller owns this gesture; the gate only
+        // handles the setup screen's own.
+        if (inDemo) return
+        trace('exit dialogue requested (setup guide double-tap)')
+        try {
+          void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {
+            if (ok === false) trace('shutDownPageContainer refused by host', 'error')
+          })
+        } catch (err) {
+          trace(`shutDownPageContainer failed: ${err}`, 'error', (err as Error)?.stack)
+        }
+      },
+    })
+    try {
+      savedUrl = await new Promise<string>((resolve) => {
+        const poll = setInterval(async () => {
+          const url = await readStored((key) => bridge.getLocalStorage(key), URL_SUFFIX)
+          if (url) {
+            clearInterval(poll)
+            resolve(url)
+          }
+        }, 2000)
+      })
+    } finally {
+      setupGate?.()
+    }
+  }
+
+  setBaseUrl(savedUrl)
+  flushLogs() // hub URL known — everything buffered so far can now be shipped
+  trace(`glasses mode: url=${savedUrl}`)
+
   controller.connect()
   trace('ws connect issued')
   platform.render(controller.state)
