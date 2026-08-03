@@ -12,6 +12,7 @@ import { formatTokens, formatUsd } from "../../utils/format";
 import { nukeClientCache } from "../../utils/nuke-cache";
 import { Card, StatTile } from "./Card";
 import { DailyUsageChart } from "./DailyUsageChart";
+import { GroqSttUsageCard } from "./GroqSttUsageCard";
 import { HourlyHeatmap } from "./HourlyHeatmap";
 import { KimiDailyCostChart } from "./KimiDailyCostChart";
 import { ModelUsageChart } from "./ModelUsageChart";
@@ -85,6 +86,7 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 	const grokUsage = data?.grokUsage;
 	const kimiUsage = data?.kimiUsage;
 	const openRouterUsage = data?.openRouterUsage;
+	const groqSttUsage = data?.groqSttUsage;
 	// Claude is "available" when we have any actionable Claude data. The endpoint
 	// returns empty arrays / no-credentials errors on a Codex-only machine.
 	const claudeAvailable =
@@ -413,6 +415,9 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 					{/* Latency is on the local server's own card now — see
 					    NetworkLatencyInline. A card of its own spent 116px on two
 					    numbers, above a list of peers it did not describe. */}
+					{/* Not in the agent section above: Groq is not an agent, it is this
+					    server's own outbound spend on the glasses' voice input. */}
+					{groqSttUsage && <GroqSttUsageCard usage={groqSttUsage} />}
 					{sortedPeers.map((peer) => (
 						<PeerServerCard key={peer.id} peer={peer} />
 					))}
