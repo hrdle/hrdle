@@ -10,6 +10,7 @@ import {
 import {
   BAR_H,
   BODY_PAD,
+  HEADER_PAD,
   BODY_WIDTH,
   CARD_BORDER,
   CARD_BORDER_COLOR,
@@ -1381,7 +1382,7 @@ function buildSessionList(state: AppState): RebuildPageContainer {
 
   const list = new TextContainerProperty({
     xPosition: 4, yPosition: nHeight,
-    width: W - 8, height: H - 36 - nHeight,
+    width: W - 8, height: H - BAR_H - nHeight,
     borderWidth: 0,
     paddingLength: LIST_PAD,
     containerID: notice ? 2 : 1, containerName: 'list',
@@ -1390,10 +1391,10 @@ function buildSessionList(state: AppState): RebuildPageContainer {
   })
 
   const footer = new TextContainerProperty({
-    xPosition: 0, yPosition: H - 36,
-    width: W, height: 36,
+    xPosition: 0, yPosition: H - BAR_H,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: notice ? 3 : 2, containerName: 'footer',
     isEventCapture: 1,
     content: sessionListFooter(state),
@@ -1435,9 +1436,9 @@ function buildConversation(state: AppState): RebuildPageContainer {
 
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
-    width: W, height: 36,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
     content: headerText,
@@ -1447,7 +1448,7 @@ function buildConversation(state: AppState): RebuildPageContainer {
   // panel, the rule costs NOTICE_BORDER px where the dashes cost a 27px line.
   const notice = nLines > 0
     ? new TextContainerProperty({
-        xPosition: 4, yPosition: 36,
+        xPosition: 4, yPosition: BAR_H,
         width: W - 8, height: nHeight,
         borderWidth: NOTICE_BORDER,
         borderColor: NOTICE_BORDER_COLOR,
@@ -1460,20 +1461,20 @@ function buildConversation(state: AppState): RebuildPageContainer {
     : null
 
   const body = new TextContainerProperty({
-    xPosition: 4, yPosition: 36 + nHeight,
-    width: W - 8, height: H - 36 - 36 - nHeight,
+    xPosition: 4, yPosition: BAR_H + nHeight,
+    width: W - 8, height: H - 2 * BAR_H - nHeight,
     borderWidth: 0,
-    paddingLength: 6,
+    paddingLength: BODY_PAD,
     containerID: notice ? 3 : 2, containerName: 'body',
     isEventCapture: 0,
     content: bodyText,
   })
 
   const footer = new TextContainerProperty({
-    xPosition: 0, yPosition: H - 36,
-    width: W, height: 36,
+    xPosition: 0, yPosition: H - BAR_H,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: notice ? 4 : 3, containerName: 'footer',
     isEventCapture: 1,
     content: footerText,
@@ -1490,29 +1491,29 @@ function buildChoice(state: AppState): RebuildPageContainer {
   // Header - action required
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
-    width: W, height: 36,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
     content: choiceHeader(state),
   })
 
   const body = new TextContainerProperty({
-    xPosition: 4, yPosition: 36,
-    width: W - 8, height: H - 36 - 36,
+    xPosition: 4, yPosition: BAR_H,
+    width: W - 8, height: H - 2 * BAR_H,
     borderWidth: 0,
-    paddingLength: 6,
+    paddingLength: BODY_PAD,
     containerID: 2, containerName: 'body',
     isEventCapture: 0,
     content: choiceBody(state),
   })
 
   const footer = new TextContainerProperty({
-    xPosition: 0, yPosition: H - 36,
-    width: W, height: 36,
+    xPosition: 0, yPosition: H - BAR_H,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
     content: FOOTER_CHOICE,
@@ -1529,29 +1530,29 @@ function buildVoice(state: AppState): RebuildPageContainer {
 
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
-    width: W, height: 36,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
     content: headerText,
   })
 
   const body = new TextContainerProperty({
-    xPosition: 4, yPosition: 36,
-    width: W - 8, height: H - 36 - 36,
+    xPosition: 4, yPosition: BAR_H,
+    width: W - 8, height: H - 2 * BAR_H,
     borderWidth: 0,
-    paddingLength: 6,
+    paddingLength: BODY_PAD,
     containerID: 2, containerName: 'body',
     isEventCapture: 0,
     content: bodyText,
   })
 
   const footer = new TextContainerProperty({
-    xPosition: 0, yPosition: H - 36,
-    width: W, height: 36,
+    xPosition: 0, yPosition: H - BAR_H,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
     content: footerText,
@@ -1568,9 +1569,9 @@ function buildOverlay(state: AppState): RebuildPageContainer {
 
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
-    width: W, height: 36,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
     content: headerText,
@@ -1593,10 +1594,10 @@ function buildOverlay(state: AppState): RebuildPageContainer {
   })
 
   const footer = new TextContainerProperty({
-    xPosition: 0, yPosition: H - 36,
-    width: W, height: 36,
+    xPosition: 0, yPosition: H - BAR_H,
+    width: W, height: BAR_H,
     borderWidth: 0,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
     content: footerText,
@@ -1612,7 +1613,7 @@ export function buildSetupGuide(): RebuildPageContainer {
   const header = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
     width: W, height: 28,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 1, containerName: 'header',
     isEventCapture: 0,
     content: __PRODUCT_NAME__,
@@ -1624,7 +1625,7 @@ export function buildSetupGuide(): RebuildPageContainer {
     borderWidth: 1,
     borderColor: 6,
     borderRadius: 3,
-    paddingLength: 6,
+    paddingLength: BODY_PAD,
     containerID: 2, containerName: 'body',
     isEventCapture: 0,
     content: `${__PRODUCT_NAME__} not connected\n\nOpen this app from the Even Hub app on your phone and set the ${__PRODUCT_NAME__} URL\n\n1. Start ${__PRODUCT_NAME__} on your PC\n2. Enter the URL in the phone app\n3. Launch it again from the glasses`,
@@ -1633,10 +1634,12 @@ export function buildSetupGuide(): RebuildPageContainer {
   const footer = new TextContainerProperty({
     xPosition: 0, yPosition: H - 24,
     width: W, height: 24,
-    paddingLength: 4,
+    paddingLength: HEADER_PAD,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
-    content: 'Setup from phone app',
+    // The gesture is live here now, so the footer can promise it. Before, a
+    // wearer with no server had no way out of this screen at all.
+    content: 'Setup from phone app                                    dbl:exit',
   })
 
   return new RebuildPageContainer({

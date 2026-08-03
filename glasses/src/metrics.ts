@@ -22,13 +22,25 @@ export { getTextWidth as textWidth }
 
 export const PANEL_W = 576
 export const PANEL_H = 288
-/** Header and footer container height. */
-export const BAR_H = 36
+/**
+ * Header and footer container height.
+ *
+ * 32 rather than 36. The bar holds exactly one line either way - its inner
+ * height is `BAR_H - 2 * HEADER_PAD`, which stays at 28 against a 27px line -
+ * so the four pixels came out of padding that was doing nothing but sitting
+ * there. Two bars' worth, plus a tighter `BODY_PAD`, is what buys the
+ * conversation its eighth line: the band was 204px usable, which is seven rows
+ * and 15px of remainder.
+ */
+export const BAR_H = 32
 /** LVGL's fixed line height. */
 export const LINE_H = 27
 
-const HEADER_PAD = 4
-export const BODY_PAD = 6
+/** Inset inside the header and footer bars. Exported because the simulator's
+ *  painter draws to the same baselines and used to keep its own copy. */
+export const HEADER_PAD = 2
+/** Inset inside the body container. Exported for the same reason. */
+export const BODY_PAD = 2
 
 /** Usable width of the header (and footer) container. Holds exactly one line:
  *  28px of inner height against a 27px line, so anything that wraps is gone. */

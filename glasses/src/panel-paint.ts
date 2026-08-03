@@ -10,6 +10,8 @@ import {
   CARD_BORDER,
   CARD_BORDER_COLOR,
   CARD_RADIUS,
+  HEADER_PAD,
+  BODY_PAD,
   LINE_H,
   LIST_PAD,
   PANEL_H,
@@ -22,8 +24,10 @@ import {
 // Text starts below the container's own padding, and LVGL stacks lines at a
 // fixed 27px — drawing them 28px apart put the last of seven a full line's
 // eighth out of place.
-export const HEADER_PAD = 4
-export const BODY_PAD = 6
+// Both come from metrics.ts. They were declared here as literals, which meant
+// the panel's geometry lived in two files and only one of them was authoritative
+// - the same shape of fault as a field the mirror forgets to send.
+export { HEADER_PAD, BODY_PAD }
 /** Baseline within a 27px line box, for the font this canvas draws with. */
 export const BASELINE = 21
 export const HEADER_BASE = HEADER_PAD + BASELINE
