@@ -16,6 +16,9 @@
 export interface SetupGateDeps {
   /** Canned data, drawn by the real controller on the real screens. */
   startDemo(): void
+  /** Give the canned data back. Called when the gate closes, because the same
+   *  controller is about to show real workspaces on the same screens. */
+  stopDemo(): void
   /** Ring, forwarded once the demo is up. */
   tap(): void
   doubleTap(): void
@@ -41,21 +44,43 @@ export interface SetupGate {
   onDoubleTap(): void
   onSwipeUp(): void
   onSwipeDown(): void
+  /**
+   * The address arrived; this gate is done.
+   *
+   * The demo has to end here. The controller and the screens it was drawing on
+   * are the ones about to show real workspaces, and `demo` is a flag on that
+   * shared state - left set, every screen keeps the DEMO tail over live
+   * sessions, which is the app lying about what the wearer is looking at.
+   */
+  close(): void
   /** Whether the demo is up. For the caller's own bookkeeping and the tests. */
   inDemo(): boolean
 }
 
 export function createSetupGate(deps: SetupGateDeps): SetupGate {
   let inDemo = false
+  // Once shut, every gesture belongs to the app's own wiring. The host's
+  // listeners are removed at the same moment, so this is belt and braces - but
+  // a gate that could still start a demo is one tap away from a DEMO tail over
+  // live workspaces, which is the fault this flag exists to have ended.
+  let closed = false
   return {
     inDemo: () => inDemo,
+    close() {
+      closed = true
+      if (!inDemo) return
+      inDemo = false
+      deps.trace('demo left: a server address arrived')
+      deps.stopDemo()
+    },
     onSwipeUp() {
-      if (inDemo) deps.swipeUp()
+      if (inDemo && !closed) deps.swipeUp()
     },
     onSwipeDown() {
-      if (inDemo) deps.swipeDown()
+      if (inDemo && !closed) deps.swipeDown()
     },
     onTap() {
+      if (closed) return
       // A reviewer has no server and is not going to install one, so without
       // the demo the app they were asked to judge is a paragraph of
       // instructions. Once it is up the tap belongs to it.
@@ -69,6 +94,7 @@ export function createSetupGate(deps: SetupGateDeps): SetupGate {
       deps.startDemo()
     },
     onDoubleTap() {
+      if (closed) return
       // Inside the demo the controller owns this: it walks back out of a
       // conversation or a picker, and from the demo's own root it asks for the
       // exit dialogue — the same question a root asks anywhere.

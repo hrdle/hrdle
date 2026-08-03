@@ -258,6 +258,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     // the real wiring below is the only handler from then on.
     const gate = createSetupGate({
       startDemo: () => controller.startDemo(),
+      stopDemo: () => controller.stopDemo(),
       tap: () => controller.tap(),
       doubleTap: () => controller.doubleTap(),
       swipeUp: () => controller.swipeUp(),
@@ -292,6 +293,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       })
     } finally {
       setupGate?.()
+      // Not optional, and not only tidiness: `demo` is a flag on the state the
+      // real app is about to draw from, so a run that passed through the demo
+      // kept the DEMO tail over live workspaces for the rest of its life.
+      gate.close()
     }
   }
 
