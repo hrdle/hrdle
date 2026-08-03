@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.57] - 2026-08-04
+
+### Added
+- **The dashboard shows what the glasses have spent on Groq.** Today's
+  transcription count, the length of audio behind it, an estimated cost, a
+  fortnight of daily audio, and how much of each quota is left. It sits in the
+  server section rather than under the agent tabs - Groq is not an agent, it is
+  this server's own outbound spend, on the one input path with no keyboard
+  behind it
+  - Unlike every other usage panel here, this one is **recorded rather than
+    aggregated**. Kimi, Codex and Grok all leave transcripts on disk and can be
+    recomputed at any time; Groq leaves nothing - no usage endpoint, remaining
+    quota only as headers on a transcription response, and no way to ask
+    afterwards. A request not written down as it happened is gone, so
+    `/api/glasses/stt` records on the way past, before the response status is
+    acted on (a rejected request still spends quota, and the headers on a 429
+    are the ones worth having) and without awaiting it (the user is waiting on
+    a transcript, not on a tally)
+  - Two quotas, because Groq caps two things on two clocks: requests per day
+    and audio seconds per hour. A remaining bar is drawn only for a limit Groq
+    actually reported, so a missing bar reads as "not measured yet" rather than
+    "full"
+  - The cost is an estimate at the list price per hour of audio and is labelled
+    as one. Audio length is measured rather than guessed - raw PCM is a
+    division, a WAV body has its chunks walked, and anything that is not a
+    plain PCM WAV measures zero, because a guessed duration would be spent as
+    real money on the estimate
+  - History starts from this release. Nothing before it can be recovered
+
 ## [0.3.56] - 2026-08-04
 
 ### Fixed
