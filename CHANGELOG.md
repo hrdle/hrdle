@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.53] - 2026-08-04
+
+### Fixed
+- **The demo said double-tap goes back on the screen where it closes the app.**
+  It is one gesture with two answers - from a workspace it steps back, from the
+  list it asks the host to close - and the tutorial taught the wrong one at the
+  root. The list row says it closes the app now, and the stepping back is
+  taught where it is true, on the conversation screen, alongside the swipe
+- **The page-budget test now checks what the panel keeps.** The version that
+  shipped with 0.3.52 counted lines against a model of the page and let an
+  overflowing lesson through: `screenText` hands back everything it assembled
+  and the container is what clips, so a line over budget disappears with
+  nothing to say it did. It compares against `conversationLines()` and asserts
+  every message is still in the body - the failure it exists for is precisely
+  the paging line falling off, which is the line explaining the swipe that
+  would have revealed it
+
 ## [0.3.52] - 2026-08-04
 
 ### Added

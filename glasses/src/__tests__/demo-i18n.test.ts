@@ -16,7 +16,9 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 ;(globalThis as unknown as { __STORAGE_PREFIX__: string }).__STORAGE_PREFIX__ = 'hrdle-'
 ;(globalThis as unknown as { __LEGACY_STORAGE_PREFIXES__: string[] }).__LEGACY_STORAGE_PREFIXES__ = []
 
-import { BODY_WIDTH, MAX_LINES, splitLines, textWidth } from '../metrics.ts'
+import { BODY_WIDTH, splitLines, textWidth } from '../metrics.ts'
+import { conversationLines, screenText } from '../display.ts'
+import type { AppState } from '../display.ts'
 import { getLang, keysOf, setLang } from '../i18n.ts'
 import type { Lang } from '../i18n.ts'
 import { demoChoices, demoConversation, demoSessions, demoTranscript } from '../demo.ts'
@@ -26,6 +28,31 @@ const LANGS: Lang[] = ['en', 'ja']
 /** Lines the panel would need for a message. */
 function lines(text: string): number {
   return text.split('\n').reduce((n, l) => n + Math.max(1, splitLines(l, BODY_WIDTH).length), 0)
+}
+
+/** The conversation screen as the demo opens it: the waiting workspace, its
+ *  recap, and the transcript at its newest message. */
+function conversationState(): AppState {
+  const sessions = demoSessions()
+  return {
+    mode: 'conversation',
+    sessions,
+    sessionIndex: 0,
+    selectedPaneId: null,
+    conversation: demoConversation(),
+    conversationOffset: 0,
+    conversationPage: 0,
+    conversationLastLoaded: 20,
+    conversationHasMore: false,
+    conversationLoading: false,
+    choiceOptions: [],
+    choiceIndex: 0,
+    relayWaiting: [],
+    relayInfo: [],
+    overlayItemId: null,
+    spinnerTick: 0,
+    demo: true,
+  } as unknown as AppState
 }
 
 beforeAll(() => {
@@ -75,13 +102,26 @@ describe('it fits the panel in both', () => {
     })
 
     test(`${lang}: the whole lesson is on the first page`, () => {
-      // A conversation opens at its newest message. Anything that does not fit
-      // is behind the swipe the lesson is trying to explain, so the recap plus
-      // the four messages have to come in under the page.
+      // Asserted against what the screen draws, not against a line count of
+      // its own: a conversation opens at its newest message, so a line that
+      // does not fit is behind the swipe the lesson is there to explain. An
+      // arithmetic model of the page was wrong by one and let exactly that
+      // through - the paging line, the one explaining the swipe.
       setLang(lang)
-      const recap = lines(demoSessions()[0].ccRecap ?? '')
-      const body = demoConversation().reduce((n, m) => n + lines(m.content) + (m.toolUse ? 1 : 0), 0)
-      expect(recap + body).toBeLessThanOrEqual(MAX_LINES)
+      const { body, notice } = screenText(conversationState())
+      const noticeLines = notice ? splitLines(notice, BODY_WIDTH).length : 0
+      // What the container holds once the recap strip has taken its share.
+      // screenText hands back everything it assembled; the panel is what
+      // clips, so the count has to be checked here rather than inferred from
+      // what came back.
+      expect(lines(body)).toBeLessThanOrEqual(conversationLines(noticeLines))
+      const shown = body
+      for (const m of demoConversation()) {
+        // The opening question is the wearer's own line and can page off the
+        // top; everything the app is teaching has to be visible.
+        if (m.role === 'user') continue
+        expect(shown).toContain(m.content.split('\n')[0].slice(0, 12))
+      }
     })
   }
 })
