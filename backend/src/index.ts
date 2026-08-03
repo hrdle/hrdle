@@ -466,35 +466,7 @@ process.env[envVar('PORT')] = String(port);
 
 const serverUrl = `https://${tailscaleHostname}:${port}`;
 
-console.log(`${IDENTITY.productName} v${VERSION}`);
-console.log(`   URL: ${serverUrl}`);
-console.log(`   Static: ${EMBEDDED_MODE ? '(embedded)' : staticRoot}`);
-
-// The plaintext signpost, one port up. A phone that has only been told
-// `91.210.90` cannot reach the HTTPS port - the certificate is for the FQDN -
-// so this is what turns a short address into the real one.
-const discovery = startDiscoveryServer(port + 1, {
-  product: IDENTITY.productName,
-  version: VERSION,
-  url: serverUrl,
-});
-if (discovery) {
-  const short = tailscaleIp ? shortTailscaleIp(tailscaleIp) : null;
-  if (short) {
-    console.log(`   Short address: ${short}   (for the glasses app's setup screen)`);
-  }
-}
-
-// Build the dashboard payload once in the background so the first client to ask
-// is served from cache like every one after it. Everything downstream of this
-// serves stale-while-revalidate, which only helps once there is something to
-// serve — without a warm-up the first open of each server's life still pays the
-// full upstream round trip. Delayed so it does not compete with startup.
-setTimeout(() => {
-  getDashboard().catch((err) => console.error('Dashboard warm-up failed:', err));
-}, 3000);
-
-export default {
+const serverOptions = {
   port,
   hostname: host,
   // Allow large uploads (videos etc.) — 10GB
@@ -503,7 +475,7 @@ export default {
     cert: Bun.file(certPath),
     key: Bun.file(keyPath),
   },
-  async fetch(req: Request, server: { upgrade: (req: Request, opts?: { data: MuxData }) => boolean }) {
+  async fetch(req: Request, server: import('bun').Server<MuxData>) {
     const url = new URL(req.url);
 
     // Handle WebSocket upgrades for mux endpoint
@@ -553,3 +525,79 @@ export default {
     sendPings: true,
   },
 };
+
+/**
+ * Whether whatever holds the port is a running instance of this server.
+ *
+ * `/health` is unauthenticated precisely so a probe like this needs no token.
+ */
+async function isOwnServerRunning(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { status?: string };
+    return body?.status === 'ok';
+  } catch {
+    return false;
+  }
+}
+
+// Serve explicitly rather than through the default export: Bun's entry-point
+// serve turns a taken port into an uncaught exception with a stack pointing at
+// `bun:main`, which reads as a crash in Bun rather than as "the server you are
+// trying to start is already running". Almost every occurrence is exactly that.
+try {
+  Bun.serve(serverOptions);
+} catch (err) {
+  const code = (err as { code?: string } | null)?.code;
+  if (code === 'EADDRINUSE') {
+    // Nearly always our own service. Ask it: a server that answers /health is
+    // the one this command was about to start, so there is nothing to report
+    // beyond "it is already up" - and nothing went wrong, so it is not an error.
+    const running = await isOwnServerRunning(serverUrl);
+    if (running) {
+      console.log(`${IDENTITY.productName} is already running at ${serverUrl}`);
+      process.exit(0);
+    }
+    console.error(`error: port ${port} is already in use by another program.`);
+    console.error(`  Stop it, or start ${IDENTITY.productName} on another port with -p <port>.`);
+  } else {
+    console.error(
+      `error: could not start the server on port ${port}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  process.exit(1);
+}
+
+console.log(`${IDENTITY.productName} v${VERSION}`);
+console.log(`   URL: ${serverUrl}`);
+console.log(`   Static: ${EMBEDDED_MODE ? '(embedded)' : staticRoot}`);
+
+// The plaintext signpost, one port up. A phone that has only been told
+// `91.210.90` cannot reach the HTTPS port - the certificate is for the FQDN -
+// so this is what turns a short address into the real one. Started only after
+// the main port is ours: when a second instance loses the race for it, the
+// neighbouring port is taken by the same running server, and warning about it
+// would only bury the one error that matters.
+const discovery = startDiscoveryServer(port + 1, {
+  product: IDENTITY.productName,
+  version: VERSION,
+  url: serverUrl,
+});
+if (discovery) {
+  const short = tailscaleIp ? shortTailscaleIp(tailscaleIp) : null;
+  if (short) {
+    console.log(`   Short address: ${short}   (for the glasses app's setup screen)`);
+  }
+}
+
+// Build the dashboard payload once in the background so the first client to ask
+// is served from cache like every one after it. Everything downstream of this
+// serves stale-while-revalidate, which only helps once there is something to
+// serve — without a warm-up the first open of each server's life still pays the
+// full upstream round trip. Delayed so it does not compete with startup.
+setTimeout(() => {
+  getDashboard().catch((err) => console.error('Dashboard warm-up failed:', err));
+}, 3000);

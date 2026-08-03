@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Starting a second server printed a crash where one sentence would do.** The
+  server options were the entry point's default export, so Bun called
+  `Bun.serve` itself and a taken port arrived as an uncaught exception - a
+  stack pointing into `bun:main`, five lines of quoted Bun source, and
+  `EADDRINUSE` at the bottom. It reads as Bun falling over, and it is almost
+  always just the service already running. It serves explicitly now and asks
+  the port who holds it: our own `/health` answering means there is nothing to
+  do, so it says so in one line and exits 0. Anything else keeps the error and
+  the non-zero exit, without the stack. The discovery listener moved after the
+  main port is won, so a second start no longer warns about the neighbouring
+  port that the first one legitimately holds
+
 ## [0.3.55] - 2026-08-04
 
 ### Changed
