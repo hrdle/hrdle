@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.50] - 2026-08-03
+
+### Fixed
+- **The DEMO tail stayed on after the demo did not.** Entering a server address
+  while the demo was up closed the gate that handles the setup screen and left
+  the demo running: `demo` is a flag on the state the real app draws from, so
+  every live workspace carried DEMO for the rest of the run - the app saying
+  the wearer is looking at canned data while they are looking at their own
+  sessions. The gate now ends the demo as it closes, and a closed gate is inert
+  (its handlers could otherwise still start one, a tap after the real wiring
+  had taken over)
+
 ## [0.3.49] - 2026-08-03
 
 ### Added

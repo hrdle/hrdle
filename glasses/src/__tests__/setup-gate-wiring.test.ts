@@ -7,6 +7,8 @@
 //   v0.0.39 — wired a way out and no way around: tap and swipe went nowhere.
 //   v0.0.40 — wired a way into the demo and left the demo's own gestures
 //             going to a noop, so it drew a list and ignored the ring.
+//   v0.0.43 — closed the gate when the server address arrived and left the
+//             demo running, so every live workspace carried the DEMO tail.
 //
 // Every one of those is a case here now.
 
@@ -19,6 +21,7 @@ function deps(): SetupGateDeps & { calls: string[] } {
   return {
     calls,
     startDemo: () => calls.push('startDemo'),
+    stopDemo: () => calls.push('stopDemo'),
     tap: () => calls.push('tap'),
     doubleTap: () => calls.push('doubleTap'),
     swipeUp: () => calls.push('swipeUp'),
@@ -93,5 +96,40 @@ describe('once the demo is up', () => {
     expect(gate.inDemo()).toBe(false)
     gate.onTap()
     expect(gate.inDemo()).toBe(true)
+  })
+})
+
+describe('when the address arrives', () => {
+  test('closing takes the demo with it', () => {
+    // `demo` is a flag on the state the real app draws from: left set, the
+    // DEMO tail rides over live workspaces for the rest of the run.
+    const d = deps()
+    const gate = createSetupGate(d)
+    gate.onTap()
+    d.calls.length = 0
+    gate.close()
+    expect(d.calls).toEqual(['stopDemo'])
+    expect(gate.inDemo()).toBe(false)
+  })
+
+  test('closing a gate nobody stepped through does nothing', () => {
+    const d = deps()
+    const gate = createSetupGate(d)
+    gate.close()
+    expect(d.calls).toEqual([])
+  })
+
+  test('a closed gate does not hand gestures to the controller', () => {
+    // The real wiring owns the ring from here. Two handlers for one gesture is
+    // how a tap both opens a workspace and starts a demo.
+    const d = deps()
+    const gate = createSetupGate(d)
+    gate.onTap()
+    gate.close()
+    d.calls.length = 0
+    gate.onTap()
+    gate.onSwipeUp()
+    gate.onDoubleTap()
+    expect(d.calls).toEqual([])
   })
 })
