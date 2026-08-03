@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.46] - 2026-08-03
+
+### Added
+- **A demo mode on the glasses, so there is an app to judge before there is a
+  server.** An EVEN Hub reviewer has no herdr server and is not going to
+  install one, so the app they were asked to judge was a paragraph of setup
+  instructions and nothing else — and everything the rubric asks them to test
+  (does it answer the ring, does it survive five minutes locked, does every
+  gesture have a visible response) was unanswerable, because nothing was on
+  screen to answer it
+  - Tap on the setup screen starts the same app on canned data: the real
+    session list, conversation and pickers, driven by the real controller and
+    the real gestures. Nothing in it draws anything of its own — a second
+    implementation of every transition would drift, and the ones that drift are
+    always the ones nobody is looking at
+  - It does not pass for the real thing, or it would break the first-run rule
+    it exists to satisfy. Every screen carries `DEMO`, riding as the header's
+    tail — the part that never yields. Voice says outright that nothing was
+    sent, and nothing opens a socket
+  - Double-tap leaves the demo for the setup screen rather than the app: that
+    gesture leaves every screen here, and the demo is something the wearer
+    stepped into. The exit dialogue is one more double-tap away, from there
+
 ## [0.3.45] - 2026-08-03
 
 ### Fixed
