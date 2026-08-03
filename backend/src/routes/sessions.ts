@@ -19,7 +19,7 @@ import { KimiService } from '../services/kimi';
 import { KimiHistoryService } from '../services/kimi-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
-import { getAllSessionMetadata, setSessionTheme, setSessionTitle, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { getAllSessionMetadata, setSessionTheme, setSessionTitle, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
@@ -355,6 +355,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       firstMessageId: includeClaudeInfo ? ccSession?.firstMessageId : undefined,
       theme: sessionMetadata[s.id]?.theme,
       customTitle: sessionMetadata[s.id]?.title,
+      sttPrompt: sessionMetadata[s.id]?.sttPrompt,
       metrics: sessionMetrics,
       panes: s.panes ? await Promise.all(s.panes.map(async (p) => {
         const isSessionAgentOnPane = !!p.agent;
@@ -434,6 +435,9 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       firstMessageId: undefined,
       theme: lost.theme,
       customTitle: lost.customTitle,
+      // The workspace is gone but its metadata file is not, and a resumed
+      // session keeps its id - so the vocabulary it was given survives with it.
+      sttPrompt: sessionMetadata[lost.id]?.sttPrompt,
       agent: lost.agent,
       metrics: undefined,
       panes: undefined,
@@ -924,6 +928,37 @@ sessions.put('/:id/title', async (c) => {
     return c.json({ success: true, title: parsed.data.title });
   } catch (_error) {
     return c.json({ error: 'Failed to update title' }, 500);
+  }
+});
+
+// PUT /sessions/:id/stt-prompt - Words this session's speech is made of (#166).
+//
+// Kept short deliberately: Whisper's prompt is capped at 224 tokens and this
+// group leads the composition, so a long one would push out the glossary it is
+// meant to sit in front of.
+const UpdateSttPromptSchema = z.object({
+  sttPrompt: z.string().max(200).nullable(),
+});
+
+sessions.put('/:id/stt-prompt', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => ({}));
+  const parsed = UpdateSttPromptSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid STT prompt' }, 400);
+  }
+
+  const exists = await herdrService.workspaceExists(id);
+  if (!exists) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  try {
+    await setSessionSttPrompt(id, parsed.data.sttPrompt);
+    return c.json({ success: true, sttPrompt: parsed.data.sttPrompt });
+  } catch (_error) {
+    return c.json({ error: 'Failed to update STT prompt' }, 500);
   }
 });
 

@@ -65,12 +65,19 @@ export async function getConversation(
   }
 }
 
-/** Send raw 16-bit mono PCM to the server for Groq transcription. Returns the recognized text. */
-export async function transcribe(pcm: Uint8Array, sampleRate = 16000): Promise<string> {
+/** Send raw 16-bit mono PCM to the server for Groq transcription. Returns the recognized text.
+ *  `sessionId` names the workspace being spoken to, so the server can lead the
+ *  vocabulary bias with that session's own words (#166). */
+export async function transcribe(
+  pcm: Uint8Array,
+  sampleRate = 16000,
+  sessionId?: string
+): Promise<string> {
   // Copy into a tightly-sized ArrayBuffer so the fetch body types cleanly.
   const body = new Uint8Array(pcm.length)
   body.set(pcm)
-  const res = await fetch(`${baseUrl}/api/glasses/stt?sampleRate=${sampleRate}`, {
+  const session = sessionId ? `&session=${encodeURIComponent(sessionId)}` : ''
+  const res = await fetch(`${baseUrl}/api/glasses/stt?sampleRate=${sampleRate}${session}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: body.buffer,

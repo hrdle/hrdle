@@ -100,6 +100,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **KimiHistoryService** (`services/kimi-history.ts`) - Kimi session history + conversation reader: parses `wire.jsonl` (`turn.prompt`, `content.part` text, `tool.call`, `tool.result` loop events) into Claude-shaped conversation turns
 - **KimiUsageService** (`services/kimi-usage.ts`) - Aggregates Kimi token consumption (24h/7d windows, per-model) from `usage.record` records across all agent wires (`agents/main` + sub-agents) for the dashboard's Kimi tab. Kimi exposes no rate-limit windows or plan data locally, so totals are all it can show. Also prices each window/model in USD when the model resolves to OpenRouter — cost is omitted (never zeroed) for unpriceable models
 - **KimiConfigService** (`services/kimi-config.ts`) - Parses `~/.kimi-code/config.toml` (via `Bun.TOML`) to map a `usage.record` model alias (`k3`) to its provider-side id (`moonshotai/kimi-k3`) and to supply the OpenRouter API key. Only OpenRouter-backed aliases are priceable
+- **GroqSttUsageService** (`services/groq-stt-usage.ts`) - Groq speech-to-text consumption by the glasses, **recorded rather than aggregated**: Groq has no usage endpoint and reports remaining quota only in `x-ratelimit-*` headers on a transcription response, so a request not written down as it happened is unrecoverable. `routes/glasses.ts` records on the way past (before the status is acted on - a 429 still spends quota - and without awaiting it), into `<dataDir>/groq-stt-usage.json`. Tracks requests (capped per day) and audio seconds (capped per hour, and what the API is priced on) separately, because the two ceilings empty on different clocks. Cost is an estimate at the list price per hour of audio, never a billed figure
 - **OpenRouterPricingService / OpenRouterAccountService** (`services/openrouter.ts`) - Pay-as-you-go cost reporting: list prices from the public `/api/v1/models` (no auth, 24h cache) drive *estimated* per-window costs, while `/api/v1/key` + `/api/v1/credits` (keyed, 60s cache, 5min failure backoff) report OpenRouter's *billed* daily/weekly/monthly spend and credit balance. Estimates use rolling windows, OpenRouter's are calendar windows, so the two never match exactly
 - **ConversationWatcher** (`services/conversation-watcher.ts`) - Watches Claude Code / Codex `.jsonl` files and emits conversation updates to subscribed WebSocket clients
 - **HookStatusService** (`services/hook-status.ts`) - Reports whether the hooks Hrdle still needs are installed (`Stop` for notification text, `PostToolUse`/`AskUserQuestion` for the question's tool name). Indicator transitions come from herdr, not hooks
@@ -130,6 +131,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/prompt` - Send a prompt to the session's agent
 - `PUT /:id/theme` - Set session color theme
 - `PUT /:id/title` - Set session custom title
+- `PUT /:id/stt-prompt` - Set the words this session's speech is made of (leads its STT vocabulary bias)
 - `POST /:id/move` - Move a session to `{ index }` in the display order (writes straight through to herdr's workspace order — hrdle stores no order of its own)
 - `GET /prompts/search` - Search prompt history
 
@@ -421,13 +423,27 @@ The G2's SDK only hands over raw PCM, so transcription happens on the server at
 `whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
 `services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
-**the user's custom titles, then the glossary, then herdr's labels**, filled up
-to what fits Whisper's 224-token ceiling (190 characters). That order is the
-point of the design: as workspaces multiply, names alone eat the budget and
-`release` - a word said several times a day - falls out. Labels go last because
-Latin-script names were never the ones being misheard. `HRDLE_STT_PROMPT=off`
-disables it, and any other value replaces it (for A/B testing; the variable name
-is composed by `envVar()` from `binaryName` in `identity.json`).
+**the speaking session's own words, then the user's custom titles, then the
+glossary, then herdr's labels**, filled up to what fits Whisper's 224-token
+ceiling (190 characters). That order is the point of the design: as workspaces
+multiply, names alone eat the budget and `release` - a word said several times a
+day - falls out. Labels go last because Latin-script names were never the ones
+being misheard. `HRDLE_STT_PROMPT=off` disables it, and any other value replaces
+it (for A/B testing; the variable name is composed by `envVar()` from
+`binaryName` in `identity.json`).
+
+The first group is per session (#166): `?session=<workspace id>` on the STT
+request names who is speaking, and `PUT /api/sessions/:id/stt-prompt` stores a
+short phrase against that session in `SessionMetadataService`, beside its theme
+and title. The glasses send it from `voiceTarget.sessionId`, which is the
+workspace the reply is going to. Its words go **before the glossary but do not
+replace it** - the glossary is what is said every day in every session, and a
+session that spent the whole budget on its own vocabulary would start mishearing
+`リリース` again. A session with no prompt of its own composes exactly as before.
+
+Note that the composed line is what a session prompt joins. Either *override* -
+the saved setting or `HRDLE_STT_PROMPT` - still means "send exactly this" and
+skips the composition, session words included.
 
 The key, the language and that prompt are also settings, editable from the
 glasses app's own web screens (the phone companion UI and the simulator) and

@@ -150,6 +150,11 @@ export interface SessionResponse {
   agent?: AgentProvider;
   theme?: SessionTheme;
   customTitle?: string;
+  /**
+   * Words this session's speech is made of, leading the vocabulary bias sent
+   * with its transcriptions (#166). Absent when it has none of its own.
+   */
+  sttPrompt?: string;
 }
 
 export interface SessionListResponse {

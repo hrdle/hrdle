@@ -170,6 +170,7 @@ function SessionMenuDialog({
 	session,
 	onChangeTheme,
 	onChangeTitle,
+	onChangeSttPrompt,
 	onCreateTab,
 	onDelete,
 	onCancel,
@@ -177,6 +178,7 @@ function SessionMenuDialog({
 	session: SessionResponse;
 	onChangeTheme: (theme: SessionTheme | null) => void;
 	onChangeTitle?: (title: string | null) => void;
+	onChangeSttPrompt?: (prompt: string | null) => void;
 	onCreateTab?: () => void;
 	onDelete: () => void;
 	onCancel: () => void;
@@ -184,6 +186,7 @@ function SessionMenuDialog({
 	const { t } = useTranslation();
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [titleValue, setTitleValue] = useState(session.customTitle || "");
+	const [sttPromptValue, setSttPromptValue] = useState(session.sttPrompt || "");
 
 	if (showDeleteConfirm) {
 		return (
@@ -289,6 +292,42 @@ function SessionMenuDialog({
 								{t("common.save")}
 							</button>
 						</div>
+					</div>
+				)}
+
+				{/* Speech-to-text vocabulary. This session's own words lead the bias
+				    sent with its transcriptions; the shared glossary follows, so a
+				    short list is worth more than a long one (#166). */}
+				{onChangeSttPrompt && (
+					<div className="mb-4">
+						<p className="text-sm text-th-text-secondary mb-2">
+							{t("session.sttPrompt")}
+						</p>
+						<div className="flex gap-2">
+							<input
+								type="text"
+								value={sttPromptValue}
+								onChange={(e) => setSttPromptValue(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") {
+										onChangeSttPrompt(sttPromptValue.trim() || null);
+									}
+								}}
+								placeholder={t("session.sttPromptPlaceholder")}
+								maxLength={200}
+								className="flex-1 bg-th-bg border border-th-border rounded px-2 py-1 text-sm text-th-text placeholder-th-text-muted focus:outline-none focus:border-blue-500"
+							/>
+							<button
+								type="button"
+								onClick={() => onChangeSttPrompt(sttPromptValue.trim() || null)}
+								className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+							>
+								{t("common.save")}
+							</button>
+						</div>
+						<p className="mt-1 text-[11px] text-th-text-muted">
+							{t("session.sttPromptHint")}
+						</p>
 					</div>
 				)}
 
@@ -2129,6 +2168,26 @@ export function WorkspaceList({
 		}
 	};
 
+	const handleMenuChangeSttPrompt = async (sttPrompt: string | null) => {
+		if (sessionForMenu) {
+			try {
+				await sessionFetch(
+					sessionForMenu as ExtendedSessionResponse,
+					peers,
+					`/api/workspaces/${sessionForMenu.id}/stt-prompt`,
+					{
+						method: "PUT",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ sttPrompt }),
+					},
+				);
+				setSessionForMenu(null);
+			} catch (err) {
+				console.error("Failed to update STT prompt:", err);
+			}
+		}
+	};
+
 	const handleMenuClose = () => {
 		setSessionForMenu(null);
 	};
@@ -2580,6 +2639,7 @@ export function WorkspaceList({
 					session={sessionForMenu}
 					onChangeTheme={handleMenuChangeTheme}
 					onChangeTitle={handleMenuChangeTitle}
+					onChangeSttPrompt={handleMenuChangeSttPrompt}
 					onCreateTab={() => {
 						handleTabAction(sessionForMenu.id, "create");
 						handleMenuClose();

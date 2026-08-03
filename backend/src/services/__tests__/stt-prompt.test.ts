@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildSttPrompt } from '../stt-prompt';
+import { buildSttPrompt, sessionPromptTerms } from '../stt-prompt';
 
 /**
  * The prompt is the only thing telling Whisper that `herdr` is a word and that
@@ -66,5 +66,41 @@ describe('buildSttPrompt', () => {
   test('the whole prompt stays inside the cap', () => {
     const titles = Array.from({ length: 40 }, (_, i) => `ワークスペース名前${i}`);
     expect(buildSttPrompt({ titles }).length).toBeLessThanOrEqual(190);
+  });
+
+  test("the speaking session's own words come first", () => {
+    const prompt = buildSttPrompt(
+      { session: ['音声認識', 'Groq'], titles: ['グラス開発'] },
+      ['ペイン'],
+    );
+    expect(prompt).toBe('音声認識、Groq、グラス開発、ペイン');
+  });
+
+  test('a session vocabulary does not cost the glossary', () => {
+    // The point of putting the session ahead of the glossary is that it beats
+    // the *names*, not the words that get misheard every day.
+    const prompt = buildSttPrompt({
+      session: ['温泉式', '文字起こし', 'ハルシネーション'],
+      titles: ['グラス開発', '2脚ロボ開発'],
+      labels: Array.from({ length: 10 }, (_, i) => `hrdle-work-${i}`),
+    });
+    for (const term of ['温泉式', 'リリース', 'マージ', 'リベース']) {
+      expect(prompt).toContain(term);
+    }
+  });
+});
+
+describe('sessionPromptTerms', () => {
+  test('splits a written phrase into whole terms', () => {
+    expect(sessionPromptTerms('音声認識、Groq, ダッシュボード')).toEqual([
+      '音声認識',
+      'Groq',
+      'ダッシュボード',
+    ]);
+  });
+
+  test('is empty for a session that has none', () => {
+    expect(sessionPromptTerms(undefined)).toEqual([]);
+    expect(sessionPromptTerms('  、 ,')).toEqual([]);
   });
 });
