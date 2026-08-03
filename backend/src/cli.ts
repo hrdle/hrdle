@@ -24,7 +24,7 @@ const VERSION = pkg.version;
 const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface CliOptions {
-  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'qr';
+  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address';
   port: number;
   host: string;
   password?: string;
@@ -59,8 +59,9 @@ ${t('cli.usage')}
   ${IDENTITY.binaryName} uninstall           Remove service registration
   ${IDENTITY.binaryName} update [options]    Check and apply updates
   ${IDENTITY.binaryName} status              Show service status
-  ${IDENTITY.binaryName} qr                  Print this server's URL as a QR code, for the
-                            phone app's Connect step
+  ${IDENTITY.binaryName} address             Print where this server can be reached: the short
+                            address for the glasses app's Connect step, and the
+                            URL for a browser (${IDENTITY.binaryName} qr is the old name)
   ${IDENTITY.binaryName} notify              Send hook event (reads JSON from stdin)
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
@@ -138,8 +139,12 @@ export function parseArgs(args: string[]): CliOptions {
       case 'status':
         options.command = 'status';
         break;
+      // `qr` is the old name. It used to draw a QR code; nothing could read
+      // one, so it prints the address now and stays only so that the command
+      // people have in their shell history still works.
+      case 'address':
       case 'qr':
-        options.command = 'qr';
+        options.command = 'address';
         break;
       case 'notify':
         options.command = 'notify';
@@ -333,8 +338,8 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
       await runStatus();
       return 'exit';
 
-    case 'qr':
-      await runQr(options.port);
+    case 'address':
+      await runAddress(options.port);
       return 'exit';
 
     case 'notify':
@@ -445,9 +450,9 @@ async function runStatus(): Promise<void> {
   await showStatus();
 }
 
-async function runQr(port: number): Promise<void> {
-  const { showQr } = await import('./commands/qr');
-  await showQr(port);
+async function runAddress(port: number): Promise<void> {
+  const { showAddress } = await import('./commands/address');
+  showAddress(port);
 }
 
 async function runDebug(options: CliOptions): Promise<void> {

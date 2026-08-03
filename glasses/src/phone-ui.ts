@@ -40,7 +40,6 @@ import {
   setBaseUrl,
 } from './api.ts'
 import type { Bridge } from './display.ts'
-import { scanQr } from './qr-scan.ts'
 import { resolveAddress } from './resolve-host.ts'
 import { clearStored, clearStoredSync, readStored, readStoredSync, storageKey, writeStoredSync } from './storage.ts'
 
@@ -181,12 +180,6 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
       case 'hrdle:clear-url':
         await store.clear(URL_SUFFIX)
         break
-
-      case 'hrdle:scan-qr': {
-        const outcome = await scanQr()
-        reply({ type: 'hrdle:qr-result', ...outcome })
-        break
-      }
 
       case 'hrdle:resolve-host': {
         // Typed short, resolved here. The guide cannot make this request itself

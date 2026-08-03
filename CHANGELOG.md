@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.54] - 2026-08-04
+
+### Changed
+- **`hrdle qr` is `hrdle address`, and prints text instead of drawing a code.**
+  The short form for the glasses app's setup screen comes first, the browser
+  URL under it. The old name still works - it is in people's shell history.
+  `install.sh` ends with it, falling back to `qr` so that a fresh install
+  between this commit and the release that carries it does not end in silence
+
+### Removed
+- **The QR scanner, and the code it was meant to read.** The glasses app's
+  WebView refuses a camera to web content, so the one screen that needed to
+  scan never could - measured on device, and the reason the setup screen has
+  asked for a nine-character address since. `qr-scan.ts`, `qr-decode.ts`,
+  `photo-capture.ts` and `camera-probe.ts` were kept anyway, for the day the
+  host implements `onPermissionRequest`. Keeping them cost more than that day
+  is worth: four modules, the jsQR dependency, two blocks of translated
+  strings, and - the expensive part - a story told across the app, the setup
+  site and the installer about a code that nothing could read. The history has
+  them if the platform ever changes
+
 ## [0.3.53] - 2026-08-04
 
 ### Fixed

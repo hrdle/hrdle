@@ -651,18 +651,22 @@ So **the setup screen asks for a short address instead of scanning anything**
 accept typing, so the job was making the typing short: nine characters rather
 than forty-three.
 
-`qr-scan.ts`, `qr-decode.ts`, `photo-capture.ts` and `camera-probe.ts` are still
-here with **no route to them**. Deliberate: the moment the host implements
-`onPermissionRequest` they work, and the photo decoder is better than what it
-replaced (BarcodeDetector first, then jsQR over the full frame, a centre crop
-and native resolution — a 150px code in a 4000x3000 photo reads from the crop
-and fails everything else). `camera-probe.ts` is the screen that produced the
-table above; wire a button to it again before re-testing any of this rather than
-starting the investigation over.
+**The scanner is gone, and so is the code it read.** `qr-scan.ts`,
+`qr-decode.ts`, `photo-capture.ts` and `camera-probe.ts` were kept for a while
+with no route to them, on the theory that they would work the day the host
+implements `onPermissionRequest`. Keeping them cost more than that day is worth:
+four modules, a jsQR dependency, two blocks of translated strings and — the
+expensive part — a story told across the app, the setup site and the installer
+about a code that nothing could read. `hrdle qr` is now `hrdle address` (the old
+name still works) and prints two lines of text instead of drawing anything.
 
-The QR code `hrdle qr` prints still has a job — read with the phone's **own**
-camera app it opens the server in a browser. That is a different thing from
-setting the glasses up.
+They are in the history, deleted together, if the platform ever changes: the
+decoder was better than what it replaced (BarcodeDetector first, then jsQR over
+the full frame, a centre crop and native resolution — a 150px code in a
+4000x3000 photo reads from the crop and fails everything else), and
+`camera-probe.ts` is the screen that produced the table above. Recover that
+commit before re-testing any of this rather than starting the investigation
+over.
 
 ### What `app.json` asks for
 
