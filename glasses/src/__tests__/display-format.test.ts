@@ -19,7 +19,7 @@ import { listRows, rowCursor, selectableRows } from '../display.ts'
 import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
 import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
-import { LIST_PAD, MAX_LINES } from '../metrics.ts'
+import { BODY_PAD, HEADER_PAD, LIST_PAD, MAX_LINES } from '../metrics.ts'
 
 describe('sanitizeForG2: tables', () => {
   const table = [
@@ -794,14 +794,19 @@ describe('workspace and pane list', () => {
     expect(screenText(st(1)).body).not.toMatch(/[├└]/)
   })
 
-  test('the list gets the row the header used to occupy, and the one the padding held', () => {
-    // Dropping the header bought the first. The second was already paid for
-    // and going to waste: at BODY_PAD the container had 240px for rows of 27,
-    // which is eight rows and 24px of remainder - a gap above the footer wide
-    // enough that it got asked about. LIST_PAD leaves 248px, so the ninth row
-    // fits with 5px to spare rather than missing by 3.
-    expect(LIST_LINES).toBe(MAX_LINES + 2)
+  test('the list gets the row the header used to occupy', () => {
+    // Dropping the header buys one. The body's own band is 288 - 2*BAR_H,
+    // and the list's is that plus a whole bar, which at BAR_H 32 and a 27px
+    // line is exactly one more row - 220px against 252px.
+    expect(LIST_LINES).toBe(MAX_LINES + 1)
     expect(LIST_LINES * LINE_H).toBeLessThanOrEqual(PANEL_H - BAR_H - 2 * LIST_PAD)
+    expect(MAX_LINES * LINE_H).toBeLessThanOrEqual(PANEL_H - 2 * BAR_H - 2 * BODY_PAD)
+  })
+
+  test('a bar still holds exactly one line', () => {
+    // The four pixels that bought the conversation its eighth line came out of
+    // padding, not out of the line box: inner height is unchanged at 28.
+    expect(BAR_H - 2 * HEADER_PAD).toBeGreaterThanOrEqual(LINE_H)
   })
 
   test('the footer carries the position and the clock', () => {
