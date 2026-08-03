@@ -16,17 +16,15 @@ import { screenText } from '../display.ts'
 import { demoChoices, demoConversation, demoSessions } from '../demo.ts'
 import type { GlassesPlatform } from '../controller.ts'
 
-function platform(): GlassesPlatform & { exits: number; demoExits: number } {
+function platform(): GlassesPlatform & { exits: number } {
   const p = {
     onDevice: false,
     exits: 0,
-    demoExits: 0,
     render() {},
     renderHeader() {},
     requestExit() { p.exits++ },
-    exitDemo() { p.demoExits++ },
   }
-  return p as unknown as GlassesPlatform & { exits: number; demoExits: number }
+  return p as unknown as GlassesPlatform & { exits: number }
 }
 
 describe('the demo', () => {
@@ -55,16 +53,15 @@ describe('the demo', () => {
     expect(screenText(c.state).header).toContain('DEMO')
   })
 
-  test('the root double-tap goes back to setup, not out of the app', () => {
-    // The demo is something the wearer stepped into, so the gesture that
-    // leaves every other screen leaves this too. The exit dialogue is one more
-    // double-tap away, from the setup screen.
+  test('the root double-tap asks the same question it asks anywhere', () => {
+    // A demo root is still a root. Routing it somewhere else would make the
+    // one screen a reviewer reaches first the one place the gesture means
+    // something other than what it means everywhere else.
     const p = platform()
     const c = new GlassesController(p)
     c.startDemo()
     c.doubleTap()
-    expect(p.demoExits).toBe(1)
-    expect(p.exits).toBe(0)
+    expect(p.exits).toBe(1)
   })
 
   test('leaving takes the canned data with it', () => {
@@ -75,7 +72,7 @@ describe('the demo', () => {
     expect(c.state.sessions).toEqual([])
     expect(c.state.conversation).toEqual([])
     expect(c.state.demo).toBe(false)
-    // And a real root double-tap is the exit dialogue again.
+    // And the root double-tap is what it always was.
     c.doubleTap()
     expect(p.exits).toBe(1)
   })

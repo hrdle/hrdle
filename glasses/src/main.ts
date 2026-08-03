@@ -163,10 +163,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     }
   }
 
-  /** Set while the setup screen is up and a demo can be left. The controller
-   *  calls it through `exitDemo`; off that screen there is nothing to leave. */
-  let demoExit: (() => void) | null = null
-
   const platform: GlassesPlatform = {
     // startGlassesMode only runs with a real Even Hub bridge.
     onDevice: true,
@@ -197,9 +193,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
     transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
-    exitDemo() {
-      demoExit?.()
-    },
     requestExit() {
       // Mode 1 — the host's own confirmation, which the user can cancel. Only
       // if they confirm does `SYSTEM_EXIT_EVENT` arrive, and the cleanup goes
@@ -262,36 +255,35 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     // A double-tap is the way out of every screen in this app; it has to be the
     // way out of the first one. Torn down as soon as the address arrives, so
     // the real wiring below is the only handler from then on.
-    const noop = (): void => {}
     let inDemo = false
-    /** Back to the setup screen. The demo is something the wearer stepped
-     *  into, so the gesture that leaves every other screen leaves this too -
-     *  and the exit dialogue is one more double-tap away, from there. */
-    const leaveDemo = (): void => {
-      if (!inDemo) return
-      inDemo = false
-      trace('demo left; setup guide restored')
-      controller.stopDemo()
-      void bridge.rebuildPageContainer(buildSetupGuide())
-    }
-    demoExit = leaveDemo
     const setupGate = setupEvents(bridge, {
-      onSwipeUp: noop,
-      onSwipeDown: noop,
+      onSwipeUp: () => { if (inDemo) controller.swipeUp() },
+      onSwipeDown: () => { if (inDemo) controller.swipeDown() },
       // A reviewer has no server and is not going to install one, so without
       // this the app they were asked to judge is a paragraph of instructions.
       // The demo is the same app on canned data - same screens, same
       // gestures, same controller - and says DEMO on every one of them.
       onTap: () => {
-        if (inDemo) return
+        if (inDemo) {
+          controller.tap()
+          return
+        }
         inDemo = true
         trace('demo started from the setup guide')
+        // Same reason as above, in the other direction: the guide was not
+        // drawn through `updateDisplay`, so it has to be told the panel is
+        // not what it last saw.
+        invalidatePanel()
         controller.startDemo()
       },
       onDoubleTap: () => {
-        // Inside the demo the controller owns this gesture; the gate only
-        // handles the setup screen's own.
-        if (inDemo) return
+        // Inside the demo the controller owns this gesture: it walks back out
+        // of a conversation or a picker, and from the demo's own root it calls
+        // `exitDemo`, which lands back here.
+        if (inDemo) {
+          controller.doubleTap()
+          return
+        }
         trace('exit dialogue requested (setup guide double-tap)')
         try {
           void Promise.resolve(bridge.shutDownPageContainer(1)).then((ok) => {

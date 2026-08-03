@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.47] - 2026-08-03
+
+### Fixed
+- **The demo answers the ring.** 0.3.46 drew the demo's session list and then
+  ignored every gesture. The gate that handles the setup screen is still the
+  only handler while the demo runs — the real wiring sits below an await that
+  has not resolved — and it was passing swipes and taps to a noop, because it
+  had been written for a screen with nothing on it
+  - Double-tap on the demo's root is the exit dialogue, the same question a
+    root asks anywhere. Routing it back to the setup screen would have made the
+    one screen a reviewer reaches first the one place the gesture means
+    something else
+  - The setup guide is drawn straight at the bridge, behind `updateDisplay`'s
+    back, so its record of the panel is wrong on both crossings. Without
+    invalidating it, a second visit would upgrade the guide's containers in
+    place — same ids, different geometry — and draw a list into a screen shaped
+    like a paragraph
+
 ## [0.3.46] - 2026-08-03
 
 ### Added
