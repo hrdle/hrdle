@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
-import { SPINNER_INTERVAL_MS, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, noticeScrollSteps, rowCursor } from './display.ts'
+import { SPINNER_INTERVAL_MS, choiceRows, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { WsClient } from './ws-client.ts'
@@ -922,19 +922,36 @@ export class GlassesController {
 
   private onChoiceAction(action: RingAction): Promise<void> {
     const st = this.state
+    const rows = choiceRows(st).length
     switch (action) {
-      case 'swipeUp':
-        this.sendChoiceKey('\x1b[A')
-        if (st.choiceIndex > 0) st.choiceIndex--
+      case 'swipeUp': {
+        if (st.choiceIndex <= 0) return Promise.resolve()
+        // Moving off the send row is a move in this app only: the pane's cursor
+        // never left the last option, so sending it an arrow would walk it one
+        // option further than the wearer can see.
+        if (!onChoiceSend(st)) this.sendChoiceKey('\x1b[A')
+        st.choiceIndex--
         this.render()
         return Promise.resolve()
-      case 'swipeDown':
-        this.sendChoiceKey('\x1b[B')
-        if (st.choiceIndex < st.choiceOptions.length - 1) st.choiceIndex++
+      }
+      case 'swipeDown': {
+        if (st.choiceIndex >= rows - 1) return Promise.resolve()
+        st.choiceIndex++
+        if (!onChoiceSend(st)) this.sendChoiceKey('\x1b[B')
         this.render()
         return Promise.resolve()
+      }
       case 'tap':
-        // Enter confirms the TUI selection.
+        // What a tap does depends on the row, and the row says which. Checking
+        // an option is a space, exactly as the TUI expects; the send row is the
+        // Enter that a single-pick list gets from any row.
+        if (st.choiceMulti && !onChoiceSend(st)) {
+          this.sendChoiceKey(' ')
+          // The pane redraws with the box ticked; read it back so the panel
+          // shows what was actually recorded rather than what was asked for.
+          void this.refreshChoices()
+          return Promise.resolve()
+        }
         this.sendChoiceKey('\r')
         this.answeredItem(this.choiceTarget?.itemId)
         st.mode = 'conversation'
@@ -942,11 +959,30 @@ export class GlassesController {
         void this.loadConversation().then(() => this.render())
         return Promise.resolve()
       case 'doubleTap':
-        // Cancel without answering — the item stays queued.
+        // Cancel without answering — the item stays queued. The same gesture
+        // does the same thing on every screen, which is why the multi-select's
+        // send is a row and not this.
         st.mode = 'conversation'
         this.render()
         return Promise.resolve()
     }
+  }
+
+  /** Re-read the pane after a toggle, so the boxes on the panel are the pane's
+   *  and not a guess. Leaves the cursor where it is; a failed read leaves the
+   *  previous options up rather than emptying the screen under the wearer. */
+  private async refreshChoices(): Promise<void> {
+    const t = this.choiceTarget
+    if (!t) return
+    try {
+      const fresh = await this.scrapeChoices(t.sessionId)
+      if (fresh.length === this.state.choiceOptions.length) {
+        this.state.choiceOptions = fresh
+      }
+    } catch {
+      // Keep what is on screen.
+    }
+    this.render()
   }
 
   /** Choice keys go to the item's sessionId+paneId. REST needs no subscription
@@ -1141,6 +1177,7 @@ export class GlassesController {
   private enterChoice(options: string[], target: ReplyTarget): void {
     this.choiceTarget = target
     this.state.choiceOptions = options
+    this.state.choiceMulti = looksMultiSelect(options)
     this.state.choiceIndex = 0
     this.state.choiceSessionName = this.sessionLabel(target.sessionId)
     this.state.mode = 'choice'
