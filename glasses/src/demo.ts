@@ -17,11 +17,18 @@
 // explains the picker. The panel is small and the ring has four gestures;
 // nothing else on screen can carry that explanation.
 //
+// The words themselves live in `i18n.ts`, in both languages, and the language
+// is the phone's own (a saved choice first, then `navigator.languages`). This
+// is the one screen a wearer meets before anything is set up, so there is
+// nowhere to go and change a setting first - and a tutorial in a language the
+// reader does not have is not a tutorial.
+//
 // It does not pretend to be connected. Every screen carries DEMO, and the
 // actions that would reach an agent say what they would have done instead.
 // A demo that could be mistaken for the real thing would fail the same
 // first-run rule this exists to satisfy.
 
+import { t } from './i18n.ts'
 import type { ConversationMessage, Session } from './types.ts'
 
 /**
@@ -42,42 +49,42 @@ export function demoSessions(): Session[] {
     {
       id: 'demo-open',
       agentSessionId: 'demo-open-thread',
-      name: 'Tap opens this one',
+      name: t('demo.open.name'),
       state: 'idle',
       // The state that makes the row worth opening: it is holding a question.
       indicatorState: 'waiting_input',
       agent: 'claude',
-      ccRecap: 'The agent\'s last line. It is waiting for an answer.',
+      ccRecap: t('demo.open.recap'),
     },
     {
       id: 'demo-working',
       agentSessionId: 'demo-working-thread',
-      name: 'Swipe moves the cursor',
+      name: t('demo.working.name'),
       state: 'working',
       indicatorState: 'processing',
       agent: 'claude',
-      ccRecap: 'Working now. The bar after a name is context left.',
+      ccRecap: t('demo.working.recap'),
     },
     {
       id: 'demo-panes',
       agentSessionId: 'demo-panes-thread',
-      name: 'A workspace can hold panes',
+      name: t('demo.panes.name'),
       state: 'idle',
       indicatorState: 'completed',
       agent: 'codex',
       panes: [
-        { paneId: '%1', label: 'they are listed under it', agent: 'codex', indicatorState: 'completed' },
-        { paneId: '%2', label: 'each with its own agent', agent: 'claude', indicatorState: 'processing' },
+        { paneId: '%1', label: t('demo.panes.pane1'), agent: 'codex', indicatorState: 'completed' },
+        { paneId: '%2', label: t('demo.panes.pane2'), agent: 'claude', indicatorState: 'processing' },
       ],
     },
     {
       id: 'demo-back',
       agentSessionId: 'demo-back-thread',
-      name: 'Double-tap goes back',
+      name: t('demo.back.name'),
       state: 'idle',
       indicatorState: 'completed',
       agent: 'claude',
-      ccRecap: 'It leaves every screen, and offers to close the app from here.',
+      ccRecap: t('demo.back.recap'),
     },
   ]
 }
@@ -96,22 +103,14 @@ export function demoSessions(): Session[] {
  */
 export function demoConversation(): ConversationMessage[] {
   return [
-    { role: 'user', content: 'What am I looking at?' },
+    { role: 'user', content: t('demo.conv.ask') },
+    { role: 'assistant', content: t('demo.conv.paging') },
     {
       role: 'assistant',
-      content:
-        'Newest message last - swipe up for the older ones.',
-    },
-    {
-      role: 'assistant',
-      content: 'A line in brackets is what the agent did, not said.',
+      content: t('demo.conv.tool'),
       toolUse: [{ name: 'Read', input: { file_path: 'db/schema.sql' } }],
     },
-    {
-      role: 'assistant',
-      content:
-        'A tap answers: options open the picker, otherwise the microphone. Try it - tap now.',
-    },
+    { role: 'assistant', content: t('demo.conv.answer') },
   ]
 }
 
@@ -123,7 +122,7 @@ export function demoConversation(): ConversationMessage[] {
  * and because each option can say what checking it does.
  */
 export function demoChoices(): string[] {
-  return ['[ ] A tap checks a box', '[ ] Check as many as you like', '[ ] Swipe down to the Send row']
+  return [`[ ] ${t('demo.choice1')}`, `[ ] ${t('demo.choice2')}`, `[ ] ${t('demo.choice3')}`]
 }
 
 /**
@@ -137,7 +136,9 @@ export function demoChoices(): string[] {
  *
  * It describes the screen it appears on, like everything else here.
  */
-export const DEMO_TRANSCRIPT = 'Spoken words land here, ready to send.'
+export function demoTranscript(): string {
+  return t('demo.transcript')
+}
 
 /** The answer, as the wearer's own turn. Spoken or picked - the transcript
  *  cannot tell the difference and neither should this. */
@@ -155,10 +156,7 @@ export function demoAnswer(text: string): ConversationMessage {
  * went nowhere.
  */
 export function demoAgentReply(text: string): ConversationMessage {
-  return {
-    role: 'assistant',
-    content: `That is your answer, in the conversation - ${text}\n\nOn a real workspace it reaches the agent from here, and the reply comes back to this screen. That is the whole loop: read, answer, carry on.`,
-  }
+  return { role: 'assistant', content: t('demo.reply', { text }) }
 }
 
 /**
@@ -169,9 +167,7 @@ export function demoAgentReply(text: string): ConversationMessage {
  * tutorial that contradicts the screen under it teaches the wrong thing.
  */
 export function demoRecap(state: 'processing' | 'completed'): string {
-  return state === 'processing'
-    ? 'Working on what you just sent.'
-    : 'Answered. Double-tap goes back to the list.'
+  return state === 'processing' ? t('demo.recap.processing') : t('demo.recap.completed')
 }
 
 /** How long the agent appears to think about it. Long enough that the reply is

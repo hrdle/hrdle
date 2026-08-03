@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.52] - 2026-08-04
+
+### Added
+- **The demo speaks the phone's language.** Its strings live in `i18n.ts` in
+  English and Japanese now, and the language is the one the phone already has
+  (a saved choice first, then `navigator.languages`) - the demo is the screen a
+  wearer meets before anything is set up, so there is nowhere to go and change
+  a setting first
+  - This is the first thing the G2 itself draws in Japanese. It costs no
+    re-reckoning of `metrics.ts`: the panel measures real glyph advances and
+    wraps Japanese every day, for what the agents send back. What it costs is
+    room - full-width is about half the characters per line - so the two tables
+    are the same lesson written twice, each to its own budget
+  - `demo-i18n.test.ts` holds that budget: in both languages a workspace name
+    and an option each have to be one row, and the recap plus the four messages
+    have to come in under a page. A line over budget is a line behind the swipe
+    that would have revealed it
+
 ## [0.3.51] - 2026-08-04
 
 ### Changed

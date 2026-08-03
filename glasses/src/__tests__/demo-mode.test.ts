@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
 import { screenText } from '../display.ts'
-import { DEMO_REPLY_MS, DEMO_TRANSCRIPT, demoChoices, demoConversation, demoSessions } from '../demo.ts'
+import { DEMO_REPLY_MS, demoChoices, demoConversation, demoSessions, demoTranscript } from '../demo.ts'
 import type { GlassesPlatform } from '../controller.ts'
 
 function platform(): GlassesPlatform & { exits: number; micStarts: number } {
@@ -128,16 +128,16 @@ describe('the demo', () => {
 
     await ring(c, 'tap')
     expect(c.state.voicePhase).toBe('confirm')
-    expect(c.state.voiceText).toBe(DEMO_TRANSCRIPT)
+    expect(c.state.voiceText).toBe(demoTranscript())
 
     await ring(c, 'tap')
     await settle()
     expect(c.state.mode).toBe('conversation')
-    expect(lastMessage(c)).toMatchObject({ role: 'user', content: DEMO_TRANSCRIPT })
+    expect(lastMessage(c)).toMatchObject({ role: 'user', content: demoTranscript() })
 
     await settle(DEMO_REPLY_MS + 50)
     expect(lastMessage(c)?.role).toBe('assistant')
-    expect(lastMessage(c)?.content).toContain(DEMO_TRANSCRIPT)
+    expect(lastMessage(c)?.content).toContain(demoTranscript())
   })
 
   test('a picked option ticks its box and is answered with', async () => {
@@ -161,7 +161,7 @@ describe('the demo', () => {
     await ring(c, 'tap')
     await settle()
     expect(c.state.mode).toBe('conversation')
-    expect(lastMessage(c)).toMatchObject({ role: 'user', content: 'A tap checks a box' })
+    expect(lastMessage(c)).toMatchObject({ role: 'user', content: demoChoices()[0].replace('[ ] ', '') })
 
     await settle(DEMO_REPLY_MS + 50)
     expect(lastMessage(c)?.role).toBe('assistant')
