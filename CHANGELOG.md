@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.49] - 2026-08-03
+
+### Added
+- **The demo answers, and the conversation moves on.** Answering an agent
+  without a keyboard is what this app is for, and the demo stopped one step
+  short of showing it: the send said what it would have done and nothing
+  happened. A spoken reply now arrives as a transcript, joins the transcript as
+  the wearer's turn, the workspace goes to work, and the agent answers it
+  - The microphone is not opened. Transcription is the server's job and a demo
+    has no server, so a real recording could only ever arrive at "(nothing was
+    recognized)" - the gesture that matters most, demonstrated as a failure
+  - The picker answers the same way. Its boxes tick locally, since there is no
+    pane to read them back from, and what was ticked is what the reply says
+  - Demo workspaces carry an agent session id. A transcript is addressed to an
+    agent session rather than to a workspace, so without one the conversation
+    screen resolved to no target and opened empty - the screen the whole demo
+    leads to
+- **A demo button in the simulator.** The demo lives behind "no server address"
+  and the simulator always has one, so the sequence a reviewer sees could only
+  be checked by clearing the address on a device
+
+### Fixed
+- **The multi-select footer reaches the panel.** `buildChoice` held the
+  single-pick wording as a constant, so the device drew "tap:confirm" over the
+  one screen where a tap does not confirm; only the copyable transcript had the
+  right words. The same divergence the screen mirror has now produced three
+  times - wording in two places, and the device gets the older copy
+- **The voice screens say DEMO.** Every other screen carried it. A recording
+  screen that does not is a recording screen claiming to be listening
+
 ## [0.3.48] - 2026-08-03
 
 ### Changed

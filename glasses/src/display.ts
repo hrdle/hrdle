@@ -1157,7 +1157,7 @@ function footerChoice(state: AppState): string {
 
 /** A checkbox the pane has already ticked. Claude Code draws `[x]`; the
  *  brackets survive the scrape, so the state is readable without asking. */
-function isChecked(option: string): boolean {
+export function isChecked(option: string): boolean {
   return /^\s*\[[xX*\u2713]\]/.test(option)
 }
 
@@ -1377,22 +1377,26 @@ function overlayContent(state: AppState): { headerText: string; bodyText: string
 function voiceContent(state: AppState): { headerText: string; bodyText: string; footerText: string } {
   const session = state.sessions[state.sessionIndex]
   const name = state.voiceSessionName || (session ? sName(session) : '---')
+  // The tail every screen carries in a demo. The mic screens were the one place
+  // it was missing, which is the worst place for it to be: a recording screen
+  // that does not say DEMO is a recording screen claiming to be listening.
+  const demoTail = state.demo ? DEMO_TAIL : ''
   switch (state.voicePhase) {
     case 'recording':
       return {
-        headerText: withClock(`${name}  [recording]`),
+        headerText: withClock(`${name}  [recording]`, demoTail),
         bodyText: '● Recording\n\nSpeak into the microphone',
         footerText: 'tap:stop and transcribe  dbl:cancel',
       }
     case 'transcribing':
       return {
-        headerText: withClock(`${name}  [transcribing]`),
+        headerText: withClock(`${name}  [transcribing]`, demoTail),
         bodyText: 'Transcribing...',
         footerText: 'dbl:cancel',
       }
     default: // 'confirm'
       return {
-        headerText: withClock(`${name}  [confirm]`),
+        headerText: withClock(`${name}  [confirm]`, demoTail),
         bodyText: state.voiceText ? state.voiceText : '(nothing was recognized)',
         footerText: state.voiceText ? 'tap:send  dbl:cancel' : 'dbl:back',
       }
@@ -1564,7 +1568,11 @@ function buildChoice(state: AppState): RebuildPageContainer {
     paddingLength: HEADER_PAD,
     containerID: 3, containerName: 'footer',
     isEventCapture: 1,
-    content: FOOTER_CHOICE,
+    // Not the constant: a multi-select's tap does one of two things depending
+    // on the row, and the footer that says so was only ever reaching
+    // `screenText`. The device drew the single-pick promise over the picker
+    // that does not keep it.
+    content: footerChoice(state),
   })
 
   return new RebuildPageContainer({
