@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.44] - 2026-08-03
+
+### Added
+- **A multi-select can be answered from the ring.** Claude Code's multi-select
+  answers to space-then-enter, and the ring could send neither a space nor
+  anything but Enter — so a tap submitted an empty set and the question came
+  back unanswered. The picker looked like it worked and did nothing
+  - Three verbs are needed where a single pick needs two: check, send, leave.
+    Double-tap means "leave" on every screen in this app, so the third verb is
+    a row rather than a gesture: tap checks an option, tap on the last row
+    sends, double-tap leaves as it always has
+  - The send row carries the count. Swiping onto it sends the pane no key —
+    the pane's cursor never left the last option. A toggle re-reads the pane,
+    so the boxes shown are the pane's rather than a guess
+  - A single-pick list is untouched: no extra row, Enter from any row, same
+    footer
+- **The phone's power state rides on every heartbeat** (`pwr=chg,82%`) and on
+  the exit line, and a charger going in or out gets a line of its own. The
+  glasses' own battery is not available — `onDeviceStatusChanged` has only ever
+  delivered `connectType: "none"` with filler behind it, which is why `dev=`
+  and `batt=` never appeared
+- **A ninth row in the session list.** The container had 240px for rows of 27,
+  which is eight rows and 24px of remainder — a gap above the footer holding a
+  row that missed by 3px. `LIST_PAD` leaves 248px, so it fits with 5px to spare
+- **The date rides with the clock** (`2026-08-03 09:41`). A wearer reading a
+  list has often been away from it for longer than a clock can say. ISO order,
+  not a locale's — the panel draws English and this way the fields cannot swap
+  meaning
+
+### Fixed
+- **A written plan is no longer taken for a menu.** Tapping a waiting session
+  put the wearer into a picker holding three lines of a plan, with a working
+  cursor and an Enter that would have sent one of them to an agent that asked
+  nothing. Two faults, either of which alone was enough:
+  - `stripAnsi` ended by deleting every non-ASCII character, so a Japanese pane
+    arrived as the punctuation between its words. It cost more than the
+    choices — the scraped question line comes out of the same buffer.
+    Renderability is `stripUnrenderable()`'s judgement, which the session list
+    has been passing Japanese through all along
+  - Any line with a number and a dot was an option. An option block now has to
+    look like one: numbering that starts at 1 and counts up without repeating,
+    at least two, close together, and near the pane's tail where a prompt sits
+- **`headerless` is carried through the screen mirror.** The list screen gives
+  the header's bar back to its rows, but the flag never left the device — so
+  the browser mirror, the recording and the replay player drew every list frame
+  36px lower than the device did, with an empty header above it. The same shape
+  as the `card` fault in 0.3.43, one field over
+
 ## [0.3.43] - 2026-08-02
 
 ### Fixed
