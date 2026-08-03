@@ -34,10 +34,12 @@ import type { ConversationMessage, Session } from './types.ts'
 /**
  * The list, as a lesson in reading the list.
  *
- * Each row's name is the gesture or the mark that row demonstrates: the one
- * that is waiting says a tap opens it, the one that is working carries the
- * context bar, the one with panes shows how panes are indented under their
- * workspace.
+ * Each row's name says what that row IS: the states a workspace can be in -
+ * waiting on you, working, finished - and then the two structural facts, panes
+ * and the way out. The marks down the left edge (the exclamation, the dot) and
+ * the context bar are what a wearer has to learn to read at a glance, and a
+ * row is the only place that can be said, since the footer is spoken for by
+ * the gestures.
  *
  * Each carries an `agentSessionId` because a transcript is addressed to an
  * agent session rather than to a workspace. Without one the conversation
@@ -76,6 +78,15 @@ export function demoSessions(): Session[] {
         { paneId: '%1', label: t('demo.panes.pane1'), agent: 'codex', indicatorState: 'completed' },
         { paneId: '%2', label: t('demo.panes.pane2'), agent: 'claude', indicatorState: 'processing' },
       ],
+    },
+    {
+      id: 'demo-done',
+      agentSessionId: 'demo-done-thread',
+      name: t('demo.done.name'),
+      state: 'idle',
+      indicatorState: 'completed',
+      agent: 'claude',
+      ccRecap: t('demo.done.recap'),
     },
     {
       id: 'demo-back',
