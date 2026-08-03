@@ -1,4 +1,4 @@
-// `qr` command - print the server's URL as a QR code.
+// `address` command - print where this server can be reached.
 //
 // The phone has to be told where this machine is, and the address is a Tailscale
 // FQDN with a random-looking tailnet in the middle of it:
@@ -6,11 +6,14 @@
 // typing it on a phone keyboard is the single worst moment of the setup - the
 // glasses app's wizard spends a whole screen telling people to write it down.
 //
-// A QR code removes the typing. The terminal renderer is the point: the person
-// is already looking at this shell, having just run `setup`, and a code drawn
-// here needs no web page, no clipboard and no second device to bridge them.
+// This used to draw the URL as a QR code, on the theory that a code removes the
+// typing. It does not: the glasses app's WebView refuses a camera to web
+// content, so the one screen that needed to read a code never could (measured
+// on device; the table is in CLAUDE.md). What remains is the short form of the
+// Tailscale IP - nine characters the setup screen accepts - and printing a code
+// beside it only invited people to point a phone at something that would not be
+// read. So this prints two lines of text and says which is for which.
 
-import QRCode from 'qrcode';
 import { IDENTITY } from '../../../shared/identity';
 import { VERSION } from '../cli';
 import { shortTailscaleIp } from '../services/discovery';
@@ -22,8 +25,8 @@ interface TailscaleStatus {
 /**
  * This machine's Tailscale name, or null with the reason already printed.
  *
- * The same source the server itself uses to pick its certificate name, so the
- * QR necessarily carries the host the certificate was issued for. Deriving it
+ * The same source the server itself uses to pick its certificate name, so what
+ * is printed is necessarily the host the certificate was issued for. Deriving it
  * any other way - `hostname`, a config value - would produce an address that
  * resolves and then fails TLS, which is a worse failure than not printing one.
  */
@@ -52,7 +55,7 @@ function tailscaleSelf(): { host: string; ip: string | null } | null {
   }
 }
 
-export async function showQr(port: number): Promise<void> {
+export function showAddress(port: number): void {
   const self = tailscaleSelf();
   if (!self) {
     process.exitCode = 1;
@@ -60,31 +63,19 @@ export async function showQr(port: number): Promise<void> {
   }
 
   const url = `https://${self.host}:${port}`;
+  const short = self.ip ? shortTailscaleIp(self.ip) : null;
 
-  // Error correction stays at the lowest level on purpose. It is the setting
-  // that decides how big the code is, and this one is read off a terminal by a
-  // phone held a foot away - not printed on a box and scanned in a warehouse.
-  // A denser code at level M would wrap in an 80-column window, and a QR code
-  // that does not fit the screen is unreadable in a way no redundancy fixes.
-  const qr = await QRCode.toString(url, {
-    type: 'terminal',
-    small: true,
-    errorCorrectionLevel: 'L',
-  });
-
+  // The short form goes first when there is one. It is the answer to the
+  // question that brought most people here - the glasses app is asking for an
+  // address and will not take the FQDN's length on a phone keyboard - and the
+  // URL below it is for the browser, which is a different errand.
   console.log('');
   console.log(`${IDENTITY.productName} v${VERSION}`);
   console.log('');
-  console.log(qr);
-  console.log(`  ${url}`);
-  console.log('');
-  console.log(`  Scan this with your phone's own camera app - it opens ${IDENTITY.productName}`);
-  console.log('  in the browser. The glasses app cannot use a camera: its WebView');
-  console.log('  refuses one to web content.');
-  const short = self.ip ? shortTailscaleIp(self.ip) : null;
   if (short) {
+    console.log(`  For the glasses app's setup screen:  ${short}`);
     console.log('');
-    console.log(`  For the glasses app's setup screen, type this instead:  ${short}`);
   }
+  console.log(`  In a browser on any device on your tailnet:  ${url}`);
   console.log('');
 }

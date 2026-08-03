@@ -151,8 +151,9 @@ hrdle notify                 # Send hook event (reads JSON from stdin)
 # Status
 hrdle status
 
-# Print this server's address as a QR code, for the phone app's Connect step
-hrdle qr
+# Print this server's address: the short form for the glasses app's Connect
+# step, and the URL for a browser. (`hrdle qr` is the old name for it.)
+hrdle address
 
 # Remote pane control (target: <peer>:<session>:<paneId>)
 hrdle send <target> [text]   # Send input to a pane on a local or peer server

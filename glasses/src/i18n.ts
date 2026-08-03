@@ -49,30 +49,6 @@ const EN: Table = {
   'machine.vps2':
     'One or two cores and 2 GB of memory is enough for several agent sessions. Your agent accounts sign in from there rather than from your desk, which is worth knowing but is not usually a problem.',
 
-  'scan.starting': 'Starting the camera...',
-  'scan.hint': 'Point the camera at the code `{binary} qr` printed in your terminal.',
-  'scan.cancel': 'Cancel',
-  'scan.notAnAddress':
-    'That code is not a web address - still looking for the one `{binary} qr` printed.',
-  'scan.timedOut':
-    'No code found. Move closer, or make the terminal window bigger, and try again.',
-  'scan.photoNoCode':
-    'No QR code in that photo. Fill more of the frame with it and try again.',
-  'scan.noCamera': 'This app cannot open a camera here. Type the address instead.',
-  'scan.denied':
-    'Camera access was refused. Allow it for this app in the phone settings, or type the address instead.',
-  'scan.cameraFailed': 'The camera could not be opened: {error}',
-  'scan.cannotProcess': 'This device cannot process the camera image.',
-
-  'probe.title': 'The camera did not open',
-  'probe.hint':
-    'What the app could see of the platform. Copy it and send it on - it is what tells the possible causes apart.',
-  'probe.copy': 'Copy',
-  'probe.copied': 'Copied',
-  'probe.close': 'Close',
-  'probe.tryPhoto': 'Try the camera app',
-  'probe.tryClipboard': 'Try the clipboard',
-
   'resolve.empty': 'Type the address first.',
   'resolve.notThere':
     'Something answered at {host}, but it was not a {product} server. Check the address.',
@@ -148,30 +124,6 @@ const JA: Table = {
     '小さな VPS で十分にこなせます。もともと24時間起動していて、住所も固定されており、Tailscale もデスクトップと同じように入ります。',
   'machine.vps2':
     '1〜2コアとメモリ 2GB あれば複数のエージェントセッションを動かせます。エージェントのアカウントは手元ではなくその VPS からサインインすることになる点は知っておくとよいですが、通常は問題になりません。',
-
-  'scan.starting': 'カメラを起動しています…',
-  'scan.hint': 'ターミナルに表示された `{binary} qr` のコードにカメラを向けてください。',
-  'scan.cancel': 'キャンセル',
-  'scan.notAnAddress':
-    'そのコードはウェブアドレスではありません。`{binary} qr` が表示したコードを探しています。',
-  'scan.timedOut':
-    'コードが見つかりませんでした。近づくか、ターミナルのウィンドウを大きくして、もう一度試してください。',
-  'scan.photoNoCode':
-    'その写真に QR コードが見つかりません。コードが画面いっぱいに写るようにして、もう一度試してください。',
-  'scan.noCamera': 'ここではカメラを開けません。アドレスは手で入力してください。',
-  'scan.denied':
-    'カメラの使用が拒否されました。端末の設定でこのアプリに許可するか、アドレスを手で入力してください。',
-  'scan.cameraFailed': 'カメラを開けませんでした: {error}',
-  'scan.cannotProcess': 'この端末ではカメラ映像を処理できません。',
-
-  'probe.title': 'カメラを開けませんでした',
-  'probe.hint':
-    'アプリから見えたプラットフォームの状態です。原因の切り分けに使うので、コピーしてそのまま共有してください。',
-  'probe.copy': 'コピー',
-  'probe.copied': 'コピーしました',
-  'probe.close': '閉じる',
-  'probe.tryPhoto': 'カメラアプリを試す',
-  'probe.tryClipboard': 'クリップボードを試す',
 
   'resolve.empty': '先にアドレスを入力してください。',
   'resolve.notThere':

@@ -30,7 +30,7 @@ describe('substitution', () => {
   test('leaves an unknown placeholder alone rather than blanking it', () => {
     // Better a visible `{binary}` than a sentence with a hole in it — one is a
     // bug report, the other reads as finished prose that says less than it should.
-    expect(t('scan.notAnAddress', {})).toContain('{binary}')
+    expect(t('resolve.notThere', {})).toContain('{host}')
   })
 
   test('an unknown key comes back as itself', () => {

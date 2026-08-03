@@ -160,7 +160,7 @@ show_path_instruction() {
   fi
 }
 
-# Finish the job: certificate permission, the service, and the QR code.
+# Finish the job: certificate permission, the service, and the address.
 #
 # This used to print four numbered instructions and stop. Every one of them is
 # something this script is standing right next to and could simply do, and each
@@ -210,12 +210,16 @@ finish_setup() {
     return
   fi
 
-  # The address, as something a phone can read.
+  # The address the phone has to be told.
   #
   # Printed here rather than described, because this is the moment it is needed:
   # the server is up, the person is looking at this window, and the alternative
   # is typing a Tailscale FQDN into a phone.
-  "$install_path" qr || true
+  #
+  # Falls back to `qr`, the old name for this: the script comes from main but
+  # the binary comes from the latest release, so between merging this and
+  # cutting that release every fresh install would otherwise end in silence.
+  "$install_path" address || "$install_path" qr || true
 }
 
 main() {
@@ -239,7 +243,7 @@ main() {
   # PATH instructions
   show_path_instruction
 
-  # Certificate permission, the service, and the QR code for the phone
+  # Certificate permission, the service, and the address for the phone
   finish_setup
 }
 
