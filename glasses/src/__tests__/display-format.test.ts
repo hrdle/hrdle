@@ -354,13 +354,18 @@ describe('header clock', () => {
     }
   })
 
-  test('a long title is clipped rather than pushing the clock off', () => {
+  test('a long title takes the bar, and the clock gives way', () => {
+    // The clock used to be what always survived. It is the other way round
+    // now: the title says which session is being read, which is the question,
+    // while the date and time answer one that is usually not being asked.
+    // Sixty full-width characters leave room for neither.
     const header = screenText({
       ...base,
       mode: 'conversation' as const,
       sessions: [{ id: 'a', name: 'と'.repeat(60), state: 'working' as const }],
     }).header
-    expect(header).toMatch(/ \d\d:\d\d$/)
+    expect(header).not.toMatch(/\d\d:\d\d/)
+    expect(header).toContain('とととと')
     expect(width(header)).toBeLessThanOrEqual(HEADER_WIDTH)
   })
 

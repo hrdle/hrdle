@@ -256,13 +256,41 @@ function withClock(title: string, tail = ''): string {
   // was which one. ISO order rather than a locale's: the panel draws English,
   // and this way the fields never swap meaning on the reader.
   const pad = (n: number) => String(n).padStart(2, '0')
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`
   const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  const clock = `${date} ${pad(now.getHours())}:${pad(now.getMinutes())}`
-  const clockPx = textWidth(clock)
+
+  // What the bar gives up first, in order.
+  //
+  // The clock used to be the thing that always survived and the title was
+  // clipped to make room. Adding the date turned that from a rounding error
+  // into a real cost - it took the right-hand side from 52px to 173px, so a
+  // workspace name that fitted yesterday loses ten characters today. And the
+  // trade is the wrong way round: the title says which session is being read,
+  // which is the question, while the date answers one that is usually not
+  // being asked.
+  //
+  // So the title is served first and the clock takes what is left: the date
+  // and time together, or the time alone, or nothing. The tail still outranks
+  // both - it is the thing the bar was widened to report.
+  for (const clock of [`${date} ${time}`, time, '']) {
+    const clockPx = clock ? textWidth(clock) + SPACE_W : 0
+    if (textWidth(title + tail) + clockPx > HEADER_WIDTH && clock) continue
+    return layOut(title, tail, clock)
+  }
+  return layOut(title, tail, '')
+}
+
+/** One bar's worth: the head, its tail, and a right-parked clock that may be
+ *  empty. The head is what yields if the three do not fit. */
+function layOut(title: string, tail: string, clock: string): string {
+  const clockPx = clock ? textWidth(clock) : 0
+  const gap = clock ? SPACE_W : 0
   const build = (h: string, spaces: number) => `${h}${tail}${' '.repeat(spaces)}${clock}`
   let head = title
-  while (head && textWidth(head + tail) + SPACE_W + clockPx > HEADER_WIDTH) head = head.slice(0, -1)
-  let spaces = Math.max(1, Math.floor((HEADER_WIDTH - textWidth(head + tail) - clockPx) / SPACE_W))
+  while (head && textWidth(head + tail) + gap + clockPx > HEADER_WIDTH) head = head.slice(0, -1)
+  let spaces = clock
+    ? Math.max(1, Math.floor((HEADER_WIDTH - textWidth(head + tail) - clockPx) / SPACE_W))
+    : 0
   // Kerning across the join can cost a pixel or two; give it back rather than
   // hand the container a line it has to wrap.
   let out = build(head, spaces)
@@ -271,7 +299,7 @@ function withClock(title: string, tail = ''): string {
     out = build(head, spaces)
   }
   // One space is the floor, and measuring the parts separately can still land
-  // a pixel or two over once they are joined. Past that the title yields —
+  // a pixel or two over once they are joined. Past that the title yields -
   // never the tail, which is the thing the bar was widened to report. Without
   // this the bar overflowed for roughly a fifth of the day, depending on which
   // digits the clock happened to be showing.
