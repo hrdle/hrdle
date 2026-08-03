@@ -104,6 +104,11 @@ export function demoSessions(): Session[] {
 export function demoConversation(): ConversationMessage[] {
   return [
     { role: 'user', content: t('demo.conv.ask') },
+    // Both navigation gestures in one line, because the page has room for one.
+    // Double-tap belongs here rather than on the list: from a workspace it
+    // steps back, and from the list it offers to close the app - the same
+    // gesture with two answers, and the demo has to be straight about which is
+    // which.
     { role: 'assistant', content: t('demo.conv.paging') },
     {
       role: 'assistant',
