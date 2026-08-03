@@ -157,8 +157,6 @@ export interface GlassesPlatform {
    * for a dialogue the user then cancels leaves the app on screen and deaf.
    */
   requestExit(): void
-  /** Leave the demo and put the setup screen back. Absent off-device. */
-  exitDemo?(): void
   /**
    * A gesture arrived while this app was believed to be in the background.
    *
@@ -792,14 +790,10 @@ export class GlassesController {
         // needs an answer opens the overlay by itself, which is the path
         // every waiting item has actually arrived by.
         //
-        // In a demo the root's way out is back to the setup screen rather than
-        // out of the app: the demo is something the wearer stepped into, and
-        // the gesture that leaves every other screen should leave this too.
-        // The exit dialogue is still one more double-tap away, from there.
-        if (this.demo) {
-          this.platform.exitDemo?.()
-          return Promise.resolve()
-        }
+        // A demo root is still a root: the same gesture asks the same question
+        // there. Routing it back to the setup screen instead would make the
+        // one screen a reviewer reaches first the one place the gesture means
+        // something else.
         this.platform.requestExit()
         return
     }
