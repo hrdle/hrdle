@@ -39,6 +39,12 @@ function ring(c: GlassesController, action: 'tap' | 'doubleTap' | 'swipeUp' | 's
 
 const settle = (ms = 0) => new Promise((r) => setTimeout(r, ms))
 
+/** A workspace holding no question, so a tap goes to the microphone rather
+ *  than to the picker. */
+function quietSession(): number {
+  return demoSessions().findIndex((s) => s.indicatorState === 'completed' && !s.panes)
+}
+
 function lastMessage(c: GlassesController) {
   return c.state.conversation[c.state.conversation.length - 1]
 }
@@ -109,7 +115,7 @@ describe('the demo', () => {
     c.startDemo()
     // A workspace that is not holding a question, so a tap goes to the mic
     // rather than to the picker.
-    c.state.sessionIndex = demoSessions().findIndex((s) => s.id === 'demo-docs')
+    c.state.sessionIndex = quietSession()
     await ring(c, 'tap')
     expect(c.state.mode).toBe('conversation')
 
@@ -139,7 +145,7 @@ describe('the demo', () => {
     const c = new GlassesController(p)
     c.startDemo()
     // The workspace that is waiting on an answer.
-    c.state.sessionIndex = demoSessions().findIndex((s) => s.id === 'demo-api')
+    c.state.sessionIndex = demoSessions().findIndex((s) => s.indicatorState === 'waiting_input')
     await ring(c, 'tap')
     await ring(c, 'tap')
     expect(c.state.mode).toBe('choice')
@@ -155,7 +161,7 @@ describe('the demo', () => {
     await ring(c, 'tap')
     await settle()
     expect(c.state.mode).toBe('conversation')
-    expect(lastMessage(c)).toMatchObject({ role: 'user', content: 'Postgres' })
+    expect(lastMessage(c)).toMatchObject({ role: 'user', content: 'A tap checks a box' })
 
     await settle(DEMO_REPLY_MS + 50)
     expect(lastMessage(c)?.role).toBe('assistant')
@@ -167,7 +173,7 @@ describe('the demo', () => {
     const p = platform()
     const c = new GlassesController(p)
     c.startDemo()
-    c.state.sessionIndex = demoSessions().findIndex((s) => s.id === 'demo-docs')
+    c.state.sessionIndex = quietSession()
     await ring(c, 'tap')
     await ring(c, 'tap')
     await ring(c, 'tap')

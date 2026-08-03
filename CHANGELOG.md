@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.51] - 2026-08-04
+
+### Changed
+- **The demo teaches the screen it is on.** It ran on plausible work - a
+  workspace called `api-refactor`, a migration, a database question - which
+  reads as a screenshot: nothing on it says what a workspace row is or which
+  gesture opens it. Every string is a caption for the thing it sits in now. The
+  workspaces are named for the gesture or mark they carry, the transcript
+  explains the transcript, each option in the picker says what checking it
+  does, and the voice screen says where spoken words end up
+  - The transcript is short enough that the whole lesson is on the first page.
+    A conversation opens at its newest message, so a line that does not fit is
+    behind the swipe it was trying to explain
+  - The recap stops saying the workspace is waiting once it has been answered
+
 ## [0.3.50] - 2026-08-03
 
 ### Fixed

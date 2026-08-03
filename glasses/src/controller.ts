@@ -35,6 +35,7 @@ import {
   demoAgentReply,
   demoAnswer,
   demoChoices,
+  demoRecap,
   demoConversation,
   demoSessions,
 } from './demo.ts'
@@ -429,9 +430,13 @@ export class GlassesController {
 
   /** The answered workspace's own indicator, so the list behind the transcript
    *  tells the same story: asked, working, done. */
-  private setDemoIndicator(state: Session['indicatorState']): void {
+  private setDemoIndicator(state: 'processing' | 'completed'): void {
     const target = this.state.sessions[this.state.sessionIndex]
-    if (target) target.indicatorState = state
+    if (!target) return
+    target.indicatorState = state
+    // The recap leads the conversation screen and the demo's opening one says
+    // the workspace is waiting. Answered, it is not.
+    target.ccRecap = demoRecap(state)
   }
 
   private clearDemoTimer(): void {
