@@ -147,6 +147,15 @@ export interface AppState {
   conversationLoading: boolean
   choiceIndex: number
   choiceOptions: string[]
+  /**
+   * The options are checkboxes rather than a single pick.
+   *
+   * Claude Code's multi-select answers to space-then-enter, and the ring had
+   * no way to send a space - so tapping sent Enter over an empty set and the
+   * question came back unanswered. Where this is set, tap toggles and
+   * double-tap sends.
+   */
+  choiceMulti?: boolean
   /** Pane the cursor is on, when the list row is a pane rather than its
    *  workspace. Carries into the conversation: its own agent session, its own
    *  status, and the pane replies are routed to. */
@@ -1088,6 +1097,26 @@ function sessionListFooter(state: AppState): string {
   return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`, detail ? `  ${detail}` : '')
 }
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
+/** Double-tap means "leave" on every screen, so a multi-select's third verb
+ *  is a row rather than a gesture. */
+function footerChoice(state: AppState): string {
+  if (!state.choiceMulti) return FOOTER_CHOICE
+  // `tap` does one of two things depending on the row, and the row says which.
+  // The footer promises the gesture that never changes.
+  return `swipe:move  tap:check/send  dbl:cancel`
+}
+
+/** A checkbox the pane has already ticked. Claude Code draws `[x]`; the
+ *  brackets survive the scrape, so the state is readable without asking. */
+function isChecked(option: string): boolean {
+  return /^\s*\[[xX*\u2713]\]/.test(option)
+}
+
+/** Whether a scraped option set is a multi-select. One checkbox is enough:
+ *  a single-pick list has none at all. */
+export function looksMultiSelect(options: string[]): boolean {
+  return options.some((o) => /^\s*\[[ xX*\u2713]\]/.test(o))
+}
 
 /** Reply target shown in the choice header — the session the Enter actually
  *  goes to, which differs from the selected one when answering a relay item
@@ -1205,7 +1234,7 @@ export function screenText(state: AppState): {
       return { header: headerText, notice: noticeText, body: bodyText, footer: footerText }
     }
     case 'choice':
-      return { header: choiceHeader(state), body: choiceBody(state), footer: FOOTER_CHOICE }
+      return { header: choiceHeader(state), body: choiceBody(state), footer: footerChoice(state) }
     case 'voice': {
       const { headerText, bodyText, footerText } = voiceContent(state)
       return { header: headerText, body: bodyText, footer: footerText }
@@ -1217,8 +1246,34 @@ export function screenText(state: AppState): {
   }
 }
 
+/**
+ * The row that sends, last in a multi-select.
+ *
+ * A multi-select needs three verbs where a single pick needs two - check,
+ * send, and leave - and there are four gestures, of which double-tap is spoken
+ * for. It means "leave" on every screen in this app, and a picker where it
+ * meant "send" instead would be the one place the wearer has to remember
+ * something. So the third verb becomes a row: tap checks an option, tap on
+ * this sends. It is not one of the pane's options, and swiping onto it sends
+ * the pane no key.
+ */
+export const CHOICE_SEND = 'Send'
+
+/** What the ring walks: the pane's options, and in a multi-select the row that
+ *  sends them. Indexing is against this, not against `choiceOptions`. */
+export function choiceRows(state: AppState): string[] {
+  if (!state.choiceMulti) return state.choiceOptions
+  const n = state.choiceOptions.filter(isChecked).length
+  return [...state.choiceOptions, n > 0 ? `${CHOICE_SEND} (${n})` : CHOICE_SEND]
+}
+
+/** Whether the cursor is on the send row rather than on an option. */
+export function onChoiceSend(state: AppState): boolean {
+  return state.choiceMulti === true && state.choiceIndex >= state.choiceOptions.length
+}
+
 function choiceBody(state: AppState): string {
-  return state.choiceOptions.map((opt, i) => {
+  return choiceRows(state).map((opt, i) => {
     const cursor = i === state.choiceIndex ? '>>>' : '   '
     return `${cursor} ${opt}`
   }).join('\n')

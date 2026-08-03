@@ -45,8 +45,19 @@ const RECONNECT_DELAY_MS = 3000
 export const GIVE_UP_AFTER_MS = 5 * 60_000
 const GIVE_UP_AFTER_TRIES = Math.round(GIVE_UP_AFTER_MS / RECONNECT_DELAY_MS)
 
-// Strip ANSI escape codes, control sequences, and non-ASCII for G2 display
-function stripAnsi(str: string): string {
+/**
+ * Strip ANSI escape codes and control sequences, and fold box-drawing and
+ * bullet characters onto ASCII the panel is sure of.
+ *
+ * It used to end by deleting every non-ASCII character, which threw away all
+ * Japanese. That is where a scraped question or set of choices turned into
+ * fragments: `2. スクリーンショットを撮り直す ── 実機の録画から、加工せず`
+ * arrived as `2. --`, and nothing downstream could tell that anything had been
+ * lost. The panel's own renderability check is `stripUnrenderable()` in
+ * metrics.ts, which is where that judgement belongs and which the session list
+ * has been passing Japanese through all along.
+ */
+export function stripAnsi(str: string): string {
   return str
     // CSI sequences: ESC[ ... letter (includes 256-color, RGB, etc)
     .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
@@ -72,8 +83,61 @@ function stripAnsi(str: string): string {
     .replace(/[✶✦✧★☆]/g, '*')
     .replace(/[❯❭❱⟩]/g, '>')
     .replace(/\u00a0/g, ' ')  // non-breaking space
-    // Remove remaining non-ASCII (keep basic printable + newline + tab)
-    .replace(/[^\x20-\x7e\n\t]/g, '')
+    // Control characters only. Anything printable - in any script - survives.
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+}
+
+/** How far back from the pane's tail an option block may start. A prompt sits
+ *  at the bottom; prose scrolls away above it. */
+const CHOICE_TAIL_LINES = 25
+/** Lines an option may be separated from the next by. Claude Code puts a blank
+ *  line between some, and a wrapped option takes a line of its own. */
+const CHOICE_MAX_GAP = 3
+
+/**
+ * The numbered options a pane is offering, or nothing.
+ *
+ * A number and a dot is not enough to go on. Every agent writes numbered lists
+ * in ordinary prose - a plan, a set of findings - and taking one for a set of
+ * choices puts the wearer in a picker whose entries mean nothing and whose
+ * Enter answers a question nobody asked. That happened: three lines of a
+ * written plan became three options, complete with a working cursor.
+ *
+ * So an option block has to look like one: numbering that starts at 1 and
+ * counts up without repeating, at least two of them, close together, and near
+ * the bottom of the pane where a prompt actually sits. Prose fails all four
+ * often enough that this costs nothing, and a real prompt passes all four by
+ * construction - it is a menu.
+ *
+ * Exported for the tests, and pure: the caller owns the terminal buffer.
+ */
+export function extractChoices(text: string): string[] {
+  if (!text) return []
+  const lines = text.split('\n')
+  // Claude Code uses U+276F as its cursor marker; stripAnsi has already folded
+  // it onto `>`, but a buffer that never went through it may still carry it.
+  const NUMBERED = /^\s*[\u276f>*]?\s*(\d+)[.)]\s*(.+)/
+  const found: { n: number; text: string; at: number }[] = []
+  const from = Math.max(0, lines.length - CHOICE_TAIL_LINES)
+  for (let i = from; i < lines.length; i++) {
+    const m = lines[i].match(NUMBERED)
+    if (m) found.push({ n: Number(m[1]), text: m[2].trim(), at: i })
+  }
+  if (found.length < 2) return []
+
+  // The longest run of 1, 2, 3, ... with no big gap between the lines.
+  let best: typeof found = []
+  let run: typeof found = []
+  for (const item of found) {
+    const prev = run[run.length - 1]
+    const continues = prev && item.n === prev.n + 1 && item.at - prev.at <= CHOICE_MAX_GAP
+    run = continues ? [...run, item] : item.n === 1 ? [item] : []
+    // Ties go to the lower block: a prompt sits below whatever prose
+    // introduced it, and the newest thing on a pane is the live one.
+    if (run.length >= best.length) best = run
+  }
+  if (best.length < 2 || best[0].n !== 1) return []
+  return best.map((c) => c.text)
 }
 
 export class WsClient {
@@ -295,19 +359,7 @@ export class WsClient {
 
   /** Extract numbered choices from terminal output (e.g. "1. Yes", "2. No") */
   getChoices(sessionId: string): string[] {
-    const text = this.getTerminalText(sessionId)
-    if (!text) return []
-    const lines = text.split('\n')
-    const choices: string[] = []
-    // Look for numbered options like "  1. Yes", "> 1. Yes", or "❯ 1. Yes"
-    // Claude Code uses ❯ as the cursor marker. Dot may be followed by zero or more spaces.
-    for (const line of lines) {
-      const match = line.match(/^\s*[❯>*]?\s*(\d+)\.\s*(.+)/)
-      if (match) {
-        choices.push(match[2].trim())
-      }
-    }
-    return choices
+    return extractChoices(this.getTerminalText(sessionId))
   }
 
   getState(): string {
