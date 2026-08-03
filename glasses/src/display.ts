@@ -157,6 +157,14 @@ export interface AppState {
    * double-tap sends.
    */
   choiceMulti?: boolean
+  /**
+   * Running on canned data with no server behind it.
+   *
+   * Every screen says so. A demo that could be mistaken for a connected app
+   * would fail the same first-run rule it exists to satisfy - the reviewer has
+   * to be able to tell that setup is still outstanding.
+   */
+  demo?: boolean
   /** Pane the cursor is on, when the list row is a pane rather than its
    *  workspace. Carries into the conversation: its own agent session, its own
    *  status, and the pane replies are routed to. */
@@ -248,6 +256,16 @@ function sName(s: Session): string {
  * Without the split a long workspace name would push the new information off
  * the edge, silently, which is the one thing a notice must not do.
  */
+/**
+ * The mark every demo screen carries.
+ *
+ * It rides as the bar's tail, which is the one part that never yields - the
+ * title is clipped before it and the clock steps aside for it. A demo the
+ * wearer could mistake for a connected app would fail the first-run rule it
+ * exists to satisfy, so this is not allowed to be the thing that falls off.
+ */
+const DEMO_TAIL = '  DEMO'
+
 function withClock(title: string, tail = ''): string {
   const now = new Date()
   // The date rides with the time. A wearer reading a session list has often
@@ -1034,6 +1052,7 @@ function conversationContent(state: AppState): {
     : session ? isWaiting(session) : false
   const ind = pane ? pane.indicatorState : session?.indicatorState
   const statusBadge = waiting ? '  [!] WAITING' : ind === 'processing' ? `  ${spinnerFrame(state)}` : ''
+  const demoTail = state.demo ? DEMO_TAIL : ''
 
   const msgs = state.conversation
   const msgIndex = msgs.length > 0
@@ -1081,7 +1100,7 @@ function conversationContent(state: AppState): {
     noticeText,
     headerText: withClock(
       `${session ? sName(session) : '---'}${pane ? ` ${paneName(pane, pane.paneId)}` : ''}`,
-      `${statusBadge}${noticeMark}`,
+      `${statusBadge}${noticeMark}${demoTail}`,
     ),
     bodyText,
     footerText: pageInfo ? `${action}  ${pageInfo.trim()}` : action,
@@ -1123,7 +1142,8 @@ function sessionListFooter(state: AppState): string {
   // hints say what every row does and can be learned once, where this changes
   // with every swipe and is the reason to swipe at all.
   const detail = metricsDetail(cursorMetrics(state, at))
-  return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`, detail ? `  ${detail}` : '')
+  const demoTail = state.demo ? DEMO_TAIL : ''
+  return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`, `${detail ? `  ${detail}` : ''}${demoTail}`)
 }
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 /** Double-tap means "leave" on every screen, so a multi-select's third verb
@@ -1153,7 +1173,7 @@ export function looksMultiSelect(options: string[]): boolean {
 function choiceHeader(state: AppState): string {
   const session = state.sessions[state.sessionIndex]
   const name = state.choiceSessionName || (session ? sName(session) : '---')
-  return withClock(`${name}  [SELECT]`)
+  return withClock(`${name}  [SELECT]`, state.demo ? DEMO_TAIL : '')
 }
 
 /**
@@ -1667,7 +1687,7 @@ export function buildSetupGuide(): RebuildPageContainer {
     isEventCapture: 1,
     // The gesture is live here now, so the footer can promise it. Before, a
     // wearer with no server had no way out of this screen at all.
-    content: 'Setup from phone app                                    dbl:exit',
+    content: 'tap:see how it works                                   dbl:exit',
   })
 
   return new RebuildPageContainer({

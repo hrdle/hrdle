@@ -32,9 +32,11 @@ describe('the setup guide', () => {
     expect(named('body')).toContain('1. Start')
   })
 
-  test('promises the way out', () => {
-    // The gesture is wired while the address is awaited, so the footer can say
-    // so. Until it was, this screen was a room with no door.
+  test('promises the way out, and the way in', () => {
+    // The gestures are wired while the address is awaited, so the footer can
+    // say so. Until they were, this screen was a room with no door - and a
+    // reviewer with no server saw nothing else of the app.
     expect(named('footer')).toContain('dbl:exit')
+    expect(named('footer')).toContain('tap:see how it works')
   })
 })

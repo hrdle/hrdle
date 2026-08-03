@@ -28,6 +28,7 @@
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { SPINNER_INTERVAL_MS, choiceRows, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
+import { DEMO_SENT, demoChoices, demoConversation, demoSessions } from './demo.ts'
 import { RelayQueue } from './relay-queue.ts'
 import { WsClient } from './ws-client.ts'
 import type { Session, Pane, ConversationMessage, GlassesRelayItem, ClientFocus } from './types.ts'
@@ -156,6 +157,8 @@ export interface GlassesPlatform {
    * for a dialogue the user then cancels leaves the app on screen and deaf.
    */
   requestExit(): void
+  /** Leave the demo and put the setup screen back. Absent off-device. */
+  exitDemo?(): void
   /**
    * A gesture arrived while this app was believed to be in the background.
    *
@@ -247,6 +250,16 @@ function initialState(): AppState {
 export class GlassesController {
   readonly state: AppState = initialState()
   readonly ws: WsClient
+  /**
+   * Running on canned data, with no socket and no server.
+   *
+   * The screens, the gestures and the controller are the real ones - this only
+   * decides where the data comes from and swallows the four things that would
+   * otherwise reach an agent. A separate demo controller would be a second
+   * implementation of every transition, and the ones that drift are always the
+   * ones nobody is looking at.
+   */
+  private demo = false
   private readonly platform: GlassesPlatform
   private readonly queue = new RelayQueue()
 
@@ -347,6 +360,30 @@ export class GlassesController {
       this.shutdown()
       this.platform.exitNow?.()
     }, FATAL_LINGER_MS)
+  }
+
+  /**
+   * Start on canned data instead of connecting.
+   *
+   * Nothing here opens a socket, so a demo run costs the network nothing and
+   * survives having no server at all - which is the situation it exists for.
+   */
+  startDemo(): void {
+    this.demo = true
+    this.state.demo = true
+    this.onSessionsUpdated(demoSessions())
+    this.render()
+  }
+
+  /** Leave the demo, taking its data with it. The caller puts the setup guide
+   *  back up; this only has to stop being a session list. */
+  stopDemo(): void {
+    this.demo = false
+    this.state.demo = false
+    this.state.sessions = []
+    this.state.sessionIndex = 0
+    this.state.conversation = []
+    this.state.mode = 'session_list'
   }
 
   /** Connect the WS and mark this connection as "glasses present" (#504). The
@@ -754,6 +791,15 @@ export class GlassesController {
         // The waiting overlay used to be here. It is not lost: an item that
         // needs an answer opens the overlay by itself, which is the path
         // every waiting item has actually arrived by.
+        //
+        // In a demo the root's way out is back to the setup screen rather than
+        // out of the app: the demo is something the wearer stepped into, and
+        // the gesture that leaves every other screen should leave this too.
+        // The exit dialogue is still one more double-tap away, from there.
+        if (this.demo) {
+          this.platform.exitDemo?.()
+          return Promise.resolve()
+        }
         this.platform.requestExit()
         return
     }
@@ -990,6 +1036,9 @@ export class GlassesController {
   private sendChoiceKey(data: string): void {
     const t = this.choiceTarget
     if (!t) return
+    // Cursor movement is local to the panel in a demo; there is no pane whose
+    // cursor could disagree with it, and nothing to send a key to.
+    if (this.demo) return
     if (t.paneId) {
       void sendPaneInput(t.sessionId, t.paneId, data).catch(() => {
         this.ws.sendInput(t.sessionId, data)
@@ -1068,6 +1117,13 @@ export class GlassesController {
     const text = this.state.voiceText?.trim()
     if (t && text) {
       try {
+        // The one place a demo could quietly claim something happened, so it
+        // says outright that nothing did.
+        if (this.demo) {
+          this.state.voiceText = DEMO_SENT
+          this.render()
+          return
+        }
         await sendPrompt(t.sessionId, text, t.paneId)
       } catch (err) {
         this.log(
@@ -1201,7 +1257,7 @@ export class GlassesController {
       this.render()
     }
     try {
-      await dismissRelayItem(item.id)
+      if (!this.demo) await dismissRelayItem(item.id)
     } catch {
       this.queue.upsert(item)
       this.syncRelay()
@@ -1220,11 +1276,14 @@ export class GlassesController {
     if (!item || item.source !== 'agent') return
     this.queue.remove(itemId)
     this.syncRelay()
-    void dismissRelayItem(itemId).catch(() => { /* reconnect snapshot re-syncs */ })
+    if (!this.demo) void dismissRelayItem(itemId).catch(() => { /* reconnect snapshot re-syncs */ })
   }
 
   /** Terminal scrape — fallback when the active waiting item has no choices. */
   private async scrapeChoices(sessionId: string): Promise<string[]> {
+    // The demo's waiting session is holding a multi-select: the picker with
+    // the most to show, and the one that was broken until today.
+    if (this.demo) return demoChoices()
     await this.ws.requestContentAndWait(sessionId)
     return this.ws.getChoices(sessionId)
   }
@@ -1478,7 +1537,9 @@ export class GlassesController {
       this.state.conversationHasMore = false
       return
     }
-    const raw = await getConversation(target.id, INITIAL_LOAD_COUNT, target.agent)
+    const raw = this.demo
+      ? demoConversation()
+      : await getConversation(target.id, INITIAL_LOAD_COUNT, target.agent)
     this.state.conversation = filterConversation(raw)
     this.state.conversationLastLoaded = INITIAL_LOAD_COUNT
     // If backend returned exactly the requested count, more may be available.
@@ -1499,6 +1560,12 @@ export class GlassesController {
     this.state.conversationLoading = true
     try {
       const newLast = this.state.conversationLastLoaded + LOAD_MORE_INCREMENT
+      // The demo's transcript is all of it; there is no older page.
+      if (this.demo) {
+        this.state.conversationLoading = false
+        this.state.conversationHasMore = false
+        return false
+      }
       const raw = await getConversation(target.id, newLast, target.agent)
       const filtered = filterConversation(raw)
       // If no new messages were added, we've reached the beginning.
