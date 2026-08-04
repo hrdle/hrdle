@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.60] - 2026-08-04
 
 ### Fixed
 - **A session showed a stranger's conversation after its directory was
