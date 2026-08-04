@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.61] - 2026-08-04
+
+### Changed
+- **Renaming a session renames its herdr workspace.** The session menu's
+  title field used to save a display title of hrdle's own, so the name on the
+  card and the workspace label herdr shows everywhere else drifted apart the
+  moment either was set. The field now writes straight through to
+  `workspace.rename` - one name, stored where the workspace lives, same rule
+  as the display order. The input starts prefilled with the current name, an
+  empty name is rejected rather than meaning "back to automatic", and a name
+  another workspace already carries is refused. Theme and voice vocabulary
+  follow the session to its new name; an open terminal survives the rename,
+  though a reloaded page will ask you to pick the session again under its new
+  name
+- **Voice vocabulary keeps its priorities without the title store.** Workspace
+  names now live only in herdr labels, so the STT prompt tells the two kinds
+  apart by script: a Japanese label is a name someone says out loud and leads,
+  an ASCII label is directory-ish text and stays last, the glossary between
+  them as before
+
 ## [0.3.60] - 2026-08-04
 
 ### Fixed
