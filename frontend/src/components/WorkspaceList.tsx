@@ -177,7 +177,7 @@ function SessionMenuDialog({
 }: {
 	session: SessionResponse;
 	onChangeTheme: (theme: SessionTheme | null) => void;
-	onChangeTitle?: (title: string | null) => void;
+	onChangeTitle?: (title: string) => void;
 	onChangeSttPrompt?: (prompt: string | null) => void;
 	onCreateTab?: () => void;
 	onDelete: () => void;
@@ -185,7 +185,10 @@ function SessionMenuDialog({
 }) {
 	const { t } = useTranslation();
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-	const [titleValue, setTitleValue] = useState(session.customTitle || "");
+	// The workspace label is the name; customTitle only appears from peers on
+	// older versions that still store one.
+	const currentName = session.customTitle || session.name;
+	const [titleValue, setTitleValue] = useState(currentName);
 	const [sttPromptValue, setSttPromptValue] = useState(session.sttPrompt || "");
 
 	if (showDeleteConfirm) {
@@ -265,11 +268,11 @@ function SessionMenuDialog({
 					</div>
 				</div>
 
-				{/* Title edit */}
+				{/* Name edit — writes through to the herdr workspace label */}
 				{onChangeTitle && (
 					<div className="mb-4">
 						<p className="text-sm text-th-text-secondary mb-2">
-							{t("session.customTitle")}
+							{t("session.workspaceName")}
 						</p>
 						<div className="flex gap-2">
 							<input
@@ -277,17 +280,20 @@ function SessionMenuDialog({
 								value={titleValue}
 								onChange={(e) => setTitleValue(e.target.value)}
 								onKeyDown={(e) => {
-									if (e.key === "Enter") {
-										onChangeTitle(titleValue.trim() || null);
+									if (e.key === "Enter" && titleValue.trim()) {
+										onChangeTitle(titleValue.trim());
 									}
 								}}
-								placeholder={t("session.customTitlePlaceholder")}
+								placeholder={t("session.workspaceNamePlaceholder")}
 								className="flex-1 bg-th-bg border border-th-border rounded px-2 py-1 text-sm text-th-text placeholder-th-text-muted focus:outline-none focus:border-blue-500"
 							/>
 							<button
 								type="button"
-								onClick={() => onChangeTitle(titleValue.trim() || null)}
-								className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+								disabled={!titleValue.trim()}
+								onClick={() => {
+									if (titleValue.trim()) onChangeTitle(titleValue.trim());
+								}}
+								className="px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
 							>
 								{t("common.save")}
 							</button>
@@ -2148,7 +2154,7 @@ export function WorkspaceList({
 		}
 	};
 
-	const handleMenuChangeTitle = async (title: string | null) => {
+	const handleMenuChangeTitle = async (title: string) => {
 		if (sessionForMenu) {
 			try {
 				await sessionFetch(

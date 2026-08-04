@@ -77,7 +77,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **PaneState** (`services/pane-state.ts`) - Backend-agnostic `stripAnsi` / `detectPaneState` heuristics for peer-dialog tooling (`hrdle send --wait`, `hrdle peek`)
 - **ClaudeCodeService** (`services/claude-code.ts`) - Monitors Claude Code state from `.jsonl` files; active-session matching uses only herdr's native agent session id
 - **SessionHistoryService** (`services/session-history.ts`) - Reads past Claude Code session history and conversations
-- **SessionMetadataService** (`services/session-metadata.ts`) - Persists session metadata (theme, title, last known sessions for recovery after reboot). Deliberately *not* session order — that lives in herdr
+- **SessionMetadataService** (`services/session-metadata.ts`) - Persists session metadata (theme, STT vocabulary, last known sessions for recovery after reboot). Deliberately *not* session order or title — both live in herdr (order = workspace order, title = workspace label)
 - **SessionsService** (`services/sessions.ts`) - Session CRUD operations with file-based persistence
 - **PromptHistoryService** (`services/prompt-history.ts`) - Searches prompt history across sessions
 - **FileService** (`services/file-service.ts`) - Secure file operations with path traversal prevention
@@ -130,7 +130,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/tabs/close` - Close a tab and all its panes (`{ tabId }`)
 - `POST /:id/prompt` - Send a prompt to the session's agent
 - `PUT /:id/theme` - Set session color theme
-- `PUT /:id/title` - Set session custom title
+- `PUT /:id/title` - Rename the session's herdr workspace (the label is the name *and* the public session id, so the response carries the new `id`)
 - `PUT /:id/stt-prompt` - Set the words this session's speech is made of (leads its STT vocabulary bias)
 - `POST /:id/move` - Move a session to `{ index }` in the display order (writes straight through to herdr's workspace order — hrdle stores no order of its own)
 - `GET /prompts/search` - Search prompt history
@@ -423,19 +423,21 @@ The G2's SDK only hands over raw PCM, so transcription happens on the server at
 `whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
 `services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
-**the speaking session's own words, then the user's custom titles, then the
-glossary, then herdr's labels**, filled up to what fits Whisper's 224-token
-ceiling (190 characters). That order is the point of the design: as workspaces
-multiply, names alone eat the budget and `release` - a word said several times a
-day - falls out. Labels go last because Latin-script names were never the ones
-being misheard. `HRDLE_STT_PROMPT=off` disables it, and any other value replaces
+**the speaking session's own words, then the Japanese workspace names, then the
+glossary, then the ASCII workspace names**, filled up to what fits Whisper's
+224-token ceiling (190 characters). That order is the point of the design: as
+workspaces multiply, names alone eat the budget and `release` - a word said
+several times a day - falls out. There is no separate custom-title store anymore
+- renaming a session writes straight to the herdr label - so script is what
+tells the two kinds of name apart: a Japanese label is a person's own coinage
+said out loud, an ASCII label is directory-ish text that goes last because
+Latin-script names were never the ones being misheard. `HRDLE_STT_PROMPT=off` disables it, and any other value replaces
 it (for A/B testing; the variable name is composed by `envVar()` from
 `binaryName` in `identity.json`).
 
 The first group is per session (#166): `?session=<workspace id>` on the STT
 request names who is speaking, and `PUT /api/sessions/:id/stt-prompt` stores a
-short phrase against that session in `SessionMetadataService`, beside its theme
-and title. The glasses send it from `voiceTarget.sessionId`, which is the
+short phrase against that session in `SessionMetadataService`, beside its theme. The glasses send it from `voiceTarget.sessionId`, which is the
 workspace the reply is going to. Its words go **before the glossary but do not
 replace it** - the glossary is what is said every day in every session, and a
 session that spent the whole budget on its own vocabulary would start mishearing

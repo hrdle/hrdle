@@ -19,7 +19,8 @@ import { KimiService } from '../services/kimi';
 import { KimiHistoryService } from '../services/kimi-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
-import { getAllSessionMetadata, setSessionTheme, setSessionTitle, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, renameSessionMetadata, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { resetSttPromptCache } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
@@ -361,7 +362,8 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       durationMinutes: includeClaudeInfo ? durationMinutes : agentThread?.updatedAt ? Math.round((Date.now() - new Date(agentThread.updatedAt).getTime()) / 60000) : undefined,
       firstMessageId: includeClaudeInfo ? ccSession?.firstMessageId : undefined,
       theme: sessionMetadata[s.id]?.theme,
-      customTitle: sessionMetadata[s.id]?.title,
+      // No customTitle: the workspace label (= name) is the title. A stored
+      // legacy title would only shadow the label the rename now writes to.
       sttPrompt: sessionMetadata[s.id]?.sttPrompt,
       metrics: sessionMetrics,
       panes: s.panes ? await Promise.all(s.panes.map(async (p) => {
@@ -441,7 +443,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       durationMinutes: undefined,
       firstMessageId: undefined,
       theme: lost.theme,
-      customTitle: lost.customTitle,
       // The workspace is gone but its metadata file is not, and a resumed
       // session keeps its id - so the vocabulary it was given survives with it.
       sttPrompt: sessionMetadata[lost.id]?.sttPrompt,
@@ -474,7 +475,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         currentPath,
         agent: s.agent ?? prev?.agent,
         theme: s.theme ?? prev?.theme,
-        customTitle: s.customTitle ?? prev?.customTitle,
         ccSessionId: s.ccSessionId ?? prev?.ccSessionId,
         agentSessionId: s.agentSessionId ?? prev?.agentSessionId,
       };
@@ -911,7 +911,10 @@ sessions.put('/:id/theme', async (c) => {
   }
 });
 
-// PUT /sessions/:id/title - Update session custom title
+// PUT /sessions/:id/title - Rename the session's herdr workspace. The name
+// lives in herdr (workspace label), not in an hrdle-side store — same rule as
+// the display order. The label is also the public session id, so a successful
+// rename returns the new id and the caller must switch to it.
 const UpdateTitleSchema = z.object({
   title: z.string().max(100).nullable(),
 });
@@ -924,6 +927,10 @@ sessions.put('/:id/title', async (c) => {
   if (!parsed.success) {
     return c.json({ error: 'Invalid title' }, 400);
   }
+  const title = parsed.data.title?.trim();
+  if (!title) {
+    return c.json({ error: 'Title must not be empty' }, 400);
+  }
 
   const exists = await herdrService.workspaceExists(id);
   if (!exists) {
@@ -931,9 +938,16 @@ sessions.put('/:id/title', async (c) => {
   }
 
   try {
-    await setSessionTitle(id, parsed.data.title);
-    return c.json({ success: true, title: parsed.data.title });
-  } catch (_error) {
+    const newId = await herdrService.renameWorkspace(id, title);
+    await renameSessionMetadata(id, newId);
+    // The renamed workspace is part of the STT vocabulary bias.
+    resetSttPromptCache();
+    return c.json({ success: true, title, id: newId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('already exists')) {
+      return c.json({ error: 'A session with that name already exists' }, 409);
+    }
     return c.json({ error: 'Failed to update title' }, 500);
   }
 });
