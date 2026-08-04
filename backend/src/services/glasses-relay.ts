@@ -275,17 +275,39 @@ function broadcastRemove(id: string): void {
 // Scrape assembly — "why is it waiting" from the pane itself
 // =============================================================================
 
-/** Extract `1. Yes` / `❯ 2. No` style numbered options from stripped lines. */
+/**
+ * One line of an option list, whoever drew it.
+ *
+ * Two numbering styles, because the agents do not agree: claude and codex
+ * write `1. Yes`, kimi writes `[1] Yes`. The optional leading glyph is the
+ * cursor on the selected row - `❯` from claude, `→` from kimi. herdr's
+ * `strip_ansi` removes colour but leaves both characters alone, so they arrive
+ * here as themselves.
+ *
+ * Kept in step with `extractChoices` in `glasses/src/ws-client.ts`, which is
+ * the same reading done against a live terminal buffer.
+ */
+const OPTION_LINE = /^\s*[❯>*→]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
+
+/**
+ * The rows a wearer cannot answer, whatever they are numbered.
+ *
+ * Every one of these opens free-text entry, and the ring has no keyboard - on
+ * the glasses that is the voice flow, reached another way. Leaving them in
+ * puts rows in the picker whose Enter does nothing a wearer can see.
+ * `Other` is kimi's; the other two are claude's.
+ */
+const UNANSWERABLE = new Set(['Type something.', 'Chat about this', 'Other']);
+
+/** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` style options from stripped lines. */
 export function extractNumberedChoices(lines: string[]): string[] {
   const choices: string[] = [];
   for (const line of lines) {
-    const m = line.match(/^\s*[❯>*]?\s*\d+[.)]\s*(.+)/);
+    const m = line.match(OPTION_LINE);
     if (m) choices.push(m[1].trim());
     if (choices.length >= MAX_CHOICES) break;
   }
-  // claude's AskUserQuestion always appends these two; on the glasses they are
-  // noise (free-text entry is the voice flow, not a ring-selectable choice).
-  return choices.filter((c) => c !== 'Type something.' && c !== 'Chat about this');
+  return choices.filter((c) => !UNANSWERABLE.has(c));
 }
 
 /**

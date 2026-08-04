@@ -87,6 +87,21 @@ export function stripAnsi(str: string): string {
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
 }
 
+/**
+ * The rows a wearer cannot answer, whatever they are numbered.
+ *
+ * Every one of these opens free-text entry, and the ring has no keyboard — on
+ * the glasses that is the voice flow, reached another way. Leaving them in
+ * puts rows in the picker whose Enter does nothing a wearer can see, which is
+ * what the relay's own scrape has always avoided and this one did not:
+ * `Type something.` was a selectable option here while the same pane read
+ * through the server offered two.
+ *
+ * `Other` is kimi's; the other two are claude's. Kept in step with
+ * `UNANSWERABLE` in `backend/src/services/glasses-relay.ts`.
+ */
+const UNANSWERABLE = new Set(['Type something.', 'Chat about this', 'Other'])
+
 /** How far back from the pane's tail an option block may start. A prompt sits
  *  at the bottom; prose scrolls away above it. */
 const CHOICE_TAIL_LINES = 25
@@ -114,14 +129,17 @@ const CHOICE_MAX_GAP = 3
 export function extractChoices(text: string): string[] {
   if (!text) return []
   const lines = text.split('\n')
-  // Claude Code uses U+276F as its cursor marker; stripAnsi has already folded
-  // it onto `>`, but a buffer that never went through it may still carry it.
-  const NUMBERED = /^\s*[\u276f>*]?\s*(\d+)[.)]\s*(.+)/
+  // Two numbering styles, because the agents do not agree: claude and codex
+  // write `1. Yes`, kimi writes `[1] Yes`. The optional leading glyph is the
+  // cursor on the selected row \u2014 U+276F from claude, U+2192 from kimi.
+  // stripAnsi folds both onto `>`, but a buffer that never went through it may
+  // still carry them.
+  const NUMBERED = /^\s*[\u276f>*\u2192]?\s*(?:(\d+)[.)]|\[(\d+)\])\s*(.+)/
   const found: { n: number; text: string; at: number }[] = []
   const from = Math.max(0, lines.length - CHOICE_TAIL_LINES)
   for (let i = from; i < lines.length; i++) {
     const m = lines[i].match(NUMBERED)
-    if (m) found.push({ n: Number(m[1]), text: m[2].trim(), at: i })
+    if (m) found.push({ n: Number(m[1] ?? m[2]), text: m[3].trim(), at: i })
   }
   if (found.length < 2) return []
 
@@ -137,7 +155,10 @@ export function extractChoices(text: string): string[] {
     if (run.length >= best.length) best = run
   }
   if (best.length < 2 || best[0].n !== 1) return []
-  return best.map((c) => c.text)
+  // Dropped last, never before the run is picked: they are numbered rows like
+  // any other, and removing one first would break the 1, 2, 3 the run is
+  // recognised by.
+  return best.map((c) => c.text).filter((c) => !UNANSWERABLE.has(c))
 }
 
 export class WsClient {
