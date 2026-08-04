@@ -26,7 +26,7 @@ import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
 import { CARD_BORDER_COLOR, LINE_H, PANEL_H, PANEL_W, splitLines, textWidth } from './metrics.ts'
-import { BASELINE, GREEN, createPanelPainter } from './panel-paint.ts'
+import { BASELINE, createPanelPainter, inkColor, withExportInk } from './panel-paint.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
 
@@ -547,7 +547,7 @@ export function startDebugUI(): void {
   function drawContainers(ctx: CanvasRenderingContext2D): void {
     for (const c of panel) {
       if (c.border > 0) {
-        ctx.strokeStyle = `rgba(${GREEN}, ${c.borderColor / 15})`
+        ctx.strokeStyle = `rgba(${inkColor()}, ${c.borderColor / 15})`
         ctx.lineWidth = c.border
         ctx.beginPath()
         ctx.roundRect(c.x + c.border / 2, c.y + c.border / 2, c.w - c.border, c.h - c.border, c.radius)
@@ -555,7 +555,7 @@ export function startDebugUI(): void {
       }
       // The footer is the one thing drawn dimmer than the rest — it carries the
       // gestures and the clock, which are reference rather than content.
-      ctx.fillStyle = c.name === 'footer' ? `rgba(${GREEN}, 0.78)` : `rgb(${GREEN})`
+      ctx.fillStyle = c.name === 'footer' ? `rgba(${inkColor()}, 0.78)` : `rgb(${inkColor()})`
       const inset = c.border + c.pad
       const innerW = c.w - 2 * inset
       const lines = c.content
@@ -815,9 +815,16 @@ export function startDebugUI(): void {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const a = document.createElement('a')
       a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${lastMode}-${stamp}.png`
+      // Drawn again in EVEN's export colours rather than read off the panel as
+      // it stands: the panel's mint and its bloom are what the last rejection
+      // was about, and a submission has to be the green their own simulator
+      // writes. The frame on screen is put back immediately after, so the
+      // repaint is invisible to whoever is watching.
+      withExportInk(paintPanel)
       a.href = canvas.toDataURL('image/png')
+      paintPanel()
       a.click()
-      copied.textContent = 'Saved the PNG (transparent, 576x288)'
+      copied.textContent = 'Saved the PNG (transparent, 576x288, export green)'
       copied.className = 'hint copied'
     } catch {
       copied.textContent = 'Could not save the PNG'

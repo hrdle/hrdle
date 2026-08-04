@@ -41,6 +41,59 @@ export const FONT = '19px system-ui, "Noto Sans", "DejaVu Sans", sans-serif'
 // The panel's phosphor green. Pulled toward pure green — the G2 is a
 // monochrome green display and the paler mint read as a generic HUD.
 export const GREEN = '76, 255, 100'
+/**
+ * The green EVEN's own simulator exports, and the only one a store submission
+ * may be drawn in.
+ *
+ * `@evenrealities/evenhub-simulator` writes its screenshots as RGBA with the
+ * colour fixed at pure green and only the alpha varying — measured on
+ * 2026-08-04, every pixel of every capture was exactly this. Ours is a mint
+ * with a bloom behind it, which reads as 251 distinct colours against their 7,
+ * and EVEN Hub rejected v0.0.48 for exactly that: "the color tone of the
+ * provided screenshots does not match the original display captured from the
+ * simulator".
+ *
+ * So the panel keeps the green that is nicer to look at and the export uses
+ * theirs. Two greens is not a split worth avoiding — one is a viewing
+ * preference, the other is a submission format.
+ */
+export const EXPORT_GREEN = '0, 255, 0'
+
+/**
+ * Which green the next frame is drawn in.
+ *
+ * Module state rather than a parameter because the colour is read from a dozen
+ * places down the painter, and threading it through all of them would put the
+ * decision in every one of them instead of at the top. Set for the duration of
+ * one repaint and put back — see `withExportInk`.
+ */
+let ink = GREEN
+/** Whether the bloom is drawn. EVEN's export has none: their glow is a
+ *  post-processing flag that the screenshot path deliberately ignores. */
+let bloom = true
+
+/** The colour the painter is currently drawing in. */
+export function inkColor(): string {
+  return ink
+}
+
+/**
+ * Run `paint` in EVEN's export colours, then put the panel's own back.
+ *
+ * Synchronous on purpose: the caller repaints, reads the canvas, and restores,
+ * and an await in the middle would leave the panel showing the wrong green to
+ * anyone looking at it.
+ */
+export function withExportInk(paint: () => void): void {
+  ink = EXPORT_GREEN
+  bloom = false
+  try {
+    paint()
+  } finally {
+    ink = GREEN
+    bloom = true
+  }
+}
 
 /** The three container strings a screen is drawn from, mirror-shaped. */
 export interface PanelScreen {
@@ -102,9 +155,11 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
     ctx.font = FONT
     ctx.textBaseline = 'alphabetic'
     // Optics bloom a little; keep it subtle or quantising turns it to mud.
-    ctx.shadowColor = `rgba(${GREEN}, 0.55)`
-    ctx.shadowBlur = 6
-    ctx.fillStyle = `rgb(${GREEN})`
+    // Off for an export: EVEN's own screenshot path ignores their glow flag,
+    // and a halo is the other half of what "processed" was read as.
+    ctx.shadowColor = bloom ? `rgba(${ink}, 0.55)` : 'transparent'
+    ctx.shadowBlur = bloom ? 6 : 0
+    ctx.fillStyle = `rgb(${ink})`
     return ctx
   }
 
@@ -154,7 +209,7 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
       // The list's strip is a notification and is drawn to be noticed; the
       // conversation's is a recap, and its rule only has to separate.
       const level = screen.headerless ? CARD_BORDER_COLOR : NOTICE_BORDER_COLOR
-      ctx.strokeStyle = `rgba(${GREEN}, ${level / 15})`
+      ctx.strokeStyle = `rgba(${ink}, ${level / 15})`
       ctx.lineWidth = NOTICE_BORDER
       ctx.beginPath()
       ctx.roundRect(
@@ -165,7 +220,7 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
         screen.headerless ? CARD_RADIUS : 0,
       )
       ctx.stroke()
-      ctx.fillStyle = `rgb(${GREEN})`
+      ctx.fillStyle = `rgb(${ink})`
     }
 
     if (screen.card) {
@@ -175,7 +230,7 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
       // is not, which is the exact class of divergence that keeps turning up.
       const lines = screen.body.split('\n')
       const box = cardBox(lines.length)
-      ctx.strokeStyle = `rgba(${GREEN}, ${CARD_BORDER_COLOR / 15})`
+      ctx.strokeStyle = `rgba(${ink}, ${CARD_BORDER_COLOR / 15})`
       ctx.lineWidth = CARD_BORDER
       ctx.beginPath()
       ctx.roundRect(
@@ -186,7 +241,7 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
         CARD_RADIUS,
       )
       ctx.stroke()
-      ctx.fillStyle = `rgb(${GREEN})`
+      ctx.fillStyle = `rgb(${ink})`
       const top = box.y + CARD_BORDER + BODY_PAD + BASELINE
       for (const [i, line] of lines.entries()) {
         drawRow(ctx, line, box.x + CARD_BORDER + BODY_PAD, top + i * LINE_H)
@@ -204,7 +259,7 @@ export function createPanelPainter(canvas: HTMLCanvasElement, onFrame?: () => vo
       }
     }
 
-    ctx.fillStyle = `rgba(${GREEN}, 0.78)`
+    ctx.fillStyle = `rgba(${ink}, 0.78)`
     drawRow(ctx, screen.footer, HEADER_PAD, FOOTER_BASE)
 
     endFrame(ctx)

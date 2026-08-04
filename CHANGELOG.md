@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.62] - 2026-08-04
+
+### Fixed
+- **The option lists the other agents draw are read at all.** The scrape only
+  understood claude's `1. Yes`. kimi writes `[1] Yes` with U+2192 as its
+  cursor, so nothing was extracted: a blocked kimi workspace produced a waiting
+  item carrying the question and no options, the picker never opened for it,
+  and a tap fell through to the microphone
+  - Both readers - the server's, which scrapes a pane it already knows is
+    blocked, and the app's, which scrapes a live terminal buffer - now take
+    either numbering, and agree on the rows the ring cannot answer:
+    `Type something.` / `Chat about this` (claude) and `Other` (kimi) all open
+    free-text entry, which has no keyboard on the glasses. The app dropped none
+    of them before, so one pane read two ways produced a picker with rows the
+    server's own notice did not offer
+  - Verified end to end against kimi-k3: question, next question, the submit
+    screen, and the answers landing in the transcript, by ring alone
+
+### Changed
+- **`Save PNG` writes the green EVEN's own simulator writes.** EVEN Hub
+  rejected a submission with "the color tone of the provided screenshots does
+  not match the original display captured from the simulator" - theirs is pure
+  green with only the alpha varying, ours was a mint with a bloom behind it,
+  251 distinct colours against their 7. Side by side that reads as processed
+  - The panel keeps its own green; only the export changes. One is a viewing
+    preference, the other is a submission format
+  - Layout was measured against the official simulator on the same screens:
+    identical line counts, at most 1px of vertical drift and 3px of width over
+    lines up to 568px. The browser font was never the problem here
+
 ## [0.3.61] - 2026-08-04
 
 ### Changed
