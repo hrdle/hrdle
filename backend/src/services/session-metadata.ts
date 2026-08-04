@@ -35,7 +35,6 @@ export interface LastKnownSession {
   currentPath?: string;
   agent?: AgentProvider;
   theme?: SessionTheme;
-  customTitle?: string;
   ccSessionId?: string;
   /** Codex thread id (rollout). Used to drive `codex resume <id>` after reboot. */
   agentSessionId?: string;
@@ -142,14 +141,23 @@ export async function setSessionSttPrompt(
   });
 }
 
-export async function setSessionTitle(sessionId: string, title: string | null): Promise<void> {
+/**
+ * Move a session's metadata to its new id after a workspace rename. The title
+ * field is dropped on the way: the workspace label is the title now, and a
+ * stored one would only shadow it.
+ */
+export async function renameSessionMetadata(oldId: string, newId: string): Promise<void> {
+  if (oldId === newId) return;
   await withMetadataLock(async () => {
     const data = await load();
-    if (!data.sessions[sessionId]) data.sessions[sessionId] = {};
-    if (title === null || title === '') {
-      delete data.sessions[sessionId].title;
-    } else {
-      data.sessions[sessionId].title = title;
+    const meta = data.sessions[oldId];
+    if (!meta) return;
+    delete data.sessions[oldId];
+    const kept: SessionMeta = {};
+    if (meta.theme) kept.theme = meta.theme;
+    if (meta.sttPrompt) kept.sttPrompt = meta.sttPrompt;
+    if (kept.theme || kept.sttPrompt) {
+      data.sessions[newId] = { ...data.sessions[newId], ...kept };
     }
     await save(data);
   });

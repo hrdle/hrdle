@@ -149,6 +149,9 @@ export interface SessionResponse {
   currentPath?: string;
   agent?: AgentProvider;
   theme?: SessionTheme;
+  /** Legacy: servers before the rename write-through stored a display title of
+   *  their own. Current servers never set it — the name (herdr workspace
+   *  label) is the title — but a peer on an older version still might. */
   customTitle?: string;
   /**
    * Words this session's speech is made of, leading the vocabulary bias sent

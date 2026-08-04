@@ -15,6 +15,7 @@ import {
   listTabs,
   listWorkspaces,
   readPaneText,
+  renameWorkspace as renameHerdrWorkspace,
   toTmuxPaneId,
   type HerdrAgentStatus,
   type HerdrWorkspace,
@@ -399,6 +400,36 @@ export class HerdrService {
     // very next sessions push and snap the dragged row back.
     this.invalidateCache();
     return true;
+  }
+
+  /**
+   * Rename a session's workspace (its herdr label). The label IS the public
+   * session id, so the caller gets the new id back and must treat the old one
+   * as retired. A live control session is re-registered under the new id as
+   * well: it resolved its workspace_id at activation, so it keeps working for
+   * clients still subscribed under the old id, and the alias lets new
+   * subscribers reach the same instance instead of spawning a duplicate.
+   */
+  async renameWorkspace(sessionId: string, name: string): Promise<string> {
+    const ws = await this.resolveWorkspace(sessionId);
+    if (!ws) {
+      throw new Error(`Failed to rename session: workspace not found: ${sessionId}`);
+    }
+    const clash = (await listWorkspaces()).find(
+      (w) => w.workspace_id !== ws.workspace_id && workspaceSessionId(w) === name,
+    );
+    if (clash) {
+      throw new Error(`Failed to rename session: workspace "${name}" already exists`);
+    }
+    await renameHerdrWorkspace(ws.workspace_id, name);
+    this.invalidateCache();
+    const control = herdrControlSessions.get(sessionId);
+    if (control && !control.isDestroyed && name !== sessionId) {
+      // A stale alias left behind by destroy() is harmless: lookups check
+      // isDestroyed and replace it.
+      herdrControlSessions.set(name, control);
+    }
+    return name;
   }
 
   async killWorkspace(sessionId: string): Promise<void> {
