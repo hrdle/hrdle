@@ -296,7 +296,14 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
     // no project dir yet). But user-visible content (recap / firstPrompt /
     // summary) must NOT leak from an ancestor project — gate it on
     // ccSession.projectPath === s.currentPath.
-    const isExactPathMatch = !!ccSession && !!s.currentPath && ccSession.projectPath === s.currentPath;
+    //
+    // Unless the id itself matched: an id is unique across every project, so a
+    // transcript found by id is this pane's own wherever it turned up. Gating
+    // that by path is how a session whose directory was renamed mid-flight lost
+    // its recap — the pane's cwd had stopped naming the project it started in.
+    const isExactPathMatch =
+      !!ccSession &&
+      (ccSession.matchedById || (!!s.currentPath && ccSession.projectPath === s.currentPath));
 
     // Same order for every agent: herdr watches the pane, a hook only reports
     // the moment it fired. Thread agents used to read hooks first, which left a

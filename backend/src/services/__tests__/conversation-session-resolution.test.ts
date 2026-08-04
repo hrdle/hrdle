@@ -78,4 +78,37 @@ describe('conversation transcript resolution', () => {
       await rm(home, { recursive: true, force: true });
     }
   });
+
+  /**
+   * Rename the working directory under a running agent and the pane's cwd names
+   * a project directory that was never written to. The transcript stays where
+   * the agent started it. Resolving by directory then walked up to an ancestor
+   * — `/home` — and answered with a stranger's conversation.
+   */
+  test('by session id: a renamed working directory still finds the transcript', async () => {
+    const { home, older } = await fixture();
+    try {
+      const renamed = '/home/fixture/repos/work-renamed';
+      const session = await serviceFor(home).getSessionById(older, renamed);
+      expect(session?.sessionId).toBe(older);
+      // The directory the transcript is in, not the one the pane is in now.
+      expect(session?.projectDirName).toBe(claudeProjectDirName('/home/fixture/repos/work'));
+      expect(session?.matchedById).toBe(true);
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  test('a cwd whose project directory does not exist never answers with another session', async () => {
+    const { home } = await fixture();
+    try {
+      const session = await serviceFor(home).getSessionById(
+        'cccccccc-9999-0000-1111-222222222222',
+        '/home/fixture/repos/work-renamed',
+      );
+      expect(session).toBeNull();
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
 });

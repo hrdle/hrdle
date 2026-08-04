@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **A session showed a stranger's conversation after its directory was
+  renamed.** A transcript was addressed by the pane's working directory, which
+  is only ever a guess at where one lives: Claude Code fixes the project
+  directory when the agent starts and never moves the file, so a `mv` of the
+  working directory under a running agent leaves the pane naming a directory
+  nothing was written to. The lookup then walked up to an ancestor - `/home` -
+  and answered with the newest transcript there, which is a different session
+  entirely. The recap, the first prompt and the context meter went blank at the
+  same time and for the same reason. A session id is unique across every
+  project, so a miss now scans for the id instead of guessing at paths again,
+  and the transcript is carried by its real location rather than re-derived
+  from a path. Where the id resolves to nothing, the conversation is empty
+  rather than someone else's - the fallback that once read "a conversation from
+  the right directory beats an empty screen" was the thing showing the wrong
+  one
+- **The Claude changes list had the same fault, and showed it as edits.** Asked
+  for a directory it had no transcript for, it walked up to an ancestor and
+  listed whatever ran in `/home/you` last - a plausible-looking list of files
+  the session never touched. It reads only this directory's own project now,
+  and where a rename has moved the session out from under its project name, it
+  finds it by the cwd the transcript itself last recorded
+
 ## [0.3.59] - 2026-08-04
 
 ### Fixed

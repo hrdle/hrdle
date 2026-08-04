@@ -1,9 +1,10 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { claudeProjectDirName } from '../utils/claude-project-path';
+import { locateSessionFile } from '../utils/locate-session-file';
 import { readLastLines } from '../utils/read-last-lines';
 import { type RecapEntry, scanLastRecap } from '../utils/recap-scanner';
 
@@ -18,6 +19,21 @@ interface ClaudeCodeSession {
   waitingToolName?: string;
   firstMessageId?: string;  // For session matching with history
   lastRecap?: RecapEntry;
+  /**
+   * The transcript this was read from, and the project directory holding it.
+   * Both are carried rather than re-derived from `projectPath`: the directory
+   * name is a lossy encoding of a path, and after a `mv` of the working
+   * directory the two no longer agree at all (the transcript stays where the
+   * agent started, the pane's cwd follows the rename).
+   */
+  filePath?: string;
+  projectDirName?: string;
+  /**
+   * The lookup matched this session's id, not merely its directory. An id is
+   * unique across every project, so the content is this pane's own even when
+   * it was found somewhere the pane's cwd would never have pointed to.
+   */
+  matchedById?: boolean;
 }
 
 interface SessionsIndex {
@@ -436,6 +452,8 @@ export class ClaudeCodeService {
 
       const data: ClaudeCodeSession = {
         sessionId,
+        filePath,
+        projectDirName: basename(dirname(filePath)),
         summary: lastUserMessage || undefined,
         firstPrompt: firstPrompt || undefined,
         modified: new Date(fileStat.mtimeMs).toISOString(),
@@ -468,47 +486,51 @@ export class ClaudeCodeService {
    * directory they belong to.
    */
   async resolveSessionCwd(sessionId: string): Promise<string | null> {
-    // Defense: sessionId is interpolated into a path.
-    if (!/^[0-9a-f-]{16,64}$/i.test(sessionId)) return null;
+    const filePath = await this.locateSessionFile(sessionId);
+    if (!filePath) return null;
+    return this.readRecordedCwd(filePath);
+  }
+
+  /** See `locateSessionFile` — the id is exact where the cwd is a guess. */
+  private locateSessionFile(sessionId: string): Promise<string | null> {
+    return locateSessionFile(sessionId, this.claudeDir);
+  }
+
+  /** The first `cwd` recorded in a transcript; it appears within the head. */
+  private async readRecordedCwd(filePath: string): Promise<string | null> {
+    const rl = createInterface({
+      input: createReadStream(filePath, { start: 0, end: 262_144 }),
+    });
     try {
-      const dirs = await readdir(this.claudeDir);
-      for (const dir of dirs) {
-        const filePath = join(this.claudeDir, dir, `${sessionId}.jsonl`);
+      let scanned = 0;
+      for await (const line of rl) {
+        if (++scanned > 200) break;
         try {
-          await stat(filePath);
-        } catch {
-          continue;
-        }
-        // cwd appears within the first few records; scan the head only.
-        const rl = createInterface({
-          input: createReadStream(filePath, { start: 0, end: 262_144 }),
-        });
-        try {
-          let scanned = 0;
-          for await (const line of rl) {
-            if (++scanned > 200) break;
-            try {
-              const d = JSON.parse(line) as { cwd?: string };
-              if (typeof d.cwd === 'string' && d.cwd.startsWith('/')) {
-                return d.cwd;
-              }
-            } catch {
-              // truncated / malformed line
-            }
+          const d = JSON.parse(line) as { cwd?: string };
+          if (typeof d.cwd === 'string' && d.cwd.startsWith('/')) {
+            return d.cwd;
           }
-        } finally {
-          rl.close();
+        } catch {
+          // truncated / malformed line
         }
-        return null; // file found but no cwd recorded
       }
     } catch {
-      // projects dir unreadable
+      // unreadable file
+    } finally {
+      rl.close();
     }
     return null;
   }
 
   /**
-   * Get Claude Code session info by session ID
+   * Get Claude Code session info by session ID.
+   *
+   * The cwd is a hint about where to look first, never the answer: it decides
+   * a project directory name, and that name goes stale the moment the working
+   * directory is renamed under a running agent. So a miss falls through to
+   * ancestors and finally to a scan of every project, which is exact because
+   * the id is unique — nothing here is allowed to answer with a session other
+   * than the one asked for.
    */
   async getSessionById(sessionId: string, workingDir: string): Promise<ClaudeCodeSession | null> {
     try {
@@ -517,7 +539,7 @@ export class ClaudeCodeService {
       const filePath = join(projectDir, `${sessionId}.jsonl`);
 
       const result = await this.readSessionDataCached(filePath, sessionId, workingDir);
-      if (result) return result;
+      if (result) return { ...result, matchedById: true };
 
       // Try parent directories
       let currentPath = workingDir;
@@ -531,7 +553,21 @@ export class ClaudeCodeService {
         const parentFilePath = join(parentProjectDir, `${sessionId}.jsonl`);
 
         const parentResult = await this.readSessionDataCached(parentFilePath, sessionId, currentPath);
-        if (parentResult) return parentResult;
+        if (parentResult) return { ...parentResult, matchedById: true };
+      }
+
+      // Nowhere the cwd points to. Ask every project directory instead: the
+      // transcript of a session whose directory was renamed is still exactly
+      // where the agent started writing it.
+      const located = await this.locateSessionFile(sessionId);
+      if (located) {
+        const recordedCwd = await this.readRecordedCwd(located);
+        const anyProject = await this.readSessionDataCached(
+          located,
+          sessionId,
+          recordedCwd ?? workingDir,
+        );
+        if (anyProject) return { ...anyProject, matchedById: true };
       }
 
       return null;
