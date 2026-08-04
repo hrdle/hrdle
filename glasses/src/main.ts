@@ -193,7 +193,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     },
     startMicCapture: () => startMic(bridge),
     stopMicCapture: () => stopMic(bridge),
-    transcribeAudio: (pcm) => transcribe(pcm, MIC_SAMPLE_RATE),
+    transcribeAudio: (pcm, sessionId) => transcribe(pcm, MIC_SAMPLE_RATE, sessionId),
     requestExit() {
       // Mode 1 — the host's own confirmation, which the user can cancel. Only
       // if they confirm does `SYSTEM_EXIT_EVENT` arrive, and the cleanup goes

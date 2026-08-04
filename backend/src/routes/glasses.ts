@@ -107,7 +107,9 @@ glasses.post('/stt', async (c) => {
     // What the speech is about: product terms and the user's own workspace
     // names. Without it the model has no reason to produce `herdr` or
     // 「2脚ロボ開発」, and reaches for the ordinary Japanese word instead.
-    const prompt = await sttPrompt();
+    // `?session=` names the workspace being spoken to, so its own vocabulary
+    // leads the prompt (#166). Absent, the composed one is what it always was.
+    const prompt = await sttPrompt({ sessionId: c.req.query('session') });
     if (prompt) form.append('prompt', prompt);
 
     const res = await fetch(GROQ_STT_URL, {

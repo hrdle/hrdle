@@ -19,6 +19,14 @@ const withLastKnownLock = createMutationLock();
 interface SessionMeta {
   theme?: SessionTheme;
   title?: string;
+  /**
+   * Words this session is about, biasing its speech-to-text (#166).
+   *
+   * Here rather than in `glasses-settings.json` because it belongs to the
+   * session the way a theme and a title do: it is written when the work is
+   * named and it dies with the workspace.
+   */
+  sttPrompt?: string;
 }
 
 export interface LastKnownSession {
@@ -64,7 +72,7 @@ async function load(): Promise<MetadataStore> {
 async function save(data: MetadataStore): Promise<void> {
   const filePath = await getFilePath();
   for (const [id, meta] of Object.entries(data.sessions)) {
-    if (!meta.theme && !meta.title) {
+    if (!meta.theme && !meta.title && !meta.sttPrompt) {
       delete data.sessions[id];
     }
   }
@@ -115,6 +123,22 @@ export async function removeLastKnownSession(sessionId: string): Promise<void> {
       const filePath = await getLastKnownFilePath();
       await atomicWriteFile(filePath, JSON.stringify(filtered, null, 2));
     }
+  });
+}
+
+export async function setSessionSttPrompt(
+  sessionId: string,
+  prompt: string | null,
+): Promise<void> {
+  await withMetadataLock(async () => {
+    const data = await load();
+    if (!data.sessions[sessionId]) data.sessions[sessionId] = {};
+    if (prompt === null || prompt.trim() === '') {
+      delete data.sessions[sessionId].sttPrompt;
+    } else {
+      data.sessions[sessionId].sttPrompt = prompt.trim();
+    }
+    await save(data);
   });
 }
 

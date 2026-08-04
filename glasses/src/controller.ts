@@ -152,8 +152,10 @@ export interface GlassesPlatform {
   /** Start mic capture. Returns false when audio is unavailable. */
   startMicCapture(): Promise<boolean>
   stopMicCapture(): Promise<void>
-  /** Transcribe collected PCM into text. */
-  transcribeAudio(pcm: Uint8Array): Promise<string>
+  /** Transcribe collected PCM into text. `sessionId` is the workspace being
+   *  spoken to, which biases the recognition toward that session's own
+   *  vocabulary server-side (#166). */
+  transcribeAudio(pcm: Uint8Array, sessionId?: string): Promise<string>
   /** Durable across a WebView restart. The device writes to the host app's
    *  storage, which outlives the page; the simulator uses localStorage. */
   saveState(json: string): void
@@ -1204,7 +1206,10 @@ export class GlassesController {
     this.state.voicePhase = 'transcribing'
     this.render()
     try {
-      this.state.voiceText = await this.platform.transcribeAudio(concatPcm(this.audioChunks))
+      this.state.voiceText = await this.platform.transcribeAudio(
+        concatPcm(this.audioChunks),
+        this.voiceTarget?.sessionId,
+      )
     } catch {
       this.state.voiceText = ''
     }

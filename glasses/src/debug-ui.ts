@@ -705,7 +705,7 @@ export function startDebugUI(): void {
     // Typed text short-circuits the transcription, which is handy for driving
     // the confirm/send flow without speaking. Left empty, the recording is
     // sent to Groq exactly as the glasses would send it.
-    transcribeAudio: async (pcm) => {
+    transcribeAudio: async (pcm, sessionId) => {
       const scripted = sttInput.value.trim()
       if (scripted) {
         setVoiceStatus(`Using the text from the STT field: ${scripted}`)
@@ -713,7 +713,7 @@ export function startDebugUI(): void {
       }
       setVoiceStatus(`Transcribing... (sent ${(pcm.length / 2 / MIC_RATE).toFixed(1)}s of audio)`)
       try {
-        const text = await transcribe(pcm, MIC_RATE)
+        const text = await transcribe(pcm, MIC_RATE, sessionId)
         setVoiceStatus(text ? `Transcript: ${text}` : 'Nothing was recognized')
         return text
       } catch (err) {
