@@ -116,6 +116,46 @@ describe('scrape extraction', () => {
     expect(choices).toEqual(['Rewrite it', 'Patch minimally']);
   });
 
+  test("extractNumberedChoices reads kimi's bracketed options", () => {
+    // Captured from a real kimi-k3 pane on 2026-08-04. herdr's `strip_ansi`
+    // removes the colour and leaves the U+2192 cursor, so this is what the
+    // scrape actually receives. None of it was read before: a blocked kimi
+    // workspace produced a waiting item with no choices and the picker never
+    // opened for it.
+    const choices = extractNumberedChoices([
+      '  ? テストはどう分けますか?',
+      '',
+      '   → [1] モジュールごとに1ファイル',
+      '         各モジュールに対応するテストファイルを個別に作成します',
+      '     [2] 全部で1ファイル',
+      '         すべてのテストを1つのファイルにまとめます',
+      '     [3] Other',
+      '',
+      '   ↑↓ select  1-3 / ↵ choose  ←/→/tab switch  esc cancel',
+    ]);
+    expect(choices).toEqual(['モジュールごとに1ファイル', '全部で1ファイル']);
+  });
+
+  test("extractNumberedChoices reads kimi's submit screen", () => {
+    expect(
+      extractNumberedChoices(['  Ready to submit your answers?', '', '   → [1] Submit', '     [2] Cancel']),
+    ).toEqual(['Submit', 'Cancel']);
+  });
+
+  test('extractNumberedChoices drops the rows the ring cannot answer', () => {
+    // All three open free-text entry, which the ring has no keyboard for.
+    // `Other` is kimi's; the other two are claude's.
+    expect(
+      extractNumberedChoices([
+        '❯ 1. Rewrite it',
+        '  2. Patch minimally',
+        '  3. Type something.',
+        '  4. Chat about this',
+      ]),
+    ).toEqual(['Rewrite it', 'Patch minimally']);
+    expect(extractNumberedChoices(['   → [1] Keep it', '     [2] Other'])).toEqual(['Keep it']);
+  });
+
   test('extractQuestionLine prefers the last ?-terminated line', () => {
     expect(extractQuestionLine(['noise', 'Continue?', '❯ 1. Yes'])).toBe('Continue?');
   });
