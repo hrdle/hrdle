@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.58] - 2026-08-04
+
+### Added
+- **Each session brings its own speech vocabulary.** A workspace can be given a
+  short phrase of words it is about (the session menu, beside the custom title,
+  or `PUT /api/sessions/:id/stt-prompt`), and those words lead the bias sent
+  with its transcriptions. `?session=` on the STT request names who is
+  speaking; the glasses take it from the workspace they are replying to
+  - Whisper's 224-token ceiling is what made one server-wide line a problem
+    rather than a simplification: as workspaces multiply, names alone eat the
+    budget and the words being said *in this session* are what fall out. A
+    session about the G2 display and one about tax paperwork were biased
+    identically, and neither got the terms it needed
+  - The session's words sit **before the glossary but do not replace it**,
+    pushing herdr's labels out instead. The glossary is what is said every day
+    in every session - a session that spent the whole budget on its own
+    vocabulary would start mishearing `リリース` again
+  - It joins the composed line rather than becoming a fourth override: the
+    saved setting and `HRDLE_STT_PROMPT` already mean "send exactly this", and a
+    per-session vocabulary is an addition to a composition, not a replacement
+    for someone's explicit choice. A session with no words of its own composes
+    exactly as before
+  - Glasses v0.0.50 carries it to the device
+
 ## [0.3.57] - 2026-08-04
 
 ### Added
