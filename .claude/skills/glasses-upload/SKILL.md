@@ -161,6 +161,29 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
 
 10. **Switch Beta over**:
 
+    **While a build is under store review, stop after step 9 and ask.** Step A
+    below takes the current Beta build back to Private, and during a review that
+    build is the one that was submitted. Whether that disturbs the review is not
+    documented anywhere - the docs cover uploading and self-test groups and
+    nothing about status transitions - so it is not a thing to find out on a
+    submission that matters.
+
+    What the Hub does say, read on 2026-08-04 while v0.0.48 sat In Review: the
+    two are separate places. A build's `Private / Beta / Public` lives on the
+    Builds tab, and the review is its own record under **Store listing ->
+    Publish to hub** (`Review status: Submitted ... In review`). With v0.0.48
+    both Beta and In Review, the dropdown on another build offered all three
+    values, none disabled and no warning. So promoting a second build to Beta
+    *probably* leaves the review alone.
+
+    **The experiment worth running on the next submission** (agreed 2026-08-04,
+    because waiting out a review each time costs real development speed): skip
+    Step A, promote the new build straight to Beta, then reload Store listing
+    and check the review record still reads `In review` against the build that
+    was submitted. If it does, Step A is only needed when Beta is exclusive, and
+    this note can become a rule. Do it on a submission whose outcome does not
+    matter much.
+
     **Step A: put the current Beta build back to Private**
     - Expand the current Beta build (`"... Published ... Beta"`) in the build
       list with `agent-browser click`
