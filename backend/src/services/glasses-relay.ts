@@ -548,6 +548,45 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
 }
 
 /**
+ * A pane that never stopped being blocked, asking something else.
+ *
+ * One AskUserQuestion call can hold several questions: the TUI takes the
+ * answer to the first and draws the second without the pane leaving
+ * `blocked`, so no enter/exit transition fires and the item on the glasses
+ * keeps the first question's text and options. The wearer's next pick then
+ * lands on a question they were never shown - the worst of the two failure
+ * modes, since it looks like it worked.
+ *
+ * A fresh item rather than an edit in place: this is a different decision, and
+ * the id is what tells a client the difference.
+ */
+async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
+  if (subscribers.size === 0) return; // presence gate, same as enterBlocked
+  const slot = store.get(ws.id);
+  const item = slot?.waiting;
+  if (!slot || !item || item.source !== 'auto' || item.paneId !== paneId) return;
+  // "Later / on PC" was said about this pane, and the wearer meant the pane
+  // rather than the sentence. Re-raising it on every redraw would be arguing.
+  if (item.dismissed) return;
+
+  const { text, choices } = await assembleWaitingPayload(ws, paneId);
+  const next = makeItem(ws.id, 'waiting', 'auto', text, paneId, choices);
+  // A read that came back with no options while the last one had them is far
+  // more likely a half-drawn frame than a question that lost its choices.
+  if (item.choices?.length && !next.choices?.length) return;
+  if (next.text === item.text && sameChoices(item.choices, next.choices)) return;
+
+  slot.waiting = next;
+  broadcastRemove(item.id);
+  broadcastUpsert(next);
+}
+
+function sameChoices(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
  * blocked→* on one pane. Removes the session's waiting item when it belongs
  * to this pane, then promotes another still-blocked pane of the same session
  * (multi-pane workspaces) so exactly one waiting item remains while anything
@@ -588,7 +627,12 @@ export async function trackGlassesRelay(): Promise<void> {
       seen.add(key);
       const next = pane.agentStatus ?? 'unknown';
       const prev = paneStatus.get(key);
-      if (prev === next) continue;
+      if (prev === next) {
+        // Still blocked is not "nothing happened": the question itself can
+        // change under a pane that never unblocks (multi-step AskUserQuestion).
+        if (next === 'blocked') await refreshBlocked(ws, pane.paneId);
+        continue;
+      }
       paneStatus.set(key, next);
       // Baseline (prev === undefined) never fires: panes already blocked when
       // tracking starts are covered by the subscribe-time snapshot instead.

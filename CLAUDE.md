@@ -832,3 +832,44 @@ systemctl --user status herdr      # if supervised via systemd
 ```
 
 hrdle auto-starts `herdr server` at boot when the socket (`~/.config/herdr/herdr.sock`, or `$HERDR_SOCKET_PATH`) is unreachable. herdr's own log lives at `~/.config/herdr/herdr-server.log`. Sessions (workspaces) live in the herdr server process — restarting hrdle never kills them; restarting herdr restores workspaces from `session.json` and, with `resume_agents_on_restore`, resumes agent conversations natively.
+
+### Never test against the default herdr server
+
+The default server is the one the user is working in. Their sessions are on it,
+and one of them is usually the session doing the testing. **A dev server started
+for a test gets its own named herdr session:**
+
+```bash
+herdr --session <name> server &                       # own dir, own session.json, own socket
+export HERDR_SOCKET_PATH=~/.config/herdr/sessions/<name>/herdr.sock
+herdr workspace create --cwd <dir> --label "<test>" --no-focus
+(cd backend && HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH bun run src/index.ts -p 3457)
+herdr --session <name> server stop                    # and close its workspaces when done
+```
+
+`--session <name>` is the only thing that isolates state. It gives
+`~/.config/herdr/sessions/<name>/` — its own socket **and its own
+`session.json`**. Everything else that looks like it would:
+
+- **`HERDR_SOCKET_PATH` alone does not.** It moves the socket; the state
+  directory still follows `$HOME`, so a second server restores the *user's*
+  workspaces and two processes then own one `session.json`
+- **`HERDR_CONFIG_PATH` does not either** — it overrides `config.toml` and
+  nothing else. Measured on 2026-08-04: a server started with both pointed at a
+  scratch directory came up holding all 16 of the user's workspaces
+- A socket path is capped by `sun_path` (104 bytes). A scratchpad path is
+  already longer than that, which is a hint that the socket does not belong
+  there
+
+Two more things a test on the default server gets wrong, both found the same
+day:
+
+- **`pane.split` ignores the `pane_id` it is given and splits the focused
+  pane** — which is the user's, not the test's. Drive a test pane through
+  `hrdle send` / `hrdle peek` with an explicit `<peer>:<session>:<paneId>`
+  target, which does route where it says
+- **The dev server shares hrdle's own data directory** with production, so
+  `SessionMetadataService` hands it the user's remembered sessions and they
+  appear in `GET /api/sessions` with `panes: null`. Harmless to read, but do
+  not mistake them for the test's own, and do not write session metadata from a
+  test run

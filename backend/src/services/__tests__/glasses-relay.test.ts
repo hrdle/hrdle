@@ -357,6 +357,87 @@ describe('trackGlassesRelay blocked transitions', () => {
   });
 });
 
+// =============================================================================
+// still-blocked refresh (multi-step AskUserQuestion)
+// =============================================================================
+
+describe('trackGlassesRelay refresh while still blocked', () => {
+  const SECOND_QUESTION = [
+    'Which approach should I take?',
+    'And how should the tests be split?',
+    '❯ 1. One file per module',
+    '  2. One file for the lot',
+  ].join('\n');
+
+  /** Blocked with the first question up, one subscriber watching. */
+  async function blockedOnFirstQuestion(): Promise<{ sock: FakeSocket; itemId: string }> {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'working' }])];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }])];
+    await trackGlassesRelay();
+    const itemId = (sock.ofType('glasses-relay')[0].item as Record<string, unknown>).id as string;
+    sock.messages = [];
+    return { sock, itemId };
+  }
+
+  test('a new question on a pane that never unblocked replaces the item', async () => {
+    const { sock, itemId } = await blockedOnFirstQuestion();
+
+    glassesRelayDeps.readPaneText = async () => SECOND_QUESTION;
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(itemId);
+    const upserts = sock.ofType('glasses-relay');
+    expect(upserts).toHaveLength(1);
+    const item = upserts[0].item as Record<string, unknown>;
+    expect(item.id).not.toBe(itemId);
+    expect(item.text).toBe('And how should the tests be split?');
+    expect(item.choices).toEqual(['One file per module', 'One file for the lot']);
+  });
+
+  test('an unchanged pane broadcasts nothing', async () => {
+    const { sock } = await blockedOnFirstQuestion();
+    await trackGlassesRelay();
+    await trackGlassesRelay();
+    expect(sock.messages).toEqual([]);
+  });
+
+  test('a read that lost its choices is treated as a half-drawn frame', async () => {
+    const { sock } = await blockedOnFirstQuestion();
+    glassesRelayDeps.readPaneText = async () => 'Which approach should I take?';
+    await trackGlassesRelay();
+    expect(sock.messages).toEqual([]);
+  });
+
+  test('a dismissed item is not re-raised by a redraw', async () => {
+    const { sock, itemId } = await blockedOnFirstQuestion();
+    dismissRelayItem(itemId);
+    sock.messages = [];
+
+    glassesRelayDeps.readPaneText = async () => SECOND_QUESTION;
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay')).toEqual([]);
+  });
+
+  test('presence gate: no subscriber, no scrape', async () => {
+    let scrapes = 0;
+    glassesRelayDeps.readPaneText = async () => {
+      scrapes++;
+      return QUESTION_PANE;
+    };
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'working' }])];
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }])];
+    await trackGlassesRelay();
+    await trackGlassesRelay();
+    expect(scrapes).toBe(0);
+  });
+});
+
 describe('snapshot ordering', () => {
   test('waiting first, then info, oldest first within a kind', async () => {
     glassesRelayDeps.listWorkspaces = async () => [];

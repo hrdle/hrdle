@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.59] - 2026-08-04
+
+### Fixed
+- **A question that changes under a still-blocked pane is followed.** One
+  AskUserQuestion call holds several questions: the TUI takes the answer to the
+  first and draws the second without the pane ever leaving `blocked`. Nothing
+  either side watched changed state, so the glasses kept the first question's
+  text and options
+  - The quiet failure is the expensive one. A picker still showing question one
+    while the pane has moved on sends its Enter to question two - an answer to
+    something the wearer never saw, which looks exactly like it worked
+  - The tracker now re-reads a pane that is still blocked and replaces the
+    waiting item when the question or its options changed. A fresh id rather
+    than an edit in place, because it is a fresh decision. It leaves a
+    dismissed item alone (the wearer chose the PC for that pane) and ignores a
+    read that came back without options while the last one had them, which is a
+    half-drawn frame rather than a question that lost its choices
+  - The glasses half - re-opening the picker on the next question - ships with
+    the app rather than the server, so a server running this alone updates the
+    notice instead of leaving it stale
+
 ## [0.3.58] - 2026-08-04
 
 ### Added

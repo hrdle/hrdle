@@ -55,6 +55,15 @@ const CONV_REFRESH_INTERVAL = 3000
  */
 export const NOTICE_DISMISS_MS = 8000
 /**
+ * How long after answering a question the next one may take the screen.
+ *
+ * Sized against the round trip rather than against reading: the pane has to
+ * redraw, the server's 5s tick has to notice, and the new item has to arrive.
+ * Two ticks of headroom, and past that the wearer has moved on and it is a
+ * notice like anything else.
+ */
+export const CHOICE_FOLLOW_MS = 15_000
+/**
  * How long the ring has to be still before the screen starts moving itself.
  *
  * The point is that a reader who is working the ring is
@@ -280,6 +289,20 @@ export class GlassesController {
   private readonly queue = new RelayQueue()
 
   private choiceTarget: ReplyTarget | null = null
+  /**
+   * Until when an answered pane may pull the wearer back into the picker.
+   *
+   * One AskUserQuestion holds several questions, and the pane draws the next
+   * one straight after the Enter that answered the last. Without this the app
+   * drops to the conversation and the remaining questions are only reachable
+   * from the notice - which is the same screen the wearer just left, so in
+   * practice they are not reachable at all.
+   *
+   * A window rather than a flag: it is a follow-up only while it plausibly
+   * follows. Minutes later it is a new decision and gets a notice like any
+   * other.
+   */
+  private choiceFollowUntil = 0
   private voiceTarget: ReplyTarget | null = null
   private overlayReturnMode: 'session_list' | 'conversation' = 'session_list'
   /** Pending auto-dismissal of a notification overlay; null when none is due. */
@@ -1064,6 +1087,7 @@ export class GlassesController {
         }
         this.sendChoiceKey('\r')
         this.answeredItem(this.choiceTarget?.itemId)
+        this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         if (this.demo) {
           const picked = this.demoPickedText()
           if (picked) this.demoReply(picked)
@@ -1079,6 +1103,10 @@ export class GlassesController {
         // Cancel without answering — the item stays queued. The same gesture
         // does the same thing on every screen, which is why the multi-select's
         // send is a row and not this.
+        // Nothing was answered, so nothing follows: a picker that reopened
+        // itself after being closed would be the app overruling the wearer.
+        this.choiceTarget = null
+        this.choiceFollowUntil = 0
         st.mode = 'conversation'
         this.render()
         return Promise.resolve()
@@ -1344,8 +1372,34 @@ export class GlassesController {
     this.render()
   }
 
+  /**
+   * Whether an arriving waiting item is the continuation of the picker the
+   * wearer is in, or has just left.
+   *
+   * Two cases, one rule - it has to be the same pane as the reply target:
+   *
+   * - still in the picker: the pane redrew with a different question under it,
+   *   so every gesture from here was going to answer the wrong one
+   * - just answered: the next question of a multi-step AskUserQuestion
+   *
+   * Not the item already being answered (a restatement of the same question is
+   * not a new one), and never in the demo, where there is no pane to follow.
+   */
+  private shouldFollowChoice(item: GlassesRelayItem): boolean {
+    if (this.demo) return false
+    if (item.kind !== 'waiting' || !item.choices?.length) return false
+    const t = this.choiceTarget
+    if (!t || item.sessionId !== t.sessionId || item.id === t.itemId) return false
+    // An unknown pane on either side is the single-pane case, where the
+    // session already identifies the target.
+    if (t.paneId && item.paneId && item.paneId !== t.paneId) return false
+    if (this.state.mode === 'choice') return true
+    return this.state.mode === 'conversation' && Date.now() < this.choiceFollowUntil
+  }
+
   private enterChoice(options: string[], target: ReplyTarget): void {
     this.choiceTarget = target
+    this.choiceFollowUntil = 0
     this.state.choiceOptions = options
     this.state.choiceMulti = looksMultiSelect(options)
     this.state.choiceIndex = 0
@@ -1523,6 +1577,17 @@ export class GlassesController {
   private onRelayUpsert(item: GlassesRelayItem): void {
     const isNew = this.queue.upsert(item)
     this.syncRelay()
+    // The next question of the one being answered. It takes the screen without
+    // being asked, because the wearer is mid-answer and the alternative is a
+    // notice they have to find their way back to.
+    if (this.shouldFollowChoice(item)) {
+      this.enterChoice(item.choices as string[], {
+        sessionId: item.sessionId,
+        paneId: item.paneId,
+        itemId: item.id,
+      })
+      return
+    }
     // A brand-new waiting item interrupts the session list; in the other
     // modes the banner / header badge surfaces it without yanking the view.
     if (isNew && item.kind === 'waiting' && this.state.mode === 'session_list') {
