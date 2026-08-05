@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.63] - 2026-08-06
+
+### Changed
+- **The glasses recording records the glasses, not the phone.** Which session
+  the phone was focused on used to be written all day, glasses or no glasses -
+  hours of lines nothing could replay, bookending every file. The replay
+  player then opened onto that silence: position 0 was a blank canvas even
+  though the day's frames were all there, further in. Focus is now recorded
+  only while the glasses are live (between their first frame and the gap
+  marker when they go), with one parked focus line flushed just before the
+  frame that ends an off-air stretch, so recordings still say what was being
+  worked on. A day the glasses never joined gets no file at all
+
 ## [0.3.62] - 2026-08-04
 
 ### Fixed
