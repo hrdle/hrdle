@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.65] - 2026-08-06
+
+### Changed
+- **Mirroring the device hides the simulator's own controls.** While the
+  mirror shows the wearer's screen, the ring buttons, host lifecycle, demo
+  and voice-input controls acted on the local panel hidden underneath it -
+  and the ring ones would fight the wearer for the real screen. They
+  disappear while the mirror is on (the keyboard shortcuts go quiet too)
+  and return when it is off. Server settings, the replay-player link and
+  the backdrop stay available
+
 ## [0.3.64] - 2026-08-06
 
 ### Added
