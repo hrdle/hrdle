@@ -1206,3 +1206,66 @@ describe('a pane blocked without a question', () => {
     expect(item.text).toBe('Which one?');
   });
 });
+
+// =============================================================================
+// A pane that was already blocked when it started asking
+// =============================================================================
+
+describe('a question that arrives without a transition', () => {
+  /**
+   * Reported from the device on 2026-08-07: the first question of a set never
+   * reached the glasses, and the second one did. The pane was already
+   * `blocked` before the question - it was holding queued input - so
+   * `enterBlocked` never fired, and answering the first question is what
+   * finally moved the status enough to build an item for the second.
+   *
+   * It used to be covered by accident: a blocked pane always produced SOME
+   * item, even when that was the status bar read as a question, and the real
+   * question replaced it when it came. Declining to build the junk took away
+   * the thing the real one was arriving into.
+   */
+  test('is picked up while the pane stays blocked', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => '  ⏵⏵ auto mode on (shift+tab to cycle)';
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    // Baseline: blocked from the first look, with nothing being asked.
+    await trackGlassesRelay();
+    await trackGlassesRelay();
+    expect(sock.ofType('glasses-relay')).toEqual([]);
+    sock.messages = [];
+
+    // Now it asks, and the status has nowhere left to move.
+    glassesRelayDeps.readPaneText = async () =>
+      ['どちらにしますか？', '❯ 1. うどん', '  2. そば'].join('\n');
+    await trackGlassesRelay();
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('どちらにしますか？');
+    expect(item.choices).toEqual(['うどん', 'そば']);
+  });
+
+  test('and a dismissed one is still not re-raised', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () =>
+      ['どちらにしますか？', '❯ 1. うどん', '  2. そば'].join('\n');
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    const id = (sock.ofType('glasses-relay')[0].item as Record<string, unknown>).id as string;
+    dismissRelayItem(id);
+    sock.messages = [];
+
+    await trackGlassesRelay();
+    await trackGlassesRelay();
+    // "Later" was said about this pane; a tick is not a reason to ask again.
+    expect(sock.ofType('glasses-relay').filter((m) => {
+      const it = m.item as Record<string, unknown>;
+      return it.dismissed !== true;
+    })).toEqual([]);
+  });
+});
