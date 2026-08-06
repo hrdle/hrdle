@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.66] - 2026-08-06
 
 ### Added
 - **Options drawn side by side are readable from the glasses.** OpenCode asks
