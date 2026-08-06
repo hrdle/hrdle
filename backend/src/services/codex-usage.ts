@@ -182,12 +182,17 @@ interface RolloutCandidate {
   mtimeMs: number;
 }
 
-function findRolloutCandidates(sessionsDir: string, limit: number): RolloutCandidate[] {
+export function findRolloutCandidates(sessionsDir: string, limit: number): RolloutCandidate[] {
   if (!existsSync(sessionsDir)) return [];
   const candidates: RolloutCandidate[] = [];
 
   // Layout: sessionsDir/YYYY/MM/DD/rollout-*.jsonl
-  const years = readdirSync(sessionsDir).filter(name => /^\d{4}$/.test(name)).sort().reverse();
+  // Guarded like every level below it: existsSync answers "was there a moment
+  // ago", not "is readable now" - a directory with no permission, a plain file
+  // where the directory should be, or a removal between the two calls all throw
+  // here, and this is the one level that used to let that escape.
+  let years: string[] = [];
+  try { years = readdirSync(sessionsDir).filter(name => /^\d{4}$/.test(name)).sort().reverse(); } catch { return []; }
   outer: for (const year of years) {
     const yearDir = join(sessionsDir, year);
     let months: string[] = [];

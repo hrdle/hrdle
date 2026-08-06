@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **One unreadable file no longer takes the whole dashboard down.** The panel is
+  a dozen independent readings gathered with `Promise.all`, which rejects on the
+  first member to reject, and the cache in front of it only serves a stale value
+  once it has one - so on the first build after a restart, a single throwing
+  reading returned an error for `GET /api/dashboard` instead of the panel, and
+  kept doing it, because a failed build caches nothing. Every agent's usage
+  dark because one provider could not read one file
+  - Each reading is now isolated: one that throws degrades to its own empty
+    value, is logged with the name of the reading that failed, and the rest of
+    the panel renders. The obligation used to sit in each service and had to be
+    remembered again by every provider added
+  - Two readings could actually do it. Codex's rollout scan guarded every level
+    of its directory walk except the top one, so an unreadable `~/.codex/
+    sessions` - or a plain file where the directory belongs - escaped. And the
+    daily-activity chart checked only that `dailyActivity` was *present* in
+    `stats-cache.json`, a file another program writes: anything there that was
+    not a list reached `.slice` and threw
+
 ## [0.3.63] - 2026-08-06
 
 ### Changed
