@@ -11,6 +11,7 @@ import {
   glassesDeviceCount,
   glassesRelayDeps,
   normalizeRelayText,
+  optionBlockStart,
   postAgentRelay,
   postHookRelay,
   resetGlassesRelayForTest,
@@ -562,13 +563,23 @@ describe('trackGlassesRelay refresh while still blocked', () => {
     // the right question with nothing under it beats offering the wrong
     // question's answers.
     const { sock, itemId } = await blockedOnFirstQuestion();
-    glassesRelayDeps.readPaneText = async () => 'Paste the token when you have it:';
+    glassesRelayDeps.readPaneText = async () => 'Which branch should I use?';
     await trackGlassesRelay();
 
     expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(itemId);
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
-    expect(item.text).toBe('Paste the token when you have it:');
+    expect(item.text).toBe('Which branch should I use?');
     expect(item.choices).toBeUndefined();
+  });
+
+  test('a pane that stopped asking keeps what is on the glasses', async () => {
+    // Only `exitBlocked` takes an item down. A redraw that no longer shows a
+    // question - the wearer answered at the keyboard, and the pane has not
+    // unblocked yet - must not blank the panel mid-glance.
+    const { sock } = await blockedOnFirstQuestion();
+    glassesRelayDeps.readPaneText = async () => '  ⏵⏵ auto mode on (shift+tab to cycle)';
+    await trackGlassesRelay();
+    expect(sock.messages).toEqual([]);
   });
 
   test('a dismissed item is not re-raised by a redraw', async () => {
@@ -1059,5 +1070,139 @@ describe('opencode reaches the glasses', () => {
       expect(next.choices).toEqual(first.choices);
       expect(next.choiceSelected).toBe(2);
     })();
+  });
+});
+
+// =============================================================================
+// The question is above the options, not at the bottom of the pane
+// =============================================================================
+
+describe('finding the question without a question mark', () => {
+  /**
+   * Captured from a live Claude Code pane on 2026-08-07, in Japanese, with the
+   * wearer part-way through typing their next message. What reached the glasses
+   * was `❯ ちなみに録画情報を見てください` — the line THEY had just typed,
+   * presented to them as the agent's question.
+   */
+  const JAPANESE_ASK = [
+    '● 今この場で出します。',
+    '────────────────────────────',
+    '←  ☐ 複数選択  ✔ Submit  →',
+    '',
+    '（検証用）好きな果物を選んでください（複数可）',
+    '',
+    '❯ 1. [ ] りんご',
+    '  2. [ ] みかん',
+    '  3. [ ] ぶどう',
+    '  4. [ ] Type something',
+    '────────────────────────────',
+    '❯ ちなみに録画情報を見てください',
+    '────────────────────────────',
+    '  ⏵⏵ auto mode on (shift+tab to cycle)',
+  ];
+
+  test('a Japanese question that ends in no question mark is still the question', () => {
+    expect(extractQuestionLine(JAPANESE_ASK, optionBlockStart(JAPANESE_ASK))).toBe(
+      '（検証用）好きな果物を選んでください（複数可）',
+    );
+  });
+
+  test("what the wearer is typing is never the agent's question", () => {
+    const text = extractQuestionLine(JAPANESE_ASK, optionBlockStart(JAPANESE_ASK));
+    expect(text).not.toContain('ちなみに録画情報');
+    expect(text).not.toContain('auto mode on');
+  });
+
+  test('a full-width question mark counts as one', () => {
+    expect(extractQuestionLine(['前置き', 'どちらにしますか？', 'あとがき'])).toBe(
+      'どちらにしますか？',
+    );
+  });
+
+  test('the option block is found by either shape', () => {
+    expect(optionBlockStart(['Which?', '❯ 1. Yes', '  2. No'])).toBe(1);
+    expect(optionBlockStart(['Which?', '   [ ] Apple', '   [ ] Banana'])).toBe(1);
+    expect(optionBlockStart(['no options here', 'at all'])).toBe(2);
+  });
+
+  test('a pane with no options still answers from the whole pane', () => {
+    // The window is the whole pane when there is no option block, so nothing
+    // that worked before this stops working.
+    expect(extractQuestionLine(['noise', 'Continue?', 'more noise'])).toBe('Continue?');
+  });
+});
+
+// =============================================================================
+// Blocked is not the same as asking
+// =============================================================================
+
+describe('a pane blocked without a question', () => {
+  /**
+   * What claude looks like between turns: herdr calls the pane `blocked`, and
+   * the bottom of the screen is its own status bar. On 2026-08-07 that reached
+   * a wearer as `⏵⏵ auto mode on (shift+tab to cycle)` under a `[!] WAITING`
+   * header, and it could not be got rid of - a waiting item claims double-tap
+   * on the conversation screen, so "back" became "later", and the next blocked
+   * flicker made another one. The wearer could not leave the screen.
+   */
+  const IDLE_PANE = [
+    '● 環境を撤収しました。',
+    '────────────────────────────',
+    '❯ ',
+    '────────────────────────────',
+    '  ⏵⏵ auto mode on (shift+tab to cycle)',
+  ].join('\n');
+
+  async function blockOn(pane: string): Promise<FakeSocket> {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => pane;
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'working' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+    ];
+    sock.messages = [];
+    await trackGlassesRelay();
+    return sock;
+  }
+
+  test('produces no notification at all', async () => {
+    const sock = await blockOn(IDLE_PANE);
+    expect(sock.ofType('glasses-relay')).toEqual([]);
+  });
+
+  test('and none however many times it flickers', async () => {
+    // Dismissing was no defence: each enter-blocked built a fresh, undismissed
+    // item, so the notice came back within a tick every time.
+    const sock = await blockOn(IDLE_PANE);
+    for (let i = 0; i < 5; i++) {
+      glassesRelayDeps.listWorkspaces = async () => [
+        ws('s1', [{ paneId: '%0', agentStatus: 'working' }]),
+      ];
+      await trackGlassesRelay();
+      glassesRelayDeps.listWorkspaces = async () => [
+        ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+      ];
+      await trackGlassesRelay();
+    }
+    expect(sock.ofType('glasses-relay')).toEqual([]);
+  });
+
+  test('a real question on the same pane still gets through', async () => {
+    const sock = await blockOn(['Which colour?', '❯ 1. Red', '  2. Green'].join('\n'));
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Which colour?');
+    expect(item.choices).toEqual(['Red', 'Green']);
+  });
+
+  test('so does a question with no options, when it reads as one', async () => {
+    // Silence is for panes that are not asking, not for prompts this scrape
+    // cannot list.
+    const sock = await blockOn(['Paste the token, then press enter.', 'Which one?'].join('\n'));
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Which one?');
   });
 });

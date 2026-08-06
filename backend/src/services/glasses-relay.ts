@@ -378,14 +378,67 @@ export function extractNumberedChoices(lines: string[]): string[] {
  * wearer got was one box-drawing character. A line with no letter and no digit
  * in it is furniture, and furniture is never the question.
  */
-export function extractQuestionLine(lines: string[]): string | undefined {
+export function extractQuestionLine(lines: string[], before = lines.length): string | undefined {
+  return findQuestion(lines, before).text;
+}
+
+/**
+ * The question, and whether it was recognised or merely the last thing on
+ * screen.
+ *
+ * The difference decides whether a notification exists at all. A pane herdr
+ * calls `blocked` is not always asking: claude sits blocked between turns, and
+ * the scrape then finds no question and no options, so the fallback returned
+ * whatever the TUI had drawn at the bottom - and a waiting item was built from
+ * it regardless. On 2026-08-07 that put `⏵⏵ auto mode on (shift+tab to cycle)`
+ * on a wearer's face as a question, and it would not go away: dismissing it
+ * only cleared that copy, and the next blocked flicker made another.
+ *
+ * The damage was not only the wrong words. A waiting item claims double-tap -
+ * on the conversation screen it means "later" rather than "back" - so a
+ * notification nobody asked for and nobody could clear left the wearer unable
+ * to leave the screen. That is what `confident` exists to prevent: a guess is
+ * still worth SHOWING when something real is already known to be waiting, but
+ * it is never worth interrupting someone for.
+ */
+export function findQuestion(
+  lines: string[],
+  before = lines.length,
+): { text?: string; confident: boolean } {
   const clean = lines
+    .slice(0, before)
     .map((l) => stripLeftRule(l).trim())
     .filter((l) => l.length > 0 && /[\p{L}\p{N}]/u.test(l));
   for (let i = clean.length - 1; i >= 0; i--) {
-    if (/\?\s*$/.test(clean[i]) || /do you want to/i.test(clean[i])) return clean[i];
+    if (/[?？]\s*$/.test(clean[i]) || /do you want to/i.test(clean[i])) {
+      return { text: clean[i], confident: true };
+    }
   }
-  return clean[clean.length - 1];
+  return { text: clean[clean.length - 1], confident: false };
+}
+
+/**
+ * Where the option block starts, so the question can be looked for above it.
+ *
+ * A question mark is not a reliable marker and never was outside English.
+ * Japanese asks with `ください` or a full-width `？` or nothing at all, so the
+ * search fell through to "the last line that says something" - and on a live
+ * pane the last line that says something is whatever the TUI drew at the
+ * bottom. On 2026-08-07 a wearer was shown `❯ ちなみに録画情報を見てください`,
+ * which was the line THEY had just typed into the input box, presented to them
+ * as the agent's question. Another read the same day produced
+ * `⏵⏵ auto mode on (shift+tab to cycle)`.
+ *
+ * The structure says it without knowing any language: an agent writes its
+ * question, then its options under it. So the question is the last thing said
+ * above the first option, and nothing below the first option can be it.
+ */
+export function optionBlockStart(lines: string[]): number {
+  for (const [i, raw] of lines.entries()) {
+    const line = stripLeftRule(raw);
+    if (NUMBERED_OPTION.test(line) || CHECKBOX_OPTION.test(line)) return i;
+  }
+  return lines.length;
 }
 
 /**
@@ -437,7 +490,7 @@ interface WaitingPayload {
 async function assembleWaitingPayload(
   ws: WorkspaceInfo,
   tmuxPaneId: string,
-): Promise<WaitingPayload> {
+): Promise<WaitingPayload | undefined> {
   // The name, not the id: since #186 the id is `w5Q`, which tells a wearer
   // nothing about which session is asking.
   const fallback = `Waiting for input: ${ws.name || ws.id}`;
@@ -448,7 +501,9 @@ async function assembleWaitingPayload(
 
   const lines = raw.split('\n');
   const clamp = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH);
-  const question = extractPermissionRequest(lines) ?? extractQuestionLine(lines);
+  const permission = extractPermissionRequest(lines);
+  const guess = findQuestion(lines, optionBlockStart(lines));
+  const question = permission ?? guess.text;
   const text = clampDisplayWidth(normalizeRelayText(question ?? fallback), MAX_TEXT_WIDTH);
 
   const numbered = extractNumberedChoices(lines);
@@ -464,7 +519,12 @@ async function assembleWaitingPayload(
   // spent only where the answer today is "no options at all".
   const painted = await glassesRelayDeps.readPaneAnsi(herdrPaneId);
   const inline = painted ? extractInlineChoices(painted.split('\n')) : undefined;
-  if (!inline) return { text: text || fallback };
+  if (!inline) {
+    // No options, and nothing that reads as a question either: the pane is
+    // blocked without asking, which is where claude spends the gaps between
+    // turns. There is nothing here to put on a face.
+    return permission || guess.confident ? { text: text || fallback } : undefined;
+  }
 
   return {
     text: text || fallback,
@@ -737,6 +797,10 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   // A dismissed item belongs to an older epoch (or another pane): this is a
   // fresh blocked transition, so it gets a fresh item.
   const payload = await assembleWaitingPayload(ws, paneId);
+  // Blocked without asking. herdr reports it for the gaps between turns as
+  // well as for a question, and there is nothing on that pane worth a
+  // notification - least of all one that would then claim double-tap.
+  if (!payload) return;
   const item = waitingItem(ws.id, paneId, payload);
   slot.waiting = item;
   broadcastUpsert(item);
@@ -773,7 +837,12 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // rather than the sentence. Re-raising it on every redraw would be arguing.
   if (item.dismissed) return;
 
-  const next = waitingItem(ws.id, paneId, await assembleWaitingPayload(ws, paneId));
+  const payload = await assembleWaitingPayload(ws, paneId);
+  // The question went away without the pane unblocking - the wearer answered
+  // it at the keyboard, most likely. Keeping what is on the glasses is right:
+  // `exitBlocked` is what takes an item down, and a redraw is not that.
+  if (!payload) return;
+  const next = waitingItem(ws.id, paneId, payload);
   // A read that came back with no options while the last one had them is far
   // more likely a half-drawn frame than a question that lost its choices - but
   // only while it is still the same question. A read that lost the options AND
