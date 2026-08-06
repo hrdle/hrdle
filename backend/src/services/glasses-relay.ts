@@ -281,14 +281,22 @@ function broadcastRemove(id: string): void {
  *
  * Two numbering styles, because the agents do not agree: claude and codex
  * write `1. Yes`, kimi writes `[1] Yes`. The optional leading glyph is the
- * cursor on the selected row - `❯` from claude, `→` from kimi. herdr's
- * `strip_ansi` removes colour but leaves both characters alone, so they arrive
- * here as themselves.
+ * cursor on the selected row, and every agent picked a different one - `❯` from
+ * claude, `→` from kimi, `›` from codex. herdr's `strip_ansi` removes colour
+ * but leaves all of them alone, so they arrive here as themselves.
+ *
+ * Missing one is not a missing row, it is a WRONG row. Measured against codex
+ * 0.146.0 on 2026-08-07: its trust prompt draws `› 1. Yes, continue` over
+ * `  2. No, quit`, and with `›` unlisted the first line failed to match while
+ * the second, having no cursor, matched fine. The glasses were handed a single
+ * option reading `No, quit` - and answering it types `1`, which is `Yes,
+ * continue`. On the one prompt where the wrong answer grants project-local
+ * config, hooks and exec policies.
  *
  * Kept in step with `extractChoices` in `glasses/src/ws-client.ts`, which is
  * the same reading done against a live terminal buffer.
  */
-const NUMBERED_OPTION = /^\s*[❯>*→]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
+const NUMBERED_OPTION = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
 
 /**
  * A checkbox row that carries no number at all.
@@ -305,7 +313,7 @@ const NUMBERED_OPTION = /^\s*[❯>*→]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
  * so they match the numbered form first and keep their box in the capture -
  * the box is what tells the app this is a multi-select at all.
  */
-const CHECKBOX_OPTION = /^\s*[❯>*→]?\s*(\[[ xX*✓✔]\]\s*\S.*)/;
+const CHECKBOX_OPTION = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(\[[ xX*✓✔]\]\s*\S.*)/;
 
 /**
  * The rows a wearer cannot answer, whatever they are numbered.
@@ -409,13 +417,47 @@ export function findQuestion(
     .slice(0, before)
     .map((l) => stripLeftRule(l).trim())
     .filter((l) => l.length > 0 && /[\p{L}\p{N}]/u.test(l));
+
+  // A line that ends in a question mark is the question, and one line of it is
+  // the whole of it - an agent that could fit the question on a line did.
   for (let i = clean.length - 1; i >= 0; i--) {
     if (/[?？]\s*$/.test(clean[i]) || /do you want to/i.test(clean[i])) {
       return { text: clean[i], confident: true };
     }
   }
-  return { text: clean[clean.length - 1], confident: false };
+
+  // Otherwise the paragraph above the options rather than the line above them.
+  // A question long enough to matter is long enough to wrap, and a pane wraps
+  // it wherever its width falls, so one line of it is whichever fragment
+  // happened to be last. Codex's trust prompt arrived as `injection. Trusting
+  // the directory allows project-local config, hooks, and exec policies to
+  // load.` - the tail of a sentence whose beginning said what was being decided.
+  return { text: tailParagraph(clean), confident: false };
 }
+
+/** The run of lines at the end of `clean`, joined - one paragraph as the pane
+ *  laid it out, up to the blank line that separates it from what came before. */
+function tailParagraph(clean: string[]): string | undefined {
+  if (clean.length === 0) return undefined;
+  // `clean` has already dropped blanks, so the paragraph break has to be found
+  // another way: a line the pane wrapped continues the one above it, and a line
+  // it started fresh does not. Length is the only signal left, and the honest
+  // version of it is that a short line ends a paragraph.
+  const out: string[] = [clean[clean.length - 1]];
+  for (let i = clean.length - 2; i >= 0; i--) {
+    if (displayWidth(clean[i]) < WRAP_FLOOR) break;
+    out.unshift(clean[i]);
+    if (out.length >= MAX_QUESTION_LINES) break;
+  }
+  return out.join(' ');
+}
+
+/** A line at least this wide was probably wrapped rather than ended. Below it,
+ *  the author chose to stop. */
+const WRAP_FLOOR = 60;
+/** However wrapped, a question that takes more than this is not being read off
+ *  a pair of glasses anyway. */
+const MAX_QUESTION_LINES = 3;
 
 /**
  * Where the option block starts, so the question can be looked for above it.
