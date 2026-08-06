@@ -25,6 +25,25 @@ All notable changes to this project will be documented in this file.
     which says `⇆ select` and is wrong: Tab moves nothing. The arrows move it,
     both ways, and both wrap - so the far end of a row is one press backwards
     rather than several forwards
+  - **The notification itself now says something.** Reading the row was only
+    half of it: a waiting item is assembled on the server, and OpenCode frames
+    every line of its prompt with a rule. Every pattern in the relay's scrape
+    anchors at the start of a line and allows only spaces and a cursor glyph
+    before what it looks for, so the rule alone made this file blind to that
+    agent - and would have, even had OpenCode numbered its options. The
+    question fared worse: it ends in no `?` and says no `Do you want to`, so
+    the fallback took the last non-empty line and the notification a wearer got
+    was one box-drawing glyph
+  - The rule is now stripped before any reader sees a line, a line with no
+    letter and no digit in it can never be the question, and the two halves
+    OpenCode splits its question across (`Permission required`, then what it
+    wants permission for) are joined into the one sentence a wearer can decide
+    on. The waiting item carries the options, how the pane takes an answer to
+    them, and where its own cursor is - a walk needs a starting point, and an
+    item that lost it withholds its choices rather than let the glasses guess
+  - The coloured read is a second round trip, taken only when the ordinary one
+    found no options at all. Every agent that already worked keeps the exact
+    read it had
 
 ## [0.3.65] - 2026-08-06
 

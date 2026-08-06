@@ -1234,6 +1234,30 @@ export interface GlassesRelayItem {
   /** Scraped or agent-declared choices; the glasses prefer these over a
    *  terminal re-scrape. */
   choices?: string[];
+  /**
+   * How the pane takes an answer to `choices`.
+   *
+   * `number` (the default when absent) is claude, codex, kimi and grok: an
+   * option is chosen by typing its own number, and the pane's own cursor never
+   * has to be moved. `arrow` is opencode, which gives its options no keys at
+   * all - answering means walking its cursor along the row and pressing Enter,
+   * so the walk needs a starting point and that is `choiceSelected`.
+   */
+  choiceInput?: 'number' | 'arrow';
+  /**
+   * Index into `choices` of the option the PANE is currently sitting on.
+   *
+   * Deliberately not called a cursor: the app has one of those already
+   * (`AppState.choiceIndex`), and it is the wearer's - which row the ring is
+   * resting on, which is not where the pane is. Answering an `arrow` pane
+   * means walking from this index to the wearer's, and confusing the two is
+   * exactly how a pick lands on an option nobody chose.
+   *
+   * Only carried when it was actually measured from the pane. An `arrow` item
+   * without it cannot be answered safely, so the app must not offer its
+   * choices.
+   */
+  choiceSelected?: number;
   source: 'auto' | 'agent';
   /** Dismissed ("later / on PC") items stay in the store so the same blocked
    *  epoch is not re-synthesized on reconnect, but are excluded from

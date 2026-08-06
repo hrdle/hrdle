@@ -16,9 +16,10 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { extractInlineChoices } from '../../../shared/inline-choices';
 import type { GlassesRelayItem } from '../../../shared/types';
 import { HerdrService, type WorkspaceInfo } from './herdr';
-import { readPaneText, toHerdrPaneId } from './herdr-client';
+import { readPane, readPaneText, toHerdrPaneId } from './herdr-client';
 
 // =============================================================================
 // Tunables / defenses (unauthenticated local endpoint — see routes)
@@ -335,10 +336,30 @@ function isUnanswerable(option: string): boolean {
   return UNANSWERABLE.has(bare);
 }
 
+/**
+ * The rule a pane frames its content with, on the left of every line.
+ *
+ * opencode draws one - `┃` down the whole prompt - and it was enough on its own
+ * to make this file blind to that agent: every pattern here anchors at the
+ * start of a line and allows only spaces and a cursor glyph before the thing it
+ * is looking for. A rule is neither, so nothing matched, and it would have
+ * matched nothing even if opencode had numbered its options.
+ *
+ * Stripped rather than allowed for in each pattern: a left border is furniture,
+ * not content, and the readers should not each have to know that.
+ */
+const LEFT_RULE = /^(\s*[│┃|┆┊╎┇┋║])+/;
+
+/** A line with its framing removed. */
+export function stripLeftRule(line: string): string {
+  return line.replace(LEFT_RULE, '');
+}
+
 /** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options. */
 export function extractNumberedChoices(lines: string[]): string[] {
   const choices: string[] = [];
-  for (const line of lines) {
+  for (const raw of lines) {
+    const line = stripLeftRule(raw);
     const m = line.match(NUMBERED_OPTION) ?? line.match(CHECKBOX_OPTION);
     if (m) choices.push(m[1].trim());
     if (choices.length >= MAX_CHOICES) break;
@@ -348,21 +369,75 @@ export function extractNumberedChoices(lines: string[]): string[] {
 
 /**
  * The question the pane is waiting on: the last `?`-terminated line, or the
- * permission prompt's "Do you want to …" line. Falls back to the last
- * non-empty line (raw tail, unsummarized — display insurance only).
+ * permission prompt's "Do you want to …" line. Falls back to the last line that
+ * actually says something (raw tail, unsummarized — display insurance only).
+ *
+ * "Says something" is the part opencode forced. Its prompt ends in neither a
+ * question mark nor `Do you want to`, so the fallback ran - and every line of
+ * that pane starts with a rule, several are nothing else, so the notification a
+ * wearer got was one box-drawing character. A line with no letter and no digit
+ * in it is furniture, and furniture is never the question.
  */
 export function extractQuestionLine(lines: string[]): string | undefined {
-  const clean = lines.map((l) => l.trim()).filter((l) => l.length > 0);
+  const clean = lines
+    .map((l) => stripLeftRule(l).trim())
+    .filter((l) => l.length > 0 && /[\p{L}\p{N}]/u.test(l));
   for (let i = clean.length - 1; i >= 0; i--) {
     if (/\?\s*$/.test(clean[i]) || /do you want to/i.test(clean[i])) return clean[i];
   }
   return clean[clean.length - 1];
 }
 
+/**
+ * What opencode is asking, from the two lines it says it in.
+ *
+ * ```
+ *   ┃  △ Permission required
+ *   ┃    → Edit fixture.txt
+ * ```
+ *
+ * Neither line alone is the question: the first says only that there is one,
+ * the second only names its object. The generic fallback would take the lower
+ * of the two and put `→ Edit fixture.txt` on the glasses, which reads as
+ * something already done rather than something being asked. Joined, they say
+ * what a wearer needs to decide on.
+ */
+export function extractPermissionRequest(lines: string[]): string | undefined {
+  const clean = lines.map((l) => stripLeftRule(l).trim());
+  const bare = (s: string) => s.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+  for (let i = clean.length - 1; i >= 0; i--) {
+    if (!/permission required/i.test(clean[i])) continue;
+    const parts: string[] = [];
+    // A short window, because the option row is further down the same pane and
+    // is made of words too. Nothing legitimate sits more than a line or two
+    // below the marker.
+    for (let j = i + 1; j < Math.min(clean.length, i + 5) && parts.length < 2; j++) {
+      if (!/[\p{L}\p{N}]/u.test(clean[j])) continue;
+      const heading = clean[j].startsWith('#');
+      parts.push(bare(clean[j]));
+      // A heading names a category rather than a thing - `# Shell command` -
+      // and stopping there tells a wearer only that a command wants running,
+      // not which one, when which one is the entire decision. So a heading
+      // takes the line under it with it, and anything else stands alone.
+      if (!heading) break;
+    }
+    const label = bare(clean[i]);
+    return parts.length > 0 ? `${label}: ${parts.join(': ')}` : label;
+  }
+  return undefined;
+}
+
+interface WaitingPayload {
+  text: string;
+  choices?: string[];
+  choiceInput?: GlassesRelayItem['choiceInput'];
+  choiceSelected?: number;
+}
+
 async function assembleWaitingPayload(
   ws: WorkspaceInfo,
   tmuxPaneId: string,
-): Promise<{ text: string; choices?: string[] }> {
+): Promise<WaitingPayload> {
   const fallback = `Waiting for input: ${ws.id}`;
   if (!ws.instanceId || !/^%[0-9A-Za-z]+$/.test(tmuxPaneId)) return { text: fallback };
   const herdrPaneId = toHerdrPaneId(ws.instanceId, tmuxPaneId);
@@ -370,14 +445,35 @@ async function assembleWaitingPayload(
   if (!raw) return { text: fallback };
 
   const lines = raw.split('\n');
-  const question = extractQuestionLine(lines);
+  const clamp = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH);
+  const question = extractPermissionRequest(lines) ?? extractQuestionLine(lines);
   const text = clampDisplayWidth(normalizeRelayText(question ?? fallback), MAX_TEXT_WIDTH);
+
   const numbered = extractNumberedChoices(lines);
-  const choices =
-    numbered.length > 0
-      ? numbered.map((c) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH))
-      : undefined;
-  return { text: text || fallback, choices };
+  if (numbered.length > 0) {
+    return { text: text || fallback, choices: numbered.map(clamp) };
+  }
+
+  // Nothing a list-shaped reader recognises. The pane may still be offering a
+  // row of options side by side, which only its colours can tell from the key
+  // hints beside it - so the second read is the same pane again with its escape
+  // sequences left on. Second rather than first on purpose: every agent that
+  // already worked keeps the exact read it had, and the extra round trip is
+  // spent only where the answer today is "no options at all".
+  const painted = await glassesRelayDeps.readPaneAnsi(herdrPaneId);
+  const inline = painted ? extractInlineChoices(painted.split('\n')) : undefined;
+  if (!inline) return { text: text || fallback };
+
+  return {
+    text: text || fallback,
+    choices: inline.options.map(clamp),
+    // Both travel or neither does. The walk that answers this pane starts from
+    // `choiceSelected`, so an item that lost it on the way is one the glasses
+    // cannot answer without guessing where the pane's cursor is - which is the
+    // guess 0.3.64 took out of this code.
+    choiceInput: 'arrow',
+    choiceSelected: inline.selected,
+  };
 }
 
 // =============================================================================
@@ -392,6 +488,7 @@ function makeItem(
   paneId?: string,
   choices?: string[],
   ttlMs: number = INFO_TTL_MS,
+  answering?: { choiceInput?: GlassesRelayItem['choiceInput']; choiceSelected?: number },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
     id: randomUUID(),
@@ -403,13 +500,60 @@ function makeItem(
   };
   if (paneId) item.paneId = paneId;
   if (choices && choices.length > 0) {
-    item.choices = choices
+    const kept = choices
       .slice(0, MAX_CHOICES)
       .map((c) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH))
       .filter((c) => c.length > 0);
+    item.choices = kept;
+
+    if (answering?.choiceInput === 'arrow') {
+      // A numbered pane is answered by naming an option, so a list that lost a
+      // row still answers the rest correctly. This one is answered by counting
+      // steps along the pane's own row, so a dropped row moves every option
+      // after it and the answer with it.
+      //
+      // When the list did not survive intact, the choices go rather than the
+      // means of answering them. An item carrying options and no `choiceInput`
+      // reads as a numbered one, and the glasses would type a digit at a pane
+      // where digits do nothing at all - a picker that looks like it worked.
+      // The question alone is the honest thing to show.
+      const selected = answering.choiceSelected;
+      const answerable =
+        kept.length === choices.length &&
+        selected !== undefined &&
+        selected >= 0 &&
+        selected < kept.length;
+      if (answerable) {
+        item.choiceInput = 'arrow';
+        item.choiceSelected = selected;
+      } else {
+        delete item.choices;
+      }
+    }
   }
   if (kind === 'info') item.expiresAt = Date.now() + ttlMs;
   return item;
+}
+
+/**
+ * The waiting item a scraped pane produces.
+ *
+ * Both callers build the same thing from the same payload — one on the pane
+ * becoming blocked, one on it asking something else without ever unblocking —
+ * and a field added to the payload has to reach both or the second question of
+ * an opencode prompt arrives without the means to answer it.
+ */
+function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload): GlassesRelayItem {
+  return makeItem(
+    sessionId,
+    'waiting',
+    'auto',
+    payload.text,
+    paneId,
+    payload.choices,
+    INFO_TTL_MS,
+    { choiceInput: payload.choiceInput, choiceSelected: payload.choiceSelected },
+  );
 }
 
 /**
@@ -590,8 +734,8 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   if (slot.waiting && !slot.waiting.dismissed) return; // active waiting already covers this session
   // A dismissed item belongs to an older epoch (or another pane): this is a
   // fresh blocked transition, so it gets a fresh item.
-  const { text, choices } = await assembleWaitingPayload(ws, paneId);
-  const item = makeItem(ws.id, 'waiting', 'auto', text, paneId, choices);
+  const payload = await assembleWaitingPayload(ws, paneId);
+  const item = waitingItem(ws.id, paneId, payload);
   slot.waiting = item;
   broadcastUpsert(item);
   // A hook can report "waiting for input" a beat before herdr reports blocked,
@@ -627,8 +771,7 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // rather than the sentence. Re-raising it on every redraw would be arguing.
   if (item.dismissed) return;
 
-  const { text, choices } = await assembleWaitingPayload(ws, paneId);
-  const next = makeItem(ws.id, 'waiting', 'auto', text, paneId, choices);
+  const next = waitingItem(ws.id, paneId, await assembleWaitingPayload(ws, paneId));
   // A read that came back with no options while the last one had them is far
   // more likely a half-drawn frame than a question that lost its choices - but
   // only while it is still the same question. A read that lost the options AND
@@ -637,7 +780,17 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // question the pane has already moved past. Wrong question with no options
   // beats right-looking options for the wrong question.
   if (item.choices?.length && !next.choices?.length && next.text === item.text) return;
-  if (next.text === item.text && sameChoices(item.choices, next.choices)) return;
+  // The selection counts as a change even when nothing else moved. On a pane
+  // answered by walking its cursor, that index is where the walk starts, and
+  // someone at the keyboard can move it without a word of the question
+  // changing. A stale one sends the right number of steps from the wrong place.
+  if (
+    next.text === item.text &&
+    sameChoices(item.choices, next.choices) &&
+    next.choiceSelected === item.choiceSelected
+  ) {
+    return;
+  }
 
   slot.waiting = next;
   broadcastRemove(item.id);
@@ -837,6 +990,17 @@ export const glassesRelayDeps = {
   listWorkspaces: (): Promise<WorkspaceInfo[]> => herdrService.listWorkspaces(),
   readPaneText: (herdrPaneId: string): Promise<string | null> =>
     readPaneText(herdrPaneId, 'recent', 30),
+  /**
+   * The same read with its escape sequences left on.
+   *
+   * A row of side-by-side options and the row of key hints beside it are the
+   * same shape as text and different colours as pixels, so the only reader that
+   * can tell them apart needs the colours. `readPane` already asked herdr for
+   * `format: 'ansi'` — `strip_ansi: false` alone does not do it, the format is
+   * what decides.
+   */
+  readPaneAnsi: (herdrPaneId: string): Promise<string | null> =>
+    readPane(herdrPaneId, 'recent', 30),
 };
 
 /** Test hook: wipe all module state. */
