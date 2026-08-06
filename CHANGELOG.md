@@ -4,7 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.64] - 2026-08-06
 
+### Added
+- **OpenCode is a supported agent.** It joins Claude Code, Codex, Grok and Kimi:
+  start one from the create modal, see it in the session list with its own
+  colour, read its transcripts in the conversation view and its token usage on
+  the dashboard. `hrdle setup` installs its herdr integration alongside the
+  others, so a resumed session keeps its identity
+  - It is the first provider that reads a **database** rather than files.
+    OpenCode 1.18 keeps sessions, messages and parts as rows in
+    `~/.local/share/opencode/opencode.db`; the reader opens it readonly per
+    query the way the Codex reader already does, and an unreadable or
+    mid-migration file degrades to an empty list rather than an error
+  - Its cost figures are OpenCode's own. Every other agent's spend here is our
+    estimate from a price list; OpenCode computes and stores a per-turn cost,
+    so the dashboard reports what it recorded. A window with no cost recorded
+    shows nothing rather than zero - a free model's genuine 0 is a different
+    statement from "unknown"
+  - A tool call and its result live in one row there, so the transcript reader
+    splits them back apart to the call-and-result shape the conversation view
+    pairs up - which means an OpenCode tool call renders as the same single
+    card as everyone else's, and a call the user refused shows as the refusal
+    rather than as one still running
+
 ### Fixed
+
 - **A multi-select question is answerable from the ring, on either agent.**
   0.3.62 fixed following a question that moves and shipped believing the
   multi-step case was closed. It was closed for single-pick lists only. Driven
@@ -43,6 +66,43 @@ All notable changes to this project will be documented in this file.
   had genuinely moved on was left showing the previous question's answers. It
   now holds only while the question itself is unchanged: the right question
   with nothing under it beats the wrong question's options
+
+- **One unreadable file no longer takes the whole dashboard down.** The panel is
+  a dozen independent readings gathered with `Promise.all`, which rejects on the
+  first member to reject, and the cache in front of it only serves a stale value
+  once it has one - so on the first build after a restart, a single throwing
+  reading returned an error for `GET /api/dashboard` instead of the panel, and
+  kept doing it, because a failed build caches nothing. Every agent's usage
+  dark because one provider could not read one file
+  - Each reading is now isolated: one that throws degrades to its own empty
+    value, is logged with the name of the reading that failed, and the rest of
+    the panel renders. The obligation used to sit in each service and had to be
+    remembered again by every provider added
+  - Two readings could actually do it. Codex's rollout scan guarded every level
+    of its directory walk except the top one, so an unreadable `~/.codex/
+    sessions` - or a plain file where the directory belongs - escaped. And the
+    daily-activity chart checked only that `dailyActivity` was *present* in
+    `stats-cache.json`, a file another program writes: anything there that was
+    not a list reached `.slice` and threw
+- **A tool call naming its file as `filePath` is summarised by its basename.**
+  The summary and the result's syntax highlighting only looked for `file_path`,
+  `path` and `notebook_path`, so an agent using the camelCase spelling got the
+  first 60 characters of an absolute path as its card heading, and no
+  highlighting
+
+
+## [0.3.63] - 2026-08-06
+
+### Changed
+- **The glasses recording records the glasses, not the phone.** Which session
+  the phone was focused on used to be written all day, glasses or no glasses -
+  hours of lines nothing could replay, bookending every file. The replay
+  player then opened onto that silence: position 0 was a blank canvas even
+  though the day's frames were all there, further in. Focus is now recorded
+  only while the glasses are live (between their first frame and the gap
+  marker when they go), with one parked focus line flushed just before the
+  frame that ends an off-air stretch, so recordings still say what was being
+  worked on. A day the glasses never joined gets no file at all
 
 ## [0.3.62] - 2026-08-04
 

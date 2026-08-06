@@ -55,9 +55,13 @@ export function getToolSummary(input: Record<string, unknown>): string {
 	if (pattern) return oneLine(pattern);
 
 	// File-based tools: the basename is what identifies the call, and the
-	// directory is the part that pushes it off the edge of a phone.
+	// directory is the part that pushes it off the edge of a phone. OpenCode
+	// names the argument `filePath` where the others use `file_path`.
 	const filePath =
-		str(input.file_path) ?? str(input.path) ?? str(input.notebook_path);
+		str(input.file_path) ??
+		str(input.filePath) ??
+		str(input.path) ??
+		str(input.notebook_path);
 	if (filePath) {
 		const parts = filePath.split("/");
 		return oneLine(parts[parts.length - 1] || filePath);

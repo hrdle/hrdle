@@ -17,6 +17,8 @@ import { GrokService } from '../services/grok';
 import { GrokHistoryService } from '../services/grok-history';
 import { KimiService } from '../services/kimi';
 import { KimiHistoryService } from '../services/kimi-history';
+import { OpenCodeService } from '../services/opencode';
+import { OpenCodeHistoryService } from '../services/opencode-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
 import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, renameSessionMetadata, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
@@ -46,11 +48,13 @@ const threadServices: Partial<Record<AgentProvider, AgentThreadService>> = {
   codex: new CodexService(),
   grok: new GrokService(),
   kimi: new KimiService(),
+  opencode: new OpenCodeService(),
 };
 export const agentHistoryProviders: Partial<Record<AgentProvider, AgentHistoryProvider>> = {
   codex: new CodexHistoryService(undefined, codexConversationService),
   grok: new GrokHistoryService(),
   kimi: new KimiHistoryService(),
+  opencode: new OpenCodeHistoryService(),
 };
 const promptHistoryService = new PromptHistoryService();
 

@@ -233,6 +233,9 @@ const AGENT_INTEGRATIONS: AgentIntegration[] = [
   { name: 'Claude Code', command: 'claude', configDir: join(homedir(), '.claude') },
   { name: 'Codex', command: 'codex', configDir: join(homedir(), '.codex') },
   { name: 'Kimi Code', command: 'kimi', configDir: join(homedir(), '.kimi-code') },
+  // OpenCode keeps its config under XDG rather than a dotfile directory of its
+  // own, and its herdr integration is an ESM plugin dropped in there.
+  { name: 'OpenCode', command: 'opencode', configDir: join(homedir(), '.config', 'opencode') },
 ];
 
 function isCommandAvailable(command: string): boolean {

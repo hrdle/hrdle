@@ -144,6 +144,9 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
   const key = JSON.stringify([screen.mode, screen.session?.id, screen.header, screen.notice, screen.body, screen.footer]);
   if (key === lastFrameKey) return;
   lastFrameKey = key;
+  // The glasses just proved themselves alive; the focus that was parked while
+  // they were off becomes this frame's context and must precede it on disk.
+  flushPendingFocus();
   recordedSinceGap = true;
   // Stamp arrival now, not when the queued write runs. File choice follows
   // the server clock too: a device clock a day off must not scatter one
@@ -164,12 +167,44 @@ export function recordGlassesInput(input: GlassesInput): void {
     announced = true;
     console.log(`[glasses-recorder] recording to ${recordingDir()} (${RECORD_ENV} is set)`);
   }
+  // A gesture is the device speaking, same as a frame: whatever focus was
+  // parked while the glasses were off belongs on disk before it.
+  flushPendingFocus();
   recordedSinceGap = true;
   const line: RecordedGlassesLine = { input: input.kind, at: input.at, receivedAt: Date.now() };
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
 }
 
+/** Key of the last focus WRITTEN to disk (not merely observed). */
 let lastFocusKey: string | null = null;
+/** Focus observed while the glasses were off, parked until they speak again.
+ *  Only the latest matters: it is context for the next frame, not history. */
+let pendingFocus: ClientFocus | null | undefined;
+
+function focusLine(
+  focus: ClientFocus | undefined,
+): Extract<RecordedGlassesLine, { focus: string | null }> {
+  return focus
+    ? { focus: focus.sessionId, deviceType: focus.deviceType, at: focus.at, receivedAt: Date.now() }
+    : { focus: null, at: Date.now(), receivedAt: Date.now() };
+}
+
+function focusKeyOf(focus: ClientFocus | undefined): string {
+  return focus ? `${focus.sessionId}:${focus.deviceType}` : '';
+}
+
+/** Write the parked focus, if it still differs from the last one on disk.
+ *  Called on the live transition, before the frame/gesture that caused it. */
+function flushPendingFocus(): void {
+  if (pendingFocus === undefined) return;
+  const focus = pendingFocus ?? undefined;
+  pendingFocus = undefined;
+  const key = focusKeyOf(focus);
+  if (key === lastFocusKey) return;
+  lastFocusKey = key;
+  const line = focusLine(focus);
+  enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
+}
 
 /**
  * Record which session the user is working in, whenever the focus election's
@@ -177,17 +212,24 @@ let lastFocusKey: string | null = null;
  * the latter rides on the frames themselves (`GlassesScreen.session`). Both
  * are written so analysis can group a recording by what was being worked on.
  *
- * Not a liveness signal: focus changes with no glasses anywhere, so it never
- * touches the gap bookkeeping.
+ * This is a glasses recording, and focus moves with no glasses anywhere —
+ * a phone browsed all day used to bookend every file with hours of focus
+ * lines nothing could replay. So focus is written only while the glasses are
+ * live (frames or gestures since the last gap); off-air changes are parked
+ * and the latest one is flushed as context when the glasses speak again.
  */
 export function recordGlassesFocus(focus: ClientFocus | undefined): void {
   if (!glassesRecordingEnabled()) return;
-  const key = focus ? `${focus.sessionId}:${focus.deviceType}` : '';
+  if (!recordedSinceGap) {
+    // Parked even when unchanged-looking: `undefined` means "nothing parked",
+    // so a cleared focus is stored as null to keep the two states apart.
+    pendingFocus = focus ?? null;
+    return;
+  }
+  const key = focusKeyOf(focus);
   if (key === lastFocusKey) return;
   lastFocusKey = key;
-  const line: RecordedGlassesLine = focus
-    ? { focus: focus.sessionId, deviceType: focus.deviceType, at: focus.at, receivedAt: Date.now() }
-    : { focus: null, at: Date.now(), receivedAt: Date.now() };
+  const line = focusLine(focus);
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
 }
 
@@ -262,5 +304,6 @@ export function resetGlassesRecorderForTest(): void {
   lastFrameKey = null;
   recordedSinceGap = false;
   lastFocusKey = null;
+  pendingFocus = undefined;
   lastPrunedDay = null;
 }

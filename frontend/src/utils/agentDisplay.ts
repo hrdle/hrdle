@@ -44,6 +44,12 @@ const AGENT_BADGES: Record<AgentProvider, AgentBadgeStyle> = {
 		barClassName: "bg-amber-400/70",
 		labelClassName: "text-amber-300",
 	},
+	opencode: {
+		label: AGENT_PROVIDERS.opencode.displayName,
+		badgeClassName: "text-orange-300 bg-orange-400/10 border-orange-400/20",
+		barClassName: "bg-orange-400/70",
+		labelClassName: "text-orange-300",
+	},
 };
 
 /** Badge style for a provider; unknown/undefined falls back to Claude. */
