@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.70] - 2026-08-07
 
 ### Fixed
 - **The glasses stop following a browser nobody is holding.** A wearer reading a
@@ -29,6 +29,28 @@ All notable changes to this project will be documented in this file.
     checkbox, tick or radio is a set of toggles whatever else it resembles. The
     whole row is refused rather than the item dropped, because the walk counts
     positions along the row the pane draws
+
+## [0.3.69] - 2026-08-07
+
+### Fixed
+- **The first question of a set reaches the wearer.** The second one did and the
+  first did not, which took a while to see for what it was: `enterBlocked` fires
+  on a status transition, and the first question does not always have one - a
+  pane holding queued input is already `blocked` when the question appears.
+  Answering the first is what finally moved the status, which is why the second
+  arrived
+  - It had been covered by accident. A blocked pane always produced *some* item,
+    even when that was only its status bar read as a question, and the real
+    question replaced it when one turned up. Declining to build the junk in
+    0.3.68 took away the thing the real question was arriving into
+- **Answering says what was sent.** The item belongs to the pane's blocked
+  epoch, so the panel does not take it down - the server does, once it sees the
+  pane move - and the seconds in between were spent looking at the question just
+  answered, which then vanished without naming the choice. Reported from the
+  device as not being able to tell whether a pick had gone through. The strip
+  now leads with the answer for a couple of seconds: not a claim that the agent
+  received anything, only that these are the keys that went. A multi-select
+  names everything it ticked rather than the row it sent from
 
 ## [0.3.68] - 2026-08-07
 
