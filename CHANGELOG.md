@@ -11,8 +11,6 @@ All notable changes to this project will be documented in this file.
   tap more and stays one line however many there are, which on the phone the
   dialog is mostly used from is the trade worth making
 
-## [Unreleased]
-
 ### Fixed
 - **A pane that is blocked without asking no longer interrupts the wearer.**
   herdr reports `blocked` for the gaps between turns as well as for a question,
