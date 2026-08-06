@@ -152,9 +152,11 @@ describe('the demo', () => {
     expect(c.state.choiceMulti).toBe(true)
 
     // No pane to read the box back from, so the toggle has to be visible here
-    // or the screen that exists to demonstrate it demonstrates nothing.
+    // or the screen that exists to demonstrate it demonstrates nothing. The
+    // mark is the one Claude Code writes, so a real tick and this one look the
+    // same when the pane's re-read replaces it.
     await ring(c, 'tap')
-    expect(c.state.choiceOptions[0]).toStartWith('[x]')
+    expect(c.state.choiceOptions[0]).toStartWith('[✔]')
 
     // Down to the send row, past the options.
     for (let i = 0; i < demoChoices().length; i++) await ring(c, 'swipeDown')

@@ -287,7 +287,24 @@ function broadcastRemove(id: string): void {
  * Kept in step with `extractChoices` in `glasses/src/ws-client.ts`, which is
  * the same reading done against a live terminal buffer.
  */
-const OPTION_LINE = /^\s*[❯>*→]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
+const NUMBERED_OPTION = /^\s*[❯>*→]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
+
+/**
+ * A checkbox row that carries no number at all.
+ *
+ * Kimi's multi-select draws exactly this - `   [ ] Apple`, four of them, and
+ * not a digit anywhere on the screen even though `1-4` still works as a key.
+ * `NUMBERED_OPTION` matched none of it, so a kimi multi-select produced no
+ * choices at all; `refreshBlocked` then held the previous question rather than
+ * replace it with an empty one, and the panel sat on question 1 while the pane
+ * had moved to question 2. The wearer's next pick went to a question they were
+ * never shown, which is the failure this whole path exists to prevent.
+ *
+ * Claude's multi-select rows are numbered *and* checkboxed (`1. [ ] Apple`),
+ * so they match the numbered form first and keep their box in the capture -
+ * the box is what tells the app this is a multi-select at all.
+ */
+const CHECKBOX_OPTION = /^\s*[❯>*→]?\s*(\[[ xX*✓✔]\]\s*\S.*)/;
 
 /**
  * The rows a wearer cannot answer, whatever they are numbered.
@@ -297,17 +314,36 @@ const OPTION_LINE = /^\s*[❯>*→]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
  * puts rows in the picker whose Enter does nothing a wearer can see.
  * `Other` is kimi's; the other two are claude's.
  */
-const UNANSWERABLE = new Set(['Type something.', 'Chat about this', 'Other']);
+const UNANSWERABLE = new Set(['Type something', 'Chat about this', 'Other']);
 
-/** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` style options from stripped lines. */
+/**
+ * Whether a captured row is one of those, once it is down to its label.
+ *
+ * Compared bare rather than literally, because the same row arrives in several
+ * dresses: claude writes `Type something.` in a single-pick list and
+ * `[ ] Type something` in a multi-select - no period, and a checkbox in front -
+ * while kimi's `Other` becomes `[ ] Other:` the moment it is the row being
+ * typed into. Matching the literal string caught the first and missed the rest,
+ * so a picker carried rows whose only effect is to open a text field nobody
+ * wearing the glasses can type into.
+ */
+function isUnanswerable(option: string): boolean {
+  const bare = option
+    .replace(/^\[[ xX*✓✔]\]\s*/, '')
+    .trim()
+    .replace(/[.:：]$/, '');
+  return UNANSWERABLE.has(bare);
+}
+
+/** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options. */
 export function extractNumberedChoices(lines: string[]): string[] {
   const choices: string[] = [];
   for (const line of lines) {
-    const m = line.match(OPTION_LINE);
+    const m = line.match(NUMBERED_OPTION) ?? line.match(CHECKBOX_OPTION);
     if (m) choices.push(m[1].trim());
     if (choices.length >= MAX_CHOICES) break;
   }
-  return choices.filter((c) => !UNANSWERABLE.has(c));
+  return choices.filter((c) => !isUnanswerable(c));
 }
 
 /**
@@ -594,8 +630,13 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   const { text, choices } = await assembleWaitingPayload(ws, paneId);
   const next = makeItem(ws.id, 'waiting', 'auto', text, paneId, choices);
   // A read that came back with no options while the last one had them is far
-  // more likely a half-drawn frame than a question that lost its choices.
-  if (item.choices?.length && !next.choices?.length) return;
+  // more likely a half-drawn frame than a question that lost its choices - but
+  // only while it is still the same question. A read that lost the options AND
+  // changed the question is a new question the scrape could not parse, and
+  // holding the old one there means showing the wearer options belonging to a
+  // question the pane has already moved past. Wrong question with no options
+  // beats right-looking options for the wrong question.
+  if (item.choices?.length && !next.choices?.length && next.text === item.text) return;
   if (next.text === item.text && sameChoices(item.choices, next.choices)) return;
 
   slot.waiting = next;
