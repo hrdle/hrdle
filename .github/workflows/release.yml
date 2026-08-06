@@ -4,6 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+  # Run it against a tag that is already pushed.
+  #
+  # A tag push is the only thing that used to start this, and on 2026-08-07
+  # GitHub dropped those webhooks for hours while branch pushes still arrived
+  # late: v0.3.68 and v0.3.70 were both tagged and neither produced a Release,
+  # so `hrdle update` had nothing to fetch. Re-pushing the tag did not help -
+  # the same webhook goes missing again.
+  #
+  # A dispatch is an API call rather than a webhook, so it does not depend on
+  # the delivery that failed. Run it with `--ref <tag>`: the release action
+  # takes its tag from the ref it is running on.
+  workflow_dispatch:
 
 jobs:
   build:
