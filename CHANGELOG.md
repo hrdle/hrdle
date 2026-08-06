@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.67] - 2026-08-07
+
+### Fixed
+- **A session's address stops changing when it is renamed.** Its id was the
+  herdr workspace *label* - text a person edits - while herdr's stable
+  `workspace_id` sat next to it. The workspace-naming convention has every agent
+  rename its workspace at least twice per task, so the address changed
+  mid-conversation, by policy: ten spoken replies in a row 404'd against a name
+  that had just been rewritten, and the next thing said out loud went to a
+  different session
+  - The 404 was the lucky half. The lookup took the first label match, so two
+    workspaces sharing a name delivered to whichever sorted first and answered
+    200 with nothing naming the one that received it. Reproduced on a live
+    server before fixing: two workspaces called `dup-test` appeared as two
+    entries with one id, and a prompt to that id succeeded
+  - The id is `workspace_id` now and the label is what `name` carries. A label
+    is still accepted as an address - it is what `hrdle send local:dev:%1` types
+    and what an installed ehpk holds - but an ambiguous one resolves to nothing,
+    and the two paths that deliver something say which of "gone" and "say which
+    one" happened, because only one of them is fixed by naming the session
+  - Renaming a session no longer moves its settings. Theme, custom title and STT
+    vocabulary were keyed by the same mutable id, so every rename quietly
+    abandoned them; six such orphans were sitting in the file on the machine
+    this was found on. Entries keyed by an old label are moved onto the
+    workspace id at startup, and only when exactly one live workspace carries
+    that name - a wrong guess would paint a session in a colour chosen for a
+    different one
+
 ## [0.3.66] - 2026-08-06
 
 ### Added
