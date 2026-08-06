@@ -53,17 +53,6 @@ describe('session-metadata mutation lock', () => {
     expect(parsed.sessions['ses-a'].theme).toBe('blue');
   });
 
-  test('renameSessionMetadata moves the theme to the new id', async () => {
-    const meta = await import('../session-metadata');
-
-    await meta.setSessionTheme('old-name', 'purple');
-    await meta.renameSessionMetadata('old-name', 'new-name');
-
-    const sessions = await meta.getAllSessionMetadata();
-    expect(sessions['old-name']).toBeUndefined();
-    expect(sessions['new-name']?.theme).toBe('purple');
-  });
-
   test('concurrent last-known-session updates are serialised', async () => {
     const meta = await import('../session-metadata');
 

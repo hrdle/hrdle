@@ -11,6 +11,7 @@ import { dashboard, getDashboard } from './routes/dashboard';
 import { notify } from './routes/notify';
 import { peers } from './routes/peers';
 import { shortTailscaleIp, startDiscoveryServer } from './services/discovery';
+import { migrateSessionIds } from './services/session-id-migration';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
 import { glassesRelay } from './routes/glasses-relay';
@@ -346,6 +347,11 @@ if (!herdrPong) {
   console.log('herdr server started');
 }
 console.log(`herdr ${herdrPong.version ?? '?'} (protocol ${herdrPong.protocol ?? '?'})`);
+
+// Settings written against a workspace name move onto its workspace id (#186).
+// Needs herdr, so it runs here rather than at import time, and it is not
+// awaited: nothing about serving depends on it.
+void migrateSessionIds();
 if (herdrPong.protocol !== undefined && herdrPong.protocol !== HERDR_TESTED_PROTOCOL) {
   console.warn(
     `warning: herdr protocol ${herdrPong.protocol} differs from the tested protocol ${HERDR_TESTED_PROTOCOL}. ` +

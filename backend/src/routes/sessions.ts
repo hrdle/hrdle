@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { homedir } from 'node:os';
 import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
-import { HerdrService } from '../services/herdr';
+import { HerdrService, findSessionByAddress } from '../services/herdr';
 import {
   captureViewportHerdr,
   getOrCreateHerdrControlSession,
@@ -21,7 +21,7 @@ import { OpenCodeService } from '../services/opencode';
 import { OpenCodeHistoryService } from '../services/opencode-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
-import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, renameSessionMetadata, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
 import { resetSttPromptCache } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
@@ -821,10 +821,14 @@ sessions.post('/history/resume', async (c) => {
 sessions.get('/:id', async (c) => {
   const id = c.req.param('id');
   const herdrSessions = await herdrService.listWorkspaces();
-  const session = herdrSessions.find(s => s.id === id);
+  // By id, then by name - the same two ways every other route accepts since
+  // #186, and for the same reason: a name is what a person types and what an
+  // older client still holds. An ambiguous name resolves to nothing rather
+  // than to whichever workspace happens to sort first.
+  const { session, ambiguous } = findSessionByAddress(herdrSessions, id);
 
   if (!session) {
-    return c.json({ error: 'Session not found' }, 404);
+    return c.json({ error: ambiguous ? 'Ambiguous session name' : 'Session not found' }, 404);
   }
 
   return c.json({
@@ -869,9 +873,9 @@ sessions.post('/:id/resume', async (c) => {
   const parsed = ResumeSessionSchema.safeParse(body);
 
   const herdrSessions = await herdrService.listWorkspaces();
-  const session = herdrSessions.find(s => s.id === id);
+  const { session, ambiguous } = findSessionByAddress(herdrSessions, id);
   if (!session) {
-    return c.json({ error: 'Session not found' }, 404);
+    return c.json({ error: ambiguous ? 'Ambiguous session name' : 'Session not found' }, 404);
   }
 
   try {
@@ -917,8 +921,8 @@ sessions.put('/:id/theme', async (c) => {
 
 // PUT /sessions/:id/title - Rename the session's herdr workspace. The name
 // lives in herdr (workspace label), not in an hrdle-side store — same rule as
-// the display order. The label is also the public session id, so a successful
-// rename returns the new id and the caller must switch to it.
+// the display order. Since #186 the label is *not* the session id, so a rename
+// changes what it is called and nothing about how it is reached.
 const UpdateTitleSchema = z.object({
   title: z.string().max(100).nullable(),
 });
@@ -942,11 +946,13 @@ sessions.put('/:id/title', async (c) => {
   }
 
   try {
-    const newId = await herdrService.renameWorkspace(id, title);
-    await renameSessionMetadata(id, newId);
+    // The id does not change with the name since #186, so nothing is rekeyed
+    // and nothing has to switch addresses - which is the whole point: this
+    // rename used to retire the session's address mid-conversation.
+    const sessionId = await herdrService.renameWorkspace(id, title);
     // The renamed workspace is part of the STT vocabulary bias.
     resetSttPromptCache();
-    return c.json({ success: true, title, id: newId });
+    return c.json({ success: true, title, id: sessionId });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message.includes('already exists')) {
@@ -1196,9 +1202,15 @@ sessions.post('/:id/panes/input', async (c) => {
     return c.json({ error: 'Invalid request', issues: parsed.error.issues }, 400);
   }
 
-  const exists = await herdrService.workspaceExists(id);
-  if (!exists) {
-    return c.json({ error: 'Session not found' }, 404);
+  // Same as /prompt: this delivers keystrokes, so an ambiguous name says so.
+  const status = await herdrService.addressStatus(id);
+  if (status !== 'ok') {
+    return c.json(
+      status === 'ambiguous'
+        ? { error: `"${id}" names more than one session - address it by session id` }
+        : { error: 'Session not found' },
+      404,
+    );
   }
 
   try {
@@ -1290,9 +1302,17 @@ sessions.post('/:id/prompt', async (c) => {
     }
   }
 
-  const exists = await herdrService.workspaceExists(id);
-  if (!exists) {
-    return c.json({ error: 'Session not found' }, 404);
+  // The delivery paths say *why* nothing was reached: a name that now points at
+  // two workspaces has to be answered differently from one that points at none
+  // (#186), because only one of them is fixed by saying which session.
+  const status = await herdrService.addressStatus(id);
+  if (status !== 'ok') {
+    return c.json(
+      status === 'ambiguous'
+        ? { error: `"${id}" names more than one session - address it by session id` }
+        : { error: 'Session not found' },
+      404,
+    );
   }
 
   try {

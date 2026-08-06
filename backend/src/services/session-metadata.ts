@@ -125,6 +125,30 @@ export async function removeLastKnownSession(sessionId: string): Promise<void> {
   });
 }
 
+/**
+ * Move whole entries from one session id to another (#186 migration).
+ *
+ * One write for the whole plan: a rename per call would leave the file in a
+ * half-migrated state if the process stopped in the middle of it.
+ */
+export async function rekeySessionMetadata(
+  moves: { from: string; to: string }[],
+): Promise<void> {
+  if (moves.length === 0) return;
+  await withMetadataLock(async () => {
+    const data = await load();
+    let changed = false;
+    for (const { from, to } of moves) {
+      const meta = data.sessions[from];
+      if (!meta || data.sessions[to]) continue;
+      data.sessions[to] = meta;
+      delete data.sessions[from];
+      changed = true;
+    }
+    if (changed) await save(data);
+  });
+}
+
 export async function setSessionSttPrompt(
   sessionId: string,
   prompt: string | null,
@@ -141,24 +165,3 @@ export async function setSessionSttPrompt(
   });
 }
 
-/**
- * Move a session's metadata to its new id after a workspace rename. The title
- * field is dropped on the way: the workspace label is the title now, and a
- * stored one would only shadow it.
- */
-export async function renameSessionMetadata(oldId: string, newId: string): Promise<void> {
-  if (oldId === newId) return;
-  await withMetadataLock(async () => {
-    const data = await load();
-    const meta = data.sessions[oldId];
-    if (!meta) return;
-    delete data.sessions[oldId];
-    const kept: SessionMeta = {};
-    if (meta.theme) kept.theme = meta.theme;
-    if (meta.sttPrompt) kept.sttPrompt = meta.sttPrompt;
-    if (kept.theme || kept.sttPrompt) {
-      data.sessions[newId] = { ...data.sessions[newId], ...kept };
-    }
-    await save(data);
-  });
-}
