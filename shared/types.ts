@@ -85,6 +85,15 @@ export const AGENT_PROVIDERS = {
     processPatterns: [/(?:^|\/)kimi(?:\s|$)/],
     supportsConversationMetadata: false,
   },
+  opencode: {
+    id: 'opencode',
+    command: 'opencode',
+    resumeCommand: 'opencode --session',
+    labelKey: 'session.agentProvider.opencode',
+    displayName: 'OpenCode',
+    processPatterns: [/(?:^|\/)opencode(?:\s|$)/],
+    supportsConversationMetadata: false,
+  },
 } as const;
 
 export type AgentProvider = keyof typeof AGENT_PROVIDERS;
@@ -666,6 +675,39 @@ export interface KimiUsageSummary {
 }
 
 /**
+ * Aggregated OpenCode token usage. Like Grok and Kimi, OpenCode exposes no
+ * rate-limit windows locally, so the dashboard shows consumption totals rather
+ * than cycle utilization bars.
+ *
+ * Unlike those two, the cost here is **not** an estimate of ours: OpenCode
+ * computes and stores a per-turn `cost` itself, so the figure is whatever it
+ * charged the turn at. It is absent, never zeroed, when no turn in the window
+ * carried one — and genuinely 0 for free models, which report exactly that.
+ */
+export interface OpenCodeUsageWindow {
+  /** Assistant turns in the window. */
+  turns: number;
+  totalTokens: number;
+  inputTokens: number;
+  cacheReadTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  /** Spend for the window in USD, as recorded by OpenCode. */
+  costUsd?: number;
+}
+
+export interface OpenCodeUsageSummary {
+  last24h: OpenCodeUsageWindow;
+  last7d: OpenCodeUsageWindow;
+  /** Per-model totals over the 7-day window, largest first. */
+  models: Array<{ model: string; totalTokens: number; costUsd?: number }>;
+  /** Sessions with turns in the 7-day window. */
+  sessions7d: number;
+  /** ISO timestamp of the most recent turn seen. */
+  lastTurnAt?: string;
+}
+
+/**
  * Groq's remaining transcription quota, as reported by `x-ratelimit-*` headers
  * on the last transcription this server made. Not polled - Groq has no usage
  * endpoint, so asking would itself spend a request.
@@ -813,6 +855,7 @@ export interface DashboardResponse {
   codexUsageLimits?: CodexUsageLimits | null; // From Codex rollouts
   grokUsage?: GrokUsageSummary | null; // From Grok updates.jsonl turn_completed records
   kimiUsage?: KimiUsageSummary | null; // From Kimi wire.jsonl usage.record records
+  opencodeUsage?: OpenCodeUsageSummary | null; // From OpenCode's assistant message rows
   // Billed OpenRouter spend for the key in ~/.kimi-code/config.toml. Null when
   // no OpenRouter provider is configured or the account can't be reached.
   openRouterUsage?: OpenRouterAccountUsage | null;
