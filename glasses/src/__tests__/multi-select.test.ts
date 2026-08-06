@@ -83,6 +83,17 @@ describe('what the panel says', () => {
     expect(screenText(st(SINGLE)).footer).toBe('swipe:select  tap:confirm  dbl:skip')
   })
 
+  test("a tick the firmware has no glyph for is substituted, not sent raw", () => {
+    // Claude Code writes U+2714 and kimi U+2713. The panel carries neither, so
+    // unsubstituted they arrive as tofu — while this window, drawing from a
+    // browser font, shows them perfectly. The one row a wearer reads to know
+    // what they have ticked is the worst place for that divergence.
+    const body = screenText(st(['[✔] Apple', '[✓] Banana', '[ ] Cherry'])).body
+    expect(body).toContain('[○] Apple')
+    expect(body).toContain('[○] Banana')
+    expect(body).toContain('[ ] Cherry')
+  })
+
   test('the checkboxes the pane drew survive to the panel', () => {
     // They arrive through the relay scrape, which never stripped non-ASCII —
     // and now neither does the glasses-side one.

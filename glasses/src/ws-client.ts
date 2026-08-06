@@ -100,7 +100,22 @@ export function stripAnsi(str: string): string {
  * `Other` is kimi's; the other two are claude's. Kept in step with
  * `UNANSWERABLE` in `backend/src/services/glasses-relay.ts`.
  */
-const UNANSWERABLE = new Set(['Type something.', 'Chat about this', 'Other'])
+const UNANSWERABLE = new Set(['Type something', 'Chat about this', 'Other'])
+
+/**
+ * Whether a captured row is one of those, once it is down to its label.
+ *
+ * The same row arrives in several dresses: claude writes `Type something.` in a
+ * single-pick list and `[ ] Type something` in a multi-select - no period, and
+ * a checkbox in front - while kimi's `Other` becomes `[ ] Other:` the moment it
+ * is the row being typed into. Matching the literal string caught the first and
+ * missed the rest. Kept in step with `isUnanswerable` in
+ * `backend/src/services/glasses-relay.ts`.
+ */
+function isUnanswerable(option: string): boolean {
+  const bare = option.replace(/^\[[ xX*✓✔]\]\s*/, '').trim().replace(/[.:：]$/, '')
+  return UNANSWERABLE.has(bare)
+}
 
 /** How far back from the pane's tail an option block may start. A prompt sits
  *  at the bottom; prose scrolls away above it. */
@@ -141,7 +156,7 @@ export function extractChoices(text: string): string[] {
     const m = lines[i].match(NUMBERED)
     if (m) found.push({ n: Number(m[1] ?? m[2]), text: m[3].trim(), at: i })
   }
-  if (found.length < 2) return []
+  if (found.length < 2) return extractCheckboxChoices(lines, from)
 
   // The longest run of 1, 2, 3, ... with no big gap between the lines.
   let best: typeof found = []
@@ -154,11 +169,43 @@ export function extractChoices(text: string): string[] {
     // introduced it, and the newest thing on a pane is the live one.
     if (run.length >= best.length) best = run
   }
-  if (best.length < 2 || best[0].n !== 1) return []
+  if (best.length < 2 || best[0].n !== 1) return extractCheckboxChoices(lines, from)
   // Dropped last, never before the run is picked: they are numbered rows like
   // any other, and removing one first would break the 1, 2, 3 the run is
   // recognised by.
-  return best.map((c) => c.text).filter((c) => !UNANSWERABLE.has(c))
+  return best.map((c) => c.text).filter((c) => !isUnanswerable(c))
+}
+
+/** A checkbox row carrying no number: kimi's multi-select draws only these. */
+const CHECKBOX = /^\s*[❯>*→]?\s*(\[[ xX*✓✔]\]\s*\S.*)/
+
+/**
+ * The unnumbered checkbox block a pane is offering, or nothing.
+ *
+ * Kimi's multi-select is `   [ ] Apple` four times over, without a digit on
+ * the screen - so the numeric run that recognises every other option list has
+ * nothing to count. The box itself is the tell here: ordinary prose does not
+ * open a line with `[ ]`, and a block of them close together near the bottom
+ * of a pane is a menu by construction, the same argument the numeric run makes.
+ *
+ * Only consulted when the numbered read came back empty, so claude's
+ * `1. [ ] Apple` - numbered and boxed - is still read as the numbered list it
+ * is, and this never gets the chance to find a shorter block inside it.
+ */
+function extractCheckboxChoices(lines: string[], from: number): string[] {
+  let best: string[] = []
+  let run: string[] = []
+  let prevAt = Number.NEGATIVE_INFINITY
+  for (let i = from; i < lines.length; i++) {
+    const m = lines[i].match(CHECKBOX)
+    if (!m) continue
+    run = i - prevAt <= CHOICE_MAX_GAP ? [...run, m[1].trim()] : [m[1].trim()]
+    prevAt = i
+    // Ties go to the lower block, for the same reason the numeric run does.
+    if (run.length >= best.length) best = run
+  }
+  if (best.length < 2) return []
+  return best.filter((c) => !isUnanswerable(c))
 }
 
 export class WsClient {

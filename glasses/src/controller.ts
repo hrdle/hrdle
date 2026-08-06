@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
-import { SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -63,6 +63,18 @@ export const NOTICE_DISMISS_MS = 8000
  * notice like anything else.
  */
 export const CHOICE_FOLLOW_MS = 15_000
+
+/** The option label without its checkbox — what a row says, apart from whether
+ *  it is ticked. */
+export function choiceLabel(option: string): string {
+  return option.replace(/^\s*\[[ xX*✓✔]\]\s*/, '').trim()
+}
+
+/** Whether two option sets are the same question with possibly different boxes
+ *  ticked, as opposed to a different question altogether. */
+export function sameLabels(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((o, i) => choiceLabel(o) === choiceLabel(b[i]))
+}
 /**
  * How long the ring has to be still before the screen starts moving itself.
  *
@@ -1052,10 +1064,6 @@ export class GlassesController {
     switch (action) {
       case 'swipeUp': {
         if (st.choiceIndex <= 0) return Promise.resolve()
-        // Moving off the send row is a move in this app only: the pane's cursor
-        // never left the last option, so sending it an arrow would walk it one
-        // option further than the wearer can see.
-        if (!onChoiceSend(st)) this.sendChoiceKey('\x1b[A')
         st.choiceIndex--
         this.render()
         return Promise.resolve()
@@ -1063,29 +1071,22 @@ export class GlassesController {
       case 'swipeDown': {
         if (st.choiceIndex >= rows - 1) return Promise.resolve()
         st.choiceIndex++
-        if (!onChoiceSend(st)) this.sendChoiceKey('\x1b[B')
         this.render()
         return Promise.resolve()
       }
       case 'tap':
-        // What a tap does depends on the row, and the row says which. Checking
-        // an option is a space, exactly as the TUI expects; the send row is the
-        // Enter that a single-pick list gets from any row.
+        // What a tap does depends on the row, and the row says which. An option
+        // is answered by its own number; the send row is the Tab that carries a
+        // multi-select on to the next question.
         if (st.choiceMulti && !onChoiceSend(st)) {
-          // No pane to read the box back from, so the demo ticks its own -
-          // otherwise a toggle in a demo is a gesture with no visible effect,
-          // on the screen that exists to show the toggle working.
-          if (this.demo) {
-            this.toggleDemoChoice()
-            return Promise.resolve()
-          }
-          this.sendChoiceKey(' ')
-          // The pane redraws with the box ticked; read it back so the panel
-          // shows what was actually recorded rather than what was asked for.
-          void this.refreshChoices()
+          // Tick it here as well as on the pane. The relay's re-read is what
+          // makes it true, and that is a tick of the clock away - long enough
+          // for a toggle to look like a gesture that did nothing.
+          this.toggleLocalChoice()
+          this.sendChoiceKey(String(st.choiceIndex + 1))
           return Promise.resolve()
         }
-        this.sendChoiceKey('\r')
+        this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         if (this.demo) {
@@ -1113,14 +1114,25 @@ export class GlassesController {
     }
   }
 
-  /** Tick or untick the option under the cursor, in the demo's own copy of the
-   *  options. The pane's redraw is what does this for real. */
-  private toggleDemoChoice(): void {
+  /**
+   * Tick or untick the option under the cursor, in this app's own copy.
+   *
+   * The pane is the authority and its redraw arrives through the relay, so this
+   * is a guess - but a guess that is right every time except when the key never
+   * landed, and the next re-read corrects it. Without it the panel showed the
+   * old box for as long as it took the server to look again, which reads as a
+   * tap that did nothing on the one screen whose whole subject is the tap.
+   */
+  private toggleLocalChoice(): void {
     const st = this.state
     const opt = st.choiceOptions[st.choiceIndex]
     if (opt === undefined) return
     st.choiceOptions = st.choiceOptions.map((o, i) =>
-      i === st.choiceIndex ? (isChecked(o) ? o.replace(/\[[xX*\u2713]\]/, '[ ]') : o.replace('[ ]', '[x]')) : o,
+      i === st.choiceIndex
+        ? isChecked(o)
+          ? o.replace(/\[[xX*\u2713\u2714]\]/, '[ ]')
+          : o.replace('[ ]', `[${CHECK_MARK}]`)
+        : o,
     )
     this.render()
   }
@@ -1131,34 +1143,33 @@ export class GlassesController {
    *  and the demo should not invent one. */
   private demoPickedText(): string | null {
     const st = this.state
-    const label = (o: string) => o.replace(/^\s*\[[ xX*\u2713]\]\s*/, '').trim()
     if (!st.choiceMulti) {
       const one = st.choiceOptions[st.choiceIndex]
-      return one ? label(one) : null
+      return one ? choiceLabel(one) : null
     }
-    const picked = st.choiceOptions.filter(isChecked).map(label)
+    const picked = st.choiceOptions.filter(isChecked).map(choiceLabel)
     return picked.length ? picked.join(', ') : null
   }
 
-  /** Re-read the pane after a toggle, so the boxes on the panel are the pane's
-   *  and not a guess. Leaves the cursor where it is; a failed read leaves the
-   *  previous options up rather than emptying the screen under the wearer. */
-  private async refreshChoices(): Promise<void> {
-    const t = this.choiceTarget
-    if (!t) return
-    try {
-      const fresh = await this.scrapeChoices(t.sessionId)
-      if (fresh.length === this.state.choiceOptions.length) {
-        this.state.choiceOptions = fresh
-      }
-    } catch {
-      // Keep what is on screen.
-    }
-    this.render()
-  }
-
-  /** Choice keys go to the item's sessionId+paneId. REST needs no subscription
-   *  and routes to the exact blocked pane; WS input is the fallback (#504). */
+  /**
+   * Choice keys go to the item's sessionId+paneId. REST needs no subscription
+   * and routes to the exact blocked pane; WS input is the fallback (#504).
+   *
+   * Only ever a key that names what it wants - a digit, a Tab, an Enter - and
+   * never an arrow. Arrows made this screen a second cursor over the pane's
+   * own, and the two came apart the moment anything redrew: every tick of a
+   * multi-select box changes the option text, the relay re-reads it, the picker
+   * reopens on the new item at row 1 while the pane's cursor is still on row 3,
+   * and from then on each swipe moves the pane from somewhere the wearer cannot
+   * see. Measured on a live pane on 2026-08-06 - three swipes in, the panel
+   * offered `Banana` and the pane was sitting on `Type something`.
+   *
+   * `1`..`9` sidesteps all of it. Claude Code and kimi both take an option's own
+   * number - choosing it in a single-pick list, ticking it in a multi-select -
+   * and neither moves its cursor when they do, so there is no second cursor to
+   * keep in step. The index this app holds is now a display cursor and nothing
+   * more, which is what it always looked like from the outside.
+   */
   private sendChoiceKey(data: string): void {
     const t = this.choiceTarget
     if (!t) return
@@ -1397,12 +1408,26 @@ export class GlassesController {
     return this.state.mode === 'conversation' && Date.now() < this.choiceFollowUntil
   }
 
+  /**
+   * Open the picker on a set of options.
+   *
+   * The cursor goes back to the top, except when the same question has simply
+   * been re-read: a multi-select re-reads on every tick of a box, and a cursor
+   * that jumped home each time made the second tick land somewhere the wearer
+   * had not chosen. Same labels means same question - the boxes are what
+   * changed, and where the wearer had got to is still where they are.
+   */
   private enterChoice(options: string[], target: ReplyTarget): void {
+    const keepCursor =
+      this.state.mode === 'choice' &&
+      this.choiceTarget?.sessionId === target.sessionId &&
+      this.choiceTarget?.paneId === target.paneId &&
+      sameLabels(this.state.choiceOptions, options)
     this.choiceTarget = target
     this.choiceFollowUntil = 0
     this.state.choiceOptions = options
     this.state.choiceMulti = looksMultiSelect(options)
-    this.state.choiceIndex = 0
+    if (!keepCursor) this.state.choiceIndex = 0
     this.state.choiceSessionName = this.sessionLabel(target.sessionId)
     this.state.mode = 'choice'
     this.render()

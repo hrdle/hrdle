@@ -156,6 +156,65 @@ describe('scrape extraction', () => {
     expect(extractNumberedChoices(['   → [1] Keep it', '     [2] Other'])).toEqual(['Keep it']);
   });
 
+  test("extractNumberedChoices reads claude's multi-select, boxes and all", () => {
+    // Captured from a live Claude Code pane on 2026-08-06. The box has to
+    // survive: it is the only thing that tells the app this is a multi-select
+    // rather than a single pick, and which rows the wearer has already ticked.
+    expect(
+      extractNumberedChoices([
+        '←  ☒ Color  ☐ Fruits  ☐ Speed  ✔ Submit  →',
+        '',
+        'Which fruits do you like?',
+        '',
+        '❯ 1. [ ] Apple',
+        '  Crisp and sweet-tart.',
+        '  2. [ ] Banana',
+        '  Soft and sweet.',
+        '  3. [✔] Cherry',
+        '  Small and tangy-sweet.',
+        '  4. [ ] Type something',
+        '     Next',
+        '',
+        '  5. Chat about this',
+      ]),
+    ).toEqual(['[ ] Apple', '[ ] Banana', '[✔] Cherry']);
+  });
+
+  test("extractNumberedChoices reads kimi's unnumbered multi-select", () => {
+    // Also captured on 2026-08-06, and the reason the whole multi-step fix
+    // still failed on kimi: its multi-select draws no digits at all, so
+    // nothing here matched, the payload came back with no choices, and
+    // `refreshBlocked` kept the previous question rather than replace it with
+    // an empty one. The panel showed question one while the pane was on
+    // question two — the quiet failure this path exists to prevent.
+    expect(
+      extractNumberedChoices([
+        '  question',
+        '',
+        '  (✓) Color   Fruits   (○) Speed   Submit',
+        '',
+        '  ? Which fruits do you like?',
+        '',
+        '   [ ] Apple',
+        '   [✓] Banana',
+        '   [ ] Cherry',
+        '   [ ] Other',
+        '',
+        '   ↑↓ select  1-4 / ↵ toggle  ←/→/tab switch  esc cancel',
+      ]),
+    ).toEqual(['[ ] Apple', '[✓] Banana', '[ ] Cherry']);
+  });
+
+  test('extractNumberedChoices drops a free-text row whatever punctuation it wears', () => {
+    // `Type something.` in a single pick, `[ ] Type something` in a
+    // multi-select, and kimi's `Other:` once it is the field being typed into.
+    // Compared literally, only the first was caught.
+    expect(extractNumberedChoices(['1. [ ] Keep it', '2. [ ] Type something'])).toEqual([
+      '[ ] Keep it',
+    ]);
+    expect(extractNumberedChoices(['   [ ] Keep it', '   [ ] Other:'])).toEqual(['[ ] Keep it']);
+  });
+
   test('extractQuestionLine prefers the last ?-terminated line', () => {
     expect(extractQuestionLine(['noise', 'Continue?', '❯ 1. Yes'])).toBe('Continue?');
   });
@@ -450,6 +509,22 @@ describe('trackGlassesRelay refresh while still blocked', () => {
     glassesRelayDeps.readPaneText = async () => 'Which approach should I take?';
     await trackGlassesRelay();
     expect(sock.messages).toEqual([]);
+  });
+
+  test('a different question with no readable choices still replaces the item', async () => {
+    // The half-drawn-frame guard held on the question text as well as the
+    // options, and a pane that had genuinely moved on to something this scrape
+    // cannot parse was left showing the previous question's options. Offering
+    // the right question with nothing under it beats offering the wrong
+    // question's answers.
+    const { sock, itemId } = await blockedOnFirstQuestion();
+    glassesRelayDeps.readPaneText = async () => 'Paste the token when you have it:';
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(itemId);
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Paste the token when you have it:');
+    expect(item.choices).toBeUndefined();
   });
 
   test('a dismissed item is not re-raised by a redraw', async () => {

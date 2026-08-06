@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.64] - 2026-08-06
 
 ### Added
 - **OpenCode is a supported agent.** It joins Claude Code, Codex, Grok and Kimi:
@@ -27,6 +27,46 @@ All notable changes to this project will be documented in this file.
     rather than as one still running
 
 ### Fixed
+
+- **A multi-select question is answerable from the ring, on either agent.**
+  0.3.62 fixed following a question that moves and shipped believing the
+  multi-step case was closed. It was closed for single-pick lists only. Driven
+  against live Claude Code and Kimi Code panes, seven separate faults turned up
+  between the scrape and the key that answers it
+  - **kimi's multi-select draws no numbers at all** - `[ ] Apple`, four rows,
+    not a digit on the screen even though `1-4` still works as a key. Neither
+    reader matched a line of it, so the payload came back with no choices and
+    the half-drawn-frame guard held the *previous* question: the panel showed
+    question one while the pane had moved to question two, which is the exact
+    silent failure 0.3.62 set out to prevent. Both readers now take an
+    unnumbered checkbox block as the menu it is
+  - **The picker drove the pane's cursor with arrow keys**, making it a second
+    cursor over the pane's own. They came apart on any redraw, and a
+    multi-select redraws on every tick - three swipes in, the panel offered
+    `Banana` while the pane sat on `Type something`. Options are now answered
+    by their own number, which both agents accept and neither moves its cursor
+    for, so there is no second cursor left to keep in step
+  - **The send row sent Enter**, which in current Claude Code toggles the row
+    under the pane's cursor rather than submitting. It sends Tab now, which is
+    what carries both agents on to the next question
+  - **A ticked box read back as empty on Claude Code**, which writes U+2714
+    where only U+2713 was listed - so the send row counted nothing and a
+    wearer's own ticks looked like they went nowhere
+  - **The rows the ring cannot answer are dropped in every dress they arrive
+    in**: `Type something.` in a single pick, `[ ] Type something` in a
+    multi-select, and kimi's `Other:` once it is the field being typed into
+  - **A tick shows the moment it is made** rather than a server re-read later,
+    and a re-read of the same question no longer sends the cursor home
+  - **A tick reaches the panel as a glyph the firmware has** (`[○]`). Both
+    agents' check marks were being sent raw, so the device drew tofu on the one
+    row a wearer reads to know what they have ticked - while the simulator,
+    drawing from a browser font, showed them perfectly
+- **A question that changes to one the scrape cannot parse replaces the old
+  one.** The half-drawn-frame guard held on the options alone, so a pane that
+  had genuinely moved on was left showing the previous question's answers. It
+  now holds only while the question itself is unchanged: the right question
+  with nothing under it beats the wrong question's options
+
 - **One unreadable file no longer takes the whole dashboard down.** The panel is
   a dozen independent readings gathered with `Promise.all`, which rejects on the
   first member to reject, and the cache in front of it only serves a stale value
@@ -49,6 +89,7 @@ All notable changes to this project will be documented in this file.
   `path` and `notebook_path`, so an agent using the camelCase spelling got the
   first 60 characters of an absolute path as its card heading, and no
   highlighting
+
 
 ## [0.3.63] - 2026-08-06
 
