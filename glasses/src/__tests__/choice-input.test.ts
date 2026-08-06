@@ -147,7 +147,14 @@ function platform(): GlassesPlatform {
 }
 
 type Internals = {
-  enterChoice(options: string[], target: { sessionId: string; paneId?: string; itemId?: string }): void
+  enterChoice(
+    options: string[],
+    target: { sessionId: string; paneId?: string; itemId?: string },
+    inline?: { options: string[]; selected: number },
+  ): void
+  inlineFromItem(item: { choices?: string[]; choiceInput?: string; choiceSelected?: number }):
+    | { options: string[]; selected: number }
+    | undefined
   sendChoiceKey(data: string): void
   handle(action: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'): Promise<void>
 }
@@ -155,17 +162,108 @@ type Internals = {
 const inner = (c: GlassesController) => c as unknown as Internals
 
 /** A controller in the picker, recording every key it sends the pane. */
-function picker(options: string[]): { c: GlassesController; keys: string[] } {
+function picker(
+  options: string[],
+  inline?: { options: string[]; selected: number },
+): { c: GlassesController; keys: string[] } {
   const c = new GlassesController(platform())
   c.state.sessions = [{ id: 's1', name: 'ws', state: 'idle' }] as GlassesController['state']['sessions']
   const keys: string[] = []
   inner(c).sendChoiceKey = (data: string) => { keys.push(data) }
-  inner(c).enterChoice(options, { sessionId: 's1', paneId: '%0', itemId: 'q1' })
+  inner(c).enterChoice(options, { sessionId: 's1', paneId: '%0', itemId: 'q1' }, inline)
   return { c, keys }
 }
 
 const FRUITS = ['[ ] Apple', '[ ] Banana', '[ ] Cherry']
 const COLORS = ['Red', 'Green', 'Blue']
+
+const RIGHT = '\x1b[C'
+const LEFT = '\x1b[D'
+const ENTER = '\r'
+
+/**
+ * A row drawn side by side has no keys of its own, so it is answered by walking
+ * the pane's own cursor and confirming. Which is only reached when the picker
+ * was opened knowing where that cursor is - and that knowledge now arrives two
+ * ways, because the server reads the same row.
+ */
+describe('a row answered by walking the pane', () => {
+  const PERMISSION = ['Allow once', 'Allow always', 'Reject']
+
+  test('walks forward from where the pane is, then confirms', async () => {
+    const { c, keys } = picker(PERMISSION, { options: PERMISSION, selected: 0 })
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+    expect(keys).toEqual([RIGHT, ENTER])
+  })
+
+  /** Both directions wrap, so the far end is one press back, not two forward. */
+  test('takes the shorter way round', async () => {
+    const { c, keys } = picker(PERMISSION, { options: PERMISSION, selected: 0 })
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+    expect(keys).toEqual([LEFT, ENTER])
+  })
+
+  test('picking where the pane already is sends only the confirm', async () => {
+    const { c, keys } = picker(PERMISSION, { options: PERMISSION, selected: 0 })
+    await inner(c).handle('tap')
+    expect(keys).toEqual([ENTER])
+  })
+
+  /** Without the reading, the old numbered answer is still what is sent - which
+   *  is right for every agent that numbers its options. */
+  test('the same options with no reading are answered by number', async () => {
+    const { c, keys } = picker(PERMISSION)
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+    expect(keys).toEqual(['2'])
+  })
+})
+
+/**
+ * Where that reading comes from when the notification carries it.
+ *
+ * Once a relay item has choices, the app never reaches its own terminal scrape
+ * for that pane - the tap path takes the item's list and opens the picker. So
+ * the item is the only place the pane's cursor can come from, and an item that
+ * cannot say where it is must not be treated as if it said zero.
+ */
+describe('reading a relay item', () => {
+  test('an arrow item carries the pane cursor through', () => {
+    const c = new GlassesController(platform())
+    expect(
+      inner(c).inlineFromItem({
+        choices: ['Allow once', 'Allow always', 'Reject'],
+        choiceInput: 'arrow',
+        choiceSelected: 2,
+      }),
+    ).toEqual({ options: ['Allow once', 'Allow always', 'Reject'], selected: 2 })
+  })
+
+  test('a numbered item is not one of these', () => {
+    const c = new GlassesController(platform())
+    expect(inner(c).inlineFromItem({ choices: ['Yes', 'No'], choiceInput: 'number' })).toBeUndefined()
+  })
+
+  /** An older server sends neither field. Absent has to keep meaning "by
+   *  number", or an upgraded app stops answering a server that has not moved. */
+  test('an item from a server that knows nothing of this answers by number', () => {
+    const c = new GlassesController(platform())
+    expect(inner(c).inlineFromItem({ choices: ['Yes', 'No'] })).toBeUndefined()
+  })
+
+  /** A missing position is not a zero: walking from a guessed start is the
+   *  blind cursor that had this removed once already. */
+  test('an arrow item with no position is refused rather than assumed', () => {
+    const c = new GlassesController(platform())
+    expect(inner(c).inlineFromItem({ choices: ['a', 'b'], choiceInput: 'arrow' })).toBeUndefined()
+    expect(
+      inner(c).inlineFromItem({ choices: ['a', 'b'], choiceInput: 'arrow', choiceSelected: 5 }),
+    ).toBeUndefined()
+  })
+})
 
 describe('what a gesture sends the pane', () => {
   test('a swipe sends nothing at all', async () => {

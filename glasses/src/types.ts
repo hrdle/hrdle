@@ -194,6 +194,28 @@ export interface GlassesRelayItem {
   text: string
   /** Scraped or agent-declared choices; preferred over a terminal re-scrape. */
   choices?: string[]
+  /**
+   * How the pane wants those choices answered.
+   *
+   * Absent means by their number, which is every agent that numbers its
+   * options - and is also what an older server sends, so absent has to keep
+   * meaning that. `arrow` is a row drawn side by side with no keys of its own
+   * (OpenCode's permission prompt): the pane's own cursor is walked to the
+   * option and Enter confirms.
+   *
+   * Mirrored from `GlassesRelayItem` in `shared/types.ts`; glasses/src keeps no
+   * dependency on shared.
+   */
+  choiceInput?: 'number' | 'arrow'
+  /**
+   * Which option the pane itself currently has selected.
+   *
+   * Only present with `choiceInput: 'arrow'`, and required there - the walk
+   * starts from this, and a walk from a guessed position is the blind cursor
+   * 0.0.52 removed. Not to be confused with the wearer's own cursor in the
+   * panel, which is `AppState.choiceIndex` and is a different number.
+   */
+  choiceSelected?: number
   source: 'auto' | 'agent'
   /** Dismissed ("later / on PC") — the server reflects these as upserts; the
    *  queue drops them and snapshots never include them. */
