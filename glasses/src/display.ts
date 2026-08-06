@@ -159,6 +159,17 @@ export interface AppState {
    */
   choiceMulti?: boolean
   /**
+   * The options are drawn side by side and answered by moving the pane's own
+   * cursor, rather than each having a key of its own.
+   *
+   * OpenCode's permission prompt is the case: `Allow once  Allow always
+   * Reject` on one row, moved with the arrow keys and confirmed with Enter.
+   * Carries where that cursor is *now*, re-read from the pane's colours on
+   * every pass - which is what makes moving it safe, and what 0.0.52 did not
+   * have when it removed cursor-driving for drifting out of step.
+   */
+  choiceInline?: { options: string[]; selected: number }
+  /**
    * Running on canned data with no server behind it.
    *
    * Every screen says so. A demo that could be mistaken for a connected app

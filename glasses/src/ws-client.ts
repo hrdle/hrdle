@@ -1,3 +1,4 @@
+import { extractInlineChoices, type InlineChoices } from '../../shared/inline-choices'
 import { getBaseUrl } from './api.ts'
 import type { Session, GlassesRelayItem, ClientFocus, GlassesScreen, GlassesInputKind } from './types.ts'
 
@@ -234,6 +235,16 @@ export class WsClient {
 
   // Buffer of last N lines per session
   private terminalBuffers = new Map<string, string[]>()
+  /**
+   * The same lines with their escape sequences intact.
+   *
+   * Everything else here reads a pane after `stripAnsi`, which is right for
+   * text and wrong for the one thing colour carries: OpenCode marks the
+   * selected option of a horizontal prompt by painting it, and nothing in the
+   * characters says which it is. Kept beside the clean copy rather than
+   * replacing it, so no existing reader changes behaviour.
+   */
+  private rawBuffers = new Map<string, string[]>()
   private maxLines = 30
   private lastSessions: Session[] | null = null
 
@@ -339,6 +350,10 @@ export class WsClient {
       .filter((l) => l.trim().length > 0)
     const key = `${sessionId}:${viewport.paneId}`
     this.terminalBuffers.set(key, cleanLines.slice(-this.maxLines))
+    this.rawBuffers.set(
+      key,
+      viewport.lines.filter((l) => stripAnsi(l).trim().length > 0).slice(-this.maxLines),
+    )
     this.callbacks.onTerminalOutput(
       sessionId,
       viewport.paneId,
@@ -428,6 +443,20 @@ export class WsClient {
   /** Extract numbered choices from terminal output (e.g. "1. Yes", "2. No") */
   getChoices(sessionId: string): string[] {
     return extractChoices(this.getTerminalText(sessionId))
+  }
+
+  /**
+   * The side-by-side options a pane is offering, read from their colours.
+   *
+   * Consulted only when `getChoices` came back empty, so a numbered or checkbox
+   * prompt is still read the way it always was and this never gets the chance
+   * to find a row of something else inside one.
+   */
+  getInlineChoices(sessionId: string): InlineChoices | undefined {
+    for (const [key, lines] of this.rawBuffers) {
+      if (key.startsWith(`${sessionId}:`)) return extractInlineChoices(lines)
+    }
+    return undefined
   }
 
   getState(): string {

@@ -26,6 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
+import { moveTo, type InlineChoices } from '../../shared/inline-choices'
 import { CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
@@ -950,12 +951,20 @@ export class GlassesController {
           // Waiting item for the session being viewed → respond. Structured
           // relay choices win; terminal scraping is the fallback.
           if (top.choices?.length) {
-            this.enterChoice(top.choices, { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
+            this.enterChoice(
+              top.choices,
+              { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id },
+              this.inlineFromItem(top),
+            )
             return
           }
           const scraped = await this.scrapeChoices(top.sessionId)
           if (scraped.length > 0) {
-            this.enterChoice(scraped, { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
+            this.enterChoice(
+              scraped,
+              { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id },
+              this.scrapedInline,
+            )
             return
           }
           await this.startVoice({ sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
@@ -977,7 +986,7 @@ export class GlassesController {
         if (cur && isSessionWaiting(cur)) {
           const scraped = await this.scrapeChoices(cur.id)
           if (scraped.length > 0) {
-            this.enterChoice(scraped, { sessionId: cur.id, paneId })
+            this.enterChoice(scraped, { sessionId: cur.id, paneId }, this.scrapedInline)
             return
           }
         }
@@ -1086,7 +1095,8 @@ export class GlassesController {
           this.sendChoiceKey(String(st.choiceIndex + 1))
           return Promise.resolve()
         }
-        this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
+        if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
+        else this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         if (this.demo) {
@@ -1374,7 +1384,11 @@ export class GlassesController {
     this.state.conversationPage = 0
     this.state.noticeWindow = 0
     if (item.choices?.length) {
-      this.enterChoice(item.choices, { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id })
+      this.enterChoice(
+        item.choices,
+        { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
+        this.inlineFromItem(item),
+      )
       void this.loadConversation().then(() => this.render())
       return
     }
@@ -1417,7 +1431,7 @@ export class GlassesController {
    * had not chosen. Same labels means same question - the boxes are what
    * changed, and where the wearer had got to is still where they are.
    */
-  private enterChoice(options: string[], target: ReplyTarget): void {
+  private enterChoice(options: string[], target: ReplyTarget, inline?: InlineChoices): void {
     const keepCursor =
       this.state.mode === 'choice' &&
       this.choiceTarget?.sessionId === target.sessionId &&
@@ -1427,6 +1441,12 @@ export class GlassesController {
     this.choiceFollowUntil = 0
     this.state.choiceOptions = options
     this.state.choiceMulti = looksMultiSelect(options)
+    // Set here rather than left over from whatever ran last: two halves feed
+    // this - a relay item that already carries the reading, and a terminal
+    // scrape that does it locally - and a stale value from one would answer
+    // the other's question.
+    this.inlineChoices = inline
+    this.state.choiceInline = inline
     if (!keepCursor) this.state.choiceIndex = 0
     this.state.choiceSessionName = this.sessionLabel(target.sessionId)
     this.state.mode = 'choice'
@@ -1472,13 +1492,86 @@ export class GlassesController {
     if (!this.demo) void dismissRelayItem(itemId).catch(() => { /* reconnect snapshot re-syncs */ })
   }
 
+  /**
+   * The pane's own reading of a side-by-side row, as the relay item carries it.
+   *
+   * The server does this scrape too, and once an item carries choices the app
+   * never reaches its own scrape for that pane - so this is the path that
+   * actually runs for a notification, and the local one is for a session whose
+   * buffer the app happens to be subscribed to.
+   *
+   * Undefined unless the item says both which way it is answered and where the
+   * pane's cursor is. A missing `choiceSelected` is not a zero: it would put
+   * the walk at a guessed starting point, which is exactly the blind cursor
+   * that had cursor-driving removed. An older server sends neither field, and
+   * then this is undefined and the numbered path answers as it always did.
+   */
+  private inlineFromItem(item: { choices?: string[]; choiceInput?: string; choiceSelected?: number }): InlineChoices | undefined {
+    if (item.choiceInput !== 'arrow') return undefined
+    if (!item.choices?.length || typeof item.choiceSelected !== 'number') return undefined
+    if (item.choiceSelected < 0 || item.choiceSelected >= item.choices.length) return undefined
+    return { options: item.choices, selected: item.choiceSelected }
+  }
+
   /** Terminal scrape — fallback when the active waiting item has no choices. */
   private async scrapeChoices(sessionId: string): Promise<string[]> {
     // The demo's waiting session is holding a multi-select: the picker with
     // the most to show, and the one that was broken until today.
     if (this.demo) return demoChoices()
     await this.ws.requestContentAndWait(sessionId)
-    return this.ws.getChoices(sessionId)
+    this.scrapedInline = undefined
+    const numbered = this.ws.getChoices(sessionId)
+    if (numbered.length > 0) return numbered
+    // Only when the numbered and checkbox reads found nothing: a prompt that
+    // has both would otherwise be answered the harder way.
+    const inline = this.ws.getInlineChoices(sessionId)
+    if (!inline) return []
+    this.scrapedInline = inline
+    return inline.options
+  }
+
+  /** What the last local scrape found, waiting to be handed to enterChoice. */
+  private scrapedInline?: InlineChoices
+
+  /**
+   * Where the pane's own cursor sits on the row now open in the picker.
+   * Undefined for every other kind of prompt, which is what keeps the
+   * answering path below from firing on one.
+   */
+  private inlineChoices?: InlineChoices
+
+  /**
+   * Answer a row of side-by-side options: walk the pane's cursor to the row the
+   * wearer picked, then confirm.
+   *
+   * The walk starts from a measured position rather than an assumed one, so a
+   * redraw between the read and the tap cannot leave the two cursors pointing
+   * at different things - the failure that had cursor-driving removed in
+   * 0.0.52. Measured against a live OpenCode pane: the arrows move it, both
+   * wrap, and Enter confirms.
+   */
+  private sendInlineChoice(index: number): void {
+    const inline = this.inlineChoices
+    if (!inline) return
+    const move = moveTo(inline, index)
+    const arrow = move.key === 'right' ? '\x1b[C' : '\x1b[D'
+    // One payload, not one request per key.
+    //
+    // Each send is a POST of its own and none of them waits, so the order they
+    // reach the PTY in is the order they happen to finish in. Measured by the
+    // work-1 session on a cold control session: the first input pays for
+    // ensurePaneReachable and listPanes, about 100ms, while the one behind it
+    // takes 1ms - so Enter overtook the arrow and confirmed whatever the cursor
+    // was still on. A wearer who picked Reject was told the command ran.
+    //
+    // Awaiting each one would also fix the order, but a walk is a single act
+    // and there is no reason to let it be interleaved at all. In one request
+    // the guarantee is real rather than probable: it is the single stdin pipe
+    // the pane already promises.
+    this.sendChoiceKey(arrow.repeat(move.count) + '\r')
+    // The pane is where we just sent it; a re-read will confirm, but until then
+    // this keeps a second tap from walking from a stale position.
+    this.inlineChoices = { ...inline, selected: index }
   }
 
   // ── WS event wiring ──
@@ -1606,11 +1699,11 @@ export class GlassesController {
     // being asked, because the wearer is mid-answer and the alternative is a
     // notice they have to find their way back to.
     if (this.shouldFollowChoice(item)) {
-      this.enterChoice(item.choices as string[], {
-        sessionId: item.sessionId,
-        paneId: item.paneId,
-        itemId: item.id,
-      })
+      this.enterChoice(
+        item.choices as string[],
+        { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
+        this.inlineFromItem(item),
+      )
       return
     }
     // A brand-new waiting item interrupts the session list; in the other
