@@ -156,17 +156,23 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
    ("Separately, a co"). Caught before submitting, which is the only place it can
    be caught — combined with the rule above, an unchecked overflow is permanent.
 
+   It caught two more people on 2026-08-06, in the same afternoon, both writing
+   a changelog long enough to be worth writing. One read the field back and
+   rewrote to 463; the other pressed "Add build" first and ended on
+   `offered to yo`, and had to **delete the build and upload it again** — the
+   only repair there is. Read it back. Writing three sentences instead of five
+   is cheaper than either.
+
 9. **Confirm**: the snapshot should show the new version as
    `"vX.X.X Uploaded N seconds ago Private"`
 
 10. **Switch Beta over**:
 
-    **While a build is under store review, stop after step 9 and ask.** Step A
-    below takes the current Beta build back to Private, and during a review that
-    build is the one that was submitted. Whether that disturbs the review is not
-    documented anywhere - the docs cover uploading and self-test groups and
-    nothing about status transitions - so it is not a thing to find out on a
-    submission that matters.
+    **While a build is under store review, stop after step 9 and ask.** During a
+    review the Beta build may be the one that was submitted, and whether moving
+    it disturbs the review is not documented anywhere - the docs cover uploading
+    and self-test groups and nothing about status transitions. Not a thing to
+    find out on a submission that matters.
 
     What the Hub does say, read on 2026-08-04 while v0.0.48 sat In Review: the
     two are separate places. A build's `Private / Beta / Public` lives on the
@@ -174,24 +180,26 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
     Publish to hub** (`Review status: Submitted ... In review`). With v0.0.48
     both Beta and In Review, the dropdown on another build offered all three
     values, none disabled and no warning. So promoting a second build to Beta
-    *probably* leaves the review alone.
+    *probably* leaves the review alone - still unconfirmed, because no
+    submission has been in flight since.
 
-    **The experiment worth running on the next submission** (agreed 2026-08-04,
-    because waiting out a review each time costs real development speed): skip
-    Step A, promote the new build straight to Beta, then reload Store listing
-    and check the review record still reads `In review` against the build that
-    was submitted. If it does, Step A is only needed when Beta is exclusive, and
-    this note can become a rule. Do it on a submission whose outcome does not
-    matter much.
+    **Promote the new build straight to Beta. Do not demote the old one first.**
+    Measured on v0.0.53 (2026-08-06): promoting demotes the previous Beta by
+    itself - v0.0.52 went to Private unasked. The demote-first path was the
+    procedure here until then and it is worse in two ways: it is a step that
+    buys nothing, and its confirmation is headed **`Delist this project from
+    Even Hub?`** - a title that reads as though it is about the whole project
+    while the body is scoped to the one build. Nobody should have to decide
+    whether that dialog means what it says. `Promote this build to Beta?` names
+    the build and the Beta group it is going to, and leaves nothing to guess.
 
-    **Step A: put the current Beta build back to Private**
-    - Expand the current Beta build (`"... Published ... Beta"`) in the build
-      list with `agent-browser click`
-    - Find the Beta badge inside the expanded panel dynamically:
+    - Expand the new build (`"... Uploaded ... Private"`) in the build list with
+      `agent-browser click`
+    - Find its `Private` badge inside the expanded panel dynamically:
       ```bash
       agent-browser --session-name evenhub eval '(() => {
         const badges = Array.from(document.querySelectorAll("*"))
-          .filter(e => e.textContent === "Beta" && e.children.length === 0);
+          .filter(e => e.textContent === "Private" && e.children.length === 0);
         return JSON.stringify(badges.map(b => {
           const r = b.getBoundingClientRect();
           return {x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height)};
@@ -203,16 +211,10 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
     - Click the center (x+w/2, y+h/2) through
       `document.elementFromPoint(...)?.click()`:
       ```bash
-      agent-browser --session-name evenhub eval '(() => { document.elementFromPoint(826, 292)?.click(); return "clicked"; })()'
+      agent-browser --session-name evenhub eval '(() => { document.elementFromPoint(826, 267)?.click(); return "clicked"; })()'
       ```
-    - snapshot, click the "Private" ref, then click "Confirm"
-
-    **Step B: promote the new build to Beta**
-    - No reload is needed (continue straight on from A)
-    - Expand the new build with a click
-    - The same way, get the `"Private"` badge's coordinates inside the expanded
-      panel and click through `elementFromPoint`
     - snapshot, click the "Beta" ref, then click "Promote to Beta"
+    - Confirm from the build list that the previous Beta now reads `Private`
 
     - A snapshot ref cannot click these badges — always use `elementFromPoint()`
     - The coordinates move with the viewport and the number of builds, so
