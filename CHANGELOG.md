@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **OpenCode is a supported agent.** It joins Claude Code, Codex, Grok and Kimi:
+  start one from the create modal, see it in the session list with its own
+  colour, read its transcripts in the conversation view and its token usage on
+  the dashboard. `hrdle setup` installs its herdr integration alongside the
+  others, so a resumed session keeps its identity
+  - It is the first provider that reads a **database** rather than files.
+    OpenCode 1.18 keeps sessions, messages and parts as rows in
+    `~/.local/share/opencode/opencode.db`; the reader opens it readonly per
+    query the way the Codex reader already does, and an unreadable or
+    mid-migration file degrades to an empty list rather than an error
+  - Its cost figures are OpenCode's own. Every other agent's spend here is our
+    estimate from a price list; OpenCode computes and stores a per-turn cost,
+    so the dashboard reports what it recorded. A window with no cost recorded
+    shows nothing rather than zero - a free model's genuine 0 is a different
+    statement from "unknown"
+  - A tool call and its result live in one row there, so the transcript reader
+    splits them back apart to the call-and-result shape the conversation view
+    pairs up - which means an OpenCode tool call renders as the same single
+    card as everyone else's, and a call the user refused shows as the refusal
+    rather than as one still running
+
 ### Fixed
 - **One unreadable file no longer takes the whole dashboard down.** The panel is
   a dozen independent readings gathered with `Promise.all`, which rejects on the
@@ -22,6 +44,11 @@ All notable changes to this project will be documented in this file.
     daily-activity chart checked only that `dailyActivity` was *present* in
     `stats-cache.json`, a file another program writes: anything there that was
     not a list reached `.slice` and threw
+- **A tool call naming its file as `filePath` is summarised by its basename.**
+  The summary and the result's syntax highlighting only looked for `file_path`,
+  `path` and `notebook_path`, so an agent using the camelCase spelling got the
+  first 60 characters of an absolute path as its card heading, and no
+  highlighting
 
 ## [0.3.63] - 2026-08-06
 
