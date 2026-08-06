@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Options drawn side by side are readable from the glasses.** OpenCode asks
+  permission before touching anything outside the project and draws the
+  question as one horizontal row - `Allow once  Allow always  Reject` - with no
+  numbering and no checkboxes, so neither reader saw it. A blocked OpenCode
+  pane produced a waiting notification with nothing under it, which is the
+  failure 0.3.62 set out to prevent arriving through a door nobody had opened
+  - As text that row and the key hints beneath it are the same shape, so no
+    rule could admit the first without offering `ctrl+f fullscreen` as an
+    answer. As paint they differ: the selected option carries a background of
+    its own and every item in the footer shares the row's. The reader works on
+    colour, and "exactly one item painted unlike the row it sits on" finds the
+    menu, rejects the footer, and names the selection in one stroke
+  - That selection is also the only place the pane's own cursor is recorded.
+    Reading it on every pass is what makes moving the cursor safe again -
+    0.0.52 removed cursor-driving for doing it blind and drifting out of step;
+    here the position is measured rather than assumed
+  - The movement was measured against a live pane, not read off the footer,
+    which says `⇆ select` and is wrong: Tab moves nothing. The arrows move it,
+    both ways, and both wrap - so the far end of a row is one press backwards
+    rather than several forwards
+
 ## [0.3.65] - 2026-08-06
 
 ### Changed
