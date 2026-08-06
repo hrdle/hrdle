@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **The agent is picked from a list rather than a row of buttons.** Five agents
+  no longer fit across the create dialog, so the fifth wrapped onto a line of
+  its own - and the row only gets longer as agents are added. A select costs one
+  tap more and stays one line however many there are, which on the phone the
+  dialog is mostly used from is the trade worth making
+
 ## [0.3.67] - 2026-08-07
 
 ### Fixed
