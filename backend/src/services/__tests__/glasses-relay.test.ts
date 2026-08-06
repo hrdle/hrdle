@@ -915,6 +915,45 @@ describe('a pane that frames itself with a rule', () => {
     );
   });
 
+  test('a heading brings the line under it, because that is the decision', () => {
+    // Captured from the same live pane asking to run a command. `Shell
+    // command` on its own tells a wearer that something wants running and not
+    // what, which is the entire thing being decided.
+    expect(
+      extractPermissionRequest([
+        '  \u2503  \u25b3 Permission required',
+        '  \u2503    # Shell command',
+        '  \u2503',
+        '  \u2503  $ echo second',
+      ]),
+    ).toBe('Permission required: Shell command: echo second');
+  });
+
+  test('a subject that is already the thing stands alone', () => {
+    expect(
+      extractPermissionRequest([
+        '  \u2503  \u25b3 Permission required',
+        '  \u2503    \u2192 Edit fixture.txt',
+        '  \u2503',
+        '  \u2503  1 + fixture',
+      ]),
+    ).toBe('Permission required: Edit fixture.txt');
+  });
+
+  test('the option row below is never mistaken for the subject', () => {
+    // It is made of words and sits on the same pane, so the window that looks
+    // for a subject has to end before it does.
+    const text = extractPermissionRequest([
+      '  \u2503  \u25b3 Permission required',
+      '  \u2503',
+      '  \u2503',
+      '  \u2503',
+      '  \u2503',
+      '  \u2503   Allow once   Allow always   Reject',
+    ]);
+    expect(text).toBe('Permission required');
+  });
+
   test('a pane with no permission line is left to the ordinary reader', () => {
     expect(extractPermissionRequest(['Continue?', '1. Yes'])).toBeUndefined();
   });

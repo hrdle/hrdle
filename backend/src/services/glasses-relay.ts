@@ -404,12 +404,25 @@ export function extractQuestionLine(lines: string[]): string | undefined {
  */
 export function extractPermissionRequest(lines: string[]): string | undefined {
   const clean = lines.map((l) => stripLeftRule(l).trim());
+  const bare = (s: string) => s.replace(/^[^\p{L}\p{N}]+/u, '').trim();
   for (let i = clean.length - 1; i >= 0; i--) {
     if (!/permission required/i.test(clean[i])) continue;
-    const subject = clean.slice(i + 1).find((l) => /[\p{L}\p{N}]/u.test(l));
-    const label = clean[i].replace(/^[^\p{L}\p{N}]+/u, '');
-    if (!subject) return label;
-    return `${label}: ${subject.replace(/^[^\p{L}\p{N}]+/u, '')}`;
+    const parts: string[] = [];
+    // A short window, because the option row is further down the same pane and
+    // is made of words too. Nothing legitimate sits more than a line or two
+    // below the marker.
+    for (let j = i + 1; j < Math.min(clean.length, i + 5) && parts.length < 2; j++) {
+      if (!/[\p{L}\p{N}]/u.test(clean[j])) continue;
+      const heading = clean[j].startsWith('#');
+      parts.push(bare(clean[j]));
+      // A heading names a category rather than a thing - `# Shell command` -
+      // and stopping there tells a wearer only that a command wants running,
+      // not which one, when which one is the entire decision. So a heading
+      // takes the line under it with it, and anything else stands alone.
+      if (!heading) break;
+    }
+    const label = bare(clean[i]);
+    return parts.length > 0 ? `${label}: ${parts.join(': ')}` : label;
   }
   return undefined;
 }
