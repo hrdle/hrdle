@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.68] - 2026-08-07
 
 ### Changed
 - **The agent is picked from a list rather than a row of buttons.** Five agents
