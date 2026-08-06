@@ -26,6 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
+import { moveTo, type InlineChoices } from './inline-choices.ts'
 import { CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
@@ -1086,7 +1087,8 @@ export class GlassesController {
           this.sendChoiceKey(String(st.choiceIndex + 1))
           return Promise.resolve()
         }
-        this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
+        if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
+        else this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         if (this.demo) {
@@ -1427,6 +1429,7 @@ export class GlassesController {
     this.choiceFollowUntil = 0
     this.state.choiceOptions = options
     this.state.choiceMulti = looksMultiSelect(options)
+    this.state.choiceInline = this.inlineChoices
     if (!keepCursor) this.state.choiceIndex = 0
     this.state.choiceSessionName = this.sessionLabel(target.sessionId)
     this.state.mode = 'choice'
@@ -1478,7 +1481,44 @@ export class GlassesController {
     // the most to show, and the one that was broken until today.
     if (this.demo) return demoChoices()
     await this.ws.requestContentAndWait(sessionId)
-    return this.ws.getChoices(sessionId)
+    this.inlineChoices = undefined
+    const numbered = this.ws.getChoices(sessionId)
+    if (numbered.length > 0) return numbered
+    // Only when the numbered and checkbox reads found nothing: a prompt that
+    // has both would otherwise be answered the harder way.
+    const inline = this.ws.getInlineChoices(sessionId)
+    if (!inline) return []
+    this.inlineChoices = inline
+    return inline.options
+  }
+
+  /**
+   * Where the pane's own cursor sits on a row of side-by-side options, as of
+   * the last scrape. Undefined for every other kind of prompt, which is what
+   * keeps the answering path below from firing on one.
+   */
+  private inlineChoices?: InlineChoices
+
+  /**
+   * Answer a row of side-by-side options: walk the pane's cursor to the row the
+   * wearer picked, then confirm.
+   *
+   * The walk starts from a measured position rather than an assumed one, so a
+   * redraw between the read and the tap cannot leave the two cursors pointing
+   * at different things - the failure that had cursor-driving removed in
+   * 0.0.52. Measured against a live OpenCode pane: the arrows move it, both
+   * wrap, and Enter confirms.
+   */
+  private sendInlineChoice(index: number): void {
+    const inline = this.inlineChoices
+    if (!inline) return
+    const move = moveTo(inline, index)
+    const arrow = move.key === 'right' ? '\x1b[C' : '\x1b[D'
+    for (let i = 0; i < move.count; i++) this.sendChoiceKey(arrow)
+    this.sendChoiceKey('\r')
+    // The pane is where we just sent it; a re-read will confirm, but until then
+    // this keeps a second tap from walking from a stale position.
+    this.inlineChoices = { ...inline, selected: index }
   }
 
   // ── WS event wiring ──

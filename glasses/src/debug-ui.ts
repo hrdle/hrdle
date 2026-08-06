@@ -737,8 +737,15 @@ export function startDebugUI(): void {
     const session = state.sessions[state.sessionIndex]
     const bufText = session ? ws.getTerminalText(session.id) : ''
     const choices = session ? ws.getChoices(session.id) : []
+    // Side-by-side options are read from the pane's colours rather than its
+    // characters, so a prompt with them shows nothing under `Choices` and this
+    // window would report a picker that is about to work as empty.
+    const inline = choices.length === 0 && session ? ws.getInlineChoices(session.id) : undefined
+    const shown = inline
+      ? `${inline.options.join(', ')} (inline, on ${inline.options[inline.selected]})`
+      : choices.join(', ')
     diag.textContent =
-      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]` +
+      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${shown}]` +
       (controller.isStopped() ? ' | stopped' : '')
     const top = state.relayWaiting[0]
     relay.textContent =
