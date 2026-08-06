@@ -188,6 +188,29 @@ function dominantSpaceBackground(cells: Array<{ ch: string; bg: string | null }>
   return best
 }
 
+/**
+ * Glyphs an agent puts in front of a *toggle* rather than an option: a
+ * checkbox, a tick, a radio.
+ *
+ * Claude Code's AskUserQuestion draws a tab bar above its question -
+ * `←  ☒ 複数選択  ✔ Submit  →` - and it is a menu by every test this module
+ * applies: the arrows carry no letters so they are dropped as furniture, and of
+ * the two items left only the active tab is painted differently. Captured from
+ * a live pane, the reader returned it as a two-option menu, and a wearer got a
+ * picker offering "複数選択" and "Submit" for a question that was working.
+ *
+ * That would have been worse than the gap this module was written to close:
+ * this one takes an agent that was answerable and makes it not.
+ *
+ * A tab carries its state as a glyph because it *has* a state - ticked, or not.
+ * An option in a row of options has none; it is chosen by being chosen. So a
+ * row containing one is a set of toggles, whatever else it looks like. Refusing
+ * the whole row rather than dropping the item is deliberate: the walk counts
+ * positions along the row the pane draws, and removing one from the middle
+ * would move every option after it.
+ */
+const TOGGLE_GLYPH = /^[\u2610\u2611\u2612\u2713\u2714\u2717\u2718\u25cb\u25cf\u25ce\u25ef\u26ac[]/
+
 /** A gutter or rule rather than an option: the box-drawing a pane frames with. */
 function isFurniture(text: string): boolean {
   return !/[\p{L}\p{N}]/u.test(text)
@@ -237,6 +260,8 @@ export function inlineChoicesInRow(line: string): InlineChoices | undefined {
   const items = withHighlight[0]
   if (items.length < 2) return undefined
   if (items.some((it) => it.text.length > MAX_ITEM_CHARS)) return undefined
+
+  if (items.some((it) => TOGGLE_GLYPH.test(it.text))) return undefined
 
   const highlighted = items.filter((it) => String(it.bg) !== rowBg)
   if (highlighted.length !== 1) return undefined

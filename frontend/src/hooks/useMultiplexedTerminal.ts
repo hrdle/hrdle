@@ -204,6 +204,10 @@ function sendClientInfoNow() {
 		type: "client-info",
 		deviceType: lastDeviceType,
 		visible: typeof document !== "undefined" && !document.hidden,
+		// A browser being driven rather than watched. The glasses follow the
+		// screen someone is holding, and an agent taking a screenshot is not
+		// that - it used to claim the focus and carry a wearer off mid-read.
+		automated: typeof navigator !== "undefined" && navigator.webdriver === true,
 	});
 }
 

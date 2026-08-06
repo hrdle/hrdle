@@ -1089,7 +1089,14 @@ export type ControlClientMessage =
   // `visible` mirrors document.visibilityState. It decides which client owns
   // the glasses focus when several are connected; re-sent on every
   // visibilitychange. Omitted by clients that predate focus follow.
-  | { type: 'client-info'; deviceType: 'mobile' | 'tablet' | 'desktop'; visible?: boolean }
+  /**
+   * `automated` is `navigator.webdriver`: a browser being driven by software
+   * rather than looked at by a person. It exists because the glasses follow the
+   * screen someone is holding, and on a machine running several agents the web
+   * UI is opened headlessly all day to take screenshots - each one claimed the
+   * focus and carried a wearer off mid-conversation.
+   */
+  | { type: 'client-info'; deviceType: 'mobile' | 'tablet' | 'desktop'; visible?: boolean; automated?: boolean }
   // Per-client sizing (see `PaneDemand`): the sizes at which THIS client is
   // currently rendering each pane it displays. Keyed by tmux-style `%N`. The
   // server reconciles one PTY size per pane across all clients' demands. A
@@ -1352,6 +1359,7 @@ const controlClientMessageOptions = [
     type: z.literal('client-info'),
     deviceType: z.enum(['mobile', 'tablet', 'desktop']),
     visible: z.boolean().optional(),
+    automated: z.boolean().optional(),
   }),
   z.object({ type: z.literal('adjust-pane'), paneId: PaneIdSchema, direction: z.enum(['L', 'R', 'U', 'D']), amount: WsAmount }),
   z.object({
