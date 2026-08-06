@@ -97,6 +97,8 @@ function backgroundAfter(current: string | null, params: string): string | null 
 interface Item {
   text: string
   bg: string | null
+  /** Spaces between the previous item and this one. */
+  gapBefore: number
 }
 
 /** Split one painted line into the items a run of spaces separates. */
@@ -104,6 +106,7 @@ function itemsOf(cells: Array<{ ch: string; bg: string | null }>): Item[] {
   const items: Item[] = []
   let run: Array<{ ch: string; bg: string | null }> = []
   let gap = 0
+  let gapBefore = 0
 
   const flush = () => {
     const text = run.map((c) => c.ch).join('').trim()
@@ -112,7 +115,7 @@ function itemsOf(cells: Array<{ ch: string; bg: string | null }>): Item[] {
       // it: a highlight is padded with spaces that carry it, and a plain item
       // is surrounded by spaces that do not.
       const painted = run.filter((c) => c.ch.trim())
-      items.push({ text, bg: painted[0]?.bg ?? null })
+      items.push({ text, bg: painted[0]?.bg ?? null, gapBefore })
     }
     run = []
   }
@@ -120,15 +123,43 @@ function itemsOf(cells: Array<{ ch: string; bg: string | null }>): Item[] {
   for (const cell of cells) {
     if (cell.ch === ' ') {
       gap++
-      if (gap >= ITEM_GAP) flush()
-      else if (run.length) run.push(cell)
+      if (gap === ITEM_GAP) flush()
+      else if (gap < ITEM_GAP && run.length) run.push(cell)
       continue
     }
+    if (gap > 0 && run.length === 0) gapBefore = gap
     gap = 0
     run.push(cell)
   }
   flush()
   return items
+}
+
+/**
+ * A run of spaces this wide is a gap between *groups* rather than between
+ * options, and ends the group.
+ *
+ * A pane wide enough draws the key hints on the same line as the options
+ * instead of below them, and then every test that separates the two by shape
+ * fails: the hints all carry the row's background, so "exactly one item painted
+ * differently" is still satisfied and they join the menu. Measured on a
+ * 121-column pane, the only seam is the space between them - options are
+ * separated by 3, the hints internally by 1 and 2, and the two groups by 33.
+ *
+ * Six sits well clear of both, and being wrong low is the safe direction: an
+ * over-eager split can only hide an option, while an over-lax one offers `enter
+ * confirm` as an answer and confirms something the wearer never picked.
+ */
+const SECTION_GAP = 6
+
+/** Split items into the groups a wide run of spaces separates. */
+function sectionsOf(items: Item[]): Item[][] {
+  const sections: Item[][] = []
+  for (const item of items) {
+    if (sections.length === 0 || item.gapBefore >= SECTION_GAP) sections.push([item])
+    else sections[sections.length - 1].push(item)
+  }
+  return sections
 }
 
 /**
@@ -181,9 +212,8 @@ export function extractInlineChoices(lines: string[]): InlineChoices | undefined
 /** The same read, for a single row. Exported for the tests. */
 export function inlineChoicesInRow(line: string): InlineChoices | undefined {
   const cells = paintedChars(line)
-  const items = itemsOf(cells).filter((it) => !isFurniture(it.text))
-  if (items.length < 2) return undefined
-  if (items.some((it) => it.text.length > MAX_ITEM_CHARS)) return undefined
+  const all = itemsOf(cells).filter((it) => !isFurniture(it.text))
+  if (all.length < 2) return undefined
 
   // Exactly one item painted unlike the row it sits on. This is what separates
   // the menu from the key hints under it, where every item shares the row's own
@@ -196,6 +226,18 @@ export function inlineChoicesInRow(line: string): InlineChoices | undefined {
   // so it can.
   const rowBg = dominantSpaceBackground(cells)
   if (rowBg === undefined) return undefined
+
+  // The menu is the group the highlight is in. On a narrow pane that is the
+  // whole row; on a wide one the key hints are sharing it, and they are a
+  // group of their own.
+  const withHighlight = sectionsOf(all).filter((section) =>
+    section.some((it) => String(it.bg) !== rowBg),
+  )
+  if (withHighlight.length !== 1) return undefined
+  const items = withHighlight[0]
+  if (items.length < 2) return undefined
+  if (items.some((it) => it.text.length > MAX_ITEM_CHARS)) return undefined
+
   const highlighted = items.filter((it) => String(it.bg) !== rowBg)
   if (highlighted.length !== 1) return undefined
 

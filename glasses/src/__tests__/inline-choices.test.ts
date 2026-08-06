@@ -6,7 +6,11 @@ import {
   moveTo,
 } from '../../../shared/inline-choices'
 import { extractChoices } from '../ws-client'
-import { OPENCODE_FOOTER_ROW, OPENCODE_PERMISSION_ROW } from './fixtures/opencode-permission'
+import {
+  OPENCODE_FOOTER_ROW,
+  OPENCODE_PERMISSION_ROW,
+  OPENCODE_PERMISSION_ROW_WIDE,
+} from './fixtures/opencode-permission'
 
 /**
  * OpenCode draws its permission prompt as one horizontal row with no numbering
@@ -105,6 +109,47 @@ describe('inlineChoicesInRow', () => {
   test('a single space stays inside an option', () => {
     const found = inlineChoicesInRow(row(['Allow once', '9;9;9'], ['Reject']))
     expect(found?.options).toEqual(['Allow once', 'Reject'])
+  })
+})
+
+/**
+ * A pane wide enough draws the key hints on the SAME line as the options
+ * rather than below them. Which shape appears is decided by the pane's width,
+ * not by the version, so a reader built from the narrow capture alone works on
+ * a phone and fails on a desktop-sized pane.
+ *
+ * It fails in the worst available way: the hints all carry the row's own
+ * background, so "exactly one item painted differently" is still satisfied and
+ * they join the menu. A wearer is then offered `enter confirm` as an answer,
+ * and picking it walks the pane onto a real option and presses Enter - an
+ * answer nobody chose, confirmed. Found by the work-1 session against a
+ * 121-column pane.
+ */
+describe('when the key hints share the options line', () => {
+  test('only the options come back', () => {
+    expect(inlineChoicesInRow(OPENCODE_PERMISSION_ROW_WIDE)).toEqual({
+      options: ['Allow once', 'Allow always', 'Reject'],
+      selected: 0,
+    })
+  })
+
+  /** The seam is the space between the groups: options are separated by 3, the
+   *  hints internally by 1 and 2, and the two groups by 33. */
+  test('a wide run of spaces ends the group, a narrow one does not', () => {
+    const together = `${row(['A', '9;9;9'], ['B'])}${' '.repeat(20)}${row(['ctrl+f x'], ['enter y'])}`
+    expect(inlineChoicesInRow(together)?.options).toEqual(['A', 'B'])
+  })
+
+  /** Two separated groups each holding a highlight is not one menu, and
+   *  guessing which is meant would be worse than declining. */
+  test('a highlight in each group is refused', () => {
+    const both = `${row(['A', '9;9;9'], ['B'])}${' '.repeat(20)}${row(['C', '9;9;9'], ['D'])}`
+    expect(inlineChoicesInRow(both)).toBeUndefined()
+  })
+
+  test('a group holding only the highlight is not a menu', () => {
+    const alone = `${row(['Solo', '9;9;9'])}${' '.repeat(20)}${row(['x'], ['y'])}`
+    expect(inlineChoicesInRow(alone)).toBeUndefined()
   })
 })
 
