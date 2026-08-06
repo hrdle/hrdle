@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **The glasses stop following a browser nobody is holding.** A wearer reading a
+  conversation was carried off to a workspace they had never touched, three
+  times in one recording, every gesture of their own somewhere else. Following
+  the session open on the screen in front of you is the point - you move, the
+  glasses come along - but this machine runs several agents that open the web UI
+  headlessly to take screenshots, and each of those counted as a person
+  - A driven browser now claims no focus at all, decided where focus is decided
+    rather than filtered by the glasses, because nothing downstream wants it
+    either. `navigator.webdriver` is the signal, which is what it is for
+  - Every real screen still counts, desktop included. The device type says where
+    you are, not whether you are there
+
+- **A question's tab bar is no longer offered as a set of choices.** Claude Code
+  draws `← ☒ 複数選択 ✔ Submit →` above its question, and it is a menu by
+  every test the side-by-side reader applies: the arrows carry no letters so
+  they are dropped, and of the two items left only the active tab is painted
+  differently. A wearer got a picker offering "複数選択" and "Submit" for a
+  question that was working perfectly well, and answering it would have walked
+  the pane between tabs and pressed Enter somewhere nobody chose
+  - A tab carries its state as a glyph because it has one; an option in a row
+    of options does not - it is chosen by being chosen. So a row containing a
+    checkbox, tick or radio is a set of toggles whatever else it resembles. The
+    whole row is refused rather than the item dropped, because the walk counts
+    positions along the row the pane draws
+
 ## [0.3.68] - 2026-08-07
 
 ### Changed

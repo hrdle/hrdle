@@ -75,6 +75,8 @@ export interface MuxData {
   /** document.visibilityState mirror. `false` = pocketed/asleep → not a
    *  focus candidate. `undefined` = never declared → also not a candidate. */
   visible?: boolean;
+  /** `navigator.webdriver`: a browser being driven rather than watched. */
+  automated?: boolean;
   /** Session this client last opened, and when. */
   focusSessionId?: string;
   focusAt?: number;
@@ -116,17 +118,32 @@ const activeMuxConnections = new Set<ServerWebSocket<MuxData>>();
  *  themselves visible, the one that opened a session most recently. Returns
  *  undefined when nothing qualifies (all hidden / none declared), which tells
  *  followers to hold their current view rather than blank it. */
-function computeClientFocus(): ClientFocus | undefined {
+/**
+ * The screen a person is looking at, among the connected clients.
+ *
+ * Pure and exported for the tests; the caller supplies the connections.
+ */
+export function pickClientFocus(clients: MuxData[]): ClientFocus | undefined {
   let best: MuxData | undefined;
-  for (const ws of activeMuxConnections) {
-    const d = ws.data;
+  for (const d of clients) {
     // The glasses follow focus; letting them claim it would be a feedback loop.
     if (d.isGlasses) continue;
+    // Focus means "the screen a person is looking at", and a driven browser is
+    // not one. This machine runs several agents that open the web UI headlessly
+    // to take screenshots; each claimed the focus, and a wearer reading a
+    // conversation was carried off to whatever session one of them landed on -
+    // three times in one recording. Refused here rather than filtered by the
+    // glasses, because nothing downstream wants it either.
+    if (d.automated) continue;
     if (!d.deviceType || !d.focusSessionId || d.visible !== true) continue;
     if (!best || (d.focusAt ?? 0) > (best.focusAt ?? 0)) best = d;
   }
   if (!best?.focusSessionId || !best.deviceType) return undefined;
   return { sessionId: best.focusSessionId, deviceType: best.deviceType, at: best.focusAt ?? 0 };
+}
+
+function computeClientFocus(): ClientFocus | undefined {
+  return pickClientFocus([...activeMuxConnections].map((ws) => ws.data));
 }
 
 /** Last broadcast focus, so a re-election that lands on the same session
@@ -880,6 +897,7 @@ async function handleControlMessage(
         // while its page is visible; picking a device back up re-claims it,
         // which is the same intent as opening a session on it.
         ws.data.deviceType = msg.deviceType;
+        if (msg.automated !== undefined) ws.data.automated = msg.automated;
         if (msg.visible !== undefined) {
           const wasVisible = ws.data.visible;
           ws.data.visible = msg.visible;

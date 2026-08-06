@@ -7,6 +7,7 @@ import {
 } from '../../../shared/inline-choices'
 import { extractChoices } from '../ws-client'
 import {
+  CLAUDE_QUESTION_TAB_BAR,
   OPENCODE_FOOTER_ROW,
   OPENCODE_PERMISSION_ROW,
   OPENCODE_PERMISSION_ROW_WIDE,
@@ -150,6 +151,53 @@ describe('when the key hints share the options line', () => {
   test('a group holding only the highlight is not a menu', () => {
     const alone = `${row(['Solo', '9;9;9'])}${' '.repeat(20)}${row(['x'], ['y'])}`
     expect(inlineChoicesInRow(alone)).toBeUndefined()
+  })
+})
+
+/**
+ * The row that made this reader dangerous rather than merely incomplete.
+ *
+ * Claude Code draws a tab bar above its question - `\u2190 \u2612 \u8907\u6570\u9078\u629e \u2714 Submit \u2192` -
+ * and it satisfies every test here: the arrows are furniture, and of the two
+ * items left only the active tab is painted differently. Found in a wearer's
+ * own screen recording, where the picker opened offering "複数選択" and
+ * "Submit" for a question that was working perfectly well. Answering it would
+ * have walked the pane between TABS and pressed Enter somewhere nobody chose.
+ *
+ * A tab carries its state as a glyph because it has one. An option in a row of
+ * options does not - it is chosen by being chosen.
+ */
+describe('a tab bar is not a row of options', () => {
+  test('the real Claude tab bar is refused', () => {
+    expect(inlineChoicesInRow(CLAUDE_QUESTION_TAB_BAR)).toBeUndefined()
+  })
+
+  test('and refused when scanning the whole pane', () => {
+    expect(
+      extractInlineChoices(['  some output', CLAUDE_QUESTION_TAB_BAR, '  more']),
+    ).toBeUndefined()
+  })
+
+  /** Refusing the row, not the item: the walk counts positions along the row
+   *  the pane draws, so removing one from the middle moves the rest. */
+  test('one toggle among plain options refuses the whole row', () => {
+    const mixed = row(['Yes', '9;9;9'], ['No'], ['\u2612 Remember'])
+    expect(inlineChoicesInRow(mixed)).toBeUndefined()
+  })
+
+  test('the glyphs an agent uses for a toggle are all refused', () => {
+    for (const g of ['\u2610', '\u2611', '\u2612', '\u2713', '\u2714', '\u25cb', '\u25cf', '[']) {
+      expect(inlineChoicesInRow(row([`${g} On`, '9;9;9'], [`${g} Off`]))).toBeUndefined()
+    }
+  })
+
+  /** OpenCode's options carry no such glyph, which is why they still read. */
+  test('a permission row is untouched by the rule', () => {
+    expect(inlineChoicesInRow(OPENCODE_PERMISSION_ROW_WIDE)?.options).toEqual([
+      'Allow once',
+      'Allow always',
+      'Reject',
+    ])
   })
 })
 

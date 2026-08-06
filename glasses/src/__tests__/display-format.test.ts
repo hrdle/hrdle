@@ -2204,14 +2204,22 @@ describe('following the phone yields to the ring', () => {
     }
   }
   const sessions = ['a', 'b', 'c'].map((id) => ({ id, name: id, state: 'idle' as const }))
-  const push = (c: GlassesController, focus?: { sessionId: string }) =>
+  type Focus = { sessionId: string; deviceType?: 'mobile' | 'tablet' | 'desktop' }
+  const push = (c: GlassesController, focus?: Focus) =>
     (c as unknown as { onSessionsUpdated: (s: unknown[], f?: unknown) => void })
       .onSessionsUpdated(sessions, focus)
 
   test('an untouched screen still follows the session opened elsewhere', () => {
     const c = new GlassesController(stubPlatform() as never)
     push(c)
-    push(c, { sessionId: 'c' })
+    push(c, { sessionId: 'c', deviceType: 'mobile' })
+    expect(c.state.sessions[c.state.sessionIndex].id).toBe('c')
+  })
+
+  test('a tablet is followed too', () => {
+    const c = new GlassesController(stubPlatform() as never)
+    push(c)
+    push(c, { sessionId: 'c', deviceType: 'tablet' })
     expect(c.state.sessions[c.state.sessionIndex].id).toBe('c')
   })
 
@@ -2221,8 +2229,9 @@ describe('following the phone yields to the ring', () => {
     c.swipeDown()
     await Promise.resolve()
     const here = c.state.sessions[c.state.sessionIndex].id
-    push(c, { sessionId: 'c' })
+    push(c, { sessionId: 'c', deviceType: 'mobile' })
     expect(c.state.sessions[c.state.sessionIndex].id).toBe(here)
     expect(here).not.toBe('c')
   })
+
 })
