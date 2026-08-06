@@ -2,6 +2,258 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.66] - 2026-08-06
+
+### Added
+- **Options drawn side by side are readable from the glasses.** OpenCode asks
+  permission before touching anything outside the project and draws the
+  question as one horizontal row - `Allow once  Allow always  Reject` - with no
+  numbering and no checkboxes, so neither reader saw it. A blocked OpenCode
+  pane produced a waiting notification with nothing under it, which is the
+  failure 0.3.62 set out to prevent arriving through a door nobody had opened
+  - As text that row and the key hints beneath it are the same shape, so no
+    rule could admit the first without offering `ctrl+f fullscreen` as an
+    answer. As paint they differ: the selected option carries a background of
+    its own and every item in the footer shares the row's. The reader works on
+    colour, and "exactly one item painted unlike the row it sits on" finds the
+    menu, rejects the footer, and names the selection in one stroke
+  - That selection is also the only place the pane's own cursor is recorded.
+    Reading it on every pass is what makes moving the cursor safe again -
+    0.0.52 removed cursor-driving for doing it blind and drifting out of step;
+    here the position is measured rather than assumed
+  - The movement was measured against a live pane, not read off the footer,
+    which says `⇆ select` and is wrong: Tab moves nothing. The arrows move it,
+    both ways, and both wrap - so the far end of a row is one press backwards
+    rather than several forwards
+  - **The notification itself now says something.** Reading the row was only
+    half of it: a waiting item is assembled on the server, and OpenCode frames
+    every line of its prompt with a rule. Every pattern in the relay's scrape
+    anchors at the start of a line and allows only spaces and a cursor glyph
+    before what it looks for, so the rule alone made this file blind to that
+    agent - and would have, even had OpenCode numbered its options. The
+    question fared worse: it ends in no `?` and says no `Do you want to`, so
+    the fallback took the last non-empty line and the notification a wearer got
+    was one box-drawing glyph
+  - The rule is now stripped before any reader sees a line, a line with no
+    letter and no digit in it can never be the question, and the two halves
+    OpenCode splits its question across (`Permission required`, then what it
+    wants permission for) are joined into the one sentence a wearer can decide
+    on. The waiting item carries the options, how the pane takes an answer to
+    them, and where its own cursor is - a walk needs a starting point, and an
+    item that lost it withholds its choices rather than let the glasses guess
+  - The coloured read is a second round trip, taken only when the ordinary one
+    found no options at all. Every agent that already worked keeps the exact
+    read it had
+
+## [0.3.65] - 2026-08-06
+
+### Changed
+- **Mirroring the device hides the simulator's own controls.** While the
+  mirror shows the wearer's screen, the ring buttons, host lifecycle, demo
+  and voice-input controls acted on the local panel hidden underneath it -
+  and the ring ones would fight the wearer for the real screen. They
+  disappear while the mirror is on (the keyboard shortcuts go quiet too)
+  and return when it is off. Server settings, the replay-player link and
+  the backdrop stay available
+
+## [0.3.64] - 2026-08-06
+
+### Added
+- **OpenCode is a supported agent.** It joins Claude Code, Codex, Grok and Kimi:
+  start one from the create modal, see it in the session list with its own
+  colour, read its transcripts in the conversation view and its token usage on
+  the dashboard. `hrdle setup` installs its herdr integration alongside the
+  others, so a resumed session keeps its identity
+  - It is the first provider that reads a **database** rather than files.
+    OpenCode 1.18 keeps sessions, messages and parts as rows in
+    `~/.local/share/opencode/opencode.db`; the reader opens it readonly per
+    query the way the Codex reader already does, and an unreadable or
+    mid-migration file degrades to an empty list rather than an error
+  - Its cost figures are OpenCode's own. Every other agent's spend here is our
+    estimate from a price list; OpenCode computes and stores a per-turn cost,
+    so the dashboard reports what it recorded. A window with no cost recorded
+    shows nothing rather than zero - a free model's genuine 0 is a different
+    statement from "unknown"
+  - A tool call and its result live in one row there, so the transcript reader
+    splits them back apart to the call-and-result shape the conversation view
+    pairs up - which means an OpenCode tool call renders as the same single
+    card as everyone else's, and a call the user refused shows as the refusal
+    rather than as one still running
+
+### Fixed
+
+- **A multi-select question is answerable from the ring, on either agent.**
+  0.3.62 fixed following a question that moves and shipped believing the
+  multi-step case was closed. It was closed for single-pick lists only. Driven
+  against live Claude Code and Kimi Code panes, seven separate faults turned up
+  between the scrape and the key that answers it
+  - **kimi's multi-select draws no numbers at all** - `[ ] Apple`, four rows,
+    not a digit on the screen even though `1-4` still works as a key. Neither
+    reader matched a line of it, so the payload came back with no choices and
+    the half-drawn-frame guard held the *previous* question: the panel showed
+    question one while the pane had moved to question two, which is the exact
+    silent failure 0.3.62 set out to prevent. Both readers now take an
+    unnumbered checkbox block as the menu it is
+  - **The picker drove the pane's cursor with arrow keys**, making it a second
+    cursor over the pane's own. They came apart on any redraw, and a
+    multi-select redraws on every tick - three swipes in, the panel offered
+    `Banana` while the pane sat on `Type something`. Options are now answered
+    by their own number, which both agents accept and neither moves its cursor
+    for, so there is no second cursor left to keep in step
+  - **The send row sent Enter**, which in current Claude Code toggles the row
+    under the pane's cursor rather than submitting. It sends Tab now, which is
+    what carries both agents on to the next question
+  - **A ticked box read back as empty on Claude Code**, which writes U+2714
+    where only U+2713 was listed - so the send row counted nothing and a
+    wearer's own ticks looked like they went nowhere
+  - **The rows the ring cannot answer are dropped in every dress they arrive
+    in**: `Type something.` in a single pick, `[ ] Type something` in a
+    multi-select, and kimi's `Other:` once it is the field being typed into
+  - **A tick shows the moment it is made** rather than a server re-read later,
+    and a re-read of the same question no longer sends the cursor home
+  - **A tick reaches the panel as a glyph the firmware has** (`[○]`). Both
+    agents' check marks were being sent raw, so the device drew tofu on the one
+    row a wearer reads to know what they have ticked - while the simulator,
+    drawing from a browser font, showed them perfectly
+- **A question that changes to one the scrape cannot parse replaces the old
+  one.** The half-drawn-frame guard held on the options alone, so a pane that
+  had genuinely moved on was left showing the previous question's answers. It
+  now holds only while the question itself is unchanged: the right question
+  with nothing under it beats the wrong question's options
+
+- **One unreadable file no longer takes the whole dashboard down.** The panel is
+  a dozen independent readings gathered with `Promise.all`, which rejects on the
+  first member to reject, and the cache in front of it only serves a stale value
+  once it has one - so on the first build after a restart, a single throwing
+  reading returned an error for `GET /api/dashboard` instead of the panel, and
+  kept doing it, because a failed build caches nothing. Every agent's usage
+  dark because one provider could not read one file
+  - Each reading is now isolated: one that throws degrades to its own empty
+    value, is logged with the name of the reading that failed, and the rest of
+    the panel renders. The obligation used to sit in each service and had to be
+    remembered again by every provider added
+  - Two readings could actually do it. Codex's rollout scan guarded every level
+    of its directory walk except the top one, so an unreadable `~/.codex/
+    sessions` - or a plain file where the directory belongs - escaped. And the
+    daily-activity chart checked only that `dailyActivity` was *present* in
+    `stats-cache.json`, a file another program writes: anything there that was
+    not a list reached `.slice` and threw
+- **A tool call naming its file as `filePath` is summarised by its basename.**
+  The summary and the result's syntax highlighting only looked for `file_path`,
+  `path` and `notebook_path`, so an agent using the camelCase spelling got the
+  first 60 characters of an absolute path as its card heading, and no
+  highlighting
+
+
+## [0.3.63] - 2026-08-06
+
+### Changed
+- **The glasses recording records the glasses, not the phone.** Which session
+  the phone was focused on used to be written all day, glasses or no glasses -
+  hours of lines nothing could replay, bookending every file. The replay
+  player then opened onto that silence: position 0 was a blank canvas even
+  though the day's frames were all there, further in. Focus is now recorded
+  only while the glasses are live (between their first frame and the gap
+  marker when they go), with one parked focus line flushed just before the
+  frame that ends an off-air stretch, so recordings still say what was being
+  worked on. A day the glasses never joined gets no file at all
+
+## [0.3.62] - 2026-08-04
+
+### Fixed
+- **The option lists the other agents draw are read at all.** The scrape only
+  understood claude's `1. Yes`. kimi writes `[1] Yes` with U+2192 as its
+  cursor, so nothing was extracted: a blocked kimi workspace produced a waiting
+  item carrying the question and no options, the picker never opened for it,
+  and a tap fell through to the microphone
+  - Both readers - the server's, which scrapes a pane it already knows is
+    blocked, and the app's, which scrapes a live terminal buffer - now take
+    either numbering, and agree on the rows the ring cannot answer:
+    `Type something.` / `Chat about this` (claude) and `Other` (kimi) all open
+    free-text entry, which has no keyboard on the glasses. The app dropped none
+    of them before, so one pane read two ways produced a picker with rows the
+    server's own notice did not offer
+  - Verified end to end against kimi-k3: question, next question, the submit
+    screen, and the answers landing in the transcript, by ring alone
+
+### Changed
+- **`Save PNG` writes the green EVEN's own simulator writes.** EVEN Hub
+  rejected a submission with "the color tone of the provided screenshots does
+  not match the original display captured from the simulator" - theirs is pure
+  green with only the alpha varying, ours was a mint with a bloom behind it,
+  251 distinct colours against their 7. Side by side that reads as processed
+  - The panel keeps its own green; only the export changes. One is a viewing
+    preference, the other is a submission format
+  - Layout was measured against the official simulator on the same screens:
+    identical line counts, at most 1px of vertical drift and 3px of width over
+    lines up to 568px. The browser font was never the problem here
+
+## [0.3.61] - 2026-08-04
+
+### Changed
+- **Renaming a session renames its herdr workspace.** The session menu's
+  title field used to save a display title of hrdle's own, so the name on the
+  card and the workspace label herdr shows everywhere else drifted apart the
+  moment either was set. The field now writes straight through to
+  `workspace.rename` - one name, stored where the workspace lives, same rule
+  as the display order. The input starts prefilled with the current name, an
+  empty name is rejected rather than meaning "back to automatic", and a name
+  another workspace already carries is refused. Theme and voice vocabulary
+  follow the session to its new name; an open terminal survives the rename,
+  though a reloaded page will ask you to pick the session again under its new
+  name
+- **Voice vocabulary keeps its priorities without the title store.** Workspace
+  names now live only in herdr labels, so the STT prompt tells the two kinds
+  apart by script: a Japanese label is a name someone says out loud and leads,
+  an ASCII label is directory-ish text and stays last, the glossary between
+  them as before
+
+## [0.3.60] - 2026-08-04
+
+### Fixed
+- **A session showed a stranger's conversation after its directory was
+  renamed.** A transcript was addressed by the pane's working directory, which
+  is only ever a guess at where one lives: Claude Code fixes the project
+  directory when the agent starts and never moves the file, so a `mv` of the
+  working directory under a running agent leaves the pane naming a directory
+  nothing was written to. The lookup then walked up to an ancestor - `/home` -
+  and answered with the newest transcript there, which is a different session
+  entirely. The recap, the first prompt and the context meter went blank at the
+  same time and for the same reason. A session id is unique across every
+  project, so a miss now scans for the id instead of guessing at paths again,
+  and the transcript is carried by its real location rather than re-derived
+  from a path. Where the id resolves to nothing, the conversation is empty
+  rather than someone else's - the fallback that once read "a conversation from
+  the right directory beats an empty screen" was the thing showing the wrong
+  one
+- **The Claude changes list had the same fault, and showed it as edits.** Asked
+  for a directory it had no transcript for, it walked up to an ancestor and
+  listed whatever ran in `/home/you` last - a plausible-looking list of files
+  the session never touched. It reads only this directory's own project now,
+  and where a rename has moved the session out from under its project name, it
+  finds it by the cwd the transcript itself last recorded
+
+## [0.3.59] - 2026-08-04
+
+### Fixed
+- **A question that changes under a still-blocked pane is followed.** One
+  AskUserQuestion call holds several questions: the TUI takes the answer to the
+  first and draws the second without the pane ever leaving `blocked`. Nothing
+  either side watched changed state, so the glasses kept the first question's
+  text and options
+  - The quiet failure is the expensive one. A picker still showing question one
+    while the pane has moved on sends its Enter to question two - an answer to
+    something the wearer never saw, which looks exactly like it worked
+  - The tracker now re-reads a pane that is still blocked and replaces the
+    waiting item when the question or its options changed. A fresh id rather
+    than an edit in place, because it is a fresh decision. It leaves a
+    dismissed item alone (the wearer chose the PC for that pane) and ignores a
+    read that came back without options while the last one had them, which is a
+    half-drawn frame rather than a question that lost its choices
+  - The glasses half - re-opening the picker on the next question - ships with
+    the app rather than the server, so a server running this alone updates the
+    notice instead of leaving it stale
+
 ## [0.3.58] - 2026-08-04
 
 ### Added

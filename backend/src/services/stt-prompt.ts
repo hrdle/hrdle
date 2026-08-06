@@ -126,20 +126,19 @@ export function buildSttPrompt(
 }
 
 /**
- * Workspace names as spoken: the user's custom titles first, then herdr's own
- * labels. A title is chosen by a person and is usually the Japanese one; a
+ * Workspace names as spoken. Renaming a session writes straight to the herdr
+ * label now (there is no hrdle-side title store anymore), so the label carries
+ * both kinds of name and script tells them apart: a Japanese label is a name a
+ * person coined and says out loud — the old "custom title" — while an ASCII
  * label is a directory-ish name that Whisper tends to get right anyway.
  */
 export async function currentWorkspaceNames(): Promise<{ titles: string[]; labels: string[] }> {
-  const [workspaces, metadata] = await Promise.all([
-    listWorkspaces().catch(() => []),
-    getAllSessionMetadata().catch(() => ({})),
-  ]);
+  const workspaces = await listWorkspaces().catch(() => []);
+  const names = workspaces.map((w) => w.label).filter(Boolean);
+  const spoken = (label: string) => /[^\x20-\x7E]/.test(label);
   return {
-    titles: Object.values(metadata)
-      .map((meta) => meta.title)
-      .filter((title): title is string => !!title),
-    labels: workspaces.map((w) => w.label).filter(Boolean),
+    titles: names.filter(spoken),
+    labels: names.filter((label) => !spoken(label)),
   };
 }
 

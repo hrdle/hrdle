@@ -15,6 +15,7 @@ import {
   listTabs,
   listWorkspaces,
   readPaneText,
+  renameWorkspace as renameHerdrWorkspace,
   toTmuxPaneId,
   type HerdrAgentStatus,
   type HerdrWorkspace,
@@ -478,6 +479,34 @@ export class HerdrService {
     // very next sessions push and snap the dragged row back.
     this.invalidateCache();
     return true;
+  }
+
+  /**
+   * Rename a session's workspace (its herdr label).
+   *
+   * Since #186 this changes what the session is *called* and nothing about
+   * where it *is*: the id is the workspace id, so subscriptions, relay items,
+   * stored settings and anything else holding an address keep working across
+   * the rename. The id is returned anyway, unchanged, because the caller was
+   * written when a rename retired the old one.
+   *
+   * The clash check compares labels, not ids - two workspaces called the same
+   * thing is exactly the state that makes a name ambiguous to address by.
+   */
+  async renameWorkspace(sessionId: string, name: string): Promise<string> {
+    const ws = await this.resolveWorkspace(sessionId);
+    if (!ws) {
+      throw new Error(`Failed to rename session: workspace not found: ${sessionId}`);
+    }
+    const clash = workspacesLabelled(await listWorkspaces(), name).find(
+      (w) => w.workspace_id !== ws.workspace_id,
+    );
+    if (clash) {
+      throw new Error(`Failed to rename session: workspace "${name}" already exists`);
+    }
+    await renameHerdrWorkspace(ws.workspace_id, name);
+    this.invalidateCache();
+    return ws.workspace_id;
   }
 
   async killWorkspace(sessionId: string): Promise<void> {

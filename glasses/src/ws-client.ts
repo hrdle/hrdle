@@ -1,3 +1,4 @@
+import { extractInlineChoices, type InlineChoices } from '../../shared/inline-choices'
 import { getBaseUrl } from './api.ts'
 import type { Session, GlassesRelayItem, ClientFocus, GlassesScreen, GlassesInputKind } from './types.ts'
 
@@ -87,6 +88,36 @@ export function stripAnsi(str: string): string {
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
 }
 
+/**
+ * The rows a wearer cannot answer, whatever they are numbered.
+ *
+ * Every one of these opens free-text entry, and the ring has no keyboard — on
+ * the glasses that is the voice flow, reached another way. Leaving them in
+ * puts rows in the picker whose Enter does nothing a wearer can see, which is
+ * what the relay's own scrape has always avoided and this one did not:
+ * `Type something.` was a selectable option here while the same pane read
+ * through the server offered two.
+ *
+ * `Other` is kimi's; the other two are claude's. Kept in step with
+ * `UNANSWERABLE` in `backend/src/services/glasses-relay.ts`.
+ */
+const UNANSWERABLE = new Set(['Type something', 'Chat about this', 'Other'])
+
+/**
+ * Whether a captured row is one of those, once it is down to its label.
+ *
+ * The same row arrives in several dresses: claude writes `Type something.` in a
+ * single-pick list and `[ ] Type something` in a multi-select - no period, and
+ * a checkbox in front - while kimi's `Other` becomes `[ ] Other:` the moment it
+ * is the row being typed into. Matching the literal string caught the first and
+ * missed the rest. Kept in step with `isUnanswerable` in
+ * `backend/src/services/glasses-relay.ts`.
+ */
+function isUnanswerable(option: string): boolean {
+  const bare = option.replace(/^\[[ xX*✓✔]\]\s*/, '').trim().replace(/[.:：]$/, '')
+  return UNANSWERABLE.has(bare)
+}
+
 /** How far back from the pane's tail an option block may start. A prompt sits
  *  at the bottom; prose scrolls away above it. */
 const CHOICE_TAIL_LINES = 25
@@ -114,16 +145,19 @@ const CHOICE_MAX_GAP = 3
 export function extractChoices(text: string): string[] {
   if (!text) return []
   const lines = text.split('\n')
-  // Claude Code uses U+276F as its cursor marker; stripAnsi has already folded
-  // it onto `>`, but a buffer that never went through it may still carry it.
-  const NUMBERED = /^\s*[\u276f>*]?\s*(\d+)[.)]\s*(.+)/
+  // Two numbering styles, because the agents do not agree: claude and codex
+  // write `1. Yes`, kimi writes `[1] Yes`. The optional leading glyph is the
+  // cursor on the selected row \u2014 U+276F from claude, U+2192 from kimi.
+  // stripAnsi folds both onto `>`, but a buffer that never went through it may
+  // still carry them.
+  const NUMBERED = /^\s*[\u276f>*\u2192]?\s*(?:(\d+)[.)]|\[(\d+)\])\s*(.+)/
   const found: { n: number; text: string; at: number }[] = []
   const from = Math.max(0, lines.length - CHOICE_TAIL_LINES)
   for (let i = from; i < lines.length; i++) {
     const m = lines[i].match(NUMBERED)
-    if (m) found.push({ n: Number(m[1]), text: m[2].trim(), at: i })
+    if (m) found.push({ n: Number(m[1] ?? m[2]), text: m[3].trim(), at: i })
   }
-  if (found.length < 2) return []
+  if (found.length < 2) return extractCheckboxChoices(lines, from)
 
   // The longest run of 1, 2, 3, ... with no big gap between the lines.
   let best: typeof found = []
@@ -136,8 +170,43 @@ export function extractChoices(text: string): string[] {
     // introduced it, and the newest thing on a pane is the live one.
     if (run.length >= best.length) best = run
   }
-  if (best.length < 2 || best[0].n !== 1) return []
-  return best.map((c) => c.text)
+  if (best.length < 2 || best[0].n !== 1) return extractCheckboxChoices(lines, from)
+  // Dropped last, never before the run is picked: they are numbered rows like
+  // any other, and removing one first would break the 1, 2, 3 the run is
+  // recognised by.
+  return best.map((c) => c.text).filter((c) => !isUnanswerable(c))
+}
+
+/** A checkbox row carrying no number: kimi's multi-select draws only these. */
+const CHECKBOX = /^\s*[❯>*→]?\s*(\[[ xX*✓✔]\]\s*\S.*)/
+
+/**
+ * The unnumbered checkbox block a pane is offering, or nothing.
+ *
+ * Kimi's multi-select is `   [ ] Apple` four times over, without a digit on
+ * the screen - so the numeric run that recognises every other option list has
+ * nothing to count. The box itself is the tell here: ordinary prose does not
+ * open a line with `[ ]`, and a block of them close together near the bottom
+ * of a pane is a menu by construction, the same argument the numeric run makes.
+ *
+ * Only consulted when the numbered read came back empty, so claude's
+ * `1. [ ] Apple` - numbered and boxed - is still read as the numbered list it
+ * is, and this never gets the chance to find a shorter block inside it.
+ */
+function extractCheckboxChoices(lines: string[], from: number): string[] {
+  let best: string[] = []
+  let run: string[] = []
+  let prevAt = Number.NEGATIVE_INFINITY
+  for (let i = from; i < lines.length; i++) {
+    const m = lines[i].match(CHECKBOX)
+    if (!m) continue
+    run = i - prevAt <= CHOICE_MAX_GAP ? [...run, m[1].trim()] : [m[1].trim()]
+    prevAt = i
+    // Ties go to the lower block, for the same reason the numeric run does.
+    if (run.length >= best.length) best = run
+  }
+  if (best.length < 2) return []
+  return best.filter((c) => !isUnanswerable(c))
 }
 
 export class WsClient {
@@ -166,6 +235,16 @@ export class WsClient {
 
   // Buffer of last N lines per session
   private terminalBuffers = new Map<string, string[]>()
+  /**
+   * The same lines with their escape sequences intact.
+   *
+   * Everything else here reads a pane after `stripAnsi`, which is right for
+   * text and wrong for the one thing colour carries: OpenCode marks the
+   * selected option of a horizontal prompt by painting it, and nothing in the
+   * characters says which it is. Kept beside the clean copy rather than
+   * replacing it, so no existing reader changes behaviour.
+   */
+  private rawBuffers = new Map<string, string[]>()
   private maxLines = 30
   private lastSessions: Session[] | null = null
 
@@ -271,6 +350,10 @@ export class WsClient {
       .filter((l) => l.trim().length > 0)
     const key = `${sessionId}:${viewport.paneId}`
     this.terminalBuffers.set(key, cleanLines.slice(-this.maxLines))
+    this.rawBuffers.set(
+      key,
+      viewport.lines.filter((l) => stripAnsi(l).trim().length > 0).slice(-this.maxLines),
+    )
     this.callbacks.onTerminalOutput(
       sessionId,
       viewport.paneId,
@@ -360,6 +443,20 @@ export class WsClient {
   /** Extract numbered choices from terminal output (e.g. "1. Yes", "2. No") */
   getChoices(sessionId: string): string[] {
     return extractChoices(this.getTerminalText(sessionId))
+  }
+
+  /**
+   * The side-by-side options a pane is offering, read from their colours.
+   *
+   * Consulted only when `getChoices` came back empty, so a numbered or checkbox
+   * prompt is still read the way it always was and this never gets the chance
+   * to find a row of something else inside one.
+   */
+  getInlineChoices(sessionId: string): InlineChoices | undefined {
+    for (const [key, lines] of this.rawBuffers) {
+      if (key.startsWith(`${sessionId}:`)) return extractInlineChoices(lines)
+    }
+    return undefined
   }
 
   getState(): string {

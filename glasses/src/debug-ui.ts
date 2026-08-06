@@ -26,7 +26,7 @@ import { GlassesController } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
 import { CARD_BORDER_COLOR, LINE_H, PANEL_H, PANEL_W, splitLines, textWidth } from './metrics.ts'
-import { BASELINE, GREEN, createPanelPainter } from './panel-paint.ts'
+import { BASELINE, createPanelPainter, inkColor, withExportInk } from './panel-paint.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
 import type { AppState } from './display.ts'
 
@@ -276,30 +276,36 @@ export function startDebugUI(): void {
         </div>
 
         <div class="panel">
-          <h2>Ring controls</h2>
-          <div class="ring">
-            <button type="button" id="btn-up">Swipe up</button>
-            <button type="button" id="btn-down">Swipe down</button>
-            <button type="button" id="btn-tap">Tap</button>
-            <button type="button" id="btn-dbl">Double tap</button>
+          <!-- Everything in here drives THIS simulator's panel. While the
+               mirror shows the device's screen instead, these controls would
+               act on a panel nobody can see (and the ring ones would fight
+               the wearer), so the whole block hides. -->
+          <div id="sim-controls">
+            <h2>Ring controls</h2>
+            <div class="ring">
+              <button type="button" id="btn-up">Swipe up</button>
+              <button type="button" id="btn-down">Swipe down</button>
+              <button type="button" id="btn-tap">Tap</button>
+              <button type="button" id="btn-dbl">Double tap</button>
+            </div>
+            <h2>Host lifecycle</h2>
+            <div class="ring">
+              <button type="button" id="btn-fg-exit">Foreground exit</button>
+              <button type="button" id="btn-fg-enter">Foreground enter</button>
+              <button type="button" id="btn-host-exit">Host exit</button>
+              <button type="button" id="btn-superseded">Superseded</button>
+              <button type="button" id="btn-gave-up">Server unreachable</button>
+            </div>
+            <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
+            <h2>First run</h2>
+            <div class="ring">
+              <button type="button" id="btn-demo">Demo mode</button>
+            </div>
+            <p class="hint" id="demo-status">What a wearer sees before a server address exists: a tap on the setup guide starts the app on canned data. Speech is canned too — there is no server to transcribe against — and an answer, spoken or picked, is followed by the agent's reply.</p>
+            <h2>Voice input</h2>
+            <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
+            <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
           </div>
-          <h2>Host lifecycle</h2>
-          <div class="ring">
-            <button type="button" id="btn-fg-exit">Foreground exit</button>
-            <button type="button" id="btn-fg-enter">Foreground enter</button>
-            <button type="button" id="btn-host-exit">Host exit</button>
-            <button type="button" id="btn-superseded">Superseded</button>
-            <button type="button" id="btn-gave-up">Server unreachable</button>
-          </div>
-          <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
-          <h2>First run</h2>
-          <div class="ring">
-            <button type="button" id="btn-demo">Demo mode</button>
-          </div>
-          <p class="hint" id="demo-status">What a wearer sees before a server address exists: a tap on the setup guide starts the app on canned data. Speech is canned too — there is no server to transcribe against — and an answer, spoken or picked, is followed by the agent's reply.</p>
-          <h2>Voice input</h2>
-          <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
-          <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
           ${settingsPanelHtml()}
 
           <h2>Replay recording</h2>
@@ -547,7 +553,7 @@ export function startDebugUI(): void {
   function drawContainers(ctx: CanvasRenderingContext2D): void {
     for (const c of panel) {
       if (c.border > 0) {
-        ctx.strokeStyle = `rgba(${GREEN}, ${c.borderColor / 15})`
+        ctx.strokeStyle = `rgba(${inkColor()}, ${c.borderColor / 15})`
         ctx.lineWidth = c.border
         ctx.beginPath()
         ctx.roundRect(c.x + c.border / 2, c.y + c.border / 2, c.w - c.border, c.h - c.border, c.radius)
@@ -555,7 +561,7 @@ export function startDebugUI(): void {
       }
       // The footer is the one thing drawn dimmer than the rest — it carries the
       // gestures and the clock, which are reference rather than content.
-      ctx.fillStyle = c.name === 'footer' ? `rgba(${GREEN}, 0.78)` : `rgb(${GREEN})`
+      ctx.fillStyle = c.name === 'footer' ? `rgba(${inkColor()}, 0.78)` : `rgb(${inkColor()})`
       const inset = c.border + c.pad
       const innerW = c.w - 2 * inset
       const lines = c.content
@@ -731,8 +737,15 @@ export function startDebugUI(): void {
     const session = state.sessions[state.sessionIndex]
     const bufText = session ? ws.getTerminalText(session.id) : ''
     const choices = session ? ws.getChoices(session.id) : []
+    // Side-by-side options are read from the pane's colours rather than its
+    // characters, so a prompt with them shows nothing under `Choices` and this
+    // window would report a picker that is about to work as empty.
+    const inline = choices.length === 0 && session ? ws.getInlineChoices(session.id) : undefined
+    const shown = inline
+      ? `${inline.options.join(', ')} (inline, on ${inline.options[inline.selected]})`
+      : choices.join(', ')
     diag.textContent =
-      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${choices.join(', ')}]` +
+      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${shown}]` +
       (controller.isStopped() ? ' | stopped' : '')
     const top = state.relayWaiting[0]
     relay.textContent =
@@ -815,9 +828,16 @@ export function startDebugUI(): void {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
       const a = document.createElement('a')
       a.download = `${__PRODUCT_NAME__.toLowerCase()}-glasses-${lastMode}-${stamp}.png`
+      // Drawn again in EVEN's export colours rather than read off the panel as
+      // it stands: the panel's mint and its bloom are what the last rejection
+      // was about, and a submission has to be the green their own simulator
+      // writes. The frame on screen is put back immediately after, so the
+      // repaint is invisible to whoever is watching.
+      withExportInk(paintPanel)
       a.href = canvas.toDataURL('image/png')
+      paintPanel()
       a.click()
-      copied.textContent = 'Saved the PNG (transparent, 576x288)'
+      copied.textContent = 'Saved the PNG (transparent, 576x288, export green)'
       copied.className = 'hint copied'
     } catch {
       copied.textContent = 'Could not save the PNG'
@@ -1199,6 +1219,9 @@ export function startDebugUI(): void {
   // clicking when walking someone through a flow.
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return
+    // Same rule as the on-screen ring: while the mirror shows the device's
+    // screen, keystrokes must not drive the hidden local panel.
+    if (mirroring) return
     const map: Record<string, () => void> = {
       ArrowUp: () => controller.swipeUp(),
       ArrowDown: () => controller.swipeDown(),
@@ -1215,14 +1238,14 @@ export function startDebugUI(): void {
   // state) — keep it fresh on an interval.
   // ── Mirror wiring ──
 
-  const RING_BUTTONS = ['btn-up', 'btn-down', 'btn-tap', 'btn-dbl']
-
   function setMirrorUi(live: boolean, message: string): void {
     mirrorStatus.textContent = message
     mirrorStatus.className = live ? 'hint mirror-live' : 'hint'
-    // A viewer clicking the ring while the device drives the panel would fight
-    // the wearer for the screen. Mirroring is for watching.
-    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = mirroring
+    // Mirroring is for watching: the simulator's own controls act on a panel
+    // the mirror is covering, and the ring ones would fight the wearer for
+    // the device's screen. Hidden, not disabled — a grayed-out button still
+    // asks to be understood.
+    el('sim-controls').hidden = mirroring
   }
 
   controller.ws.setGlassesScreenHandler((screen) => {

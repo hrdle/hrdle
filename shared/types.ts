@@ -85,6 +85,15 @@ export const AGENT_PROVIDERS = {
     processPatterns: [/(?:^|\/)kimi(?:\s|$)/],
     supportsConversationMetadata: false,
   },
+  opencode: {
+    id: 'opencode',
+    command: 'opencode',
+    resumeCommand: 'opencode --session',
+    labelKey: 'session.agentProvider.opencode',
+    displayName: 'OpenCode',
+    processPatterns: [/(?:^|\/)opencode(?:\s|$)/],
+    supportsConversationMetadata: false,
+  },
 } as const;
 
 export type AgentProvider = keyof typeof AGENT_PROVIDERS;
@@ -149,6 +158,9 @@ export interface SessionResponse {
   currentPath?: string;
   agent?: AgentProvider;
   theme?: SessionTheme;
+  /** Legacy: servers before the rename write-through stored a display title of
+   *  their own. Current servers never set it — the name (herdr workspace
+   *  label) is the title — but a peer on an older version still might. */
   customTitle?: string;
   /**
    * Words this session's speech is made of, leading the vocabulary bias sent
@@ -663,6 +675,39 @@ export interface KimiUsageSummary {
 }
 
 /**
+ * Aggregated OpenCode token usage. Like Grok and Kimi, OpenCode exposes no
+ * rate-limit windows locally, so the dashboard shows consumption totals rather
+ * than cycle utilization bars.
+ *
+ * Unlike those two, the cost here is **not** an estimate of ours: OpenCode
+ * computes and stores a per-turn `cost` itself, so the figure is whatever it
+ * charged the turn at. It is absent, never zeroed, when no turn in the window
+ * carried one — and genuinely 0 for free models, which report exactly that.
+ */
+export interface OpenCodeUsageWindow {
+  /** Assistant turns in the window. */
+  turns: number;
+  totalTokens: number;
+  inputTokens: number;
+  cacheReadTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  /** Spend for the window in USD, as recorded by OpenCode. */
+  costUsd?: number;
+}
+
+export interface OpenCodeUsageSummary {
+  last24h: OpenCodeUsageWindow;
+  last7d: OpenCodeUsageWindow;
+  /** Per-model totals over the 7-day window, largest first. */
+  models: Array<{ model: string; totalTokens: number; costUsd?: number }>;
+  /** Sessions with turns in the 7-day window. */
+  sessions7d: number;
+  /** ISO timestamp of the most recent turn seen. */
+  lastTurnAt?: string;
+}
+
+/**
  * Groq's remaining transcription quota, as reported by `x-ratelimit-*` headers
  * on the last transcription this server made. Not polled - Groq has no usage
  * endpoint, so asking would itself spend a request.
@@ -810,6 +855,7 @@ export interface DashboardResponse {
   codexUsageLimits?: CodexUsageLimits | null; // From Codex rollouts
   grokUsage?: GrokUsageSummary | null; // From Grok updates.jsonl turn_completed records
   kimiUsage?: KimiUsageSummary | null; // From Kimi wire.jsonl usage.record records
+  opencodeUsage?: OpenCodeUsageSummary | null; // From OpenCode's assistant message rows
   // Billed OpenRouter spend for the key in ~/.kimi-code/config.toml. Null when
   // no OpenRouter provider is configured or the account can't be reached.
   openRouterUsage?: OpenRouterAccountUsage | null;
@@ -1188,6 +1234,30 @@ export interface GlassesRelayItem {
   /** Scraped or agent-declared choices; the glasses prefer these over a
    *  terminal re-scrape. */
   choices?: string[];
+  /**
+   * How the pane takes an answer to `choices`.
+   *
+   * `number` (the default when absent) is claude, codex, kimi and grok: an
+   * option is chosen by typing its own number, and the pane's own cursor never
+   * has to be moved. `arrow` is opencode, which gives its options no keys at
+   * all - answering means walking its cursor along the row and pressing Enter,
+   * so the walk needs a starting point and that is `choiceSelected`.
+   */
+  choiceInput?: 'number' | 'arrow';
+  /**
+   * Index into `choices` of the option the PANE is currently sitting on.
+   *
+   * Deliberately not called a cursor: the app has one of those already
+   * (`AppState.choiceIndex`), and it is the wearer's - which row the ring is
+   * resting on, which is not where the pane is. Answering an `arrow` pane
+   * means walking from this index to the wearer's, and confusing the two is
+   * exactly how a pick lands on an option nobody chose.
+   *
+   * Only carried when it was actually measured from the pane. An `arrow` item
+   * without it cannot be answered safely, so the app must not offer its
+   * choices.
+   */
+  choiceSelected?: number;
   source: 'auto' | 'agent';
   /** Dismissed ("later / on PC") items stay in the store so the same blocked
    *  epoch is not re-synthesized on reconnect, but are excluded from

@@ -35,7 +35,6 @@ export interface LastKnownSession {
   currentPath?: string;
   agent?: AgentProvider;
   theme?: SessionTheme;
-  customTitle?: string;
   ccSessionId?: string;
   /** Codex thread id (rollout). Used to drive `codex resume <id>` after reboot. */
   agentSessionId?: string;
@@ -166,15 +165,3 @@ export async function setSessionSttPrompt(
   });
 }
 
-export async function setSessionTitle(sessionId: string, title: string | null): Promise<void> {
-  await withMetadataLock(async () => {
-    const data = await load();
-    if (!data.sessions[sessionId]) data.sessions[sessionId] = {};
-    if (title === null || title === '') {
-      delete data.sessions[sessionId].title;
-    } else {
-      data.sessions[sessionId].title = title;
-    }
-    await save(data);
-  });
-}

@@ -543,9 +543,10 @@ function ToolCard({
 	// Read/Write/Edit name a file; its extension is what tells the output what
 	// language it is looking at.
 	const calledPath = call
-		? ((call.input.file_path ?? call.input.path ?? call.input.notebook_path) as
-				| string
-				| undefined)
+		? ((call.input.file_path ??
+				call.input.filePath ??
+				call.input.path ??
+				call.input.notebook_path) as string | undefined)
 		: undefined;
 	const Icon = isError ? TriangleAlert : toolIcon(name);
 	const done = todos ? todos.filter((i) => i.status === "done").length : 0;

@@ -355,6 +355,11 @@ export async function getWorkspace(workspaceId: string): Promise<HerdrWorkspace 
   }
 }
 
+/** Rename a workspace (set its label). */
+export async function renameWorkspace(workspaceId: string, label: string): Promise<void> {
+  await herdrRpc('workspace.rename', { workspace_id: workspaceId, label });
+}
+
 export async function listPanes(workspaceId?: string): Promise<HerdrPane[]> {
   const params: Record<string, unknown> = workspaceId ? { workspace_id: workspaceId } : {};
   const res = await herdrRpc<{ panes: HerdrPane[] }>('pane.list', params);

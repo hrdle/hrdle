@@ -27,6 +27,7 @@ import {
   SPACE_W,
   ellipsize,
   splitLines,
+  stripUnrenderable,
   textWidth,
 } from './metrics.ts'
 // The give-up threshold, so the screen quotes the number the client actually
@@ -157,6 +158,17 @@ export interface AppState {
    * double-tap sends.
    */
   choiceMulti?: boolean
+  /**
+   * The options are drawn side by side and answered by moving the pane's own
+   * cursor, rather than each having a key of its own.
+   *
+   * OpenCode's permission prompt is the case: `Allow once  Allow always
+   * Reject` on one row, moved with the arrow keys and confirmed with Enter.
+   * Carries where that cursor is *now*, re-read from the pane's colours on
+   * every pass - which is what makes moving it safe, and what 0.0.52 did not
+   * have when it removed cursor-driving for drifting out of step.
+   */
+  choiceInline?: { options: string[]; selected: number }
   /**
    * Running on canned data with no server behind it.
    *
@@ -1155,16 +1167,27 @@ function footerChoice(state: AppState): string {
   return `swipe:move  tap:check/send  dbl:cancel`
 }
 
-/** A checkbox the pane has already ticked. Claude Code draws `[x]`; the
- *  brackets survive the scrape, so the state is readable without asking. */
+/**
+ * A checkbox the pane has already ticked.
+ *
+ * The brackets survive the scrape, so the state is readable without asking -
+ * but the mark inside them is whatever the agent felt like drawing. Claude Code
+ * uses U+2714 HEAVY CHECK MARK and kimi uses U+2713 CHECK MARK, and only the
+ * lighter one was listed here: every box claude ticked read back as empty, so
+ * the send row counted nothing and the panel showed a wearer's own ticks going
+ * nowhere. Measured on a live pane on 2026-08-06.
+ */
 export function isChecked(option: string): boolean {
-  return /^\s*\[[xX*\u2713]\]/.test(option)
+  return /^\s*\[[xX*\u2713\u2714]\]/.test(option)
 }
+
+/** The mark written when this app ticks a box itself. */
+export const CHECK_MARK = '\u2714'
 
 /** Whether a scraped option set is a multi-select. One checkbox is enough:
  *  a single-pick list has none at all. */
 export function looksMultiSelect(options: string[]): boolean {
-  return options.some((o) => /^\s*\[[ xX*\u2713]\]/.test(o))
+  return options.some((o) => /^\s*\[[ xX*\u2713\u2714]\]/.test(o))
 }
 
 /** Reply target shown in the choice header — the session the Enter actually
@@ -1324,7 +1347,13 @@ export function onChoiceSend(state: AppState): boolean {
 function choiceBody(state: AppState): string {
   return choiceRows(state).map((opt, i) => {
     const cursor = i === state.choiceIndex ? '>>>' : '   '
-    return `${cursor} ${opt}`
+    // The rows come off a pane, so they carry whatever that agent chose to
+    // draw with. A tick is the character this most depends on and the one the
+    // firmware is least likely to have: claude writes U+2714 and kimi U+2713,
+    // and neither has a glyph. Unsubstituted, the wearer's own ticks reach the
+    // panel as tofu, while the simulator draws them beautifully from a browser
+    // font - the exact divergence the simulator exists to make visible.
+    return `${cursor} ${stripUnrenderable(opt)}`
   }).join('\n')
 }
 

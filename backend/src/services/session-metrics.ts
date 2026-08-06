@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import { createInterface } from 'node:readline';
 import type { SessionMetrics } from '../../../shared/types';
 import { claudeProjectDirName } from '../utils/claude-project-path';
+import { locateSessionFile } from '../utils/locate-session-file';
 import { getMaxInputTokens } from './anthropic-models';
 
 const CONTEXT_MAX_DEFAULT = 200_000;
@@ -156,7 +157,13 @@ export async function computeSessionMetrics(input: MetricsInput): Promise<Sessio
 
   if (ccSessionId && workingDir) {
     const projectDir = pathToProjectDir(workingDir);
-    const filePath = path.join(projectDir, `${ccSessionId}.jsonl`);
+    const byPath = path.join(projectDir, `${ccSessionId}.jsonl`);
+    // The cwd names a project directory that may never have been written to —
+    // rename a working directory under a running agent and it stops matching.
+    // The id is unique, so a scan of every project settles it.
+    const filePath = fs.existsSync(byPath)
+      ? byPath
+      : ((await locateSessionFile(ccSessionId)) ?? byPath);
     const usage = await readJsonlUsage(filePath);
     if (usage) {
       const max = await getMaxInputTokens(usage.latestModel ?? undefined);

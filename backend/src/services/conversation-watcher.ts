@@ -38,9 +38,12 @@ export class ConversationWatcher {
    * agent in it — with two panes it showed whichever had written last, and
    * that is a different conversation from the one on screen.
    *
-   * A session id that resolves to nothing (herdr reporting a stale id, a
-   * transcript not written yet) falls back to the directory, because a
-   * conversation from the right directory beats an empty screen.
+   * A session id that resolves to nothing (a transcript not written yet, an id
+   * herdr reports for an agent that never started one) shows nothing. It used
+   * to fall back to the directory on the theory that a conversation from the
+   * right directory beats an empty screen — but the lookup already searches
+   * every project for the id, so what is left to fall back to is another
+   * pane's conversation presented as this one's. An empty screen is honest.
    *
    * Returns the initial set of conversation messages (may be empty if no
    * session exists yet).
@@ -52,16 +55,20 @@ export class ConversationWatcher {
     // conversation (#334). Listeners are kept — they belong to the subscriber.
     this.closeWatcher();
 
-    const session =
-      (agentSessionId
-        ? await claudeCodeService.getSessionById(agentSessionId, workingDir)
-        : null) ?? (await claudeCodeService.getSessionForPath(workingDir));
+    const session = agentSessionId
+      ? await claudeCodeService.getSessionById(agentSessionId, workingDir)
+      : await claudeCodeService.getSessionForPath(workingDir);
     if (!session?.sessionId) {
       return [];
     }
 
-    const projectDirName = pathToProjectName(session.projectPath || workingDir);
-    const filePath = join(claudeProjectsDir, projectDirName, `${session.sessionId}.jsonl`);
+    // The directory the transcript is in, not the directory it is about: a
+    // project directory name is decided when the agent starts and a rename of
+    // the working directory afterwards leaves the two disagreeing.
+    const projectDirName =
+      session.projectDirName ?? pathToProjectName(session.projectPath || workingDir);
+    const filePath =
+      session.filePath ?? join(claudeProjectsDir, projectDirName, `${session.sessionId}.jsonl`);
 
     this.filePath = filePath;
     this.projectDirName = projectDirName;

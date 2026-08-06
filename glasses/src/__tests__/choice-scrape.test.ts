@@ -46,6 +46,61 @@ describe('extractChoices', () => {
     ])
   })
 
+  test("reads kimi's menu, which numbers itself differently", () => {
+    // Captured from a real kimi-k3 pane on 2026-08-04, through
+    // `pane.read`. Two things here that claude does not do: the options are
+    // bracketed rather than dotted, the cursor is U+2192 rather than U+276F -
+    // and neither was read, so a blocked kimi workspace produced a waiting
+    // item with no choices at all and the picker never opened for it.
+    const pane = [
+      '  ? テストはどう分けますか?',
+      '',
+      '   → [1] モジュールごとに1ファイル',
+      '         各モジュールに対応するテストファイルを個別に作成します',
+      '     [2] 全部で1ファイル',
+      '         すべてのテストを1つのファイルにまとめます',
+      '     [3] Other',
+      '',
+      '   ↑↓ select  1-3 / ↵ choose  ←/→/tab switch  esc cancel',
+    ].join('\n')
+    // The description lines sit between the options, so the run has to
+    // tolerate the gap; `Other` is dropped as unanswerable.
+    expect(extractChoices(stripAnsi(pane))).toEqual(['モジュールごとに1ファイル', '全部で1ファイル'])
+  })
+
+  test("reads kimi's submit screen", () => {
+    // The third step of one AskUserQuestion call, and the one that actually
+    // sends the answers - a picker that stopped short of it would leave the
+    // pane holding two answers it was never told to submit.
+    const pane = [
+      '  Ready to submit your answers?',
+      '',
+      '   → [1] Submit',
+      '     [2] Cancel',
+      '',
+      '   ↑↓ select  1/2 choose  ↵ confirm  ←/→/tab switch  esc cancel',
+    ].join('\n')
+    expect(extractChoices(stripAnsi(pane))).toEqual(['Submit', 'Cancel'])
+  })
+
+  test('drops the rows the ring cannot answer', () => {
+    // Both of claude's trailing rows open free-text entry. They were offered
+    // here as selectable options while the same pane read through the server
+    // offered two - the picker and the notice disagreeing about one pane.
+    const pane = [
+      'テストはどう分けますか?',
+      '❯ 1. モジュールごとに1ファイル',
+      '  2. 全部で1ファイル',
+      '  3. Type something.',
+      '  4. Chat about this',
+    ].join('\n')
+    expect(extractChoices(stripAnsi(pane))).toEqual(['モジュールごとに1ファイル', '全部で1ファイル'])
+  })
+
+  test('a menu that is only unanswerable rows comes back empty', () => {
+    expect(extractChoices('1. Type something.\n2. Chat about this')).toEqual([])
+  })
+
   test('reads a menu written with parentheses', () => {
     expect(extractChoices('1) Postgres\n2) SQLite')).toEqual(['Postgres', 'SQLite'])
   })

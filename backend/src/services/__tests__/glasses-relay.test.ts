@@ -6,6 +6,7 @@ import {
   dismissRelayItem,
   displayWidth,
   extractNumberedChoices,
+  extractPermissionRequest,
   extractQuestionLine,
   glassesDeviceCount,
   glassesRelayDeps,
@@ -14,6 +15,7 @@ import {
   postHookRelay,
   resetGlassesRelayForTest,
   resolveHookTarget,
+  stripLeftRule,
   subscribeGlassesRelay,
   trackGlassesRelay,
   unsubscribeGlassesRelay,
@@ -31,7 +33,49 @@ beforeEach(() => {
   resetGlassesRelayForTest();
   glassesRelayDeps.listWorkspaces = origListWorkspaces;
   glassesRelayDeps.readPaneText = origReadPaneText;
+  // The coloured read is a second round trip taken only when the plain one
+  // found no options, so it fires for every pane in here that is not offering a
+  // list. Stubbed empty by default rather than restored: a unit test must not
+  // reach for a herdr socket, and every pane below whose options DO matter says
+  // so for itself.
+  glassesRelayDeps.readPaneAnsi = async () => null;
 });
+
+/**
+ * An opencode permission prompt, captured from a live 1.18.14 pane 121 columns
+ * wide (2026-08-06). Two things about it broke this file:
+ *
+ * - every line is framed with a rule, and every pattern here anchors at the
+ *   start of a line, so nothing matched and nothing could have
+ * - the question ends in no `?` and says no `Do you want to`, so the fallback
+ *   ran and the notification a wearer got was the rule itself: one glyph
+ *
+ * Only the options row carries its colours, because it is the only row whose
+ * colours are read. It is verbatim; the rest is the same pane as text.
+ */
+const OPENCODE_OPTION_ROW = '\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;10;10;10m  \x1b[0m\x1b[38;2;245;167;66m\x1b[48;2;20;20;20m┃\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m  \x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;245;167;66m \x1b[0m\x1b[38;2;10;10;10m\x1b[48;2;245;167;66mAllow once\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;245;167;66m \x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m  \x1b[0m\x1b[38;2;128;128;128m\x1b[48;2;30;30;30mAllow always\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m   \x1b[0m\x1b[38;2;128;128;128m\x1b[48;2;30;30;30mReject\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m                                 \x1b[0m\x1b[38;2;238;238;238m\x1b[48;2;30;30;30mctrl+f \x1b[0m\x1b[38;2;128;128;128m\x1b[48;2;30;30;30mfullscreen\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m  \x1b[0m\x1b[38;2;238;238;238m\x1b[48;2;30;30;30m⇆ \x1b[0m\x1b[38;2;128;128;128m\x1b[48;2;30;30;30mselect\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m  \x1b[0m\x1b[38;2;238;238;238m\x1b[48;2;30;30;30menter \x1b[0m\x1b[38;2;128;128;128m\x1b[48;2;30;30;30mconfirm\x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;30;30;30m   \x1b[0m\x1b[38;2;255;255;255m\x1b[48;2;10;10;10m  \x1b[0m\r';
+
+const OPENCODE_PANE = [
+  '  \u2503',
+  '  \u2503  \u25b3 Permission required',
+  '  \u2503    \u2192 Edit fixture.txt',
+  '  \u2503',
+  '  \u2503  1 + fixture',
+  '  \u2503',
+  '  \u2503   Allow once   Allow always   Reject                                 ctrl+f fullscreen  \u21c6 select  enter confirm',
+  '  \u2503',
+].join('\n');
+
+const OPENCODE_PANE_ANSI = [
+  '  \u2503',
+  '  \u2503  \u25b3 Permission required',
+  '  \u2503    \u2192 Edit fixture.txt',
+  '  \u2503',
+  '  \u2503  1 + fixture',
+  '  \u2503',
+  OPENCODE_OPTION_ROW,
+  '  \u2503',
+].join('\n');
 
 /** Minimal WorkspaceInfo stub — only the fields the tracker reads. */
 function ws(
@@ -114,6 +158,105 @@ describe('scrape extraction', () => {
       'not a choice',
     ]);
     expect(choices).toEqual(['Rewrite it', 'Patch minimally']);
+  });
+
+  test("extractNumberedChoices reads kimi's bracketed options", () => {
+    // Captured from a real kimi-k3 pane on 2026-08-04. herdr's `strip_ansi`
+    // removes the colour and leaves the U+2192 cursor, so this is what the
+    // scrape actually receives. None of it was read before: a blocked kimi
+    // workspace produced a waiting item with no choices and the picker never
+    // opened for it.
+    const choices = extractNumberedChoices([
+      '  ? テストはどう分けますか?',
+      '',
+      '   → [1] モジュールごとに1ファイル',
+      '         各モジュールに対応するテストファイルを個別に作成します',
+      '     [2] 全部で1ファイル',
+      '         すべてのテストを1つのファイルにまとめます',
+      '     [3] Other',
+      '',
+      '   ↑↓ select  1-3 / ↵ choose  ←/→/tab switch  esc cancel',
+    ]);
+    expect(choices).toEqual(['モジュールごとに1ファイル', '全部で1ファイル']);
+  });
+
+  test("extractNumberedChoices reads kimi's submit screen", () => {
+    expect(
+      extractNumberedChoices(['  Ready to submit your answers?', '', '   → [1] Submit', '     [2] Cancel']),
+    ).toEqual(['Submit', 'Cancel']);
+  });
+
+  test('extractNumberedChoices drops the rows the ring cannot answer', () => {
+    // All three open free-text entry, which the ring has no keyboard for.
+    // `Other` is kimi's; the other two are claude's.
+    expect(
+      extractNumberedChoices([
+        '❯ 1. Rewrite it',
+        '  2. Patch minimally',
+        '  3. Type something.',
+        '  4. Chat about this',
+      ]),
+    ).toEqual(['Rewrite it', 'Patch minimally']);
+    expect(extractNumberedChoices(['   → [1] Keep it', '     [2] Other'])).toEqual(['Keep it']);
+  });
+
+  test("extractNumberedChoices reads claude's multi-select, boxes and all", () => {
+    // Captured from a live Claude Code pane on 2026-08-06. The box has to
+    // survive: it is the only thing that tells the app this is a multi-select
+    // rather than a single pick, and which rows the wearer has already ticked.
+    expect(
+      extractNumberedChoices([
+        '←  ☒ Color  ☐ Fruits  ☐ Speed  ✔ Submit  →',
+        '',
+        'Which fruits do you like?',
+        '',
+        '❯ 1. [ ] Apple',
+        '  Crisp and sweet-tart.',
+        '  2. [ ] Banana',
+        '  Soft and sweet.',
+        '  3. [✔] Cherry',
+        '  Small and tangy-sweet.',
+        '  4. [ ] Type something',
+        '     Next',
+        '',
+        '  5. Chat about this',
+      ]),
+    ).toEqual(['[ ] Apple', '[ ] Banana', '[✔] Cherry']);
+  });
+
+  test("extractNumberedChoices reads kimi's unnumbered multi-select", () => {
+    // Also captured on 2026-08-06, and the reason the whole multi-step fix
+    // still failed on kimi: its multi-select draws no digits at all, so
+    // nothing here matched, the payload came back with no choices, and
+    // `refreshBlocked` kept the previous question rather than replace it with
+    // an empty one. The panel showed question one while the pane was on
+    // question two — the quiet failure this path exists to prevent.
+    expect(
+      extractNumberedChoices([
+        '  question',
+        '',
+        '  (✓) Color   Fruits   (○) Speed   Submit',
+        '',
+        '  ? Which fruits do you like?',
+        '',
+        '   [ ] Apple',
+        '   [✓] Banana',
+        '   [ ] Cherry',
+        '   [ ] Other',
+        '',
+        '   ↑↓ select  1-4 / ↵ toggle  ←/→/tab switch  esc cancel',
+      ]),
+    ).toEqual(['[ ] Apple', '[✓] Banana', '[ ] Cherry']);
+  });
+
+  test('extractNumberedChoices drops a free-text row whatever punctuation it wears', () => {
+    // `Type something.` in a single pick, `[ ] Type something` in a
+    // multi-select, and kimi's `Other:` once it is the field being typed into.
+    // Compared literally, only the first was caught.
+    expect(extractNumberedChoices(['1. [ ] Keep it', '2. [ ] Type something'])).toEqual([
+      '[ ] Keep it',
+    ]);
+    expect(extractNumberedChoices(['   [ ] Keep it', '   [ ] Other:'])).toEqual(['[ ] Keep it']);
   });
 
   test('extractQuestionLine prefers the last ?-terminated line', () => {
@@ -354,6 +497,103 @@ describe('trackGlassesRelay blocked transitions', () => {
     const snapshot = await buildGlassesRelaySnapshot();
     expect(snapshot).toHaveLength(0);
     expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(itemId);
+  });
+});
+
+// =============================================================================
+// still-blocked refresh (multi-step AskUserQuestion)
+// =============================================================================
+
+describe('trackGlassesRelay refresh while still blocked', () => {
+  const SECOND_QUESTION = [
+    'Which approach should I take?',
+    'And how should the tests be split?',
+    '❯ 1. One file per module',
+    '  2. One file for the lot',
+  ].join('\n');
+
+  /** Blocked with the first question up, one subscriber watching. */
+  async function blockedOnFirstQuestion(): Promise<{ sock: FakeSocket; itemId: string }> {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'working' }])];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }])];
+    await trackGlassesRelay();
+    const itemId = (sock.ofType('glasses-relay')[0].item as Record<string, unknown>).id as string;
+    sock.messages = [];
+    return { sock, itemId };
+  }
+
+  test('a new question on a pane that never unblocked replaces the item', async () => {
+    const { sock, itemId } = await blockedOnFirstQuestion();
+
+    glassesRelayDeps.readPaneText = async () => SECOND_QUESTION;
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(itemId);
+    const upserts = sock.ofType('glasses-relay');
+    expect(upserts).toHaveLength(1);
+    const item = upserts[0].item as Record<string, unknown>;
+    expect(item.id).not.toBe(itemId);
+    expect(item.text).toBe('And how should the tests be split?');
+    expect(item.choices).toEqual(['One file per module', 'One file for the lot']);
+  });
+
+  test('an unchanged pane broadcasts nothing', async () => {
+    const { sock } = await blockedOnFirstQuestion();
+    await trackGlassesRelay();
+    await trackGlassesRelay();
+    expect(sock.messages).toEqual([]);
+  });
+
+  test('a read that lost its choices is treated as a half-drawn frame', async () => {
+    const { sock } = await blockedOnFirstQuestion();
+    glassesRelayDeps.readPaneText = async () => 'Which approach should I take?';
+    await trackGlassesRelay();
+    expect(sock.messages).toEqual([]);
+  });
+
+  test('a different question with no readable choices still replaces the item', async () => {
+    // The half-drawn-frame guard held on the question text as well as the
+    // options, and a pane that had genuinely moved on to something this scrape
+    // cannot parse was left showing the previous question's options. Offering
+    // the right question with nothing under it beats offering the wrong
+    // question's answers.
+    const { sock, itemId } = await blockedOnFirstQuestion();
+    glassesRelayDeps.readPaneText = async () => 'Paste the token when you have it:';
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(itemId);
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Paste the token when you have it:');
+    expect(item.choices).toBeUndefined();
+  });
+
+  test('a dismissed item is not re-raised by a redraw', async () => {
+    const { sock, itemId } = await blockedOnFirstQuestion();
+    dismissRelayItem(itemId);
+    sock.messages = [];
+
+    glassesRelayDeps.readPaneText = async () => SECOND_QUESTION;
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay')).toEqual([]);
+  });
+
+  test('presence gate: no subscriber, no scrape', async () => {
+    let scrapes = 0;
+    glassesRelayDeps.readPaneText = async () => {
+      scrapes++;
+      return QUESTION_PANE;
+    };
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'working' }])];
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }])];
+    await trackGlassesRelay();
+    await trackGlassesRelay();
+    expect(scrapes).toBe(0);
   });
 });
 
@@ -634,3 +874,190 @@ describe('simulator vs device', () => {
     expect(glassesDeviceCount()).toBe(0);
   });
 })
+
+// =============================================================================
+// opencode: a rule down the left, and options side by side
+// =============================================================================
+
+describe('a pane that frames itself with a rule', () => {
+  test('the framing is not part of what a line says', () => {
+    // The rule goes; the content's own indentation is not the rule's to take.
+    expect(stripLeftRule('  ┃  1. Yes')).toBe('  1. Yes');
+    expect(stripLeftRule('│ [ ] Apple')).toBe(' [ ] Apple');
+    expect(stripLeftRule('  2. plain')).toBe('  2. plain');
+  });
+
+  test('a numbered list inside a frame is read like any other', () => {
+    // No agent draws this today. It is here because the frame was enough on its
+    // own to hide a list from every reader in this file, and the next agent to
+    // draw a box round its prompt should not rediscover that.
+    expect(extractNumberedChoices(['┃ Which one?', '┃ ❯ 1. Yes', '┃   2. No'])).toEqual([
+      'Yes',
+      'No',
+    ]);
+  });
+
+  test('the question is never the frame itself', () => {
+    // What a wearer actually got: a notification reading `┃`. The prompt ends
+    // in no question mark and says no `Do you want to`, so the fallback took
+    // the last non-empty line, and on this pane that is a box-drawing glyph.
+    expect(extractQuestionLine(OPENCODE_PANE.split('\n'))).not.toBe('┃');
+    expect(extractQuestionLine(['│', '│  something happened', '│', '│'])).toBe(
+      'something happened',
+    );
+  });
+
+  test('the two halves of a permission prompt are one question', () => {
+    // Separately they are useless: the first says only that permission is
+    // wanted, the second only names the file.
+    expect(extractPermissionRequest(OPENCODE_PANE.split('\n'))).toBe(
+      'Permission required: Edit fixture.txt',
+    );
+  });
+
+  test('a heading brings the line under it, because that is the decision', () => {
+    // Captured from the same live pane asking to run a command. `Shell
+    // command` on its own tells a wearer that something wants running and not
+    // what, which is the entire thing being decided.
+    expect(
+      extractPermissionRequest([
+        '  \u2503  \u25b3 Permission required',
+        '  \u2503    # Shell command',
+        '  \u2503',
+        '  \u2503  $ echo second',
+      ]),
+    ).toBe('Permission required: Shell command: echo second');
+  });
+
+  test('a subject that is already the thing stands alone', () => {
+    expect(
+      extractPermissionRequest([
+        '  \u2503  \u25b3 Permission required',
+        '  \u2503    \u2192 Edit fixture.txt',
+        '  \u2503',
+        '  \u2503  1 + fixture',
+      ]),
+    ).toBe('Permission required: Edit fixture.txt');
+  });
+
+  test('the option row below is never mistaken for the subject', () => {
+    // It is made of words and sits on the same pane, so the window that looks
+    // for a subject has to end before it does.
+    const text = extractPermissionRequest([
+      '  \u2503  \u25b3 Permission required',
+      '  \u2503',
+      '  \u2503',
+      '  \u2503',
+      '  \u2503',
+      '  \u2503   Allow once   Allow always   Reject',
+    ]);
+    expect(text).toBe('Permission required');
+  });
+
+  test('a pane with no permission line is left to the ordinary reader', () => {
+    expect(extractPermissionRequest(['Continue?', '1. Yes'])).toBeUndefined();
+  });
+});
+
+describe('opencode reaches the glasses', () => {
+  async function blockedOnOpencode(): Promise<FakeSocket> {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => OPENCODE_PANE;
+    glassesRelayDeps.readPaneAnsi = async () => OPENCODE_PANE_ANSI;
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'working' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+    ];
+    sock.messages = [];
+    await trackGlassesRelay();
+    return sock;
+  }
+
+  test('the waiting item carries the question, the options and where the pane is', async () => {
+    const sock = await blockedOnOpencode();
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Permission required: Edit fixture.txt');
+    // The key hints share the options row on a pane this wide; offering
+    // `enter confirm` as an answer would walk the pane onto a real option and
+    // press Enter on it.
+    expect(item.choices).toEqual(['Allow once', 'Allow always', 'Reject']);
+    expect(item.choiceInput).toBe('arrow');
+    expect(item.choiceSelected).toBe(0);
+  });
+
+  test('the coloured read is spent only where the plain one found nothing', async () => {
+    let coloured = 0;
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.readPaneAnsi = async () => {
+      coloured++;
+      return OPENCODE_PANE_ANSI;
+    };
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'working' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+    ];
+    await trackGlassesRelay();
+    // A claude pane offers a numbered list, so the second round trip is never
+    // taken and every agent that already worked keeps the read it had.
+    expect(coloured).toBe(0);
+  });
+
+  test('a selection that moved is pushed even when the question did not', () => {
+    // Someone at the keyboard can walk the pane's cursor without a word of the
+    // question changing. That index is where the glasses' own walk starts, so a
+    // stale one sends the right number of steps from the wrong place, and the
+    // wearer confirms an option they did not pick.
+    //
+    // Built rather than captured: the capture has the highlight on `Allow
+    // once`, and the case under test is the same row with it somewhere else.
+    const bg = (colour: string, text: string) => `\x1b[48;2;${colour}m${text}\x1b[0m`;
+    const ROW = '30;30;30';
+    const HIT = '245;167;66';
+    const row = (selected: number) =>
+      bg(ROW, '  \u2503   ') +
+      ['Allow once', 'Allow always', 'Reject']
+        .map((o, i) => bg(i === selected ? HIT : ROW, o))
+        .join(bg(ROW, '   ')) +
+      bg(ROW, ' '.repeat(30));
+    const paneWith = (selected: number) =>
+      ['  \u2503  \u25b3 Permission required', '  \u2503    \u2192 Edit fixture.txt', row(selected)].join(
+        '\n',
+      );
+
+    return (async () => {
+      const sock = new FakeSocket();
+      glassesRelayDeps.readPaneText = async () => OPENCODE_PANE;
+      glassesRelayDeps.readPaneAnsi = async () => paneWith(0);
+      glassesRelayDeps.listWorkspaces = async () => [
+        ws('s1', [{ paneId: '%0', agentStatus: 'working' }]),
+      ];
+      await subscribeGlassesRelay(sock);
+      await trackGlassesRelay();
+      glassesRelayDeps.listWorkspaces = async () => [
+        ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+      ];
+      await trackGlassesRelay();
+      const first = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+      expect(first.choiceSelected).toBe(0);
+      sock.messages = [];
+
+      glassesRelayDeps.readPaneAnsi = async () => paneWith(2);
+      await trackGlassesRelay();
+
+      const next = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+      expect(next.id).not.toBe(first.id);
+      expect(next.text).toBe(first.text);
+      expect(next.choices).toEqual(first.choices);
+      expect(next.choiceSelected).toBe(2);
+    })();
+  });
+});

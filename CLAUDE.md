@@ -6,7 +6,7 @@ Codex and other coding agents should use this file as the single source of repos
 
 ## Project Overview
 
-Hrdle is a web-based terminal session manager for coding agents — Claude Code, Codex, Grok and Kimi. It runs them in herdr workspaces and provides a web UI for remote access from tablets/mobile devices.
+Hrdle is a web-based terminal session manager for coding agents — Claude Code, Codex, Grok, Kimi and OpenCode. It runs them in herdr workspaces and provides a web UI for remote access from tablets/mobile devices.
 
 Formerly CC Hub, renamed in #459: the old name said Claude Code, which stopped being the whole story once the other agents arrived. `m0a/cc-hub` is archived at v0.2.98 and this repository carries development forward. The rename lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
 
@@ -77,7 +77,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **PaneState** (`services/pane-state.ts`) - Backend-agnostic `stripAnsi` / `detectPaneState` heuristics for peer-dialog tooling (`hrdle send --wait`, `hrdle peek`)
 - **ClaudeCodeService** (`services/claude-code.ts`) - Monitors Claude Code state from `.jsonl` files; active-session matching uses only herdr's native agent session id
 - **SessionHistoryService** (`services/session-history.ts`) - Reads past Claude Code session history and conversations
-- **SessionMetadataService** (`services/session-metadata.ts`) - Persists session metadata (theme, title, last known sessions for recovery after reboot). Deliberately *not* session order — that lives in herdr
+- **SessionMetadataService** (`services/session-metadata.ts`) - Persists session metadata (theme, STT vocabulary, last known sessions for recovery after reboot). Deliberately *not* session order or title — both live in herdr (order = workspace order, title = workspace label)
 - **SessionsService** (`services/sessions.ts`) - Session CRUD operations with file-based persistence
 - **PromptHistoryService** (`services/prompt-history.ts`) - Searches prompt history across sessions
 - **FileService** (`services/file-service.ts`) - Secure file operations with path traversal prevention
@@ -100,6 +100,9 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **KimiHistoryService** (`services/kimi-history.ts`) - Kimi session history + conversation reader: parses `wire.jsonl` (`turn.prompt`, `content.part` text, `tool.call`, `tool.result` loop events) into Claude-shaped conversation turns
 - **KimiUsageService** (`services/kimi-usage.ts`) - Aggregates Kimi token consumption (24h/7d windows, per-model) from `usage.record` records across all agent wires (`agents/main` + sub-agents) for the dashboard's Kimi tab. Kimi exposes no rate-limit windows or plan data locally, so totals are all it can show. Also prices each window/model in USD when the model resolves to OpenRouter — cost is omitted (never zeroed) for unpriceable models
 - **KimiConfigService** (`services/kimi-config.ts`) - Parses `~/.kimi-code/config.toml` (via `Bun.TOML`) to map a `usage.record` model alias (`k3`) to its provider-side id (`moonshotai/kimi-k3`) and to supply the OpenRouter API key. Only OpenRouter-backed aliases are priceable
+- **OpenCodeService / OpenCodeSessionStore** (`services/opencode.ts`) - OpenCode (sst/opencode) integration, and the **only provider that reads a database instead of files**: 1.18 keeps sessions, messages and their parts as rows in `~/.local/share/opencode/opencode.db` (WAL) — there is no `storage/` tree. Opened readonly per query, following the `codex.ts` precedent. Two things about that store are traps: the `project` table's `global` row is a catch-all whose `worktree` mutates as other directories are visited (so `session.directory` is the only stable cwd), and `session_input.prompt` looks like the first prompt but the table is never written at all in 1.18.13 — zero rows across sessions of both kinds, interactive TUI included — so the first user `text` part is used instead. Subagent sessions carry a `parent_id` and are excluded — they are turns of their parent, not sessions anyone opened
+- **OpenCodeHistoryService** (`services/opencode-history.ts`) - OpenCode session history + conversation reader. A `tool` part holds the call **and** its result in one row (`state.input` / `state.output`), which the parser splits back across an assistant/user turn boundary because that is the shape `ConversationViewer` pairs by `toolUseId`; `reasoning`, `step-start` and `step-finish` parts are dropped
+- **OpenCodeUsageService** (`services/opencode-usage.ts`) - Aggregates OpenCode token consumption (24h/7d windows, per-model) from assistant message rows for the dashboard's OpenCode tab. Like Grok and Kimi it has no rate-limit windows to show, but unlike them **the cost is not our estimate**: OpenCode computes and stores a per-turn `cost`, so the figure is its own. Absent (never zeroed) when no turn in the window carried one; a genuine 0 is what free models report
 - **GroqSttUsageService** (`services/groq-stt-usage.ts`) - Groq speech-to-text consumption by the glasses, **recorded rather than aggregated**: Groq has no usage endpoint and reports remaining quota only in `x-ratelimit-*` headers on a transcription response, so a request not written down as it happened is unrecoverable. `routes/glasses.ts` records on the way past (before the status is acted on - a 429 still spends quota - and without awaiting it), into `<dataDir>/groq-stt-usage.json`. Tracks requests (capped per day) and audio seconds (capped per hour, and what the API is priced on) separately, because the two ceilings empty on different clocks. Cost is an estimate at the list price per hour of audio, never a billed figure
 - **OpenRouterPricingService / OpenRouterAccountService** (`services/openrouter.ts`) - Pay-as-you-go cost reporting: list prices from the public `/api/v1/models` (no auth, 24h cache) drive *estimated* per-window costs, while `/api/v1/key` + `/api/v1/credits` (keyed, 60s cache, 5min failure backoff) report OpenRouter's *billed* daily/weekly/monthly spend and credit balance. Estimates use rolling windows, OpenRouter's are calendar windows, so the two never match exactly
 - **ConversationWatcher** (`services/conversation-watcher.ts`) - Watches Claude Code / Codex `.jsonl` files and emits conversation updates to subscribed WebSocket clients
@@ -130,7 +133,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/tabs/close` - Close a tab and all its panes (`{ tabId }`)
 - `POST /:id/prompt` - Send a prompt to the session's agent
 - `PUT /:id/theme` - Set session color theme
-- `PUT /:id/title` - Set session custom title
+- `PUT /:id/title` - Rename the session's herdr workspace (the label is the name *and* the public session id, so the response carries the new `id`)
 - `PUT /:id/stt-prompt` - Set the words this session's speech is made of (leads its STT vocabulary bias)
 - `POST /:id/move` - Move a session to `{ index }` in the display order (writes straight through to herdr's workspace order — hrdle stores no order of its own)
 - `GET /prompts/search` - Search prompt history
@@ -423,19 +426,21 @@ The G2's SDK only hands over raw PCM, so transcription happens on the server at
 `whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
 `services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
-**the speaking session's own words, then the user's custom titles, then the
-glossary, then herdr's labels**, filled up to what fits Whisper's 224-token
-ceiling (190 characters). That order is the point of the design: as workspaces
-multiply, names alone eat the budget and `release` - a word said several times a
-day - falls out. Labels go last because Latin-script names were never the ones
-being misheard. `HRDLE_STT_PROMPT=off` disables it, and any other value replaces
+**the speaking session's own words, then the Japanese workspace names, then the
+glossary, then the ASCII workspace names**, filled up to what fits Whisper's
+224-token ceiling (190 characters). That order is the point of the design: as
+workspaces multiply, names alone eat the budget and `release` - a word said
+several times a day - falls out. There is no separate custom-title store anymore
+- renaming a session writes straight to the herdr label - so script is what
+tells the two kinds of name apart: a Japanese label is a person's own coinage
+said out loud, an ASCII label is directory-ish text that goes last because
+Latin-script names were never the ones being misheard. `HRDLE_STT_PROMPT=off` disables it, and any other value replaces
 it (for A/B testing; the variable name is composed by `envVar()` from
 `binaryName` in `identity.json`).
 
 The first group is per session (#166): `?session=<workspace id>` on the STT
 request names who is speaking, and `PUT /api/sessions/:id/stt-prompt` stores a
-short phrase against that session in `SessionMetadataService`, beside its theme
-and title. The glasses send it from `voiceTarget.sessionId`, which is the
+short phrase against that session in `SessionMetadataService`, beside its theme. The glasses send it from `voiceTarget.sessionId`, which is the
 workspace the reply is going to. Its words go **before the glossary but do not
 replace it** - the glossary is what is said every day in every session, and a
 session that spent the whole budget on its own vocabulary would start mishearing
@@ -572,7 +577,7 @@ Written down because it was got wrong three times in one afternoon (2026-07-31),
 each time by assuming rather than looking. Anyone about to describe this product
 — a README, a store listing, the setup guide — should read this first.
 
-The agents are not the competition. Claude Code, Codex, Grok and Kimi are the
+The agents are not the competition. Claude Code, Codex, Grok, Kimi and OpenCode are the
 things being run. The competition is:
 
 | | What it is | Where it wins |
@@ -832,3 +837,44 @@ systemctl --user status herdr      # if supervised via systemd
 ```
 
 hrdle auto-starts `herdr server` at boot when the socket (`~/.config/herdr/herdr.sock`, or `$HERDR_SOCKET_PATH`) is unreachable. herdr's own log lives at `~/.config/herdr/herdr-server.log`. Sessions (workspaces) live in the herdr server process — restarting hrdle never kills them; restarting herdr restores workspaces from `session.json` and, with `resume_agents_on_restore`, resumes agent conversations natively.
+
+### Never test against the default herdr server
+
+The default server is the one the user is working in. Their sessions are on it,
+and one of them is usually the session doing the testing. **A dev server started
+for a test gets its own named herdr session:**
+
+```bash
+herdr --session <name> server &                       # own dir, own session.json, own socket
+export HERDR_SOCKET_PATH=~/.config/herdr/sessions/<name>/herdr.sock
+herdr workspace create --cwd <dir> --label "<test>" --no-focus
+(cd backend && HERDR_SOCKET_PATH=$HERDR_SOCKET_PATH bun run src/index.ts -p 3457)
+herdr --session <name> server stop                    # and close its workspaces when done
+```
+
+`--session <name>` is the only thing that isolates state. It gives
+`~/.config/herdr/sessions/<name>/` — its own socket **and its own
+`session.json`**. Everything else that looks like it would:
+
+- **`HERDR_SOCKET_PATH` alone does not.** It moves the socket; the state
+  directory still follows `$HOME`, so a second server restores the *user's*
+  workspaces and two processes then own one `session.json`
+- **`HERDR_CONFIG_PATH` does not either** — it overrides `config.toml` and
+  nothing else. Measured on 2026-08-04: a server started with both pointed at a
+  scratch directory came up holding all 16 of the user's workspaces
+- A socket path is capped by `sun_path` (104 bytes). A scratchpad path is
+  already longer than that, which is a hint that the socket does not belong
+  there
+
+Two more things a test on the default server gets wrong, both found the same
+day:
+
+- **`pane.split` ignores the `pane_id` it is given and splits the focused
+  pane** — which is the user's, not the test's. Drive a test pane through
+  `hrdle send` / `hrdle peek` with an explicit `<peer>:<session>:<paneId>`
+  target, which does route where it says
+- **The dev server shares hrdle's own data directory** with production, so
+  `SessionMetadataService` hands it the user's remembered sessions and they
+  appear in `GET /api/sessions` with `panes: null`. Harmless to read, but do
+  not mistake them for the test's own, and do not write session metadata from a
+  test run

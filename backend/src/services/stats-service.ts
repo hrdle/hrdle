@@ -45,8 +45,9 @@ export class StatsService {
   // Cached result of the last jsonl scan, shared across requests.
   private modelUsageCache: { computedAt: number; data: ModelUsage[] } | null = null;
 
-  constructor() {
-    this.claudeDir = join(homedir(), '.claude');
+  /** The directory is a parameter so tests can point at a fixture cache. */
+  constructor(claudeDir = join(homedir(), '.claude')) {
+    this.claudeDir = claudeDir;
   }
 
   private async readStatsCache(): Promise<StatsCache | null> {
@@ -60,7 +61,11 @@ export class StatsService {
 
   async getDailyActivity(days: number = 14): Promise<DailyActivity[]> {
     const stats = await this.readStatsCache();
-    if (!stats?.dailyActivity) {
+    // Shape-checked, not just truthy: the cache is written by another program
+    // and parsed without validation, so `dailyActivity` being present says
+    // nothing about it being a list. A half-written or reformatted file used to
+    // reach `.slice` on a non-array and throw.
+    if (!Array.isArray(stats?.dailyActivity)) {
       return [];
     }
 

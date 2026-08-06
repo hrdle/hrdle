@@ -5,6 +5,7 @@ import { CodexUsageService } from '../services/codex-usage';
 import { GrokUsageService } from '../services/grok-usage';
 import { KimiUsageService } from '../services/kimi-usage';
 import { KimiConfigService } from '../services/kimi-config';
+import { OpenCodeUsageService } from '../services/opencode-usage';
 import { OpenRouterAccountService } from '../services/openrouter';
 import { groqSttUsageService } from '../services/groq-stt-usage';
 import { UsageHistoryService } from '../services/usage-history';
@@ -21,6 +22,7 @@ const codexUsageService = new CodexUsageService();
 const grokUsageService = new GrokUsageService();
 const kimiConfigService = new KimiConfigService();
 const kimiUsageService = new KimiUsageService(undefined, kimiConfigService);
+const opencodeUsageService = new OpenCodeUsageService();
 // Kimi is the only OpenRouter consumer here, so its config supplies the key.
 const openRouterAccountService = new OpenRouterAccountService(() =>
   kimiConfigService.getOpenRouterApiKey(),
@@ -48,23 +50,54 @@ async function getDiskUsage(): Promise<{ total: number; used: number; available:
   }
 }
 
+/**
+ * One leg of the dashboard build, isolated from the others.
+ *
+ * The panel is a dozen independent readings gathered with `Promise.all`, and
+ * that combinator rejects on the first member to reject. The cache in front of
+ * this does not save it: `staleWhileRevalidate` serves a stale value only when
+ * it has one, so the *first* build after a restart has nothing to fall back on
+ * and the whole of `GET /api/dashboard` fails — every agent's panel dark
+ * because one provider could not read one file. It then keeps failing, because
+ * a failed build caches nothing.
+ *
+ * Each reading is already a best-effort thing that reports null or empty when
+ * its source is missing; that a source can also be *malformed* had to be
+ * remembered separately in every service, and any new provider inherits the
+ * obligation without being told. So the isolation lives here, once: a leg that
+ * throws degrades to its own fallback and the rest of the panel still renders.
+ *
+ * Takes a thunk rather than a promise so a synchronous throw inside the call is
+ * caught too — that one would otherwise escape before `Promise.all` is even
+ * formed.
+ */
+export async function leg<T>(label: string, work: () => T | Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    console.error(`dashboard: ${label} failed, serving fallback`, error);
+    return fallback;
+  }
+}
+
 export async function buildDashboard(): Promise<DashboardResponse> {
   // The herdr skew check rides on this poll instead of its own timer (#393);
   // it is cached, so the extra spawn is far rarer than the request rate.
-  const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, openRouterUsage, groqSttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate] = await Promise.all([
-    anthropicUsageService.getUsageLimits(),
-    codexUsageService.getUsageLimits(),
-    grokUsageService.getUsageSummary(),
-    kimiUsageService.getUsageSummary(),
-    openRouterAccountService.getUsage(),
-    groqSttUsageService.getUsageSummary(),
-    statsService.getDailyActivity(14),
-    statsService.getModelUsage(),
-    statsService.getHourlyActivity(),
-    usageHistoryService.getHistory(),
-    Promise.resolve(systemMetricsService.getMetrics()),
-    getDiskUsage(),
-    herdrUpdateService.getStatus(),
+  const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, groqSttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate] = await Promise.all([
+    leg('anthropic usage', () => anthropicUsageService.getUsageLimits(), null),
+    leg('codex usage', () => codexUsageService.getUsageLimits(), null),
+    leg('grok usage', () => grokUsageService.getUsageSummary(), null),
+    leg('kimi usage', () => kimiUsageService.getUsageSummary(), null),
+    leg('opencode usage', () => opencodeUsageService.getUsageSummary(), null),
+    leg('openrouter usage', () => openRouterAccountService.getUsage(), null),
+    leg('groq stt usage', () => groqSttUsageService.getUsageSummary(), null),
+    leg('daily activity', () => statsService.getDailyActivity(14), []),
+    leg('model usage', () => statsService.getModelUsage(), []),
+    leg('hourly activity', () => statsService.getHourlyActivity(), {}),
+    leg('usage history', () => usageHistoryService.getHistory(), []),
+    leg('system metrics', () => systemMetricsService.getMetrics(), undefined),
+    leg('disk usage', () => getDiskUsage(), null),
+    leg('herdr update', () => herdrUpdateService.getStatus(), undefined),
   ]);
 
   // Record snapshot for history
@@ -83,6 +116,7 @@ export async function buildDashboard(): Promise<DashboardResponse> {
     codexUsageLimits,
     grokUsage,
     kimiUsage,
+    opencodeUsage,
     openRouterUsage,
     groqSttUsage,
     usageHistory,

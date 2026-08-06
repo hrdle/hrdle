@@ -17,9 +17,12 @@ import { GrokService } from '../services/grok';
 import { GrokHistoryService } from '../services/grok-history';
 import { KimiService } from '../services/kimi';
 import { KimiHistoryService } from '../services/kimi-history';
+import { OpenCodeService } from '../services/opencode';
+import { OpenCodeHistoryService } from '../services/opencode-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
-import { getAllSessionMetadata, setSessionTheme, setSessionTitle, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { resetSttPromptCache } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
@@ -45,11 +48,13 @@ const threadServices: Partial<Record<AgentProvider, AgentThreadService>> = {
   codex: new CodexService(),
   grok: new GrokService(),
   kimi: new KimiService(),
+  opencode: new OpenCodeService(),
 };
 export const agentHistoryProviders: Partial<Record<AgentProvider, AgentHistoryProvider>> = {
   codex: new CodexHistoryService(undefined, codexConversationService),
   grok: new GrokHistoryService(),
   kimi: new KimiHistoryService(),
+  opencode: new OpenCodeHistoryService(),
 };
 const promptHistoryService = new PromptHistoryService();
 
@@ -296,7 +301,14 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
     // no project dir yet). But user-visible content (recap / firstPrompt /
     // summary) must NOT leak from an ancestor project — gate it on
     // ccSession.projectPath === s.currentPath.
-    const isExactPathMatch = !!ccSession && !!s.currentPath && ccSession.projectPath === s.currentPath;
+    //
+    // Unless the id itself matched: an id is unique across every project, so a
+    // transcript found by id is this pane's own wherever it turned up. Gating
+    // that by path is how a session whose directory was renamed mid-flight lost
+    // its recap — the pane's cwd had stopped naming the project it started in.
+    const isExactPathMatch =
+      !!ccSession &&
+      (ccSession.matchedById || (!!s.currentPath && ccSession.projectPath === s.currentPath));
 
     // Same order for every agent: herdr watches the pane, a hook only reports
     // the moment it fired. Thread agents used to read hooks first, which left a
@@ -354,7 +366,8 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       durationMinutes: includeClaudeInfo ? durationMinutes : agentThread?.updatedAt ? Math.round((Date.now() - new Date(agentThread.updatedAt).getTime()) / 60000) : undefined,
       firstMessageId: includeClaudeInfo ? ccSession?.firstMessageId : undefined,
       theme: sessionMetadata[s.id]?.theme,
-      customTitle: sessionMetadata[s.id]?.title,
+      // No customTitle: the workspace label (= name) is the title. A stored
+      // legacy title would only shadow the label the rename now writes to.
       sttPrompt: sessionMetadata[s.id]?.sttPrompt,
       metrics: sessionMetrics,
       panes: s.panes ? await Promise.all(s.panes.map(async (p) => {
@@ -434,7 +447,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       durationMinutes: undefined,
       firstMessageId: undefined,
       theme: lost.theme,
-      customTitle: lost.customTitle,
       // The workspace is gone but its metadata file is not, and a resumed
       // session keeps its id - so the vocabulary it was given survives with it.
       sttPrompt: sessionMetadata[lost.id]?.sttPrompt,
@@ -467,7 +479,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         currentPath,
         agent: s.agent ?? prev?.agent,
         theme: s.theme ?? prev?.theme,
-        customTitle: s.customTitle ?? prev?.customTitle,
         ccSessionId: s.ccSessionId ?? prev?.ccSessionId,
         agentSessionId: s.agentSessionId ?? prev?.agentSessionId,
       };
@@ -908,7 +919,10 @@ sessions.put('/:id/theme', async (c) => {
   }
 });
 
-// PUT /sessions/:id/title - Update session custom title
+// PUT /sessions/:id/title - Rename the session's herdr workspace. The name
+// lives in herdr (workspace label), not in an hrdle-side store — same rule as
+// the display order. Since #186 the label is *not* the session id, so a rename
+// changes what it is called and nothing about how it is reached.
 const UpdateTitleSchema = z.object({
   title: z.string().max(100).nullable(),
 });
@@ -921,6 +935,10 @@ sessions.put('/:id/title', async (c) => {
   if (!parsed.success) {
     return c.json({ error: 'Invalid title' }, 400);
   }
+  const title = parsed.data.title?.trim();
+  if (!title) {
+    return c.json({ error: 'Title must not be empty' }, 400);
+  }
 
   const exists = await herdrService.workspaceExists(id);
   if (!exists) {
@@ -928,9 +946,18 @@ sessions.put('/:id/title', async (c) => {
   }
 
   try {
-    await setSessionTitle(id, parsed.data.title);
-    return c.json({ success: true, title: parsed.data.title });
-  } catch (_error) {
+    // The id does not change with the name since #186, so nothing is rekeyed
+    // and nothing has to switch addresses - which is the whole point: this
+    // rename used to retire the session's address mid-conversation.
+    const sessionId = await herdrService.renameWorkspace(id, title);
+    // The renamed workspace is part of the STT vocabulary bias.
+    resetSttPromptCache();
+    return c.json({ success: true, title, id: sessionId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('already exists')) {
+      return c.json({ error: 'A session with that name already exists' }, 409);
+    }
     return c.json({ error: 'Failed to update title' }, 500);
   }
 });
