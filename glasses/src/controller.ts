@@ -1555,8 +1555,20 @@ export class GlassesController {
     if (!inline) return
     const move = moveTo(inline, index)
     const arrow = move.key === 'right' ? '\x1b[C' : '\x1b[D'
-    for (let i = 0; i < move.count; i++) this.sendChoiceKey(arrow)
-    this.sendChoiceKey('\r')
+    // One payload, not one request per key.
+    //
+    // Each send is a POST of its own and none of them waits, so the order they
+    // reach the PTY in is the order they happen to finish in. Measured by the
+    // work-1 session on a cold control session: the first input pays for
+    // ensurePaneReachable and listPanes, about 100ms, while the one behind it
+    // takes 1ms - so Enter overtook the arrow and confirmed whatever the cursor
+    // was still on. A wearer who picked Reject was told the command ran.
+    //
+    // Awaiting each one would also fix the order, but a walk is a single act
+    // and there is no reason to let it be interleaved at all. In one request
+    // the guarantee is real rather than probable: it is the single stdin pipe
+    // the pane already promises.
+    this.sendChoiceKey(arrow.repeat(move.count) + '\r')
     // The pane is where we just sent it; a re-read will confirm, but until then
     // this keeps a second tap from walking from a stale position.
     this.inlineChoices = { ...inline, selected: index }

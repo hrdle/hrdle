@@ -194,7 +194,7 @@ describe('a row answered by walking the pane', () => {
     const { c, keys } = picker(PERMISSION, { options: PERMISSION, selected: 0 })
     await inner(c).handle('swipeDown')
     await inner(c).handle('tap')
-    expect(keys).toEqual([RIGHT, ENTER])
+    expect(keys).toEqual([RIGHT + ENTER])
   })
 
   /** Both directions wrap, so the far end is one press back, not two forward. */
@@ -203,13 +203,34 @@ describe('a row answered by walking the pane', () => {
     await inner(c).handle('swipeDown')
     await inner(c).handle('swipeDown')
     await inner(c).handle('tap')
-    expect(keys).toEqual([LEFT, ENTER])
+    expect(keys).toEqual([LEFT + ENTER])
   })
 
   test('picking where the pane already is sends only the confirm', async () => {
     const { c, keys } = picker(PERMISSION, { options: PERMISSION, selected: 0 })
     await inner(c).handle('tap')
     expect(keys).toEqual([ENTER])
+  })
+
+  /**
+   * A walk is one act and goes in one request.
+   *
+   * Sent as a key each, they are independent POSTs that do not wait, and the
+   * order they reach the PTY in is the order they finish in. Measured cold, the
+   * first input pays about 100ms for the pane to be made reachable while the
+   * one behind it takes 1ms - so Enter overtook the arrows and confirmed the
+   * option the cursor had not left yet. The wearer picked Reject and was told
+   * the command ran, which is the failure this whole path exists to prevent,
+   * arriving silently.
+   */
+  test('the whole walk goes in a single send', async () => {
+    const four = ['a', 'b', 'c', 'd']
+    const { c, keys } = picker(four, { options: four, selected: 0 })
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+    expect(keys).toHaveLength(1)
+    expect(keys[0]).toBe(RIGHT + RIGHT + ENTER)
   })
 
   /** Without the reading, the old numbered answer is still what is sent - which
