@@ -82,7 +82,7 @@ export function stripAnsi(str: string): string {
     .replace(/[▼▾▽]/g, 'v')
     .replace(/[⎿⌐⌙]/g, '|')
     .replace(/[✶✦✧★☆]/g, '*')
-    .replace(/[❯❭❱⟩]/g, '>')
+    .replace(/[❯›»❭❱⟩‣▸]/g, '>')
     .replace(/\u00a0/g, ' ')  // non-breaking space
     // Control characters only. Anything printable - in any script - survives.
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
@@ -147,10 +147,12 @@ export function extractChoices(text: string): string[] {
   const lines = text.split('\n')
   // Two numbering styles, because the agents do not agree: claude and codex
   // write `1. Yes`, kimi writes `[1] Yes`. The optional leading glyph is the
-  // cursor on the selected row \u2014 U+276F from claude, U+2192 from kimi.
+  // cursor on the selected row, and every agent chose a different one \u2014
+  // U+276F from claude, U+2192 from kimi, U+203A from codex. Missing one costs
+  // the row it marks, which is the row the pane is ON.
   // stripAnsi folds both onto `>`, but a buffer that never went through it may
   // still carry them.
-  const NUMBERED = /^\s*[\u276f>*\u2192]?\s*(?:(\d+)[.)]|\[(\d+)\])\s*(.+)/
+  const NUMBERED = /^\s*[\u276f\u203a\u00bb\u276d\u2771\u27e9>*\u2192\u2023\u25b8]?\s*(?:(\d+)[.)]|\[(\d+)\])\s*(.+)/
   const found: { n: number; text: string; at: number }[] = []
   const from = Math.max(0, lines.length - CHOICE_TAIL_LINES)
   for (let i = from; i < lines.length; i++) {
@@ -178,7 +180,7 @@ export function extractChoices(text: string): string[] {
 }
 
 /** A checkbox row carrying no number: kimi's multi-select draws only these. */
-const CHECKBOX = /^\s*[❯>*→]?\s*(\[[ xX*✓✔]\]\s*\S.*)/
+const CHECKBOX = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(\[[ xX*✓✔]\]\s*\S.*)/
 
 /**
  * The unnumbered checkbox block a pane is offering, or nothing.

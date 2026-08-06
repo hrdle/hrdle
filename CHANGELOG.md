@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Codex's options are read, and read whole.** Every agent picked a different
+  glyph for the cursor on the selected row - `❯` from claude, `→` from kimi,
+  and `›` from codex, which was not in the list. The cost was not the row it
+  marks going missing; it was that row going missing while its sibling stayed,
+  because `2. No, quit` carries no cursor and matched on its own. So the
+  glasses were handed a single option reading `No, quit` - and answering it
+  types `1`, which is `Yes, continue`
+  - It showed up on the trust prompt, which is the first thing codex draws and
+    the worst one to answer by accident: it decides whether project-local
+    config, hooks and exec policies load. Measured against codex-cli 0.146.0
+  - The class now carries every cursor an agent has been seen to draw, in all
+    three readers that have to agree about it
+- **A question that wraps is shown whole.** A question long enough to matter is
+  long enough to wrap, and the reader took one line of it - whichever fragment
+  happened to sit last. Codex's trust prompt arrived as `injection. Trusting
+  the directory allows project-local config, hooks, and exec policies to load.`,
+  the tail of a sentence whose beginning said what was being decided. Where no
+  single line ends in a question mark, the paragraph above the options is taken
+  instead of the line above them
+
 ## [0.3.70] - 2026-08-07
 
 ### Fixed

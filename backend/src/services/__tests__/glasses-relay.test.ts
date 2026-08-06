@@ -1269,3 +1269,66 @@ describe('a question that arrives without a transition', () => {
     })).toEqual([]);
   });
 });
+
+// =============================================================================
+// codex: a third cursor glyph, and a question that wraps
+// =============================================================================
+
+describe('codex draws its cursor with a different glyph again', () => {
+  /**
+   * Captured from codex-cli 0.146.0 on 2026-08-07 - the trust prompt, which is
+   * the first thing it shows and the worst one to get wrong: answering it
+   * grants project-local config, hooks and exec policies.
+   *
+   * `›` is U+203A, and it was not in the cursor class. The cost was not the row
+   * it marks going missing, it was the row going missing while its sibling
+   * stayed: `2. No, quit` has no cursor, so it matched on its own. The glasses
+   * were handed one option reading `No, quit`, and answering it types `1`.
+   */
+  const CODEX_TRUST = [
+    '> You are in /tmp/codex-choice-test',
+    '',
+    '  Do you trust the contents of this directory? Working with untrusted contents comes with higher risk of prompt',
+    '  injection. Trusting the directory allows project-local config, hooks, and exec policies to load.',
+    '',
+    '› 1. Yes, continue',
+    '  2. No, quit',
+    '',
+    '  Press enter to continue',
+  ];
+
+  test('both options are read, in the order the pane numbers them', () => {
+    expect(extractNumberedChoices(CODEX_TRUST)).toEqual(['Yes, continue', 'No, quit']);
+  });
+
+  test('the cursor row is never the one that goes missing', () => {
+    // The half-read is worse than the no-read: one option on the panel, and
+    // the key that answers it belongs to the option that was dropped.
+    const choices = extractNumberedChoices(CODEX_TRUST);
+    expect(choices).not.toEqual(['No, quit']);
+    expect(choices[0]).toBe('Yes, continue');
+  });
+
+  test('every cursor an agent has been seen to draw is accepted', () => {
+    for (const cursor of ['❯', '›', '»', '→', '>', '*', '‣', '▸']) {
+      expect(extractNumberedChoices([`${cursor} 1. Yes`, '  2. No'])).toEqual(['Yes', 'No']);
+    }
+  });
+
+  test('a wrapped question is read whole, not by its last fragment', () => {
+    const text = extractQuestionLine(CODEX_TRUST, optionBlockStart(CODEX_TRUST));
+    expect(text).toContain('Do you trust the contents of this directory?');
+    // The fragment that used to arrive on its own says nothing about what is
+    // being decided.
+    expect(text).not.toBe(
+      'injection. Trusting the directory allows project-local config, hooks, and exec policies to load.',
+    );
+  });
+
+  test('a question that fits on one line is still taken as one line', () => {
+    // Only a wrapped one gets joined - an agent that could fit the question on
+    // a line did, and gluing the line above it on would be inventing.
+    expect(extractQuestionLine(['Some prose about the change.', 'Which one?', '❯ 1. A', '  2. B'], 2))
+      .toBe('Which one?');
+  });
+});
