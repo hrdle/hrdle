@@ -523,28 +523,29 @@ function CreateSessionModal({
 					/>
 				</label>
 
-				{/* Agent provider */}
-				<div className="mb-3">
-					<div className="text-xs text-th-text-secondary mb-1">
+				{/*
+				 * Agent provider. A row of buttons until there were five of them,
+				 * at which point the grid wrapped and the odd one sat alone on a
+				 * second line - and the list only grows as agents are added. A
+				 * select costs one tap more and stays one line however many there
+				 * are, which on a phone is the trade worth making.
+				 */}
+				<label className="mb-3 block">
+					<span className="text-xs text-th-text-secondary mb-1 block">
 						{t("session.agent")}
-					</div>
-					<div className="grid grid-cols-4 gap-2">
+					</span>
+					<select
+						value={agent}
+						onChange={(e) => setAgent(e.target.value as AgentProvider)}
+						className="w-full px-3 py-2 bg-th-bg border border-th-border rounded text-th-text focus:outline-none focus:border-blue-500 text-sm"
+					>
 						{AGENT_PROVIDER_IDS.map((option) => (
-							<button
-								key={option}
-								type="button"
-								onClick={() => setAgent(option)}
-								className={`px-3 py-2 rounded border text-sm font-medium transition-colors ${
-									agent === option
-										? "border-blue-500 bg-blue-600/20 text-blue-300"
-										: "border-th-border bg-th-bg text-th-text-secondary hover:bg-th-surface-active"
-								}`}
-							>
+							<option key={option} value={option}>
 								{t(AGENT_PROVIDERS[option].labelKey)}
-							</button>
+							</option>
 						))}
-					</div>
-				</div>
+					</select>
+				</label>
 
 				{/* Server (peer) selector - hidden when there is only one */}
 				{peers.length > 1 && (
