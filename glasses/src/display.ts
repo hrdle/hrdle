@@ -211,6 +211,20 @@ export interface AppState {
   voiceText?: string
   // ── Glasses relay channel (#504) ──
   /** Active waiting items, priority order (first = shown in the overlay). */
+  /**
+   * What the wearer just answered, and until when to say so.
+   *
+   * A scraped question belongs to the pane's blocked epoch, so the app does
+   * not take it down on an answer - the server does, once it sees the pane
+   * move. That is right, but it leaves the moment that matters silent: the
+   * ring sends the key, the same question stays on the strip for a beat, and
+   * then it vanishes without ever saying what went. Reported from the device
+   * on 2026-08-07 as not being able to tell whether the pick had gone through.
+   *
+   * So the strip says it. Not a claim that the agent received anything - only
+   * that this is what was sent, which is the part the app knows.
+   */
+  answered?: { text: string; until: number }
   relayWaiting: GlassesRelayItem[]
   /** Active info items, newest first (passive FYI line in conversation). */
   relayInfo: GlassesRelayItem[]
@@ -513,10 +527,25 @@ function relayLabel(state: AppState, item: GlassesRelayItem): string {
   return s ? sName(s) : item.sessionId
 }
 
+/** What the strip says over an answer just sent. English, like everything the
+ *  panel draws itself. */
+export const SENT_LABEL = 'Sent'
+
+/** How long the answer stays on the strip before the queue has it back. Long
+ *  enough to read at a glance, short enough that it is gone before the next
+ *  question of a multi-step ask arrives. */
+export const ANSWER_ECHO_MS = 2500
+
 /** Waiting/info banner prepended to the TOP of the conversation tab (#504).
  *  Waiting-first is the core philosophy: the highest-priority waiting item
  *  always heads the view; an info item shows only when nothing is waiting. */
 function relayBannerLines(state: AppState): string[] {
+  // Ahead of the queue on purpose: for these few seconds the answer is the
+  // news, and the question it answered is not - it is still on the strip only
+  // because the server has not seen the pane move yet.
+  if (state.answered && Date.now() < state.answered.until) {
+    return [`[>] ${SENT_LABEL}`, state.answered.text]
+  }
   const top = state.relayWaiting[0]
   if (top) {
     const choiceHint = top.choices?.length ? `(${top.choices.length} choices)` : ''
