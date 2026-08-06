@@ -27,7 +27,7 @@
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -1099,8 +1099,9 @@ export class GlassesController {
         else this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
+        this.echoAnswer(this.pickedText())
         if (this.demo) {
-          const picked = this.demoPickedText()
+          const picked = this.pickedText()
           if (picked) this.demoReply(picked)
           else st.mode = 'conversation'
           this.render()
@@ -1151,7 +1152,7 @@ export class GlassesController {
    *  multi-select, the option under the cursor in a single-pick list. Null when
    *  a multi-select was sent with nothing ticked - there is no answer to relay
    *  and the demo should not invent one. */
-  private demoPickedText(): string | null {
+  private pickedText(): string | null {
     const st = this.state
     if (!st.choiceMulti) {
       const one = st.choiceOptions[st.choiceIndex]
@@ -1160,6 +1161,31 @@ export class GlassesController {
     const picked = st.choiceOptions.filter(isChecked).map(choiceLabel)
     return picked.length ? picked.join(', ') : null
   }
+
+  /**
+   * Say what was just sent, for a couple of seconds.
+   *
+   * The item itself stays until the server sees the pane move - a scraped
+   * question belongs to the pane's blocked epoch and the app does not own its
+   * lifetime. That leaves the tap silent, which on the device read as not
+   * knowing whether the pick had gone anywhere. This says only what the app
+   * actually knows: these are the keys that went.
+   */
+  private echoAnswer(text: string | null): void {
+    if (!text) return
+    this.state.answered = { text, until: Date.now() + ANSWER_ECHO_MS }
+    if (this.echoTimer) clearTimeout(this.echoTimer)
+    this.echoTimer = setTimeout(() => {
+      this.echoTimer = null
+      // Left in place rather than cleared on a timer alone: `relayBannerLines`
+      // checks the clock too, so a render that happens for any other reason
+      // already shows the right thing. This one exists to make a render happen
+      // when nothing else would.
+      this.render()
+    }, ANSWER_ECHO_MS)
+  }
+
+  private echoTimer: ReturnType<typeof setTimeout> | null = null
 
   /**
    * Choice keys go to the item's sessionId+paneId. REST needs no subscription

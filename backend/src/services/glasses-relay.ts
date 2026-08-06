@@ -832,7 +832,22 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   if (subscribers.size === 0) return; // presence gate, same as enterBlocked
   const slot = store.get(ws.id);
   const item = slot?.waiting;
-  if (!slot || !item || item.source !== 'auto' || item.paneId !== paneId) return;
+  // Nothing here yet, and the pane is blocked: it may have begun asking without
+  // a transition to announce it. That is the ordinary case rather than an edge
+  // one - a pane holding queued input is already blocked when the question
+  // appears, so `enterBlocked` never fires for it. Reported from the device on
+  // 2026-08-07: the first question of a set never reached the glasses, and the
+  // second did, because answering the first is what finally moved the status.
+  //
+  // It used to be covered by accident. A blocked pane always produced SOME
+  // item, even when it was only the status bar read as a question, and this
+  // function replaced that with the real one when it arrived. Declining to
+  // build the junk took away the thing the real question was arriving into.
+  if (!item) {
+    await enterBlocked(ws, paneId);
+    return;
+  }
+  if (!slot || item.source !== 'auto' || item.paneId !== paneId) return;
   // "Later / on PC" was said about this pane, and the wearer meant the pane
   // rather than the sentence. Re-raising it on every redraw would be arguing.
   if (item.dismissed) return;
