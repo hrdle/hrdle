@@ -276,30 +276,36 @@ export function startDebugUI(): void {
         </div>
 
         <div class="panel">
-          <h2>Ring controls</h2>
-          <div class="ring">
-            <button type="button" id="btn-up">Swipe up</button>
-            <button type="button" id="btn-down">Swipe down</button>
-            <button type="button" id="btn-tap">Tap</button>
-            <button type="button" id="btn-dbl">Double tap</button>
+          <!-- Everything in here drives THIS simulator's panel. While the
+               mirror shows the device's screen instead, these controls would
+               act on a panel nobody can see (and the ring ones would fight
+               the wearer), so the whole block hides. -->
+          <div id="sim-controls">
+            <h2>Ring controls</h2>
+            <div class="ring">
+              <button type="button" id="btn-up">Swipe up</button>
+              <button type="button" id="btn-down">Swipe down</button>
+              <button type="button" id="btn-tap">Tap</button>
+              <button type="button" id="btn-dbl">Double tap</button>
+            </div>
+            <h2>Host lifecycle</h2>
+            <div class="ring">
+              <button type="button" id="btn-fg-exit">Foreground exit</button>
+              <button type="button" id="btn-fg-enter">Foreground enter</button>
+              <button type="button" id="btn-host-exit">Host exit</button>
+              <button type="button" id="btn-superseded">Superseded</button>
+              <button type="button" id="btn-gave-up">Server unreachable</button>
+            </div>
+            <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
+            <h2>First run</h2>
+            <div class="ring">
+              <button type="button" id="btn-demo">Demo mode</button>
+            </div>
+            <p class="hint" id="demo-status">What a wearer sees before a server address exists: a tap on the setup guide starts the app on canned data. Speech is canned too — there is no server to transcribe against — and an answer, spoken or picked, is followed by the agent's reply.</p>
+            <h2>Voice input</h2>
+            <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
+            <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
           </div>
-          <h2>Host lifecycle</h2>
-          <div class="ring">
-            <button type="button" id="btn-fg-exit">Foreground exit</button>
-            <button type="button" id="btn-fg-enter">Foreground enter</button>
-            <button type="button" id="btn-host-exit">Host exit</button>
-            <button type="button" id="btn-superseded">Superseded</button>
-            <button type="button" id="btn-gave-up">Server unreachable</button>
-          </div>
-          <p class="hint" id="lifecycle-status">On the device these arrive from the host. A host exit releases the socket, the clocks and the microphone for good — the diagnostics line above says <code>stopped</code> once it has, and nothing draws after that.</p>
-          <h2>First run</h2>
-          <div class="ring">
-            <button type="button" id="btn-demo">Demo mode</button>
-          </div>
-          <p class="hint" id="demo-status">What a wearer sees before a server address exists: a tap on the setup guide starts the app on canned data. Speech is canned too — there is no server to transcribe against — and an answer, spoken or picked, is followed by the agent's reply.</p>
-          <h2>Voice input</h2>
-          <input type="text" id="dbg-stt" placeholder="Text to use instead of STT (optional)" />
-          <p class="hint" id="voice-status">Tap on the conversation screen to start recording, tap again to send it to Groq. With text in the field it skips recording and uses that as the transcript.</p>
           ${settingsPanelHtml()}
 
           <h2>Replay recording</h2>
@@ -1206,6 +1212,9 @@ export function startDebugUI(): void {
   // clicking when walking someone through a flow.
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return
+    // Same rule as the on-screen ring: while the mirror shows the device's
+    // screen, keystrokes must not drive the hidden local panel.
+    if (mirroring) return
     const map: Record<string, () => void> = {
       ArrowUp: () => controller.swipeUp(),
       ArrowDown: () => controller.swipeDown(),
@@ -1222,14 +1231,14 @@ export function startDebugUI(): void {
   // state) — keep it fresh on an interval.
   // ── Mirror wiring ──
 
-  const RING_BUTTONS = ['btn-up', 'btn-down', 'btn-tap', 'btn-dbl']
-
   function setMirrorUi(live: boolean, message: string): void {
     mirrorStatus.textContent = message
     mirrorStatus.className = live ? 'hint mirror-live' : 'hint'
-    // A viewer clicking the ring while the device drives the panel would fight
-    // the wearer for the screen. Mirroring is for watching.
-    for (const id of RING_BUTTONS) (el(id) as HTMLButtonElement).disabled = mirroring
+    // Mirroring is for watching: the simulator's own controls act on a panel
+    // the mirror is covering, and the ring ones would fight the wearer for
+    // the device's screen. Hidden, not disabled — a grayed-out button still
+    // asks to be understood.
+    el('sim-controls').hidden = mirroring
   }
 
   controller.ws.setGlassesScreenHandler((screen) => {
