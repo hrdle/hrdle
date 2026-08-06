@@ -97,9 +97,74 @@ export function herdrPaneCommand(leader: string, agentPane?: HerdrAgentPane): st
   return agentPane?.agent ?? leader.split(/\s+/)[0]?.split('/').pop() ?? '';
 }
 
-/** Session id for a workspace: label when present, else the workspace id. */
+/**
+ * A session's address: herdr's own workspace id (#186).
+ *
+ * This used to be the workspace *label*, which is text a person edits. The
+ * naming convention in CLAUDE.md has every agent rename its workspace at least
+ * twice per task, so a session's address changed mid-conversation, by policy:
+ * on 2026-08-06 ten spoken replies in a row 404'd against a name that had just
+ * been rewritten, and the next thing said went to a different session. Two
+ * workspaces sharing a name was worse than that - `find` took the first, and
+ * the caller got a 200 with no way to know which one had received the text.
+ */
 function workspaceSessionId(ws: HerdrWorkspace): string {
+  return ws.workspace_id;
+}
+
+/** What a person sees and calls it. Empty labels fall back to the id. */
+function workspaceDisplayName(ws: HerdrWorkspace): string {
   return ws.label && ws.label.trim() !== '' ? ws.label : ws.workspace_id;
+}
+
+/**
+ * Workspaces carrying a given label. Exported for the metadata migration,
+ * which has to answer the same question about keys written before #186.
+ */
+export function workspacesLabelled(
+  workspaces: HerdrWorkspace[],
+  label: string,
+): HerdrWorkspace[] {
+  return workspaces.filter((w) => (w.label ?? '').trim() === label);
+}
+
+/**
+ * The session an address names, over an already-built session list.
+ *
+ * Same rule as `resolveWorkspace` — id first, then name, and an ambiguous name
+ * resolves to nothing — for the routes that answer from `listWorkspaces()`
+ * rather than going back to herdr. `ambiguous` is separated out so a caller can
+ * say *why* it found nothing.
+ */
+export function findSessionByAddress<T extends { id: string; name: string }>(
+  sessions: T[],
+  address: string,
+): { session?: T; ambiguous: boolean } {
+  const byId = sessions.find((s) => s.id === address);
+  if (byId) return { session: byId, ambiguous: false };
+  const named = sessions.filter((s) => s.name === address);
+  if (named.length === 1) return { session: named[0], ambiguous: false };
+  return { ambiguous: named.length > 1 };
+}
+
+/**
+ * The one workspace called `label`, or null when none is - or when more than
+ * one is, which is the case worth refusing rather than guessing at.
+ */
+export function resolveByLabel(
+  workspaces: HerdrWorkspace[],
+  label: string,
+): HerdrWorkspace | null {
+  const matches = workspacesLabelled(workspaces, label);
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    console.warn(
+      `[herdr] "${label}" names ${matches.length} workspaces (${matches
+        .map((w) => w.workspace_id)
+        .join(', ')}) - refusing to guess. Address it by workspace id.`,
+    );
+  }
+  return null;
 }
 
 export class HerdrService {
@@ -112,14 +177,24 @@ export class HerdrService {
   >();
   private static readonly PROCESS_CMD_CACHE_TTL = 3000;
 
+  /**
+   * The workspace a session id names.
+   *
+   * The id is a workspace id since #186, but a label is still accepted: it is
+   * what a person types (`hrdle send local:dev:%1`), and it is what anything
+   * holding an address from before the change still has - an ehpk on the
+   * glasses cannot be migrated from this side.
+   *
+   * An ambiguous label resolves to **nothing**. Taking the first match is how
+   * a message reaches the wrong session while the caller is told it succeeded,
+   * and a refusal a person can see beats a delivery they cannot.
+   */
   private async resolveWorkspace(sessionId: string): Promise<HerdrWorkspace | null> {
     try {
       const workspaces = await listWorkspaces();
-      return (
-        workspaces.find((w) => workspaceSessionId(w) === sessionId) ??
-        workspaces.find((w) => w.workspace_id === sessionId) ??
-        null
-      );
+      const byId = workspaces.find((w) => w.workspace_id === sessionId);
+      if (byId) return byId;
+      return resolveByLabel(workspaces, sessionId);
     } catch {
       return null;
     }
@@ -296,7 +371,7 @@ export class HerdrService {
 
           return {
             id: workspaceSessionId(ws),
-            name: workspaceSessionId(ws),
+            name: workspaceDisplayName(ws),
             instanceId: ws.workspace_id,
             createdAt: new Date(0).toISOString(),
             attached: ws.focused,
@@ -357,8 +432,11 @@ export class HerdrService {
 
   async createWorkspace(name: string): Promise<string> {
     this.invalidateCache();
-    const existing = await this.resolveWorkspace(name);
-    if (existing) {
+    // Asked by name, so the check is by name - and *any* number of matches
+    // means taken. `resolveWorkspace` would answer null for two of them, which
+    // is the right answer to "which one" and the wrong one to "is it free".
+    const existing = workspacesLabelled(await listWorkspaces().catch(() => []), name);
+    if (existing.length > 0) {
       throw new Error(`Failed to create session: workspace "${name}" already exists`);
     }
     await herdrRpc('workspace.create', {
@@ -382,9 +460,10 @@ export class HerdrService {
    */
   async moveWorkspace(sessionId: string, targetIndex: number): Promise<boolean> {
     const workspaces = await listWorkspaces();
-    const current = workspaces.findIndex(
-      (w) => workspaceSessionId(w) === sessionId || w.workspace_id === sessionId,
-    );
+    const target =
+      workspaces.find((w) => w.workspace_id === sessionId) ??
+      resolveByLabel(workspaces, sessionId);
+    const current = target ? workspaces.indexOf(target) : -1;
     if (current === -1) return false;
 
     const clamped = Math.max(0, Math.min(targetIndex, workspaces.length - 1));
@@ -416,5 +495,26 @@ export class HerdrService {
 
   async workspaceExists(sessionId: string): Promise<boolean> {
     return (await this.resolveWorkspace(sessionId)) !== null;
+  }
+
+  /**
+   * Why an address resolves to nothing, for the paths that deliver something.
+   *
+   * `missing` and `ambiguous` are both "it did not arrive", but they are not
+   * the same instruction to whoever is holding the microphone: one means the
+   * session is gone, the other means say which one. Reporting both as 404
+   * Session not found is how the caller ends up retyping a name that will
+   * never work.
+   */
+  async addressStatus(sessionId: string): Promise<'ok' | 'ambiguous' | 'missing'> {
+    try {
+      const workspaces = await listWorkspaces();
+      if (workspaces.some((w) => w.workspace_id === sessionId)) return 'ok';
+      const named = workspacesLabelled(workspaces, sessionId);
+      if (named.length === 1) return 'ok';
+      return named.length > 1 ? 'ambiguous' : 'missing';
+    } catch {
+      return 'missing';
+    }
   }
 }

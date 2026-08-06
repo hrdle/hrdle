@@ -305,7 +305,9 @@ async function assembleWaitingPayload(
   ws: WorkspaceInfo,
   tmuxPaneId: string,
 ): Promise<{ text: string; choices?: string[] }> {
-  const fallback = `Waiting for input: ${ws.id}`;
+  // The name, not the id: since #186 the id is `w5Q`, which tells a wearer
+  // nothing about which session is asking.
+  const fallback = `Waiting for input: ${ws.name || ws.id}`;
   if (!ws.instanceId || !/^%[0-9A-Za-z]+$/.test(tmuxPaneId)) return { text: fallback };
   const herdrPaneId = toHerdrPaneId(ws.instanceId, tmuxPaneId);
   const raw = await glassesRelayDeps.readPaneText(herdrPaneId);

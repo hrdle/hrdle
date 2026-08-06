@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { homedir } from 'node:os';
 import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
-import { HerdrService } from '../services/herdr';
+import { HerdrService, findSessionByAddress } from '../services/herdr';
 import {
   captureViewportHerdr,
   getOrCreateHerdrControlSession,
@@ -810,10 +810,14 @@ sessions.post('/history/resume', async (c) => {
 sessions.get('/:id', async (c) => {
   const id = c.req.param('id');
   const herdrSessions = await herdrService.listWorkspaces();
-  const session = herdrSessions.find(s => s.id === id);
+  // By id, then by name - the same two ways every other route accepts since
+  // #186, and for the same reason: a name is what a person types and what an
+  // older client still holds. An ambiguous name resolves to nothing rather
+  // than to whichever workspace happens to sort first.
+  const { session, ambiguous } = findSessionByAddress(herdrSessions, id);
 
   if (!session) {
-    return c.json({ error: 'Session not found' }, 404);
+    return c.json({ error: ambiguous ? 'Ambiguous session name' : 'Session not found' }, 404);
   }
 
   return c.json({
@@ -858,9 +862,9 @@ sessions.post('/:id/resume', async (c) => {
   const parsed = ResumeSessionSchema.safeParse(body);
 
   const herdrSessions = await herdrService.listWorkspaces();
-  const session = herdrSessions.find(s => s.id === id);
+  const { session, ambiguous } = findSessionByAddress(herdrSessions, id);
   if (!session) {
-    return c.json({ error: 'Session not found' }, 404);
+    return c.json({ error: ambiguous ? 'Ambiguous session name' : 'Session not found' }, 404);
   }
 
   try {
@@ -1171,9 +1175,15 @@ sessions.post('/:id/panes/input', async (c) => {
     return c.json({ error: 'Invalid request', issues: parsed.error.issues }, 400);
   }
 
-  const exists = await herdrService.workspaceExists(id);
-  if (!exists) {
-    return c.json({ error: 'Session not found' }, 404);
+  // Same as /prompt: this delivers keystrokes, so an ambiguous name says so.
+  const status = await herdrService.addressStatus(id);
+  if (status !== 'ok') {
+    return c.json(
+      status === 'ambiguous'
+        ? { error: `"${id}" names more than one session - address it by session id` }
+        : { error: 'Session not found' },
+      404,
+    );
   }
 
   try {
@@ -1265,9 +1275,17 @@ sessions.post('/:id/prompt', async (c) => {
     }
   }
 
-  const exists = await herdrService.workspaceExists(id);
-  if (!exists) {
-    return c.json({ error: 'Session not found' }, 404);
+  // The delivery paths say *why* nothing was reached: a name that now points at
+  // two workspaces has to be answered differently from one that points at none
+  // (#186), because only one of them is fixed by saying which session.
+  const status = await herdrService.addressStatus(id);
+  if (status !== 'ok') {
+    return c.json(
+      status === 'ambiguous'
+        ? { error: `"${id}" names more than one session - address it by session id` }
+        : { error: 'Session not found' },
+      404,
+    );
   }
 
   try {

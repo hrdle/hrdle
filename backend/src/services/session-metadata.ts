@@ -126,6 +126,30 @@ export async function removeLastKnownSession(sessionId: string): Promise<void> {
   });
 }
 
+/**
+ * Move whole entries from one session id to another (#186 migration).
+ *
+ * One write for the whole plan: a rename per call would leave the file in a
+ * half-migrated state if the process stopped in the middle of it.
+ */
+export async function rekeySessionMetadata(
+  moves: { from: string; to: string }[],
+): Promise<void> {
+  if (moves.length === 0) return;
+  await withMetadataLock(async () => {
+    const data = await load();
+    let changed = false;
+    for (const { from, to } of moves) {
+      const meta = data.sessions[from];
+      if (!meta || data.sessions[to]) continue;
+      data.sessions[to] = meta;
+      delete data.sessions[from];
+      changed = true;
+    }
+    if (changed) await save(data);
+  });
+}
+
 export async function setSessionSttPrompt(
   sessionId: string,
   prompt: string | null,

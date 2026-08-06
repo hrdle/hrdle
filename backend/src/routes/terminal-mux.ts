@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from 'bun';
-import { HerdrService } from '../services/herdr';
+import { HerdrService, findSessionByAddress } from '../services/herdr';
 import {
   captureViewportHerdr,
   getOrCreateHerdrControlSession,
@@ -686,7 +686,7 @@ async function handleSubscribeConversation(
   let workingDir: string | undefined;
   try {
     const sessions = await herdrService.listWorkspaces();
-    const session = sessions.find(s => s.id === sessionId);
+    const { session } = findSessionByAddress(sessions, sessionId);
     // The pane's own directory, not the workspace's. `currentPath` is the
     // first agent pane's, so a second pane working elsewhere would have been
     // read against a project directory it has no transcript in.
