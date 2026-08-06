@@ -26,7 +26,7 @@
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
-import { moveTo, type InlineChoices } from './inline-choices.ts'
+import { moveTo, type InlineChoices } from '../../shared/inline-choices'
 import { CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {

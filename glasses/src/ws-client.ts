@@ -1,4 +1,4 @@
-import { extractInlineChoices, type InlineChoices } from './inline-choices'
+import { extractInlineChoices, type InlineChoices } from '../../shared/inline-choices'
 import { getBaseUrl } from './api.ts'
 import type { Session, GlassesRelayItem, ClientFocus, GlassesScreen, GlassesInputKind } from './types.ts'
 

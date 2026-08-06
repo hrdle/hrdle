@@ -4,7 +4,7 @@ import {
   inlineChoicesInRow,
   paintedChars,
   moveTo,
-} from '../inline-choices'
+} from '../../../shared/inline-choices'
 import { extractChoices } from '../ws-client'
 import { OPENCODE_FOOTER_ROW, OPENCODE_PERMISSION_ROW } from './fixtures/opencode-permission'
 
