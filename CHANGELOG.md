@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.71] - 2026-08-07
 
 ### Fixed
 - **Codex's options are read, and read whole.** Every agent picked a different
