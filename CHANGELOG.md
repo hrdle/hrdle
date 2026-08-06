@@ -11,6 +11,34 @@ All notable changes to this project will be documented in this file.
   tap more and stays one line however many there are, which on the phone the
   dialog is mostly used from is the trade worth making
 
+## [Unreleased]
+
+### Fixed
+- **A pane that is blocked without asking no longer interrupts the wearer.**
+  herdr reports `blocked` for the gaps between turns as well as for a question,
+  and with no question and no options the scrape fell through to "the last line
+  that says something" - which on a live pane is whatever the TUI drew at the
+  bottom. `⏵⏵ auto mode on (shift+tab to cycle)` appeared on a wearer's face
+  under a `[!] WAITING` header
+  - It could not be got rid of. A waiting item claims double-tap on the
+    conversation screen, where it means "later" rather than "back", so a
+    notification nobody asked for took away the way out - and dismissing it did
+    not help, because the next blocked flicker built a fresh, undismissed one.
+    The screen recording has twenty-odd double-taps in a row, all landing on
+    the same screen
+  - A waiting item is now built only when something was recognised: a
+    permission line, an option block, or a line that reads as a question. A
+    guess is worth showing when something real is already waiting; it is never
+    worth interrupting someone for
+- **The question is found by where it sits, not by its punctuation.** It was
+  looked for by an ASCII `?` or `Do you want to`, and a Japanese question ends
+  in neither - `好きな果物を選んでください（複数可）` is a question and says so
+  with a verb. So the glasses were shown `❯ ちなみに録画情報を見てください`:
+  the line the wearer had just typed into their own input box, handed back as
+  the agent's question. An agent writes its question and puts the options under
+  it, so the question is the last thing said above the first option, and
+  nothing below it can be - which needs no list of question marks
+
 ## [0.3.67] - 2026-08-07
 
 ### Fixed
