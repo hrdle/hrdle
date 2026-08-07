@@ -3,90 +3,94 @@ import { buildSttPrompt, sessionPromptTerms } from '../stt-prompt';
 
 /**
  * The prompt is the only thing telling Whisper that `herdr` is a word and that
- * 「2脚ロボ開発」 is a name. It is also capped, so what gets dropped when it is
- * full is the part worth pinning: names are unguessable, glossary terms are not.
+ * `ペイン` is not `ペイント`. It is also capped, so what gets dropped when it is
+ * full is the part worth pinning - which is why what goes in it is now said
+ * deliberately (a session's own words, the shared list) rather than scraped
+ * from workspace labels (#210).
  */
 describe('buildSttPrompt', () => {
-  test('names come first, since the glossary cannot cover them', () => {
-    const prompt = buildSttPrompt(['グラス開発', '2脚ロボ開発'], ['ペイン']);
-    expect(prompt).toBe('グラス開発、2脚ロボ開発、ペイン');
+  test("the speaking session's own words come first", () => {
+    const prompt = buildSttPrompt({ session: ['音声認識', 'Groq'] }, ['ペイン']);
+    expect(prompt).toBe('音声認識、Groq、ペイン');
   });
 
-  test('a name repeated as a title and a label is said once', () => {
-    expect(buildSttPrompt(['cchub-work-2', 'CCHub-Work-2'], [])).toBe('cchub-work-2');
+  test('the shared words sit between the session and the glossary', () => {
+    // Someone typed the shared list on purpose; the glossary is only our guess
+    // at the same thing.
+    const prompt = buildSttPrompt({ session: ['音声認識'], shared: ['確定申告'] }, ['ペイン']);
+    expect(prompt).toBe('音声認識、確定申告、ペイン');
   });
 
-  test('blank names are skipped rather than left as empty slots', () => {
-    expect(buildSttPrompt(['', '   ', 'life'], [])).toBe('life');
+  test('a term repeated across the groups is said once', () => {
+    expect(buildSttPrompt({ session: ['Groq'], shared: ['groq'] }, [])).toBe('Groq');
   });
 
-  test('no names and no glossary means no prompt at all', () => {
+  test('blank terms are skipped rather than left as empty slots', () => {
+    expect(buildSttPrompt({ session: ['', '   ', 'life'] }, [])).toBe('life');
+  });
+
+  test('nothing to say means no prompt at all', () => {
     // The caller sends nothing rather than an empty `prompt` field.
-    expect(buildSttPrompt([], [])).toBe('');
+    expect(buildSttPrompt({}, [])).toBe('');
   });
 
   test('the cap drops whole terms, never half of one', () => {
-    const titles = ['あ'.repeat(180)];
-    const prompt = buildSttPrompt({ titles }, ['ペイン', 'ワークスペース']);
-    // 180 + 1 + 3 fits ペイン; ワークスペース would exceed 190 and is left out
-    // whole — half a word biases nothing.
-    expect(prompt).toBe(`${titles[0]}、ペイン`);
+    const session = 'あ'.repeat(93);
+    const prompt = buildSttPrompt({ session: [session] }, ['ペイン', 'い'.repeat(100)]);
+    // 93 + 1 + 3 = 97 for ペイン; the 100-character term would take the line
+    // past 190 and is left out whole.
+    expect(prompt).toBe(`${session}、ペイン`);
   });
 
-  test('the words the user says outrank the workspace labels', () => {
-    // The first cut spent the budget on names and dropped `リリース`, which is
-    // said ten times a day, to keep a label that is said approximately never.
-    const prompt = buildSttPrompt(
-      { titles: ['グラス開発'], labels: ['い'.repeat(180)] },
-      ['リリース'],
-    );
-    expect(prompt).toBe('グラス開発、リリース');
+  test('a term too long to fit does not block the shorter ones behind it', () => {
+    expect(buildSttPrompt({ session: ['い'.repeat(200), 'life'] }, [])).toBe('life');
   });
 
-  test('a name too long to fit does not block the shorter ones behind it', () => {
-    const prompt = buildSttPrompt(['い'.repeat(200), 'life'], []);
-    expect(prompt).toBe('life');
-  });
-
-  test('a full workspace list does not push out the words that get misheard', () => {
-    // This is the regression: the first cut listed names first, and thirteen
-    // workspaces ate the budget before `リリース` — the word reported as being
-    // misheard several times a day — ever got in.
-    const labels = [
-      'hrdle', 'cchub-work-3', 'cchub-work-1', 'cchub-work-2', 'wheel-leg-bot',
-      'life', 'linux', 'pixel-customrom', 'repos', 'lifestyle-app-work-1',
-    ];
-    const prompt = buildSttPrompt({ titles: ['グラス開発', '2脚ロボ開発'], labels });
-    for (const term of ['リリース', 'マージ', 'リベース', 'ペイン']) {
+  test('the contributed groups cannot take more than half the budget', () => {
+    // The #210 failure mode, reproduced with the group that replaced the one
+    // that caused it: a session naming everything it might ever say must not
+    // cost the words misheard in every session.
+    const session = Array.from({ length: 30 }, (_, i) => `セッション語彙${i}`);
+    const prompt = buildSttPrompt({ session });
+    for (const term of ['リリース', 'マージ', 'コミット', 'リベース']) {
       expect(prompt).toContain(term);
     }
-    expect(prompt).toContain('2脚ロボ開発');
+    expect(prompt.length).toBeLessThanOrEqual(190);
   });
 
-  test('the whole prompt stays inside the cap', () => {
-    const titles = Array.from({ length: 40 }, (_, i) => `ワークスペース名前${i}`);
-    expect(buildSttPrompt({ titles }).length).toBeLessThanOrEqual(190);
-  });
-
-  test("the speaking session's own words come first", () => {
-    const prompt = buildSttPrompt(
-      { session: ['音声認識', 'Groq'], titles: ['グラス開発'] },
-      ['ペイン'],
-    );
-    expect(prompt).toBe('音声認識、Groq、グラス開発、ペイン');
+  test('the shared words compete with the session for that half, session first', () => {
+    const session = ['あ'.repeat(92)];
+    const prompt = buildSttPrompt({ session, shared: ['確定申告'] }, ['ペイン']);
+    // 92 leaves no room for 確定申告 (4 + 1) inside the 95 the two share, but
+    // ペイン still gets in on the glossary's own budget.
+    expect(prompt).toBe(`${session[0]}、ペイン`);
   });
 
   test('a session vocabulary does not cost the glossary', () => {
-    // The point of putting the session ahead of the glossary is that it beats
-    // the *names*, not the words that get misheard every day.
+    // The point of putting the session first is that it beats *our* guesses,
+    // not that it replaces the words misheard every day.
     const prompt = buildSttPrompt({
       session: ['温泉式', '文字起こし', 'ハルシネーション'],
-      titles: ['グラス開発', '2脚ロボ開発'],
-      labels: Array.from({ length: 10 }, (_, i) => `hrdle-work-${i}`),
+      shared: ['確定申告', '固定資産税'],
     });
-    for (const term of ['温泉式', 'リリース', 'マージ', 'リベース']) {
+    for (const term of ['温泉式', '確定申告', 'リリース', 'マージ', 'リベース', 'ペイン']) {
       expect(prompt).toContain(term);
     }
+  });
+
+  test('the glossary survives on its own when nothing else is set', () => {
+    // The regression this issue is about: with workspace labels leading the
+    // prompt, `タブ` was the only glossary term that fit and `リリース`,
+    // `コミット`, `リベース` and `ペイン` were all pushed out.
+    const prompt = buildSttPrompt();
+    for (const term of ['リリース', 'コミット', 'リベース', 'ペイン', 'デプロイ']) {
+      expect(prompt).toContain(term);
+    }
+  });
+
+  test('the whole prompt stays inside the cap', () => {
+    const session = Array.from({ length: 40 }, (_, i) => `セッション語彙${i}`);
+    expect(buildSttPrompt({ session }).length).toBeLessThanOrEqual(190);
   });
 });
 

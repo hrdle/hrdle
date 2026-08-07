@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { buildSttPrompt, currentWorkspaceNames, sttPrompt } from '../services/stt-prompt';
+import { sttPrompt } from '../services/stt-prompt';
 import {
   glassesSettingsView,
   resolveGroqApiKey,
@@ -151,8 +151,9 @@ glasses.post('/stt', async (c) => {
  * environment" rather than showing a box that looks empty but is not.
  */
 glasses.get('/settings', async (c) => {
-  const composed = buildSttPrompt(await currentWorkspaceNames());
-  return c.json(await glassesSettingsView(composed));
+  // The line as it would go out with no session named: the saved words and the
+  // glossary. A session speaking adds its own group in front of these.
+  return c.json(await glassesSettingsView(await sttPrompt()));
 });
 
 /**
@@ -198,8 +199,9 @@ glasses.put('/settings', async (c) => {
     return c.json({ error: parsed.error.issues[0]?.message || 'invalid settings' }, 400);
   }
   await updateGlassesSettings(parsed.data);
-  const composed = buildSttPrompt(await currentWorkspaceNames());
-  return c.json(await glassesSettingsView(composed));
+  // The line as it would go out with no session named: the saved words and the
+  // glossary. A session speaking adds its own group in front of these.
+  return c.json(await glassesSettingsView(await sttPrompt()));
 });
 
 export { glasses };

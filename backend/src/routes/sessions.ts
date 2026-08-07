@@ -22,7 +22,6 @@ import { OpenCodeHistoryService } from '../services/opencode-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
 import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
-import { resetSttPromptCache } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
@@ -950,8 +949,6 @@ sessions.put('/:id/title', async (c) => {
     // and nothing has to switch addresses - which is the whole point: this
     // rename used to retire the session's address mid-conversation.
     const sessionId = await herdrService.renameWorkspace(id, title);
-    // The renamed workspace is part of the STT vocabulary bias.
-    resetSttPromptCache();
     return c.json({ success: true, title, id: sessionId });
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
@@ -966,9 +963,12 @@ sessions.put('/:id/title', async (c) => {
 //
 // Kept short deliberately: Whisper's prompt is capped at 224 tokens and this
 // group leads the composition, so a long one would push out the glossary it is
-// meant to sit in front of.
+// meant to sit in front of. 100 rather than the 200 it started at, because the
+// composition now hard-limits the contributed groups to half its budget (#210)
+// and a field that accepts twice what can be used is a field that silently
+// drops the rest.
 const UpdateSttPromptSchema = z.object({
-  sttPrompt: z.string().max(200).nullable(),
+  sttPrompt: z.string().max(100).nullable(),
 });
 
 sessions.put('/:id/stt-prompt', async (c) => {

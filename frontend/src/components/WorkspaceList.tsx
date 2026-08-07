@@ -320,7 +320,7 @@ function SessionMenuDialog({
 									}
 								}}
 								placeholder={t("session.sttPromptPlaceholder")}
-								maxLength={200}
+								maxLength={100}
 								className="flex-1 bg-th-bg border border-th-border rounded px-2 py-1 text-sm text-th-text placeholder-th-text-muted focus:outline-none focus:border-blue-500"
 							/>
 							<button

@@ -24,7 +24,7 @@ const VERSION = pkg.version;
 const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface CliOptions {
-  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address';
+  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address' | 'stt-prompt';
   port: number;
   host: string;
   password?: string;
@@ -46,7 +46,10 @@ interface CliOptions {
   glassesText?: string;
   glassesKind?: 'waiting' | 'info';
   glassesChoices?: string[];
-  glassesSession?: string;
+  /** `--session`, shared by every command that addresses one. */
+  session?: string;
+  sttPromptText?: string;
+  sttPromptClear?: boolean;
 }
 
 function printHelp(): void {
@@ -66,6 +69,10 @@ ${t('cli.usage')}
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
                             (session is auto-resolved: cwd → process ancestors)
+  ${IDENTITY.binaryName} stt-prompt [words]  Words this session's speech is made of. They lead
+                            the vocabulary sent with its transcriptions, ahead
+                            of the shared glossary. No argument prints what is
+                            set; --clear removes it. [--session <id>]
   ${IDENTITY.binaryName} send <target> [text]  Send input to a pane on a peer or local server
                               target: <peer>:<session>:<paneId>
                               (peer can be 'local', a peer id, or a nickname)
@@ -182,7 +189,19 @@ export function parseArgs(args: string[]): CliOptions {
           console.error('--session takes a session id');
           process.exit(1);
         }
-        options.glassesSession = args[i];
+        options.session = args[i];
+        break;
+      case 'stt-prompt': {
+        options.command = 'stt-prompt';
+        const next = args[i + 1];
+        if (next && !next.startsWith('-')) {
+          options.sttPromptText = next;
+          i++;
+        }
+        break;
+      }
+      case '--clear':
+        options.sttPromptClear = true;
         break;
       case 'send': {
         options.command = 'send';
@@ -350,6 +369,10 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
       await runGlasses(options);
       return 'exit';
 
+    case 'stt-prompt':
+      await runSttPromptCommand(options);
+      return 'exit';
+
     case 'send':
       await runSend(options);
       return 'exit';
@@ -393,7 +416,20 @@ async function runGlasses(options: CliOptions): Promise<void> {
     text: options.glassesText,
     kind: options.glassesKind ?? (options.glassesChoices?.length ? 'waiting' : 'info'),
     choices: options.glassesChoices,
-    session: options.glassesSession,
+    session: options.session,
+    port: options.port,
+  });
+}
+
+async function runSttPromptCommand(options: CliOptions): Promise<void> {
+  const { runSttPrompt } = await import('./commands/stt-prompt');
+  // Three states, and `undefined` is not "empty": no argument means show, and
+  // only --clear removes what is set. A bare `hrdle stt-prompt` wiping the
+  // session's vocabulary would be the kind of surprise this whole issue is
+  // about.
+  await runSttPrompt({
+    text: options.sttPromptClear ? null : options.sttPromptText,
+    session: options.session,
     port: options.port,
   });
 }
