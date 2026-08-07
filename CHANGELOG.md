@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **The ready screen says which glasses build is installed.** The setup guide
+  redeploys whenever a sentence changes; the glasses app is rebuilt, packed,
+  uploaded and promoted. So the two are never in step, and the version on the
+  phone was the half nobody could see - the card at the end of setup reported
+  the server's version, its session count and its API usage, and nothing at all
+  about the app doing the asking
+  - The app now puts its version and the commit it was built from into the
+    greeting it sends the guide, and the guide shows them as one more row. The
+    commit is there because a version number says which number a build claims,
+    not which code it holds: an unreleased build and the packed ehpk both
+    answer the same `0.0.57`
+  - Both were already baked in at build time (`__APP_VERSION__` from
+    `app.json`, `__BUILD_COMMIT__` from git) and until now went only to a trace
+    log nobody reads on a phone
+  - The row is left out entirely for an ehpk from before this, which greets the
+    guide exactly as it always did. The guide half of it lives in
+    hrdle/hrdle-setup
+
 ## [0.3.75] - 2026-08-07
 
 ### Fixed

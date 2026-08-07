@@ -164,7 +164,15 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
     switch (data.type) {
       case 'hrdle:ready':
         greeted = true
-        reply({ type: 'hrdle:host-ready' })
+        // The greeting carries which build is doing the greeting. The guide
+        // deploys on its own schedule and this app does not — so "which ehpk is
+        // installed?" is a question only this side can answer, and the ready
+        // screen is where someone is already looking when they ask it. An older
+        // ehpk simply omits the field and the guide leaves the row out.
+        reply({
+          type: 'hrdle:host-ready',
+          app: { version: __APP_VERSION__, commit: __BUILD_COMMIT__ },
+        })
         break
 
       case 'hrdle:get-url':
