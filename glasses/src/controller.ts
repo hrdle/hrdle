@@ -1058,7 +1058,7 @@ export class GlassesController {
         // right fallback and the one the server already implements.
         const paneId = this.currentPane()?.paneId
         if (cur && isSessionWaiting(cur)) {
-          const scraped = await this.scrapeChoices(cur.id)
+          const scraped = await this.scrapeChoices(cur.id, this.currentPane())
           if (scraped.length > 0) {
             this.enterChoice(scraped, { sessionId: cur.id, paneId }, this.scrapedInline)
             return
@@ -1639,16 +1639,40 @@ export class GlassesController {
   }
 
   /** Terminal scrape — fallback when the active waiting item has no choices. */
-  private async scrapeChoices(sessionId: string): Promise<string[]> {
+  private async scrapeChoices(sessionId: string, pane?: Pane): Promise<string[]> {
     // The demo's waiting session is holding a multi-select: the picker with
     // the most to show, and the one that was broken until today.
     if (this.demo) return demoChoices()
+
+    // What the agent recorded beats anything read off the screen: the options
+    // as it wrote them, with the descriptions the screen never carried. A call
+    // holding several questions is skipped - the pane draws a tab each and
+    // answers whichever is in front, and which one that is is not in the
+    // record.
+    const recorded = pane?.pendingQuestion
+    if (recorded && !recorded.ambiguous) {
+      this.scrapedInline = undefined
+      return recorded.options.map((o) => (o.description ? `${o.label} - ${o.description}` : o.label))
+    }
+
     await this.ws.requestContentAndWait(sessionId)
     this.scrapedInline = undefined
     const numbered = this.ws.getChoices(sessionId)
     if (numbered.length > 0) return numbered
+
     // Only when the numbered and checkbox reads found nothing: a prompt that
     // has both would otherwise be answered the harder way.
+    //
+    // And only for an agent that keeps no record of its questions. This read
+    // is a guess about paint - one item coloured unlike its neighbours - and
+    // where the agent can be asked directly and says it is asking nothing, the
+    // guess has nothing left to be right about. Both times it was wrong it was
+    // here: a kimi question's tab bar offered as that question's answer, and a
+    // Claude pane that was not asking anything offering a line number and a
+    // line of code from a `Read` result. A numbered list is still read for
+    // every agent, because a permission prompt is numbered and is in no
+    // record at all.
+    if (pane?.questionKnown === true) return []
     const inline = this.ws.getInlineChoices(sessionId)
     if (!inline) return []
     this.scrapedInline = inline
