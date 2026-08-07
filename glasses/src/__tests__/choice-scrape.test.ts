@@ -64,8 +64,13 @@ describe('extractChoices', () => {
       '   ↑↓ select  1-3 / ↵ choose  ←/→/tab switch  esc cancel',
     ].join('\n')
     // The description lines sit between the options, so the run has to
-    // tolerate the gap; `Other` is dropped as unanswerable.
-    expect(extractChoices(stripAnsi(pane))).toEqual(['モジュールごとに1ファイル', '全部で1ファイル'])
+    // tolerate the gap - and each one comes back attached to the label above
+    // it, because on a bare label like `案 A` it is the only thing that says
+    // what picking it does. `Other` is dropped as unanswerable.
+    expect(extractChoices(stripAnsi(pane))).toEqual([
+      'モジュールごとに1ファイル - 各モジュールに対応するテストファイルを個別に作成します',
+      '全部で1ファイル - すべてのテストを1つのファイルにまとめます',
+    ])
   })
 
   test("reads kimi's submit screen", () => {

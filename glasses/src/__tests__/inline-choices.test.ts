@@ -11,6 +11,8 @@ import {
   OPENCODE_FOOTER_ROW,
   OPENCODE_PERMISSION_ROW,
   OPENCODE_PERMISSION_ROW_WIDE,
+  KIMI_QUESTION_TAB_BAR_TICKED,
+  KIMI_QUESTION_TAB_BAR_PLAIN,
 } from './fixtures/opencode-permission'
 
 /**
@@ -274,5 +276,26 @@ describe('alongside the existing readers', () => {
   test('the numbered reader still finds nothing here', () => {
     const pane = [OPENCODE_PERMISSION_ROW, OPENCODE_FOOTER_ROW].join('\n')
     expect(extractChoices(pane)).toEqual([])
+  })
+})
+
+describe("kimi's question tab bar", () => {
+  test('the ticked state is refused, like claude\'s', () => {
+    expect(inlineChoicesInRow(KIMI_QUESTION_TAB_BAR_TICKED)).toBeUndefined()
+  })
+
+  test('the plain state is refused too, on the word rather than the shape', () => {
+    // Nothing marks this row as chrome: one item highlighted, one not. It was
+    // offered to a wearer as `intro.lead / Submit` on 2026-08-08.
+    expect(inlineChoicesInRow(KIMI_QUESTION_TAB_BAR_PLAIN)).toBeUndefined()
+  })
+
+  test('a real row of options still reads', () => {
+    // The guard must not cost opencode its permission prompt, which is what
+    // this whole reader exists for.
+    expect(inlineChoicesInRow(OPENCODE_PERMISSION_ROW)).toEqual({
+      options: ['Allow once', 'Allow always', 'Reject'],
+      selected: 0,
+    })
   })
 })

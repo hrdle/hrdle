@@ -16,11 +16,43 @@ export interface KimiSessionInfo {
   updatedAt: string;
 }
 
+/**
+ * `state.json` as Kimi Code writes it, in both schemas it has used.
+ *
+ * 0.34 renamed `workDir` to `cwd` and turned the timestamps from ISO strings
+ * into epoch milliseconds, announcing it with `version: 2`. The guard in
+ * `scan()` required `workDir`, so every session written by the new version was
+ * skipped: no conversation, no history row, no usage, no recap - a Chat view
+ * that said "no messages" about a session with a full transcript on disk.
+ *
+ * Read duck-typed rather than switched on `version`, so a `version: 3` that
+ * only adds fields keeps working, and the sessions already on disk in the old
+ * schema keep being read.
+ */
 interface KimiStateJson {
-  createdAt?: string;
-  updatedAt?: string;
+  version?: number;
+  createdAt?: string | number;
+  updatedAt?: string | number;
   title?: string;
+  /** v1. Superseded by `cwd`. */
   workDir?: string;
+  /** v2 (Kimi 0.34+). */
+  cwd?: string;
+}
+
+/**
+ * A `state.json` timestamp as an ISO string, whichever way it was written.
+ *
+ * Normalised here, at the one place both schemas meet, because everything
+ * downstream sorts and dates these as strings (`localeCompare` in
+ * `kimi-history.ts`, `new Date()` in `kimi-usage.ts`, `HistorySession.modified`).
+ * A number reaching any of them is a silent wrong answer rather than an error.
+ */
+function isoTimestamp(value: string | number | undefined): string | undefined {
+  if (typeof value === 'string') return value || undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 /** Minimal shape of a wire.jsonl `turn.prompt` record. */
@@ -49,7 +81,8 @@ export function turnPromptText(record: KimiTurnPromptRecord): string {
 /**
  * Kimi Code stores each session under
  * `~/.kimi-code/sessions/wd_<name>_<hash>/session_<uuid>/` with a `state.json`
- * (title / workDir / timestamps) and the main agent's wire log in
+ * (title / working directory / timestamps, in either schema - see
+ * `KimiStateJson`) and the main agent's wire log in
  * `agents/main/wire.jsonl`, whose `turn.prompt` records carry the user prompts
  * and whose `usage.record` records carry per-turn token usage. Sub-agent wires
  * (`agents/agent-N/`) are ignored.
@@ -100,15 +133,17 @@ export class KimiSessionStore {
       await Promise.all(entries.map(async (name) => {
         const sessionDir = join(projectDir, name);
         const state = await this.readState(join(sessionDir, 'state.json'));
-        if (!state?.updatedAt || !state.workDir) return;
+        const cwd = state?.cwd ?? state?.workDir;
+        const updatedAt = isoTimestamp(state?.updatedAt);
+        if (!updatedAt || !cwd) return;
         results.push({
           sessionId: name,
-          cwd: state.workDir,
+          cwd,
           dir: sessionDir,
-          title: state.title,
+          title: state?.title,
           firstPrompt: readFirstKimiPrompt(sessionDir),
-          createdAt: state.createdAt,
-          updatedAt: state.updatedAt,
+          createdAt: isoTimestamp(state?.createdAt),
+          updatedAt,
         });
       }));
     }));

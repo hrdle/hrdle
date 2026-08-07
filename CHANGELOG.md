@@ -41,6 +41,34 @@ All notable changes to this project will be documented in this file.
 ## [0.3.75] - 2026-08-07
 
 ### Fixed
+- **A Kimi session's conversation is readable again.** Kimi Code 0.34 renamed
+  the working directory in its `state.json` from `workDir` to `cwd` and turned
+  the timestamps into epoch milliseconds. Hrdle required the old name, so every
+  session started since that upgrade was skipped before anything could read it,
+  and Chat answered "no messages" about a session holding a full transcript
+  - The same blindness stopped the history list at the day of the upgrade, left
+    the Kimi usage tab under-reporting, and emptied the first prompt on the
+    workspace card
+  - Nothing appeared in a log, because a session that cannot be found and a
+    session with nothing in it return the same thing
+  - Both spellings are read now, so the sessions from before the upgrade are
+    still there
+- **A question on the glasses says what its options mean.** Kimi writes a bare
+  label on each numbered line - `案A`, `案B`, `案C` - and puts what tells them
+  apart on the line below it, which nothing was reading. The wearer was handed
+  three labels that name nothing and asked to choose between them
+  - The description under an option now travels with it, on the notification
+    and in the picker, cut to length rather than allowed to run
+  - A description the terminal wrapped is put back together the way the
+    language wants: latin text gets back the space the wrap consumed, Japanese
+    does not get one it never had
+  - Each row in the picker is clipped to a single line. An option with a
+    description on it is long, and three that wrapped would push the last one
+    off the screen it is being chosen from
+- **The tab bar above a Kimi question is no longer offered as its answer.** The
+  reader that finds options drawn side by side found `intro.lead   Submit` -
+  the bar that switches between questions - and opened a picker on it. Tapping
+  would have moved to another tab while looking like an answer
 - **A session list with nothing in it now says the VPN is off.** Hrdle is only
   reachable over the tailnet, so a phone with Tailscale switched off gets no
   answer from the server - and no answer is exactly what it looked like it had

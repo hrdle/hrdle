@@ -208,8 +208,49 @@ function dominantSpaceBackground(cells: Array<{ ch: string; bg: string | null }>
  * the whole row rather than dropping the item is deliberate: the walk counts
  * positions along the row the pane draws, and removing one from the middle
  * would move every option after it.
+ *
+ * Kimi draws the same bar and got through anyway, because it *wraps* its tick:
+ * `(\u2713) intro.lead   Submit`, where the first item carries no bare glyph at
+ * position 0 - it carries a bracket. Captured from the live pane on
+ * 2026-08-08, `(\u2713) intro.lead` sits on the row's own background while `Submit`
+ * is painted `48;2;79;168;255`, so "exactly one item painted differently" was
+ * satisfied and a wearer was offered the tab bar as the answer to the
+ * question - recorded in the picker as `>>> intro.lead / Submit`. Tapping it
+ * would have switched tabs while looking like an answer.
+ *
+ * So the parenthesised form counts as a toggle too. Written as an alternation
+ * rather than by adding `(` to the class: a bare `(` opens plenty of options
+ * that are not toggles (`(Recommended)` is one of kimi's own), and only the
+ * enclosed state marker makes it a tab.
  */
-const TOGGLE_GLYPH = /^[\u2610\u2611\u2612\u2713\u2714\u2717\u2718\u25cb\u25cf\u25ce\u25ef\u26ac[]/
+const TOGGLE_GLYPH =
+  /^(?:[\u2610\u2611\u2612\u2713\u2714\u2717\u2718\u25cb\u25cf\u25ce\u25ef\u26ac[]|\([ xX*\u2713\u2714\u25cb\u25cf]?\))/
+
+/**
+ * Words that make a row a bar of actions rather than a set of answers.
+ *
+ * The glyph test above needs the agent to have drawn a state marker, and kimi
+ * only draws its tick on the *inactive* tab: with the tab itself active the row
+ * is `intro.lead   Submit`, one item highlighted and one not, which is
+ * indistinguishable by shape from a genuine two-option menu. Both states were
+ * captured from the same pane minutes apart on 2026-08-08.
+ *
+ * What survives in both is the word. `Submit` is a thing a question's chrome
+ * does with the answers, never an answer - claude writes `\u2714 Submit` on its tab
+ * bar and kimi `Submit` on its, and where either agent really does offer it as
+ * an option it is numbered (`[1] Submit`) and read by a different path
+ * entirely, before this one is ever consulted.
+ *
+ * Refusing costs at most a picker that does not open, which the wearer can
+ * still answer from the pane; admitting costs an answer sent to the wrong
+ * place. This module already chose that direction once, for the same reason.
+ */
+const ACTION_BAR_WORDS = new Set(['submit', 'cancel', 'done'])
+
+/** Whether an item is one of those, ignoring the padding a highlight adds. */
+function isActionWord(text: string): boolean {
+  return ACTION_BAR_WORDS.has(text.trim().replace(/^[\u2713\u2714\u2611]\s*/, '').toLowerCase())
+}
 
 /** A gutter or rule rather than an option: the box-drawing a pane frames with. */
 function isFurniture(text: string): boolean {
@@ -262,6 +303,8 @@ export function inlineChoicesInRow(line: string): InlineChoices | undefined {
   if (items.some((it) => it.text.length > MAX_ITEM_CHARS)) return undefined
 
   if (items.some((it) => TOGGLE_GLYPH.test(it.text))) return undefined
+
+  if (items.some((it) => isActionWord(it.text))) return undefined
 
   const highlighted = items.filter((it) => String(it.bg) !== rowBg)
   if (highlighted.length !== 1) return undefined
