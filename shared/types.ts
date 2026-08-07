@@ -897,6 +897,23 @@ export interface ExtendedSessionResponse extends SessionResponse {
   ccFirstPrompt?: string;
   ccRecap?: string;
   ccRecapAt?: string;
+  /**
+   * Where `ccRecap` came from, because the two sources are not the same kind
+   * of thing and only one of them is worth a strip above the transcript.
+   *
+   * Claude writes a real away_summary: text that exists nowhere else and says
+   * what happened while you were not looking. A thread agent has no such
+   * concept, so its recap is a *copy of its latest assistant message* - useful
+   * as one line of context on a workspace card, and on the conversation screen
+   * the same words as the message directly beneath it.
+   *
+   * Kimi's was drawn on 79% of that session's conversation frames on
+   * 2026-08-08 (Claude's, on the same day: 0%), taking two of the panel's eight
+   * lines permanently to repeat what was already on screen.
+   *
+   * Absent means summary - an older server sending no kind at all is Claude's.
+   */
+  ccRecapKind?: 'summary' | 'last-message';
   waitingToolName?: string;
   panes?: PaneInfo[];
   /** Tabs of this workspace. Only present when it has more than one tab — a

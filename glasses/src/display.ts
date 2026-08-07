@@ -1011,6 +1011,29 @@ export const NOTICE_BORDER_COLOR = 6
  * Shared with the auto-advance clock, which has to know how much is waiting
  * behind the strip without rendering it.
  */
+/**
+ * What kind of recap an agent produces, when the server did not say.
+ *
+ * `ccRecapKind` is the answer, and the server that sends it is newer than some
+ * of the glasses that will ask. An ehpk outlives its server routinely - it is
+ * installed from a store, and the server is updated by hand - so the app is
+ * left holding the old shape, where a thread agent's copy of its own last
+ * message is indistinguishable from Claude's summary and gets a permanent
+ * strip either way.
+ *
+ * Which agent it is, it does know. Every agent but Claude reaches its recap
+ * the same way (`AgentThread.recap`: there is no away_summary to read, so the
+ * latest assistant message stands in), and that is a property of the agent
+ * rather than of the version talking to us.
+ *
+ * Consulted only when the server said nothing. Where it does say, it wins:
+ * this list is a copy of something the other side knows for certain, and a
+ * copy that outvoted the original would be worse than no copy at all.
+ */
+function kindOfAgent(agent: string | undefined): 'summary' | 'last-message' {
+  return agent && agent !== 'claude' ? 'last-message' : 'summary'
+}
+
 function conversationNoticeText(state: AppState): string {
   const session = state.sessions[state.sessionIndex]
   const pane = state.selectedPaneId
@@ -1022,7 +1045,17 @@ function conversationNoticeText(state: AppState): string {
   const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
   const recapText = pane ? pane.recap : session?.ccRecap
   const recapAt = pane ? pane.recapAt : session?.ccRecapAt
-  const recap = onLatest && recapIsCurrent(recapAt, state.conversation) ? recapBlock(recapText) : []
+  // A pane's recap is Claude's, so it is always a summary. A session's may be
+  // a thread agent's copy of its own latest message, and that one is not shown:
+  // it repeats the message directly beneath it and takes two of eight lines to
+  // do it. Kimi's was up on 79% of its conversation frames on 2026-08-08,
+  // against 0% for Claude on the same day - the difference is not that Kimi
+  // talks more, it is that the staleness test cannot retire a recap whose
+  // source *is* the newest message. Nothing retires it, so it never leaves.
+  const isSummary = pane ? true : (session?.ccRecapKind ?? kindOfAgent(session?.agent)) === 'summary'
+  const recap = onLatest && isSummary && recapIsCurrent(recapAt, state.conversation)
+    ? recapBlock(recapText)
+    : []
   return [...banner, ...recap].join('\n')
 }
 

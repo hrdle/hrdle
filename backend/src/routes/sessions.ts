@@ -353,6 +353,14 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       ccFirstPrompt: includeClaudeInfo ? (isExactPathMatch ? ccSession?.firstPrompt : undefined) : agentThread?.firstPrompt,
       ccRecap: includeClaudeInfo && isExactPathMatch ? ccSession?.lastRecap?.content : agentThread?.recap,
       ccRecapAt: includeClaudeInfo && isExactPathMatch ? ccSession?.lastRecap?.timestamp : agentThread?.recapAt,
+      // The two branches above are different kinds of text, and this is the
+      // only place that knows which one was taken: Claude's is a summary, a
+      // thread agent's is a copy of its own latest message (`AgentThread.recap`
+      // says so). A reader that cannot tell them apart puts the copy above the
+      // message it copies.
+      ccRecapKind: (includeClaudeInfo && isExactPathMatch
+        ? (ccSession?.lastRecap ? 'summary' : undefined)
+        : (agentThread?.recap ? 'last-message' : undefined)) as 'summary' | 'last-message' | undefined,
       indicatorState: sessionIndicatorState,
       ccSessionId: includeClaudeInfo ? s.agentSessionId : undefined,
       bridgeSessionId:
@@ -437,6 +445,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       ccFirstPrompt: undefined,
       ccRecap: undefined,
       ccRecapAt: undefined,
+      ccRecapKind: undefined,
       indicatorState: undefined,
       ccSessionId: lost.ccSessionId,
       bridgeSessionId: undefined,
