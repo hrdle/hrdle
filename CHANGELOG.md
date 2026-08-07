@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.72] - 2026-08-07
 
 ### Fixed
 - **A pane that redraws no longer mints questions.** OpenCode's TUI redraws
