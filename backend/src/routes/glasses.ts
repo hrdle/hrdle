@@ -112,10 +112,16 @@ glasses.post('/stt', async (c) => {
     const prompt = await sttPrompt({ sessionId: c.req.query('session') });
     if (prompt) form.append('prompt', prompt);
 
+    // The server's own idle timeout is 120s (#209), and the wearer is watching
+    // "Transcribing..." for all of it. Bound the leg we do not control well
+    // inside that, so a stalled provider comes back as a 502 the glasses can
+    // report rather than as the connection dying under them: 8 seconds of
+    // audio transcribes in ~0.33s, so 60 is already far past slow.
     const res = await fetch(GROQ_STT_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
+      signal: AbortSignal.timeout(60_000),
     });
 
     // Recorded before the status is acted on: a rejected request still spends

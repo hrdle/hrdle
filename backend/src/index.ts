@@ -477,6 +477,29 @@ const serverOptions = {
   hostname: host,
   // Allow large uploads (videos etc.) — 10GB
   maxRequestBodySize: 10 * 1024 * 1024 * 1024,
+  /**
+   * Seconds a request may go without traffic before Bun closes it (#209).
+   *
+   * Bun's default is 10, and the `idleTimeout: 60` further down applies to the
+   * `websocket` object, not to HTTP - so every HTTP request ran on the default.
+   * Six speech transcriptions died at it in the two days to 2026-08-06, each
+   * arriving on the glasses as "nothing was recognized":
+   *
+   *   [Bun.serve]: request timed out after 10 seconds
+   *   --> POST /api/glasses/stt 500 11s
+   *
+   * Groq is not the slow part - 8 seconds of audio transcribes in ~0.33s from
+   * this host. What takes the time is the upload from the phone over the
+   * tailnet, so the requests that died were the long recordings on a slow
+   * link: exactly the ones worth not losing. Recording has no length limit, on
+   * purpose.
+   *
+   * 120 rather than the 255 Bun allows, because this is also the ceiling on a
+   * request that has genuinely stalled, and 10GB of upload is allowed above.
+   * At the G2's 16kHz mono PCM (32KB/s) it covers a several-minute recording
+   * over a link slow enough to be worth worrying about.
+   */
+  idleTimeout: 120,
   tls: {
     cert: Bun.file(certPath),
     key: Bun.file(keyPath),
