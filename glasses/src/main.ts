@@ -8,7 +8,7 @@
 import { setBaseUrl, transcribe, reportLog } from './api.ts'
 import { initDisplay, updateDisplay, updateHeader, setupEvents, buildSetupGuide, screenText, panelWrites, panelDrops, setPanelTrace, invalidatePanel, startMic, stopMic } from './display.ts'
 import type { AppState, Bridge } from './display.ts'
-import { GlassesController } from './controller.ts'
+import { GlassesController, MIC_SAMPLE_RATE } from './controller.ts'
 import { createSetupGate } from './setup-gate.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { startPhoneUI } from './phone-ui.ts'
@@ -18,7 +18,6 @@ import { readStored, storageKey } from './storage.ts'
 import { DriftMonitor } from './drift.ts'
 
 const URL_SUFFIX = 'url'
-const MIC_SAMPLE_RATE = 16000
 // Fine enough to see lateness building before the beat that would have shown it.
 const DRIFT_TICK_MS = 1000
 // Slow now that the crash is understood: enough to date a silent death, not
