@@ -867,8 +867,10 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
  * lands on a question they were never shown - the worst of the two failure
  * modes, since it looks like it worked.
  *
- * A fresh item rather than an edit in place: this is a different decision, and
- * the id is what tells a client the difference.
+ * A fresh item rather than an edit in place - but only when the question
+ * itself changed. The id is what tells a client "this is another decision"
+ * from "the same one, redrawn", and a pane that redraws often will mint
+ * questions out of nothing if those two are not kept apart.
  */
 async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   if (subscribers.size === 0) return; // presence gate, same as enterBlocked
@@ -908,15 +910,21 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // question the pane has already moved past. Wrong question with no options
   // beats right-looking options for the wrong question.
   if (item.choices?.length && !next.choices?.length && next.text === item.text) return;
-  // The selection counts as a change even when nothing else moved. On a pane
-  // answered by walking its cursor, that index is where the walk starts, and
-  // someone at the keyboard can move it without a word of the question
-  // changing. A stale one sends the right number of steps from the wrong place.
-  if (
-    next.text === item.text &&
-    sameChoices(item.choices, next.choices) &&
-    next.choiceSelected === item.choiceSelected
-  ) {
+  // Same question, and only the pane's own cursor has moved under it. That has
+  // to reach the glasses - the walk that answers this pane starts from that
+  // index - but it is NOT a new decision, and sending it as one is what broke a
+  // wearer on 2026-08-07: seven identical permission prompts inside 1.3
+  // seconds, each with an id of its own, so answering the first only revealed
+  // the second. OpenCode's TUI redraws constantly and the highlight reads
+  // slightly differently across frames; every flicker minted another question.
+  //
+  // Updated in place instead. The client keys by id, so the same id is an edit
+  // and a new one is an interruption - which is the actual difference between
+  // "the cursor moved" and "it is asking something else".
+  if (next.text === item.text && sameChoices(item.choices, next.choices)) {
+    if (next.choiceSelected === item.choiceSelected) return;
+    item.choiceSelected = next.choiceSelected;
+    broadcastUpsert(item);
     return;
   }
 

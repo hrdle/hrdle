@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **A pane that redraws no longer mints questions.** OpenCode's TUI redraws
+  constantly and its highlight reads slightly differently across frames, and
+  the relay treated every one of those as a new decision - a fresh item with an
+  id of its own. On the device that was seven identical permission prompts
+  inside 1.3 seconds: answering the first only uncovered the second, and the
+  wearer could not get past them
+  - The pane's own cursor does have to reach the glasses, because the walk that
+    answers such a pane starts from it. But that is an edit to the question on
+    screen, not another question. It is sent under the same id now, which is
+    how a client is told the difference between "redrawn" and "asking something
+    else"
+  - The behaviour this replaces was required by a test written the day before,
+    so the test was wrong too and went with it
+
 ## [0.3.71] - 2026-08-07
 
 ### Fixed
