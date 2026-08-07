@@ -178,7 +178,59 @@ describe('scrape extraction', () => {
       '',
       '   ↑↓ select  1-3 / ↵ choose  ←/→/tab switch  esc cancel',
     ]);
-    expect(choices).toEqual(['モジュールごとに1ファイル', '全部で1ファイル']);
+    // The description under each label comes with it. Without it the wearer
+    // gets labels that name nothing - `案A / 案B / 案C` on 2026-08-08, where
+    // every word that told them apart was on the line below.
+    expect(choices).toEqual([
+      'モジュールごとに1ファイル - 各モジュールに対応するテストファイルを個別に作成します',
+      '全部で1ファイル - すべてのテストを1つのファイルにまとめます',
+    ]);
+  });
+
+  test('extractNumberedChoices keeps the footer hints out of a description', () => {
+    // The hints sit left of the labels, so indentation alone rejects them.
+    expect(
+      extractNumberedChoices([
+        '      [1] 案 A (Recommended)',
+        '          現行のトーンに一番近い',
+        '      [2] 案 B',
+        '  ↑↓ select  1-2 / ↵ choose  ←/→/tab switch  esc cancel',
+      ]),
+    ).toEqual(['案 A (Recommended) - 現行のトーンに一番近い', '案 B']);
+  });
+
+  test('extractNumberedChoices rejoins a description the pane wrapped', () => {
+    // Captured from the live kimi pane on 2026-08-08: the description ran past
+    // the column and the terminal broke it mid-word. Joined with a space, the
+    // wearer reads `スマホやG2か ら` - a space that was never written.
+    expect(
+      extractNumberedChoices([
+        '      [1] 案A (Recommended)',
+        '          現行の動詞列の構成を活かしつつ「スマホやG2か',
+        '          ら」を明示',
+      ]),
+    ).toEqual(['案A (Recommended) - 現行の動詞列の構成を活かしつつ「スマホやG2から」を明示']);
+  });
+
+  test('extractNumberedChoices keeps the space latin wrapping consumed', () => {
+    expect(
+      extractNumberedChoices([
+        '      [1] Rewrite',
+        '          start again from the',
+        '          current interface',
+      ]),
+    ).toEqual(['Rewrite - start again from the current interface']);
+  });
+
+  test('extractNumberedChoices cuts a description that runs long', () => {
+    const [only] = extractNumberedChoices([
+      '  [1] Yes',
+      `      ${'x'.repeat(200)}`,
+      '  [2] No',
+    ]);
+    expect(only.length).toBeLessThan(100);
+    expect(only.startsWith('Yes - xxx')).toBe(true);
+    expect(only.endsWith('…')).toBe(true);
   });
 
   test("extractNumberedChoices reads kimi's submit screen", () => {

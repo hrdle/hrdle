@@ -153,11 +153,14 @@ export function extractChoices(text: string): string[] {
   // stripAnsi folds both onto `>`, but a buffer that never went through it may
   // still carry them.
   const NUMBERED = /^\s*[\u276f\u203a\u00bb\u276d\u2771\u27e9>*\u2192\u2023\u25b8]?\s*(?:(\d+)[.)]|\[(\d+)\])\s*(.+)/
-  const found: { n: number; text: string; at: number }[] = []
+  const found: { n: number; text: string; at: number; col: number }[] = []
   const from = Math.max(0, lines.length - CHOICE_TAIL_LINES)
   for (let i = from; i < lines.length; i++) {
     const m = lines[i].match(NUMBERED)
-    if (m) found.push({ n: Number(m[1] ?? m[2]), text: m[3].trim(), at: i })
+    if (m) {
+      const text = m[3].trim()
+      found.push({ n: Number(m[1] ?? m[2]), text, at: i, col: labelColumn(lines[i], text) })
+    }
   }
   if (found.length < 2) return extractCheckboxChoices(lines, from)
 
@@ -176,8 +179,77 @@ export function extractChoices(text: string): string[] {
   // Dropped last, never before the run is picked: they are numbered rows like
   // any other, and removing one first would break the 1, 2, 3 the run is
   // recognised by.
-  return best.map((c) => c.text).filter((c) => !isUnanswerable(c))
+  return best
+    .filter((c) => !isUnanswerable(c.text))
+    .map((c) => withDetail(c.text, detailFor(lines, c.at, c.col)))
 }
+
+/** Where the label starts within its line, for the indent comparison. */
+function labelColumn(line: string, label: string): number {
+  const at = line.lastIndexOf(label)
+  return at < 0 ? line.length : at
+}
+
+/**
+ * The description an agent draws under an option, or ''.
+ *
+ * Kimi's AskUserQuestion puts a bare label on the numbered line - `案 A`,
+ * `案 B` - and everything that tells them apart on the line below, set flush
+ * with the label. Reading the numbered lines alone offered a wearer three
+ * labels naming nothing (recorded on the G2, 2026-08-08).
+ *
+ * Bounded by indentation, which is what separates a continuation from the
+ * footer hints under the block: a description is aligned with its label or
+ * further in, and `↑↓ select …` is neither. A blank line ends the option.
+ *
+ * Kept in step with `extractNumberedChoices` in `glasses-relay.ts`, which does
+ * this against a relay item's captured lines rather than a live buffer.
+ */
+function detailFor(lines: string[], at: number, col: number): string {
+  let detail = ''
+  for (let i = at + 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line.trim()) break
+    if (line.match(NUMBERED_ROW) || line.match(CHECKBOX)) break
+    if (line.length - line.trimStart().length < col) break
+    detail = joinWrapped(detail, line.trim())
+  }
+  return detail
+}
+
+/**
+ * Rejoin a description the pane wrapped.
+ *
+ * A terminal breaks latin text at a space and eats it, so the halves need one
+ * back; it breaks Japanese wherever the column ends, so adding one there
+ * invents a space nobody typed (`スマホやG2か ら`). The seam decides, not a
+ * language setting.
+ *
+ * Kept in step with `joinWrapped` in `glasses-relay.ts`.
+ */
+function joinWrapped(head: string, tail: string): string {
+  if (!head) return tail
+  if (!tail) return head
+  const ascii = /[\x20-\x7e]/
+  return ascii.test(head[head.length - 1]) || ascii.test(tail[0])
+    ? `${head} ${tail}`
+    : `${head}${tail}`
+}
+
+/** Longest a description may run before it is cut. */
+const MAX_DETAIL_CHARS = 80
+
+function withDetail(label: string, detail: string): string {
+  if (!detail) return label
+  const cut = detail.length <= MAX_DETAIL_CHARS
+    ? detail
+    : `${detail.slice(0, MAX_DETAIL_CHARS - 1).trimEnd()}…`
+  return `${label} - ${cut}`
+}
+
+/** The numbered form again, at module scope, so `detailFor` can stop at the
+ *  next option without re-deriving it. */
+const NUMBERED_ROW = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(?:(\d+)[.)]|\[(\d+)\])\s*(.+)/
 
 /** A checkbox row carrying no number: kimi's multi-select draws only these. */
 const CHECKBOX = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(\[[ xX*✓✔]\]\s*\S.*)/

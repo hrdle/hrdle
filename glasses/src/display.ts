@@ -1409,7 +1409,14 @@ function choiceBody(state: AppState): string {
     // and neither has a glyph. Unsubstituted, the wearer's own ticks reach the
     // panel as tofu, while the simulator draws them beautifully from a browser
     // font - the exact divergence the simulator exists to make visible.
-    return `${cursor} ${stripUnrenderable(opt)}`
+    const row = `${cursor} ${stripUnrenderable(opt)}`
+    // One row, one line. An option now carries the description the agent drew
+    // under it (`案 A - 現行のトーンに一番近い`), and left to wrap, three of
+    // them overflow the picker's eight lines and push the last option off a
+    // screen the wearer is being asked to choose from. Cut rather than wrapped:
+    // the count of rows has to match the count of options, because the cursor
+    // is a position in that list.
+    return textWidth(row) > BODY_WIDTH ? ellipsize(row) : row
   }).join('\n')
 }
 

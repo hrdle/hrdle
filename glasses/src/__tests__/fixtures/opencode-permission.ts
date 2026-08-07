@@ -41,3 +41,27 @@ export const OPENCODE_PERMISSION_ROW_WIDE =
  */
 export const CLAUDE_QUESTION_TAB_BAR =
   '←  ☒ 複数選択 \x1b[0m\x1b[38;2;0;0;0m\x1b[48;2;177;185;249m ✔ Submit \x1b[0m\x1b[38;2;153;153;153m →\x1b[0m'
+
+/**
+ * Kimi's AskUserQuestion tab bar, in both the states it draws, captured from a
+ * live kimi-k3 pane on 2026-08-08.
+ *
+ * The same trap as `CLAUDE_QUESTION_TAB_BAR` and it got through, because kimi
+ * wraps its tick instead of leading with one. A wearer was offered
+ * `intro.lead / Submit` as the answer to a question about lead sentences
+ * (recorded in the picker at 05:41), where tapping switches tabs while looking
+ * like an answer.
+ *
+ * Two states because the tick is not always there, and only the first can be
+ * recognised by its shape: in the second the row is a highlighted item and a
+ * plain one, which is exactly what a real menu is. What survives in both is the
+ * word `Submit` - an action the bar carries, not an answer to anything.
+ */
+
+/** `(✓) intro.lead   Submit`, with `Submit` highlighted. */
+export const KIMI_QUESTION_TAB_BAR_TICKED =
+  '  \x1b[0m\x1b[38;2;78;200;126m(✓) intro.lead\x1b[0m  \x1b[0m\x1b[1m\x1b[38;2;224;224;224m\x1b[48;2;79;168;255m Submit \x1b[0m\r'
+
+/** The same bar with the tab itself active and no tick drawn at all. */
+export const KIMI_QUESTION_TAB_BAR_PLAIN =
+  '  \x1b[0m\x1b[1m\x1b[38;2;224;224;224m\x1b[48;2;79;168;255m intro.lead \x1b[0m  \x1b[0m\x1b[38;2;136;136;136m Submit \x1b[0m\r'

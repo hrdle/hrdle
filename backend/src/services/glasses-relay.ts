@@ -363,16 +363,101 @@ export function stripLeftRule(line: string): string {
   return line.replace(LEFT_RULE, '');
 }
 
-/** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options. */
+/**
+ * The line under an option that says what it means.
+ *
+ * Kimi's AskUserQuestion puts a bare label on the numbered line and the
+ * substance under it, indented past where the label starts:
+ *
+ * ```
+ *     [1] 案 A (Recommended)
+ *         現行の動詞列の構成を活かしつつ「スマホやG2から」を明示
+ * →   [2] 案 B
+ *         最短。操作できることを先に言い切る
+ * ```
+ *
+ * Reading only the numbered lines sent a wearer `案A / 案B / 案C` - three
+ * labels that name nothing, on a question whose whole content was in the lines
+ * that were dropped. Recorded on the G2 on 2026-08-08 and unanswerable as
+ * drawn.
+ *
+ * Recognised by indentation rather than by what it says: a continuation is
+ * indented further than the label it belongs to, which the footer hints
+ * (`↑↓ select …`, flush left) and a blank separator line are not. The
+ * indentation is measured against where the *label* starts, not the line, so
+ * the cursor glyph on the selected row does not change the answer.
+ */
+const MAX_DETAIL_CHARS = 80;
+
+/** Where the label starts within an option line, for the indent comparison. */
+function labelColumn(line: string, label: string): number {
+  const at = line.lastIndexOf(label);
+  return at < 0 ? line.length : at;
+}
+
+/** Leading whitespace of a line, in characters. */
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
+}
+
+/** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options, each
+ *  with the description line under it when the agent draws one. */
 export function extractNumberedChoices(lines: string[]): string[] {
-  const choices: string[] = [];
+  const rows: Array<{ label: string; detail: string; column: number }> = [];
   for (const raw of lines) {
     const line = stripLeftRule(raw);
     const m = line.match(NUMBERED_OPTION) ?? line.match(CHECKBOX_OPTION);
-    if (m) choices.push(m[1].trim());
-    if (choices.length >= MAX_CHOICES) break;
+    if (m) {
+      if (rows.length >= MAX_CHOICES) break;
+      const label = m[1].trim();
+      rows.push({ label, detail: '', column: labelColumn(line, label) });
+      continue;
+    }
+    const last = rows[rows.length - 1];
+    if (!last) continue;
+    // A blank line ends the block: what follows it belongs to the prompt's
+    // furniture, not to the option above.
+    if (!line.trim()) {
+      last.column = Number.POSITIVE_INFINITY;
+      continue;
+    }
+    // Aligned with the label, or further in. Kimi sets its description flush
+    // with the label above it, so "further in than the label" would miss every
+    // one of them; the footer hints sit far to the left of it either way.
+    if (indentOf(line) < last.column) continue;
+    last.detail = joinWrapped(last.detail, line.trim());
   }
-  return choices.filter((c) => !isUnanswerable(c));
+
+  // Filtered on the label alone: `Other` becomes unanswerable whatever
+  // description an agent hangs off it.
+  return rows
+    .filter((r) => !isUnanswerable(r.label))
+    .map((r) => (r.detail ? `${r.label} - ${truncate(r.detail, MAX_DETAIL_CHARS)}` : r.label));
+}
+
+/**
+ * Rejoin a description the pane wrapped across two lines.
+ *
+ * A terminal breaks latin text at a space, which the break then consumes, so
+ * the halves need one put back. It breaks Japanese wherever the column runs
+ * out - mid-word, mid-phrase - and putting a space there invents one that was
+ * never written: `スマホやG2から` came back as `スマホやG2か ら` on the first
+ * capture of this working.
+ *
+ * Decided by the characters either side of the seam rather than by a language
+ * setting: two non-ASCII characters meeting is a break the width forced.
+ */
+function joinWrapped(head: string, tail: string): string {
+  if (!head) return tail;
+  if (!tail) return head;
+  const seam = /[\x20-\x7e]/;
+  const spaced = seam.test(head[head.length - 1]) || seam.test(tail[0]);
+  return spaced ? `${head} ${tail}` : `${head}${tail}`;
+}
+
+/** Cut to `max` characters, marking that something was cut. */
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
 /**
