@@ -69,3 +69,37 @@ describe('the recap strip', () => {
     expect(notice).toContain('renamed the service')
   })
 })
+
+describe('an ehpk talking to a server from before the kind', () => {
+  test("a thread agent's recap is hidden on the agent alone", () => {
+    // v0.3.76 and earlier send no kind at all. The app still knows which agent
+    // it is, and every agent but claude reaches its recap the same way.
+    const { notice } = screenText(state({
+      agent: 'kimi',
+      ccRecap: 'the newest message',
+      ccRecapAt: '2026-08-08T06:00:00.000Z',
+    }))
+    expect(notice).toBe('')
+  })
+
+  test("claude's is still drawn", () => {
+    const { notice } = screenText(state({
+      agent: 'claude',
+      ccRecap: 'renamed the service and moved its unit file',
+      ccRecapAt: '2026-08-08T06:00:00.000Z',
+    }))
+    expect(notice).toContain('renamed the service')
+  })
+
+  test('the server wins where it does speak', () => {
+    // A kind of `summary` on a non-claude agent is the server telling us
+    // something this side cannot know. It is not overruled by the guess.
+    const { notice } = screenText(state({
+      agent: 'kimi',
+      ccRecap: 'a real summary, somehow',
+      ccRecapAt: '2026-08-08T06:00:00.000Z',
+      ccRecapKind: 'summary',
+    }))
+    expect(notice).toContain('a real summary')
+  })
+})
