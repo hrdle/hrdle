@@ -8,7 +8,7 @@ Codex and other coding agents should use this file as the single source of repos
 
 Hrdle is a web-based terminal session manager for coding agents — Claude Code, Codex, Grok, Kimi and OpenCode. It runs them in herdr workspaces and provides a web UI for remote access from tablets/mobile devices.
 
-Formerly CC Hub, renamed in #459: the old name said Claude Code, which stopped being the whole story once the other agents arrived. `m0a/cc-hub` is archived at v0.2.98 and this repository carries development forward. The rename lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
+Formerly CC Hub, renamed in #459: the old name said Claude Code, which stopped being the whole story once the other agents arrived. `m0a/cc-hub` is archived at v0.2.98 and this repository carries development forward. It is **not** a remote here and must not be added as one — it was, until it overwrote this repository's `main` with its own history on 2026-08-07 (recovered from the release tags; see the release skill). The rename lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
 
 ## Language and Style Rules
 

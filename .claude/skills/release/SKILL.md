@@ -58,10 +58,29 @@ description: Run the Hrdle release procedure - version bump, release PR, tag pus
 
 - **Never build the binary locally** — CI builds it and attaches it to the
   release
-- **Always pass `--repo hrdle/hrdle` to `gh`.** This checkout also has an
-  `upstream` remote pointing at `m0a/cc-hub`, which is archived and read-only.
-  Without `--repo`, `gh pr create` resolves there and fails with "Repository was
-  archived so is read-only", and `gh pr list` shows that repository's PRs
+- **Always pass `--repo hrdle/hrdle` to `gh`.** There is one remote now and it
+  is the right one, so this is belt and braces rather than a fix - but it costs
+  nothing and it is the habit that survives someone adding a second remote
+  again.
+
+  There was a second one until 2026-08-07: `upstream`, pointing at the archived
+  `m0a/cc-hub`. Without `--repo`, `gh pr create` resolved there and failed with
+  "Repository was archived so is read-only". It ended worse than that. On
+  2026-08-07 at 00:45Z `hrdle/hrdle`'s `main` was force-pushed to cc-hub's
+  history - the head became `docs: say at the top that this is where the
+  project stops`, v0.2.98, and every release from 0.3.66 to 0.3.72 disappeared
+  from the branch.
+
+  Nothing was lost, because tags do not move: `v0.3.72` still pointed at the
+  old head, so `git push origin <sha>:main --force-with-lease` put it back.
+  **That is the recovery if it ever happens again** - find the newest release
+  tag, check every worktree for anything newer (`git merge-base --is-ancestor`),
+  and restore with a lease on the damaged head so a concurrent write cannot be
+  clobbered in the fixing.
+
+  The remote itself is gone now. Do not add it back. Nothing here needs to
+  fetch from cc-hub, and the only thing it ever did was sit one typo away from
+  overwriting this repository.
 - Versions are semver patch by default (0.0.41 -> 0.0.42)
 - Ask the user before a major or minor bump
 - Keep the release notes short and factual
