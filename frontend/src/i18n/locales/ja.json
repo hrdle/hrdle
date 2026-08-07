@@ -298,6 +298,14 @@
 		"disconnected": "切断されました",
 		"reconnect": "再接続"
 	},
+	"connection": {
+		"unreachable": "サーバーに接続できません",
+		"tailscaleHint": "この端末の Tailscale を有効にしてください。Hrdle は Tailscale 経由でのみ接続できます。",
+		"genericHint": "サーバーが起動しているか、この端末から到達できるか確認してください。",
+		"retry": "再試行",
+		"retryingAutomatically": "自動で再接続を試みています",
+		"staleList": "接続が切れています。最後に取得したセッションを表示しています"
+	},
 	"auth": {
 		"title": "ログイン",
 		"password": "パスワード",

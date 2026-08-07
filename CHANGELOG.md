@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **A session list with nothing in it now says the VPN is off.** Hrdle is only
+  reachable over the tailnet, so a phone with Tailscale switched off gets no
+  answer from the server - and no answer is exactly what it looked like it had
+  got: an empty list, indistinguishable from a machine with no sessions on it.
+  The list arrives over a WebSocket that never opens rather than a request that
+  fails, so nothing on that path had a failure to report
+  - The peers poll is what knows. It already runs every 5s and is the first
+    thing to fail when the device leaves the tailnet, so it now carries a
+    reachability flag: an HTTP status, even a 500, counts as reached, and only
+    a transport failure counts as unreachable
+  - Where the list would be blank it now says the server cannot be reached and
+    what to do about it, and where the list is still showing what it last
+    managed to load it says that too, above the stale rows. The advice names
+    Tailscale only when the address the page was served from is a tailnet one
+    (a `.ts.net` name, CGNAT, or the Tailscale ULA); anything else gets the
+    generic line rather than a guess
+  - Coming back is immediate. The session watchers back off up to a minute
+    between attempts, so switching the VPN on used to look like it had not
+    worked; the first successful poll after a failure now resets that backoff
+    and reconnects
+
 ## [0.3.74] - 2026-08-07
 
 ### Added

@@ -189,6 +189,27 @@ function openWatcher(peer: PeerClientView) {
 	}
 }
 
+/**
+ * Drop the backoff and reconnect every watcher at once. Called when something
+ * else has just established that the server is answering again (the peers poll
+ * succeeding after a failure), because a watcher that has been retrying for a
+ * while is up to 60s from its next attempt - long enough that switching the VPN
+ * back on looks like it did not work.
+ */
+export function reconnectPeerWatchersNow() {
+	for (const [peerId, watcher] of watchers) {
+		if (watcher.closed) continue;
+		if (watcher.ws && watcher.ws.readyState === WebSocket.OPEN) continue;
+		if (watcher.retryTimer !== null) {
+			window.clearTimeout(watcher.retryTimer);
+			watcher.retryTimer = null;
+		}
+		watcher.retryAttempt = 0;
+		const peer = peerInfoById.get(peerId);
+		if (peer) openWatcher(peer);
+	}
+}
+
 function closeWatcher(peerId: string) {
 	const watcher = watchers.get(peerId);
 	if (!watcher) return;
