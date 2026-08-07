@@ -1022,7 +1022,7 @@ describe('opencode reaches the glasses', () => {
     expect(coloured).toBe(0);
   });
 
-  test('a selection that moved is pushed even when the question did not', () => {
+  test('a selection that moved is an edit, not another question', () => {
     // Someone at the keyboard can walk the pane's cursor without a word of the
     // question changing. That index is where the glasses' own walk starts, so a
     // stale one sends the right number of steps from the wrong place, and the
@@ -1065,10 +1065,18 @@ describe('opencode reaches the glasses', () => {
       await trackGlassesRelay();
 
       const next = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
-      expect(next.id).not.toBe(first.id);
+      // The SAME id. A moved cursor is an edit to the question on screen, not
+      // another question - and this file used to mint a new id for it, which on
+      // a pane that redraws as often as opencode's produced seven identical
+      // permission prompts inside 1.3 seconds. Answering one only uncovered
+      // the next; the wearer could not get past them.
+      expect(next.id).toBe(first.id);
       expect(next.text).toBe(first.text);
       expect(next.choices).toEqual(first.choices);
       expect(next.choiceSelected).toBe(2);
+      // Nothing is taken down either: a remove and a fresh upsert is how the
+      // client is told to treat it as new.
+      expect(sock.ofType('glasses-relay-remove')).toEqual([]);
     })();
   });
 });
@@ -1330,5 +1338,46 @@ describe('codex draws its cursor with a different glyph again', () => {
     // a line did, and gluing the line above it on would be inventing.
     expect(extractQuestionLine(['Some prose about the change.', 'Which one?', '❯ 1. A', '  2. B'], 2))
       .toBe('Which one?');
+  });
+});
+
+describe('a pane that redraws does not mint questions', () => {
+  /**
+   * OpenCode's TUI redraws constantly, and the highlight reads slightly
+   * differently across frames. Reported from the device on 2026-08-07: seven
+   * identical permission prompts inside 1.3 seconds, each with an id of its
+   * own, so answering the first only uncovered the second and the wearer could
+   * not get past them.
+   */
+  test('many redraws of one question stay one question', async () => {
+    const bg = (colour: string, text: string) => `\x1b[48;2;${colour}m${text}\x1b[0m`;
+    const ROW = '30;30;30';
+    const HIT = '245;167;66';
+    const row = (selected: number) =>
+      bg(ROW, '  ┃   ') +
+      ['Allow once', 'Allow always', 'Reject']
+        .map((o, i) => bg(i === selected ? HIT : ROW, o))
+        .join(bg(ROW, '   ')) +
+      bg(ROW, ' '.repeat(30));
+    const pane = (selected: number) =>
+      ['  ┃  △ Permission required', '  ┃    → Edit x.txt', row(selected)].join('\n');
+
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => OPENCODE_PANE;
+    let frame = 0;
+    glassesRelayDeps.readPaneAnsi = async () => pane(frame++ % 3);
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [{ paneId: '%0', agentStatus: 'blocked' }]),
+    ];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    const first = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+
+    // Ten more passes, the highlight landing somewhere different each time.
+    for (let i = 0; i < 10; i++) await trackGlassesRelay();
+
+    const ids = new Set(sock.ofType('glasses-relay').map((m) => (m.item as Record<string, unknown>).id));
+    expect(ids).toEqual(new Set([first.id]));
+    expect(sock.ofType('glasses-relay-remove')).toEqual([]);
   });
 });
