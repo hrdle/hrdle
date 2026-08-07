@@ -81,7 +81,7 @@ function describeKey(v: GlassesSettingsView): string {
 }
 
 function describePrompt(v: GlassesSettingsView): string {
-  if (v.sttPromptSource === 'setting') return t('settings.promptSetting')
+  if (v.sttPromptSource === 'off') return t('settings.promptOff')
   if (v.sttPromptSource === 'env') return t('settings.promptEnv')
   return t('settings.promptComposed')
 }
@@ -117,8 +117,8 @@ export async function wireSettingsPanel(): Promise<void> {
     }
 
     prompt.value = v.sttPrompt
-    // The composed prompt as the placeholder: an empty box means "compose one",
-    // and this is what that produces right now.
+    // The whole line as the placeholder: an empty box is not an empty prompt,
+    // and this is what would go out right now with these words folded in.
     prompt.placeholder = v.effectivePrompt || 'off'
     if (promptStatus) promptStatus.textContent = describePrompt(v)
   }

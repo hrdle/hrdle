@@ -26,7 +26,11 @@ export interface GlassesSettings {
   groqApiKey?: string;
   /** Language sent to Whisper, or `auto` to let it detect. */
   sttLang?: SttLang;
-  /** Replaces the composed vocabulary prompt. `off` sends no prompt. */
+  /**
+   * Words added to every session's vocabulary prompt, ahead of the glossary.
+   * `off` sends no prompt at all. It used to *replace* the composed prompt,
+   * which is #210: see the note on `sttPrompt()`.
+   */
   sttPrompt?: string;
 }
 
@@ -37,7 +41,12 @@ export interface GlassesSettingsView {
   sttLang: SttLang;
   sttLangSource: 'setting' | 'default';
   sttPrompt: string;
-  sttPromptSource: 'setting' | 'env' | 'composed';
+  /**
+   * Where the line in `effectivePrompt` comes from. There is no `setting` any
+   * more: what the screen saves is one group inside `composed`, not a
+   * replacement for it (#210).
+   */
+  sttPromptSource: 'composed' | 'env' | 'off';
   /** The prompt that would be sent right now, so the editor can show it. */
   effectivePrompt: string;
 }
@@ -124,20 +133,26 @@ export async function resolveSttLang(): Promise<{ lang: SttLang; source: 'settin
 /**
  * A view for the settings screen.
  *
- * `effectivePrompt` is what would be sent right now, so the editor can show the
- * composed vocabulary prompt as the thing being replaced rather than an empty
- * box. It is passed in rather than imported to keep this module free of the
- * herdr lookup that composing one needs.
+ * `effectivePrompt` is the line that would be sent right now — the saved words
+ * already folded into it — so the screen can show what typing here actually
+ * produces rather than an empty box. It is passed in rather than composed here
+ * because composing reads the session metadata, and that module is downstream
+ * of this one.
  */
-export async function glassesSettingsView(composedPrompt: string): Promise<GlassesSettingsView> {
+export async function glassesSettingsView(
+  effectivePrompt: string | undefined,
+): Promise<GlassesSettingsView> {
   const settings = await loadGlassesSettings();
   const { source: apiKeySource } = await resolveGroqApiKey();
   const { lang, source: sttLangSource } = await resolveSttLang();
   const envPrompt = process.env[PROMPT_ENV];
 
-  const sttPromptSource = settings.sttPrompt ? 'setting' : envPrompt ? 'env' : 'composed';
-  const effective =
-    settings.sttPrompt ?? envPrompt ?? composedPrompt;
+  const sttPromptSource =
+    settings.sttPrompt === 'off' || envPrompt === 'off'
+      ? 'off'
+      : envPrompt
+        ? 'env'
+        : 'composed';
 
   return {
     hasApiKey: apiKeySource !== 'none',
@@ -146,7 +161,7 @@ export async function glassesSettingsView(composedPrompt: string): Promise<Glass
     sttLangSource,
     sttPrompt: settings.sttPrompt ?? '',
     sttPromptSource,
-    effectivePrompt: effective === 'off' ? '' : effective,
+    effectivePrompt: effectivePrompt ?? '',
   };
 }
 

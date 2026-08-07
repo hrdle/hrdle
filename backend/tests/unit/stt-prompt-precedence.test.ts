@@ -7,7 +7,7 @@ import {
   resetGlassesSettingsCache,
   updateGlassesSettings,
 } from '../../src/services/glasses-settings';
-import { resetSttPromptCache, sttPrompt } from '../../src/services/stt-prompt';
+import { sttPrompt } from '../../src/services/stt-prompt';
 
 const DATA_DIR_ENV = IDENTITY.dataDirEnv;
 const PROMPT_ENV = `${IDENTITY.binaryName.toUpperCase()}_STT_PROMPT`;
@@ -23,7 +23,6 @@ beforeEach(async () => {
   process.env[DATA_DIR_ENV] = tempDir;
   delete process.env[PROMPT_ENV];
   resetGlassesSettingsCache();
-  resetSttPromptCache();
 });
 
 afterEach(async () => {
@@ -32,40 +31,53 @@ afterEach(async () => {
   if (prevPrompt === undefined) delete process.env[PROMPT_ENV];
   else process.env[PROMPT_ENV] = prevPrompt;
   resetGlassesSettingsCache();
-  resetSttPromptCache();
   await rm(tempDir, { recursive: true, force: true });
 });
 
 /**
- * Three sources, and the one a person can reach from the glasses wins. The env
- * var stays for an A/B run that should not outlive the process.
+ * The saved setting contributes; the environment replaces; `off` from either
+ * side switches the bias off entirely.
+ *
+ * The saved one used to replace too, and outrank the environment doing it. One
+ * left over from a comparison then meant five days of five-word prompts and no
+ * glossary, silently (#210) - so the field a person can reach from the device
+ * is the one that cannot disable everything else by accident.
  */
 describe('STT prompt precedence', () => {
-  test('a saved prompt beats the environment', async () => {
-    process.env[PROMPT_ENV] = 'from env';
-    await updateGlassesSettings({ sttPrompt: 'from settings' });
-    resetSttPromptCache();
-    expect(await sttPrompt()).toBe('from settings');
+  test('the saved words join the composed prompt rather than replacing it', async () => {
+    await updateGlassesSettings({ sttPrompt: '確定申告、固定資産税' });
+    const prompt = await sttPrompt();
+    expect(prompt).toContain('確定申告');
+    // The glossary is still there behind them - this is the regression.
+    expect(prompt).toContain('リリース');
+    expect(prompt).toContain('リベース');
   });
 
-  test('the environment applies when nothing is saved', async () => {
+  test('the environment still replaces the whole line, for an A/B run', async () => {
     process.env[PROMPT_ENV] = 'from env';
-    resetSttPromptCache();
+    expect(await sttPrompt()).toBe('from env');
+  });
+
+  test('the environment outranks the saved words, since only one of them replaces', async () => {
+    process.env[PROMPT_ENV] = 'from env';
+    await updateGlassesSettings({ sttPrompt: '確定申告' });
     expect(await sttPrompt()).toBe('from env');
   });
 
   test('`off` from the settings disables the prompt entirely', async () => {
     process.env[PROMPT_ENV] = 'from env';
     await updateGlassesSettings({ sttPrompt: 'off' });
-    resetSttPromptCache();
     expect(await sttPrompt()).toBeUndefined();
   });
 
-  test('clearing the saved prompt hands it back to the environment', async () => {
-    await updateGlassesSettings({ sttPrompt: 'from settings' });
-    await updateGlassesSettings({ sttPrompt: null });
-    process.env[PROMPT_ENV] = 'from env';
-    resetSttPromptCache();
-    expect(await sttPrompt()).toBe('from env');
+  test('`off` from the environment disables it too', async () => {
+    process.env[PROMPT_ENV] = 'off';
+    expect(await sttPrompt()).toBeUndefined();
+  });
+
+  test('with nothing set at all, the glossary is what goes out', async () => {
+    const prompt = await sttPrompt();
+    expect(prompt).toContain('リリース');
+    expect(prompt).toContain('ペイン');
   });
 });

@@ -102,22 +102,28 @@ describe('glasses settings store', () => {
     expect(view.effectivePrompt).toBe(composed);
     expect(view.sttLangSource).toBe('default');
 
-    process.env[`${IDENTITY.binaryName.toUpperCase()}_STT_PROMPT`] = 'from env';
-    resetGlassesSettingsCache();
-    view = await glassesSettingsView(composed);
-    expect(view.sttPromptSource).toBe('env');
-    expect(view.effectivePrompt).toBe('from env');
-
+    // Saved words no longer make a source of their own: they are one group
+    // inside the composed line the caller hands in (#210).
     await updateGlassesSettings({ sttPrompt: 'from settings', sttLang: 'auto' });
-    view = await glassesSettingsView(composed);
-    expect(view.sttPromptSource).toBe('setting');
-    expect(view.effectivePrompt).toBe('from settings');
+    view = await glassesSettingsView(`from settings, ${composed}`);
+    expect(view.sttPromptSource).toBe('composed');
+    expect(view.sttPrompt).toBe('from settings');
+    expect(view.effectivePrompt).toBe(`from settings, ${composed}`);
     expect(view.sttLang).toBe('auto');
     expect(view.sttLangSource).toBe('setting');
+
+    process.env[`${IDENTITY.binaryName.toUpperCase()}_STT_PROMPT`] = 'from env';
+    resetGlassesSettingsCache();
+    view = await glassesSettingsView('from env');
+    expect(view.sttPromptSource).toBe('env');
+    expect(view.effectivePrompt).toBe('from env');
   });
 
-  test('`off` shows as no prompt rather than the literal word', async () => {
+  test('`off` says so, and shows no prompt rather than the literal word', async () => {
     await updateGlassesSettings({ sttPrompt: 'off' });
-    expect((await glassesSettingsView('composed')).effectivePrompt).toBe('');
+    // Composing returns undefined for `off`; the view must not print it.
+    const view = await glassesSettingsView(undefined);
+    expect(view.sttPromptSource).toBe('off');
+    expect(view.effectivePrompt).toBe('');
   });
 });

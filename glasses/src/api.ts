@@ -165,7 +165,8 @@ export interface GlassesSettingsView {
   sttLang: string
   sttLangSource: 'setting' | 'default'
   sttPrompt: string
-  sttPromptSource: 'setting' | 'env' | 'composed'
+  /** What is saved here joins the composed line rather than replacing it (#210). */
+  sttPromptSource: 'composed' | 'env' | 'off'
   effectivePrompt: string
 }
 

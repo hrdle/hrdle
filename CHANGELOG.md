@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **The speech vocabulary is made of words someone chose, not of workspace
+  names.** Workspace labels led the prompt sent to Whisper, on the reasoning
+  that 「2脚ロボ開発」 is a coinage nothing else can supply. That held while a
+  label was a name. The naming convention appends a status suffix (`— 作業中`,
+  `— 完了済`) and agents write the reason for an interruption into parentheses,
+  so a label became a sentence written for a person reading a list - and
+  thirteen of them spent 189 of the 190 characters available. `タブ` was the
+  only glossary term that fit; `リリース`, `コミット`, `リベース` and `ペイン` -
+  the words reported as being misheard - were all pushed out
+  - Labels are gone from the prompt entirely rather than trimmed: nothing stops
+    one growing again, and a name written to be read is the wrong thing to ask
+    for words about to be spoken
+  - What a session is about is now said deliberately. `hrdle stt-prompt "音声
+    認識、ハルシネーション"` sets it from inside the session, resolving which one
+    it is the same way `hrdle glasses` does, so the agent doing the work can
+    keep its own vocabulary current
+  - Whatever is set, half the budget stays with the glossary. The failure was a
+    group filling the line, and the group that replaced the labels could have
+    repeated it
+- **A saved vocabulary no longer silently disables everything else.** The
+  glasses settings screen wrote a prompt that *replaced* the composed one, and
+  outranked `HRDLE_STT_PROMPT` doing it. One left over from a comparison on
+  2026-08-02 meant five days of five-word prompts with no glossary, no session
+  vocabulary and nothing anywhere saying so - it took a "recognition feels worse
+  today" report and a code read to find. What that field saves is now one group
+  inside the composed line, ahead of the glossary; replacing outright is left to
+  the environment variable, which does not outlive the process that set it.
+  `off` from either side still means no bias at all
+
 ## [0.3.72] - 2026-08-07
 
 ### Fixed

@@ -74,13 +74,13 @@ const EN: Table = {
   'settings.langEn': 'English',
   'settings.langSaved': 'Saved here.',
   'settings.langDefault': 'Server default ({lang}). Pick one to change it.',
-  'settings.prompt': 'Vocabulary prompt',
-  'settings.promptSave': 'Save prompt',
-  'settings.promptReset': 'Reset',
-  'settings.promptSetting': 'Using the prompt saved here.',
-  'settings.promptEnv': 'Using HRDLE_STT_PROMPT from the server environment.',
+  'settings.prompt': 'Shared vocabulary',
+  'settings.promptSave': 'Save words',
+  'settings.promptReset': 'Clear',
+  'settings.promptOff': 'No vocabulary is sent at all (this is set to `off`).',
+  'settings.promptEnv': 'Replaced by HRDLE_STT_PROMPT in the server environment.',
   'settings.promptComposed':
-    'Using the prompt composed from your workspace names and the glossary.',
+    'These words are sent with every transcription, ahead of the glossary. A session adds its own words in front of them.',
   'settings.failed': 'Failed: {error}',
 
   // The demo, which is a tutorial: every string is a caption for the thing it
@@ -153,12 +153,13 @@ const JA: Table = {
   'settings.langEn': '英語',
   'settings.langSaved': 'ここに保存されています。',
   'settings.langDefault': 'サーバーの既定値 ({lang})。変更するには選んでください。',
-  'settings.prompt': '語彙プロンプト',
-  'settings.promptSave': 'プロンプトを保存',
-  'settings.promptReset': '既定に戻す',
-  'settings.promptSetting': 'ここに保存されたプロンプトを使っています。',
-  'settings.promptEnv': 'サーバー環境変数の HRDLE_STT_PROMPT を使っています。',
-  'settings.promptComposed': 'ワークスペース名と用語集から組み立てたプロンプトを使っています。',
+  'settings.prompt': '共通の語彙',
+  'settings.promptSave': '語彙を保存',
+  'settings.promptReset': '消す',
+  'settings.promptOff': '語彙を送らない設定（off）になっています。',
+  'settings.promptEnv': 'サーバー環境変数の HRDLE_STT_PROMPT で置き換えられています。',
+  'settings.promptComposed':
+    'ここの語を毎回の音声認識に、用語集より先に送っています。セッション独自の語はさらにその前に付きます。',
   'settings.failed': '失敗しました: {error}',
 
   // The demo. Japanese is full-width, so each of these has half the room the

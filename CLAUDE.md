@@ -351,6 +351,12 @@ hrdle send local:dev:%1 --wait "y"  # Send, then snapshot viewport with detected
                                     # (--wait-ms <n> delay, --lines <n> rows)
 hrdle peek local:dev:%1             # Snapshot a pane viewport (--lines <n>, default 20)
 
+# Speech vocabulary for the session this runs in (session auto-resolved: cwd, then
+# /proc ancestry - same as `hrdle glasses`; --session <id> to name one)
+hrdle stt-prompt "音声認識、語彙バイアス"   # Set the words this session is about
+hrdle stt-prompt                           # Print what is set
+hrdle stt-prompt --clear                   # Back to the glossary alone
+
 # Debugging (Bun inspector on the running service)
 hrdle debug status      # Show inspector state
 hrdle debug enable      # Enable inspector (port 9229)
@@ -426,29 +432,33 @@ The G2's SDK only hands over raw PCM, so transcription happens on the server at
 `whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
 `services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
-**the speaking session's own words, then the Japanese workspace names, then the
-glossary, then the ASCII workspace names**, filled up to what fits Whisper's
-224-token ceiling (190 characters). That order is the point of the design: as
-workspaces multiply, names alone eat the budget and `release` - a word said
-several times a day - falls out. There is no separate custom-title store anymore
-- renaming a session writes straight to the herdr label - so script is what
-tells the two kinds of name apart: a Japanese label is a person's own coinage
-said out loud, an ASCII label is directory-ish text that goes last because
-Latin-script names were never the ones being misheard. `HRDLE_STT_PROMPT=off` disables it, and any other value replaces
-it (for A/B testing; the variable name is composed by `envVar()` from
-`binaryName` in `identity.json`).
+**the speaking session's own words, then the shared words from the settings
+screen, then the glossary**, filled up to what fits Whisper's 224-token ceiling
+(190 characters) - and the first two together may take **no more than half of
+it**, so the glossary is there whatever else is set. `HRDLE_STT_PROMPT=off`
+disables the bias entirely, and any other value replaces the whole line (for A/B
+testing; the variable name is composed by `envVar()` from `binaryName` in
+`identity.json`).
 
 The first group is per session (#166): `?session=<workspace id>` on the STT
 request names who is speaking, and `PUT /api/sessions/:id/stt-prompt` stores a
-short phrase against that session in `SessionMetadataService`, beside its theme. The glasses send it from `voiceTarget.sessionId`, which is the
-workspace the reply is going to. Its words go **before the glossary but do not
-replace it** - the glossary is what is said every day in every session, and a
-session that spent the whole budget on its own vocabulary would start mishearing
-`リリース` again. A session with no prompt of its own composes exactly as before.
+short phrase against that session in `SessionMetadataService`, beside its theme.
+The glasses send it from `voiceTarget.sessionId`, which is the workspace the
+reply is going to. **The agent in the session can write it itself** - `hrdle
+stt-prompt "音声認識、ハルシネーション"` resolves which session it is running in
+the same way `hrdle glasses` does (`commands/session-target.ts`) - which is the
+point: what is about to be said is known in the session, and not anywhere else.
 
-Note that the composed line is what a session prompt joins. Either *override* -
-the saved setting or `HRDLE_STT_PROMPT` - still means "send exactly this" and
-skips the composition, session words included.
+**Workspace names are not in the prompt, and putting them back would undo
+#210.** They used to lead it, on the reasoning that 「2脚ロボ開発」 is a coinage
+nothing else can supply. That held while a label was a name. The naming
+convention appends a status suffix (`— 作業中`, `— 完了済`) and agents write the
+reason for an interruption into parentheses, so a label became a sentence
+written for a person reading a list - and measured on 2026-08-07, thirteen of
+them spent 189 of the 190 characters: `タブ` was the only glossary term that fit,
+while `リリース`, `コミット`, `リベース` and `ペイン` - the words actually
+reported as misheard - were all pushed out. The half-the-budget cap exists so
+that the group which replaced them cannot repeat it.
 
 The key, the language and that prompt are also settings, editable from the
 glasses app's own web screens (the phone companion UI and the simulator) and
@@ -459,7 +469,7 @@ stored by `services/glasses-settings.ts` in `<dataDir>/glasses-settings.json`
 |---|---|---|
 | Groq key | setting, then `GROQ_API_KEY` | Write-only through the API - `GET /api/glasses/settings` reports only whether one is set and where it came from |
 | Language | `?lang=` on the request, then the setting, then `ja` | `auto` sends no language at all and lets Whisper detect it. The glossary is Japanese, so a prompt of its own is what makes another language work properly |
-| Prompt | setting, then `HRDLE_STT_PROMPT`, then composed | The setting wins because it is the one reachable while wearing the glasses; the env var stays for an A/B run that should not outlive the process |
+| Prompt | `HRDLE_STT_PROMPT`, then composed - and the setting is *one group inside* composed, not a source of its own | The setting used to replace the composition, and outrank the env var doing it. One left over from a comparison then sent five words and no glossary for five days, silently (#210). The env var still replaces, because an A/B run does not outlive the process that set it; the field reachable from the device now contributes instead. `off` from either side still means no bias at all |
 
 The settings screen ships in the ehpk, so **the phone companion UI only gains it
 after `/glasses-upload`**. The simulator the server serves at `/glasses` updates
