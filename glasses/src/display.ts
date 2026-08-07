@@ -509,6 +509,23 @@ const SPINNER = ['·', '•']
  *  only whether something is alive. */
 export const SPINNER_INTERVAL_MS = 3000
 
+/**
+ * How long a recording runs before stopping itself.
+ *
+ * Spoken instructions to an agent are short - a sentence, two at most - so an
+ * open microphone is far more likely to be one somebody forgot to stop than
+ * one still being spoken into. Left running it costs the wearer's battery, the
+ * upload, and Groq quota, and produces a transcript with a minute of room
+ * noise on the end.
+ *
+ * The screen says the number rather than counting down to it. A countdown
+ * would mean redrawing the panel every second over BLE for the entire
+ * recording, which is the opposite of how everything else here behaves: the
+ * spinner is deliberately slow for the same reason, and an idle app sends
+ * nothing at all.
+ */
+export const MAX_RECORDING_MS = 30_000
+
 function spinnerFrame(state: AppState): string {
   return SPINNER[(state.spinnerTick ?? 0) % SPINNER.length]
 }
@@ -1453,7 +1470,7 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
     case 'recording':
       return {
         headerText: withClock(`${name}  [recording]`, demoTail),
-        bodyText: '● Recording\n\nSpeak into the microphone',
+        bodyText: `● Recording\n\nSpeak into the microphone\nStops itself after ${Math.round(MAX_RECORDING_MS / 1000)} seconds`,
         footerText: 'tap:stop and transcribe  dbl:cancel',
       }
     case 'transcribing':
