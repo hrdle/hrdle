@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.77] - 2026-08-08
+
+### Fixed
+- **The summary strip stays out of the way on a Kimi or OpenCode session.** It
+  was up permanently, and what it said was the message directly beneath it -
+  two of the panel's eight lines spent repeating what was already on screen
+  - Claude writes a real summary; the other agents have no such thing, so what
+    they send is a copy of their own latest message. That is one useful line on
+    a workspace card and nothing at all above the transcript
+  - It could not retire itself either: the "is this recap still current" test
+    compares it against the newest message, and a recap whose source *is* the
+    newest message is never behind
+  - Measured across a day of screen recordings: the Kimi session drew the strip
+    on 79% of its conversation frames, Claude's on 0%
+- **A paged message no longer loses the lines the strip took.** Paging tiled by
+  the panel's full height while the body drew what the notice left, so with a
+  banner up three lines at every page boundary were on no page at all - a
+  three-part answer arrived with the middle part missing and nothing to say so
+
 ## [0.3.76] - 2026-08-08
 
 ### Added
