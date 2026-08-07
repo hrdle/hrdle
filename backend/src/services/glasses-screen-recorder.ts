@@ -20,6 +20,7 @@
 
 import { appendFile, mkdir, readdir, readFile, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
+import { VERSION } from '../cli';
 import { envVar } from '../../../shared/identity';
 import type { ClientFocus, GlassesInput, GlassesScreen } from '../../../shared/types';
 import { getDataDir } from '../utils/storage';
@@ -40,11 +41,22 @@ const RETENTION_DAYS = 365;
  *  `at`/`receivedAt` gap itself is diagnostic (clock drift, WebView
  *  background throttling). The three shapes are discriminated by their own
  *  keys, so old recordings read back unchanged. */
+/**
+ * The server build that wrote the line.
+ *
+ * Stamped on every shape, including the ones that carry no frame: a recording
+ * is read later to decide whether something is fixed, and half of what gets
+ * fixed lives on this side. The app's own build travels on the frame
+ * (`GlassesScreen.app`), so a frame says which pair drew it and a gap says
+ * which server saw the glasses leave.
+ */
+type ServerStamp = { server: string };
+
 export type RecordedGlassesLine =
-  | (GlassesScreen & { receivedAt: number })
-  | { gap: true; at: number }
-  | { input: GlassesInput['kind']; at: number; receivedAt: number }
-  | {
+  | (GlassesScreen & { receivedAt: number } & ServerStamp)
+  | ({ gap: true; at: number } & ServerStamp)
+  | ({ input: GlassesInput['kind']; at: number; receivedAt: number } & ServerStamp)
+  | ({
       /** Session the focus election picked, `null` when it cleared. */
       focus: string | null;
       deviceType?: string;
@@ -52,7 +64,7 @@ export type RecordedGlassesLine =
        *  since a claim outlives the moment it was made. Order by receivedAt. */
       at: number;
       receivedAt: number;
-    };
+    } & ServerStamp);
 
 /** Local date stamp — the user reviews footage in their own timezone. */
 function dayStamp(at: number): string {
@@ -136,7 +148,7 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
     if (!recordedSinceGap) return;
     lastFrameKey = null;
     recordedSinceGap = false;
-    const marker: RecordedGlassesLine = { gap: true, at: Date.now() };
+    const marker: RecordedGlassesLine = { gap: true, at: Date.now(), server: VERSION };
     enqueue(() => appendLine(marker, dayStamp(marker.at)));
     return;
   }
@@ -151,7 +163,7 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
   // Stamp arrival now, not when the queued write runs. File choice follows
   // the server clock too: a device clock a day off must not scatter one
   // evening across two files.
-  const line: RecordedGlassesLine = { ...screen, receivedAt: Date.now() };
+  const line: RecordedGlassesLine = { ...screen, receivedAt: Date.now(), server: VERSION };
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
 }
 
@@ -171,7 +183,7 @@ export function recordGlassesInput(input: GlassesInput): void {
   // parked while the glasses were off belongs on disk before it.
   flushPendingFocus();
   recordedSinceGap = true;
-  const line: RecordedGlassesLine = { input: input.kind, at: input.at, receivedAt: Date.now() };
+  const line: RecordedGlassesLine = { input: input.kind, at: input.at, receivedAt: Date.now(), server: VERSION };
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
 }
 
@@ -185,8 +197,8 @@ function focusLine(
   focus: ClientFocus | undefined,
 ): Extract<RecordedGlassesLine, { focus: string | null }> {
   return focus
-    ? { focus: focus.sessionId, deviceType: focus.deviceType, at: focus.at, receivedAt: Date.now() }
-    : { focus: null, at: Date.now(), receivedAt: Date.now() };
+    ? { focus: focus.sessionId, deviceType: focus.deviceType, at: focus.at, receivedAt: Date.now(), server: VERSION }
+    : { focus: null, at: Date.now(), receivedAt: Date.now(), server: VERSION };
 }
 
 function focusKeyOf(focus: ClientFocus | undefined): string {
