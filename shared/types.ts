@@ -1238,6 +1238,23 @@ export interface GlassesScreen {
   body: string;
   footer: string;
   /**
+   * The glasses build that drew this frame.
+   *
+   * A recording is read days later to decide whether something is fixed, and
+   * without this it cannot answer that: on 2026-08-08 three ehpk builds and
+   * three server versions shipped between breakfast and lunch, and telling
+   * which one drew a given frame meant correlating the file against a separate
+   * console log that happened to print the version. The commit is here for the
+   * same reason it is on the setup screen - a version says which number a
+   * build claims, not which code it holds.
+   *
+   * Sent per frame rather than once per connection: it survives a reconnect,
+   * an app update mid-recording, and a second device, none of which a
+   * remembered value does.
+   */
+  app?: string;
+  appCommit?: string;
+  /**
    * Recap / waiting banner, drawn in its own strip above the body with a rule
    * between. Separate from `body` because that rule is a container border on
    * the panel, not a row of text — a mirror that concatenates the two shows a

@@ -156,7 +156,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       const key = `${state.mode}\u0000${session?.id ?? ''}\u0000${session?.paneId ?? ''}\u0000${header}\u0000${notice ?? ''}\u0000${body}\u0000${footer}\u0000${card ? '1' : ''}\u0000${headerless ? '1' : ''}`
       if (key === lastPublished) return
       lastPublished = key
-      controller.ws.publishScreen({ header, body, footer, notice, card, headerless, mode: state.mode, session, at: Date.now() })
+      controller.ws.publishScreen({ header, body, footer, notice, card, headerless, mode: state.mode, session, app: __APP_VERSION__, appCommit: __BUILD_COMMIT__, at: Date.now() })
     } catch (err) {
       // A mirror is a nicety; never let it take the panel down with it.
       trace(`publishScreen failed: ${err}`, 'error', (err as Error)?.stack)

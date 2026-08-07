@@ -286,3 +286,30 @@ describe('recordGlassesScreen', () => {
     expect(files.some((f) => f.endsWith('.jsonl'))).toBe(true);
   });
 });
+
+describe('a recorded line says which build wrote it', () => {
+  /**
+   * A recording is read days later to decide whether something is fixed, and
+   * on 2026-08-08 it could not answer that: three ehpk builds and three server
+   * versions shipped in one morning, and telling which pair drew a frame meant
+   * correlating the file against a console log that happened to print the
+   * version.
+   */
+  it('carries the app build from the frame and stamps the server itself', async () => {
+    recordGlassesScreen(frame({ app: '0.0.63', appCommit: '2f15190' }));
+    await flushGlassesRecorder();
+    const [line] = await readLines();
+    expect(line.app).toBe('0.0.63');
+    expect(line.appCommit).toBe('2f15190');
+    expect(typeof line.server).toBe('string');
+    expect((line.server as string).length).toBeGreaterThan(0);
+  });
+
+  it('stamps the server on a gap too, so a disconnect says who saw it', async () => {
+    recordGlassesScreen(frame());
+    recordGlassesScreen(null);
+    await flushGlassesRecorder();
+    const gap = (await readLines()).find((l) => l.gap === true);
+    expect(typeof gap?.server).toBe('string');
+  });
+});
