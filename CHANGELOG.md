@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.75] - 2026-08-07
 
 ### Fixed
 - **A session list with nothing in it now says the VPN is off.** Hrdle is only
