@@ -30,6 +30,10 @@ export interface Session {
   /** When the recap was written. The conversation is compared against it: a
    *  message newer than the recap means the reader is already past it. */
   ccRecapAt?: string
+  /** Whether the recap is a summary or a copy of the latest message. Only a
+   *  summary earns a strip above the transcript; a copy repeats what is
+   *  already there. Absent means summary, for a server from before this. */
+  ccRecapKind?: 'summary' | 'last-message'
   /** Tab the terminal is showing. Panes outside it are marked in the list. */
   activeTabId?: string
   ccFirstPrompt?: string

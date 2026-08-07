@@ -1022,7 +1022,17 @@ function conversationNoticeText(state: AppState): string {
   const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
   const recapText = pane ? pane.recap : session?.ccRecap
   const recapAt = pane ? pane.recapAt : session?.ccRecapAt
-  const recap = onLatest && recapIsCurrent(recapAt, state.conversation) ? recapBlock(recapText) : []
+  // A pane's recap is Claude's, so it is always a summary. A session's may be
+  // a thread agent's copy of its own latest message, and that one is not shown:
+  // it repeats the message directly beneath it and takes two of eight lines to
+  // do it. Kimi's was up on 79% of its conversation frames on 2026-08-08,
+  // against 0% for Claude on the same day - the difference is not that Kimi
+  // talks more, it is that the staleness test cannot retire a recap whose
+  // source *is* the newest message. Nothing retires it, so it never leaves.
+  const isSummary = pane ? true : (session?.ccRecapKind ?? 'summary') === 'summary'
+  const recap = onLatest && isSummary && recapIsCurrent(recapAt, state.conversation)
+    ? recapBlock(recapText)
+    : []
   return [...banner, ...recap].join('\n')
 }
 
