@@ -168,20 +168,25 @@ hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
 
 10. **Switch Beta over**:
 
-    **While a build is under store review, stop after step 9 and ask.** During a
-    review the Beta build may be the one that was submitted, and whether moving
-    it disturbs the review is not documented anywhere - the docs cover uploading
-    and self-test groups and nothing about status transitions. Not a thing to
-    find out on a submission that matters.
+    **A review in flight is not a reason to stop.** This used to say to halt
+    after step 9 and ask, because whether moving Beta disturbed a review was
+    undocumented and not a thing to find out on a submission that mattered. It
+    was measured on 2026-08-07, deliberately, with the user's agreement to
+    re-submit if it broke: v0.0.55 was In Review, v0.0.56 was uploaded and then
+    promoted straight to Beta, and **the review did not move**. `Review status`
+    still read `Submitted Aug 7, 2026 at 9:11 AM / In review / Awaiting
+    review...`, to the character, and the project card still said
+    `0.0.55 In Review`.
 
-    What the Hub does say, read on 2026-08-04 while v0.0.48 sat In Review: the
-    two are separate places. A build's `Private / Beta / Public` lives on the
-    Builds tab, and the review is its own record under **Store listing ->
-    Publish to hub** (`Review status: Submitted ... In review`). With v0.0.48
-    both Beta and In Review, the dropdown on another build offered all three
-    values, none disabled and no warning. So promoting a second build to Beta
-    *probably* leaves the review alone - still unconfirmed, because no
-    submission has been in flight since.
+    The two are separate records, which is why: a build's
+    `Private / Beta / Public` lives on the Builds tab, and the review is its own
+    record under **Store listing -> Publish to hub**. The review is attached to
+    the build that was submitted, not to whichever build is currently Beta.
+
+    One thing does differ from the ordinary case below. **A build under review
+    is not demoted to Private when it loses Beta** - v0.0.55 became
+    `In Review` in the build list, keeping its review state, where v0.0.52 had
+    gone to `Private`.
 
     **Promote the new build straight to Beta. Do not demote the old one first.**
     Measured on v0.0.53 (2026-08-06): promoting demotes the previous Beta by
