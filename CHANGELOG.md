@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.78] - 2026-08-08
+
+### Fixed
+- **The picker no longer opens on a session that is not asking anything.** It
+  opened on a Claude session showing a `Read` result and offered a line number
+  and a line of code as the two things to choose between; earlier the same day
+  it offered a Kimi question's own tab bar as that question's answer
+  - Both came from the same read: one item on a row painted unlike its
+    neighbours, which is a guess about pixels. It is the right guess for
+    OpenCode, whose permission prompt exists nowhere else, and it has nothing
+    to be right about for an agent that writes its questions down
+  - Claude records the `AskUserQuestion` call in its transcript and Kimi records
+    `interaction.request` in its wire, both with the options and the
+    descriptions under them. Those files were already being read here, so the
+    question now comes from the agent rather than from the screen
+  - A numbered list is still read for every agent: a permission prompt is
+    numbered and is in no record at all. Codex, Grok and OpenCode are unchanged
+- **A question's options carry their descriptions without being scraped.** They
+  come from the record, so there is no indentation rule to get right and
+  nothing to truncate by guess
+
 ## [0.3.77] - 2026-08-08
 
 ### Fixed
