@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **A recording stops when the sentence does.** The 30-second limit closes a
+  microphone nobody closed; this closes one that has finished being spoken
+  into, which is the ordinary case - you say a sentence and then wait, and
+  waiting is what the tap was for. A second and a half of quiet ends it and
+  transcribes what was collected, the same path a manual stop takes
+  - It does not start until something has been said. Tap, then take a moment to
+    think, and nothing happens - being cut off before the first word would be
+    worse than the open microphone this exists to close
+  - It does not end on a pause. Drawing breath mid-sentence is about a second
+    of quiet, so an ordinary pause resets the count rather than ending on it
+  - The threshold is deliberately low, because the two ways of being wrong are
+    not symmetric: too low and a recording fails to stop itself, which the
+    30-second limit catches, while too high cuts somebody off mid-sentence,
+    which nothing catches. It may want tuning against the G2's own microphone
+    gain, and is one constant
 - **The ready screen says which glasses build is installed.** The setup guide
   redeploys whenever a sentence changes; the glasses app is rebuilt, packed,
   uploaded and promoted. So the two are never in step, and the version on the
