@@ -251,6 +251,50 @@ export interface PaneInfo {
    *  `metrics` — the header recap is hidden and each Claude pane shows its own. */
   recap?: string;
   recapAt?: string;
+  /**
+   * The question this pane is waiting on, as the agent itself recorded it.
+   *
+   * Everything shown about a question was read off the pane until now: a line
+   * ending in `?`, rows that look like a list, and - failing both - a row
+   * where exactly one item is painted differently from its neighbours. That
+   * last rule is a guess about pixels, and on 2026-08-08 it guessed wrong on a
+   * Claude pane that was not asking anything: a `Read` result held a line
+   * number and a line of code on one row, and a wearer was offered
+   * `1039 / const pane = state.selectedPaneId` to choose between. It had
+   * already offered a kimi question's own tab bar as that question's answer.
+   *
+   * Claude writes the `AskUserQuestion` call into its transcript and kimi
+   * writes `interaction.request` into its wire, both with the options and
+   * their descriptions, in files this server already reads. A client that has
+   * this does not have to recognise a menu; it is told what the menu is.
+   *
+   * Read only while the pane is waiting - the transcript tail is not worth
+   * opening every five seconds for every pane on the machine.
+   */
+  pendingQuestion?: PendingQuestion;
+  /**
+   * Whether this pane's agent keeps a record that could be read.
+   *
+   * `false` means the screen is still the only source (codex, grok, opencode).
+   * `true` with no `pendingQuestion` is the agent saying nothing is being
+   * asked, which is what lets a client refuse a menu it thinks it can see. It
+   * does **not** mean nothing is waiting: a permission prompt is not a
+   * question and is not in any of these records.
+   */
+  questionKnown?: boolean;
+}
+
+/** A question an agent recorded, with the options as it wrote them. */
+export interface PendingQuestion {
+  question: string;
+  options: Array<{ label: string; description?: string }>;
+  multiSelect: boolean;
+  /**
+   * The call carried more than one question, so the pane is drawing a tab per
+   * question and answering whichever is in front. Which one that is exists
+   * only on the screen, so a client must not assume this is the one showing.
+   */
+  ambiguous: boolean;
 }
 
 export interface SessionMetrics {
