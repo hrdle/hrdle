@@ -724,7 +724,13 @@ export function startDebugUI(): void {
         return text
       } catch (err) {
         setVoiceStatus(`Transcription failed: ${err instanceof Error ? err.message : err}`)
-        return ''
+        // Rethrow rather than answering with an empty transcript. The device
+        // passes `transcribe` straight through (`main.ts`), so swallowing it
+        // here made the simulator the one place a failed request looked like a
+        // recording of silence - and since #209 the controller draws a
+        // different screen for each, from this distinction. A panel message is
+        // for whoever is at the keyboard; the screen is the thing under test.
+        throw err
       }
     },
   }

@@ -33,6 +33,25 @@ All notable changes to this project will be documented in this file.
   inside the composed line, ahead of the glossary; replacing outright is left to
   the environment variable, which does not outlive the process that set it.
   `off` from either side still means no bias at all
+- **A long recording is no longer cut off at eleven seconds.** `idleTimeout: 60`
+  was set inside the `websocket` object, which is the WebSocket idle timeout;
+  nothing set the server-level one, so every HTTP request ran on Bun's default
+  of 10 seconds. Six speech transcriptions died at it in the two days to
+  2026-08-06, each arriving on the glasses as "nothing was recognized". Groq is
+  not the slow part - 8 seconds of audio transcribes in ~0.33s from this host -
+  so what was being lost was the upload from the phone over the tailnet, which
+  means the long recordings on a slow link: exactly the ones worth keeping.
+  HTTP requests now idle for 120 seconds, and the leg we do not control, the
+  call to Groq, is bounded at 60 inside that so a stalled provider comes back
+  as a 502 rather than as the connection dying under the wearer
+- **The glasses say which of the two things happened.** A transcription that
+  never came back and one that came back empty both read "(nothing was
+  recognized)", and only one of them is answered by speaking more clearly. A
+  failure now says so, and says the recording was not the problem
+  - The simulator was swallowing the error and returning an empty transcript,
+    where the device passes the request straight through. That made it the one
+    place a cut-off request looked like a recording of silence - the exact
+    class of divergence the simulator exists to not have
 
 ## [0.3.72] - 2026-08-07
 

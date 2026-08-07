@@ -1248,6 +1248,7 @@ export class GlassesController {
     this.state.mode = 'voice'
     this.state.voicePhase = 'recording'
     this.state.voiceText = ''
+    this.state.voiceFailed = false
     this.state.voiceSessionName = this.sessionLabel(target.sessionId)
     this.render()
     this.recording = true
@@ -1279,14 +1280,20 @@ export class GlassesController {
     }
     await this.platform.stopMicCapture()
     this.state.voicePhase = 'transcribing'
+    this.state.voiceFailed = false
     this.render()
     try {
       this.state.voiceText = await this.platform.transcribeAudio(
         concatPcm(this.audioChunks),
         this.voiceTarget?.sessionId,
       )
-    } catch {
+    } catch (err) {
+      // Kept apart from an empty transcript (#209): the request not arriving
+      // and the audio holding no words are different things to be told, and
+      // only one of them is answered by speaking more clearly.
+      console.warn('[voice] transcription failed:', err)
       this.state.voiceText = ''
+      this.state.voiceFailed = true
     }
     this.state.voicePhase = 'confirm'
     this.render()

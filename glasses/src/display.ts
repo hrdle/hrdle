@@ -209,6 +209,16 @@ export interface AppState {
   debugEvent?: string
   voicePhase?: VoicePhase
   voiceText?: string
+  /**
+   * The transcription never came back, as distinct from coming back empty.
+   *
+   * Both used to read "(nothing was recognized)", and one of them is worth
+   * saying again more slowly while the other is worth saying again at all
+   * (#209). A request cut off mid-upload - which is what a 10-second HTTP
+   * timeout was doing to long recordings on a slow link - looked exactly like
+   * a clear recording of silence.
+   */
+  voiceFailed?: boolean
   // ── Glasses relay channel (#504) ──
   /** Active waiting items, priority order (first = shown in the overlay). */
   /**
@@ -1455,7 +1465,11 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
     default: // 'confirm'
       return {
         headerText: withClock(`${name}  [confirm]`, demoTail),
-        bodyText: state.voiceText ? state.voiceText : '(nothing was recognized)',
+        bodyText: state.voiceText
+          ? state.voiceText
+          : state.voiceFailed
+            ? '(the transcription did not come back)\n\nSay it again - the recording was not the problem'
+            : '(nothing was recognized)',
         footerText: state.voiceText ? 'tap:send  dbl:cancel' : 'dbl:back',
       }
   }
