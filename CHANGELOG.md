@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.73] - 2026-08-07
 
 ### Fixed
 - **The speech vocabulary is made of words someone chose, not of workspace
