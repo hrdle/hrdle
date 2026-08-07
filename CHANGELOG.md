@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.76] - 2026-08-08
+
 ### Added
 - **A recording stops when the sentence does.** The 30-second limit closes a
   microphone nobody closed; this closes one that has finished being spoken
