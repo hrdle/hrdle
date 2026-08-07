@@ -300,6 +300,14 @@
 		"disconnected": "Disconnected",
 		"reconnect": "Reconnect"
 	},
+	"connection": {
+		"unreachable": "Can't reach the server",
+		"tailscaleHint": "Turn Tailscale on for this device - Hrdle is only reachable over the tailnet.",
+		"genericHint": "Check that the server is running and that this device can reach it.",
+		"retry": "Try again",
+		"retryingAutomatically": "Retrying in the background",
+		"staleList": "Disconnected - showing the sessions as they last were"
+	},
 	"auth": {
 		"title": "Login",
 		"password": "Password",

@@ -43,7 +43,11 @@ import {
 	threadAgentOf,
 } from "../../../shared/types";
 import { openClaudeAppSession } from "../utils/claude-app";
-import { usePeers } from "../hooks/usePeers";
+import { usePeers, useServerReachable } from "../hooks/usePeers";
+import {
+	ServerUnreachableBanner,
+	ServerUnreachableNotice,
+} from "./ServerUnreachable";
 import {
 	applyLocalSessionReorder,
 	useWorkspaces,
@@ -1790,7 +1794,8 @@ export function WorkspaceList({
 		deleteSession,
 		updateSessionTheme,
 	} = useWorkspaces();
-	const { peers } = usePeers();
+	const { peers, refresh: refreshPeers } = usePeers();
+	const serverReachable = useServerReachable();
 	const { fetchConversation } = useSessionHistory();
 
 	const [sessionForMenu, setSessionForMenu] = useState<SessionResponse | null>(
@@ -2203,6 +2208,19 @@ export function WorkspaceList({
 		setSessionForMenu(session);
 	};
 
+	// Nothing to list and nothing answering: say so, rather than spinning for as
+	// long as the VPN is off. The sessions themselves arrive over a WebSocket
+	// that has no failure of its own to report, so the peers poll is what knows.
+	if (serverReachable === false && sessions.length === 0 && !isOnboarding) {
+		return (
+			<div
+				className={`flex items-center justify-center bg-[#0a0a0a] ${inline ? "h-full" : "h-screen"}`}
+			>
+				<ServerUnreachableNotice onRetry={() => void refreshPeers()} />
+			</div>
+		);
+	}
+
 	// Don't show loading screen during onboarding (need to show UI elements)
 	if (isLoading && sessions.length === 0 && !isOnboarding) {
 		return (
@@ -2376,6 +2394,10 @@ export function WorkspaceList({
 					{activeTab === "sessions" && (
 						<div className="h-full overflow-y-auto overscroll-contain">
 							<div className="px-3 py-3">
+								{/* The list below is whatever last arrived. The server is not
+								    answering now, so say so before any of it is acted on. */}
+								{serverReachable === false && <ServerUnreachableBanner />}
+
 								{/* Hook configuration banner */}
 								{hookConfigured === false && !hookBannerDismissed && (
 									<div className="mb-3 p-2.5 bg-amber-900/20 border border-amber-700/30 rounded-lg text-[12px] text-amber-400 flex items-start gap-2">

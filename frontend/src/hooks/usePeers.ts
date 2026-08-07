@@ -4,7 +4,8 @@ import type {
 	PeerCreateInput,
 	PeerUpdateInput,
 } from "../../../shared/types";
-import { authFetch } from "../services/api";
+import { authFetch, isTransientNetworkError } from "../services/api";
+import { reconnectPeerWatchersNow } from "./usePeerSessionsWatcher";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -23,6 +24,18 @@ interface UsePeersReturn {
 // Module-level cache shared by every component
 let cachedPeers: PeerClientView[] | null = null;
 let lastError: string | null = null;
+/**
+ * Whether the last `/api/peers` poll reached the server at all. `null` until
+ * the first attempt settles.
+ *
+ * This poll is what the reachability signal is read from rather than a probe of
+ * its own: it already runs every 5s for as long as the app is mounted, and it
+ * is the *first* thing that fails when this device leaves the tailnet - the
+ * session list has no fetch of its own to fail, it waits on a WebSocket that
+ * simply never opens, which is why an unreachable server used to show as an
+ * empty list rather than as anything being wrong.
+ */
+let lastReachable: boolean | null = null;
 const listeners = new Set<() => void>();
 
 // usePeers is called from several components at once, but the polling timer is
@@ -33,6 +46,16 @@ let refreshInFlight: Promise<void> | null = null;
 
 function notifyListeners() {
 	for (const l of listeners) l();
+}
+
+function setReachable(reachable: boolean) {
+	const wasUnreachable = lastReachable === false;
+	lastReachable = reachable;
+	// Coming back is worth acting on immediately. The session watchers back off
+	// up to a minute between attempts, so without this the list stays empty for
+	// most of a minute after the VPN is switched back on - which reads exactly
+	// like the failure the user was told to fix.
+	if (reachable && wasUnreachable) reconnectPeerWatchersNow();
 }
 
 async function fetchPeers(): Promise<PeerClientView[]> {
@@ -49,8 +72,12 @@ function refreshShared(): Promise<void> {
 		try {
 			cachedPeers = await fetchPeers();
 			lastError = null;
+			setReachable(true);
 		} catch (err) {
 			lastError = err instanceof Error ? err.message : "Failed to load peers";
+			// An HTTP status - even 500 - means the server answered, so only a
+			// transport failure counts as unreachable.
+			setReachable(!isTransientNetworkError(err));
 		} finally {
 			refreshInFlight = null;
 			notifyListeners();
@@ -176,4 +203,30 @@ export function usePeers(): UsePeersReturn {
 		verifyPeer: verifyPeerFn,
 		reorderPeers,
 	};
+}
+
+/**
+ * Whether the server answered the last poll. `null` while the first attempt is
+ * still in flight, so a caller can tell "not known yet" from "not reachable"
+ * and avoid flashing a failure notice during startup.
+ *
+ * Shares the poll and the cache with `usePeers`, so subscribing costs nothing.
+ */
+export function useServerReachable(): boolean | null {
+	// Not named setReachable: that is the module-level writer above, and one of
+	// the two shadowing the other in this file is a trap.
+	const [reachable, setValue] = useState<boolean | null>(() => lastReachable);
+
+	useEffect(() => {
+		const listener = () => setValue(lastReachable);
+		const unsubscribe = subscribePeers(listener);
+		if (cachedPeers === null && lastReachable === null) {
+			void refreshShared();
+		} else {
+			listener();
+		}
+		return unsubscribe;
+	}, []);
+
+	return reachable;
 }

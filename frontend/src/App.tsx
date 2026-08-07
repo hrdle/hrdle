@@ -40,6 +40,7 @@ import {
 } from "./utils/sessionKey";
 import { useAuth } from "./hooks/useAuth";
 import { useWorkspaces } from "./hooks/useWorkspaces";
+import { ServerUnreachableHint } from "./components/ServerUnreachable";
 import { TerminalPage } from "./pages/TerminalPage";
 import { authFetch, isTransientNetworkError } from "./services/api";
 import {
@@ -84,6 +85,9 @@ function LoadingScreen({
 			{error ? (
 				<>
 					<div className="text-red-400 text-sm">{error}</div>
+					{/* The error alone says the connection failed; this says what to do
+					    about it, which from a phone is almost always the VPN. */}
+					<ServerUnreachableHint />
 					<button
 						type="button"
 						onClick={onRetry}
