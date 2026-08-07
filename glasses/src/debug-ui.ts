@@ -22,7 +22,7 @@
 
 import { setBaseUrl, transcribe } from './api.ts'
 import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
-import { GlassesController } from './controller.ts'
+import { GlassesController, MIC_SAMPLE_RATE } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
 import { CARD_BORDER_COLOR, LINE_H, PANEL_H, PANEL_W, splitLines, textWidth } from './metrics.ts'
@@ -588,7 +588,6 @@ export function startDebugUI(): void {
   // the G2 uses, so the whole voice path can be exercised without the
   // hardware. The G2's SDK hands over raw 16-bit PCM at 16kHz; asking the
   // AudioContext for that rate lets the same bytes reach the same server code.
-  const MIC_RATE = 16000
   let micStream: MediaStream | null = null
   let micCtx: AudioContext | null = null
   let micNode: ScriptProcessorNode | null = null
@@ -596,7 +595,7 @@ export function startDebugUI(): void {
   async function startMic(): Promise<boolean> {
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 } })
-      micCtx = new AudioContext({ sampleRate: MIC_RATE })
+      micCtx = new AudioContext({ sampleRate: MIC_SAMPLE_RATE })
       const source = micCtx.createMediaStreamSource(micStream)
       // ScriptProcessor is deprecated in favour of AudioWorklet, which needs a
       // separate module file and a build step to match. For a debug panel that
@@ -717,9 +716,9 @@ export function startDebugUI(): void {
         setVoiceStatus(`Using the text from the STT field: ${scripted}`)
         return scripted
       }
-      setVoiceStatus(`Transcribing... (sent ${(pcm.length / 2 / MIC_RATE).toFixed(1)}s of audio)`)
+      setVoiceStatus(`Transcribing... (sent ${(pcm.length / 2 / MIC_SAMPLE_RATE).toFixed(1)}s of audio)`)
       try {
-        const text = await transcribe(pcm, MIC_RATE, sessionId)
+        const text = await transcribe(pcm, MIC_SAMPLE_RATE, sessionId)
         setVoiceStatus(text ? `Transcript: ${text}` : 'Nothing was recognized')
         return text
       } catch (err) {

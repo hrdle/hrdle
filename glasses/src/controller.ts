@@ -226,6 +226,46 @@ interface ReplyTarget {
   itemId?: string
 }
 
+/**
+ * The rate the microphone is opened at, on the device and in the simulator
+ * alike. Lived as a private constant in each of them until the silence
+ * detector needed it too - and a detector counting samples at one rate while
+ * the audio arrives at another is wrong by exactly that ratio, silently.
+ */
+export const MIC_SAMPLE_RATE = 16000
+
+/**
+ * How quiet counts as quiet, as RMS of 16-bit samples (full scale 32768).
+ *
+ * Deliberately low. Getting it wrong in one direction means a recording that
+ * does not stop itself, and the 30-second limit catches that. Getting it wrong
+ * in the other means cutting somebody off mid-sentence, which is the failure
+ * nobody forgives. So the bar to clear is "louder than a quiet room", not
+ * "clearly speech".
+ */
+const SPEECH_RMS = 600
+
+/** Quiet for this long after speech, and the recording is over. */
+const SILENCE_TAIL_SAMPLES = Math.round(MIC_SAMPLE_RATE * 1.5)
+
+/**
+ * Loudness of one chunk, as RMS.
+ *
+ * The bytes are little-endian signed 16-bit; read as unsigned they would make
+ * every negative sample enormous and nothing would ever be quiet.
+ */
+export function pcmRms(pcm: Uint8Array): number {
+  const n = pcm.length >> 1
+  if (n === 0) return 0
+  let sum = 0
+  for (let i = 0; i < n; i++) {
+    let v = pcm[i * 2] | (pcm[i * 2 + 1] << 8)
+    if (v >= 0x8000) v -= 0x10000
+    sum += v * v
+  }
+  return Math.sqrt(sum / n)
+}
+
 /** Concatenate collected PCM chunks into one contiguous buffer. */
 function concatPcm(chunks: Uint8Array[]): Uint8Array {
   let len = 0
@@ -350,6 +390,10 @@ export class GlassesController {
 
   private audioChunks: Uint8Array[] = []
   private recording = false
+  /** Whether anything above `SPEECH_RMS` has been heard in this recording. */
+  private heardSpeech = false
+  /** Samples of quiet since the last thing that was not quiet. */
+  private silentSamples = 0
   private lastConvRefresh = 0
 
   constructor(platform: GlassesPlatform) {
@@ -772,6 +816,8 @@ export class GlassesController {
     this.clearNoticeTimer()
     this.recording = false
     this.audioChunks = []
+    this.heardSpeech = false
+    this.silentSamples = 0
     // Unconditional: `recording` says whether the PCM was being collected, not
     // whether the microphone is open — `startVoice` opens it before anything
     // sets that flag, and a failed open leaves it false. `audioControl(false)`
@@ -788,8 +834,31 @@ export class GlassesController {
   swipeUp(): void { void this.handle('swipeUp') }
   swipeDown(): void { void this.handle('swipeDown') }
 
+  /**
+   * A chunk of microphone audio, and the decision of whether the sentence is
+   * over.
+   *
+   * Counting quiet **samples** rather than elapsed milliseconds is what makes
+   * this testable: the same chunks always produce the same decision, with no
+   * clock to stub. It is also the more honest measure - what matters is how
+   * much silence was recorded, not how long the host took to deliver it.
+   *
+   * Nothing happens until something has been said. Someone who taps and then
+   * takes a moment to think would otherwise be cut off before their first
+   * word, which is worse than the open microphone this exists to close.
+   */
   onAudioData(pcm: Uint8Array): void {
-    if (this.recording) this.audioChunks.push(pcm)
+    if (!this.recording) return
+    this.audioChunks.push(pcm)
+
+    if (pcmRms(pcm) >= SPEECH_RMS) {
+      this.heardSpeech = true
+      this.silentSamples = 0
+      return
+    }
+    if (!this.heardSpeech) return
+    this.silentSamples += pcm.length >> 1
+    if (this.silentSamples >= SILENCE_TAIL_SAMPLES) void this.stopAndTranscribe()
   }
 
   /** Explicit state machine dispatch: (mode, action) → transition. */
@@ -1250,6 +1319,8 @@ export class GlassesController {
   private async startVoice(target: ReplyTarget): Promise<void> {
     this.voiceTarget = target
     this.audioChunks = []
+    this.heardSpeech = false
+    this.silentSamples = 0
     this.state.mode = 'voice'
     this.state.voicePhase = 'recording'
     this.state.voiceText = ''

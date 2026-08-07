@@ -1470,7 +1470,7 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
     case 'recording':
       return {
         headerText: withClock(`${name}  [recording]`, demoTail),
-        bodyText: `● Recording\n\nSpeak into the microphone\nStops itself after ${Math.round(MAX_RECORDING_MS / 1000)} seconds`,
+        bodyText: `● Recording\n\nSpeak into the microphone\nStops when you stop, or after ${Math.round(MAX_RECORDING_MS / 1000)} seconds`,
         footerText: 'tap:stop and transcribe  dbl:cancel',
       }
     case 'transcribing':
