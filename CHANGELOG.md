@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.79] - 2026-08-08
+
+### Added
+- **A recorded frame says which build drew it.** The screen recording is read
+  days later to decide whether something is fixed, and it could not answer
+  that: on one morning three glasses builds and three server versions shipped,
+  and telling which pair drew a frame meant correlating the file against a
+  console line that happened to print the version
+  - A frame now carries the glasses build and the commit it was built from, and
+    every recorded line carries the server that wrote it - frames, gaps,
+    gestures and focus alike. A frame says which pair was running; a gap says
+    which server saw the glasses leave
+  - The commit is there because a version says which number a build claims, not
+    which code it holds: an unreleased build and the packed ehpk answer the same
+    number
+  - Recordings written before this read back unchanged
+
 ## [0.3.78] - 2026-08-08
 
 ### Fixed
