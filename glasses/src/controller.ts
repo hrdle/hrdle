@@ -27,7 +27,7 @@
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationBodyLines, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -1915,7 +1915,15 @@ export class GlassesController {
   }
 
   private currentMsgTotalPages(): number {
-    return getTotalPagesAt(this.state.conversation, this.state.conversationOffset)
+    // The same line budget the body will draw with. Counted against the
+    // panel's full height while a notice was up, the footer promised fewer
+    // pages than paging actually needed and the tail of a message was
+    // unreachable.
+    return getTotalPagesAt(
+      this.state.conversation,
+      this.state.conversationOffset,
+      conversationBodyLines(this.state),
+    )
   }
 
   /** The pane the cursor is on, when the list row was a pane. */

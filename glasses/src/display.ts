@@ -48,21 +48,34 @@ function splitDisplayLines(text: string): string[] {
   return splitLines(text, BODY_WIDTH)
 }
 
-/** Paginate a single message by display lines */
-function paginateSingleMessage(fullText: string, page: number): { text: string; pageInfo: string; totalPages: number } {
+/**
+ * Paginate a single message by display lines.
+ *
+ * `lines` is how many the body will actually draw, which is **not** always
+ * `MAX_LINES`: a notice takes its share of the panel first, and what is left is
+ * `conversationLines(notice)`. Paging by the panel's height while drawing the
+ * smaller number tore a hole at every page boundary - the body clipped its
+ * tail and the next page began past it, so the lines in between were on no page
+ * at all. Recorded on 2026-08-08 with a waiting banner up: a three-proposal
+ * answer arrived on the G2 with the whole of the second proposal and the third
+ * one's heading missing, page 1 ending mid-list and page 2 resuming after the
+ * gap, with nothing to say anything had been skipped.
+ */
+function paginateSingleMessage(fullText: string, page: number, lines = MAX_LINES): { text: string; pageInfo: string; totalPages: number } {
   const allLines = splitDisplayLines(fullText)
+  const perPage = Math.max(1, lines)
 
-  if (allLines.length <= MAX_LINES) {
+  if (allLines.length <= perPage) {
     return { text: fullText, pageInfo: '', totalPages: 1 }
   }
 
   // Pages tile: no line appears twice. Carrying the last line over as context
   // sounded helpful and read as the page not having advanced — the reader has
   // to work out which of the seven lines is the one they already know.
-  const totalPages = Math.ceil(allLines.length / MAX_LINES)
+  const totalPages = Math.ceil(allLines.length / perPage)
   const p = Math.min(page, totalPages - 1)
-  const start = p * MAX_LINES
-  const pageLines = allLines.slice(start, start + MAX_LINES)
+  const start = p * perPage
+  const pageLines = allLines.slice(start, start + perPage)
   const text = pageLines.join('\n')
   const pageInfo = ` p${p + 1}/${totalPages}`
   return { text, pageInfo, totalPages }
@@ -106,10 +119,16 @@ function buildMultiMessageViewFrom(msgs: ConversationMessage[], fromIndex: numbe
 }
 
 /** Main pagination entry point */
-function paginateMessage(msgs: ConversationMessage[], msgIndex: number, page: number): { text: string; pageInfo: string; totalPages: number; multiCount: number } {
+function paginateMessage(msgs: ConversationMessage[], msgIndex: number, page: number, lines = MAX_LINES): { text: string; pageInfo: string; totalPages: number; multiCount: number } {
   if (msgIndex < 0) return { text: '(no messages)', pageInfo: '', totalPages: 0, multiCount: 0 }
 
   if (page === 0) {
+    // Deliberately the panel's own height rather than `lines`: the multi
+    // message view has no second page, so packing it smaller drops whole
+    // messages instead of moving them, and the tutorial is written to this
+    // size. What it packs past the body's share is clipped, which is its own
+    // fault to fix and not this one - nothing here is on a page that cannot be
+    // reached.
     const { text, count } = buildMultiMessageViewFrom(msgs, msgIndex)
     if (count > 1) {
       return { text, pageInfo: '', totalPages: 1, multiCount: count }
@@ -117,16 +136,30 @@ function paginateMessage(msgs: ConversationMessage[], msgIndex: number, page: nu
   }
 
   const fullText = formatMessage(msgs[msgIndex])
-  const result = paginateSingleMessage(fullText, page)
+  const result = paginateSingleMessage(fullText, page, lines)
   return { ...result, multiCount: 1 }
 }
 
-/** Get total pages for the message at a given offset */
-export function getTotalPagesAt(msgs: ConversationMessage[], offset: number): number {
+/**
+ * Get total pages for the message at a given offset.
+ *
+ * `lines` must be the number the body will draw with, or the count disagrees
+ * with what paging actually does: the footer promises `p1/2` while the reader
+ * needs three presses to reach the end, and the last press appears to do
+ * nothing.
+ */
+export function getTotalPagesAt(msgs: ConversationMessage[], offset: number, lines = MAX_LINES): number {
   const msgIndex = msgs.length > 0 ? Math.max(0, msgs.length - 1 - offset) : -1
   if (msgIndex < 0) return 0
-  const { totalPages } = paginateMessage(msgs, msgIndex, 0)
+  const { totalPages } = paginateMessage(msgs, msgIndex, 0, lines)
   return totalPages
+}
+
+/** The text of one page, built the way the body builds it. Exported for the
+ *  tests, which check that paging a message loses none of it. */
+export function conversationPageText(msgs: ConversationMessage[], offset: number, page: number, lines = MAX_LINES): string {
+  const msgIndex = msgs.length > 0 ? Math.max(0, msgs.length - 1 - offset) : -1
+  return paginateMessage(msgs, msgIndex, page, lines).text
 }
 
 /** Calculate how many messages are shown at a given offset, for offset jumping */
@@ -1103,6 +1136,18 @@ export function conversationLines(noticeLines: number): number {
   return Math.max(0, Math.floor((body - 2 * BODY_PAD) / LINE_H))
 }
 
+/**
+ * The lines the conversation body has right now, notice included.
+ *
+ * The single answer to "how much fits", so that what is paged and what is
+ * drawn cannot disagree. The controller needs it too: it counts pages to know
+ * when a swipe should move to the next message instead of the next page.
+ */
+export function conversationBodyLines(state: AppState): number {
+  const notice = noticeScrollOf(conversationNoticeText(state), state.noticeWindow ?? 0)
+  return conversationLines(notice.length)
+}
+
 function conversationContent(state: AppState): {
   headerText: string
   noticeText: string
@@ -1126,24 +1171,26 @@ function conversationContent(state: AppState): {
   const msgIndex = msgs.length > 0
     ? Math.max(0, msgs.length - 1 - state.conversationOffset)
     : -1
-  const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage)
+  // The notice is measured first, because what it leaves is what the
+  // conversation may both draw *and* page by. Paging by the panel's full
+  // height while drawing less put whole lines on no page at all.
   const allNotice = conversationNoticeText(state)
-  // The body container clips overflow: cap the banner+recap+content block at
-  // one page so a waiting overlay never pushes conversation text off-screen.
-  // Everything is measured in display lines — counting the conversation in
-  // logical lines let a wrapped paragraph run off the bottom unnoticed.
-  const content = convText.split('\n').flatMap(splitDisplayLines)
   // The notice block gets its own container so the panel can draw the line
   // between them as a border. It used to be a row of dashes inside this one,
   // which spent 27px — a seventh of everything the reader gets — on a rule.
   const noticeLines = noticeScrollOf(allNotice, state.noticeWindow ?? 0)
   const noticeText = noticeLines.join('\n')
-  // The body container clips overflow: cap the content at what is left once
-  // the notice has taken its share, so a waiting banner never pushes
-  // conversation text off-screen. Everything is measured in display lines —
-  // counting the conversation in logical lines let a wrapped paragraph run off
-  // the bottom unnoticed.
-  const bodyText = content.slice(0, conversationLines(noticeLines.length)).join('\n')
+  const bodyLines = conversationLines(noticeLines.length)
+  const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage, bodyLines)
+  // The body container clips overflow: cap the banner+recap+content block at
+  // one page so a waiting overlay never pushes conversation text off-screen.
+  // Everything is measured in display lines — counting the conversation in
+  // logical lines let a wrapped paragraph run off the bottom unnoticed.
+  const content = convText.split('\n').flatMap(splitDisplayLines)
+  // The body container clips overflow, so this is a backstop rather than the
+  // decision: the page was built to `bodyLines` above, and anything past it
+  // here would be a line the next page does not begin with.
+  const bodyText = content.slice(0, bodyLines).join('\n')
   // With a waiting banner up, the ring is routed to the overlay item:
   // tap = respond/jump, double-tap = dismiss ("later / on PC").
   // Read some way back, the double-tap returns to the newest message rather
