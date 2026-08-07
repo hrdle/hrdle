@@ -180,6 +180,11 @@ export interface GlassesScreen {
   /** The session under the cursor / on screen, as structured data — analysis
    *  of a recording should not have to parse the header back apart. */
   session?: { id: string; name?: string; paneId?: string }
+  /** The glasses build that drew the frame, so a recording read days later can
+   *  say whether a fault was still present in it. The commit because a version
+   *  says which number a build claims, not which code it holds. */
+  app?: string
+  appCommit?: string
   at: number
 }
 
@@ -194,10 +199,10 @@ export type GlassesInputKind = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
  * back through the same painter the live mirror uses and overlays gestures.
  */
 export type RecordedGlassesLine =
-  | (GlassesScreen & { receivedAt: number })
-  | { gap: true; at: number }
-  | { input: GlassesInputKind; at: number; receivedAt: number }
-  | { focus: string | null; deviceType?: string; at: number; receivedAt: number }
+  | (GlassesScreen & { receivedAt: number; server?: string })
+  | { gap: true; at: number; server?: string }
+  | { input: GlassesInputKind; at: number; receivedAt: number; server?: string }
+  | { focus: string | null; deviceType?: string; at: number; receivedAt: number; server?: string }
 
 export interface RecordingDaySummary {
   /** YYYY-MM-DD, server-local. */

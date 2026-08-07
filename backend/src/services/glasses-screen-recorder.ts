@@ -50,7 +50,7 @@ const RETENTION_DAYS = 365;
  * (`GlassesScreen.app`), so a frame says which pair drew it and a gap says
  * which server saw the glasses leave.
  */
-type ServerStamp = { server: string };
+type ServerStamp = { server?: string };
 
 export type RecordedGlassesLine =
   | (GlassesScreen & { receivedAt: number } & ServerStamp)
