@@ -2,7 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.73] - 2026-08-07
+## [Unreleased]
+
+### Added
+- **A recording stops itself after 30 seconds.** Spoken instructions to an agent
+  are a sentence or two, so an open microphone is far more likely to be one
+  somebody forgot to stop than one still being spoken into - and left running it
+  spends the wearer's battery, the upload and Groq quota to produce a transcript
+  with a minute of room noise on the end. Stopping transcribes what it has, the
+  same as stopping by hand
+  - The screen says the number rather than counting down to it. A countdown
+    means redrawing the panel over BLE every second for the whole recording,
+    which is what the deliberately slow spinner exists to avoid
+  - It is disarmed by everything else that ends a recording - a manual stop, a
+    cancel, the host tearing the run down - and is not armed at all when the
+    microphone refused to open
 
 ### Fixed
 - **The speech vocabulary is made of words someone chose, not of workspace

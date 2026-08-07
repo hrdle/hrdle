@@ -27,7 +27,7 @@
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -325,6 +325,8 @@ export class GlassesController {
   private autoTimer: ReturnType<typeof setInterval> | null = null
   /** The gap between saying the run is closing and closing it. */
   private exitTimer: ReturnType<typeof setTimeout> | null = null
+  /** Stops a recording nobody stopped (`MAX_RECORDING_MS`); null when idle. */
+  private recordTimer: ReturnType<typeof setTimeout> | null = null
   /** Torn down by the host. Nothing draws, nothing reconnects, nothing ticks. */
   private stopped = false
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
@@ -764,6 +766,9 @@ export class GlassesController {
       clearTimeout(this.exitTimer)
       this.exitTimer = null
     }
+    // A recording the host tore down mid-way: the self-stop would otherwise
+    // wake a dead controller up to transcribe and draw.
+    this.clearRecordTimer()
     this.clearNoticeTimer()
     this.recording = false
     this.audioChunks = []
@@ -1263,12 +1268,27 @@ export class GlassesController {
       this.state.voicePhase = 'confirm'
       this.state.voiceText = ''
       this.render()
+      return
+    }
+    // Only once the microphone is actually open: a start that failed has
+    // nothing to stop, and arming the timer anyway would fire a transcription
+    // of no audio half a minute after the wearer had moved on.
+    this.recordTimer = setTimeout(() => void this.stopAndTranscribe(), MAX_RECORDING_MS)
+  }
+
+  /** Disarm the self-stop. Safe to call when it was never armed. */
+  private clearRecordTimer(): void {
+    if (this.recordTimer) {
+      clearTimeout(this.recordTimer)
+      this.recordTimer = null
     }
   }
 
   private async stopAndTranscribe(): Promise<void> {
     if (!this.recording) return
     this.recording = false
+    // Whichever of the two stopped it, the other must not fire later.
+    this.clearRecordTimer()
     if (this.demo) {
       this.state.voicePhase = 'transcribing'
       this.render()
@@ -1336,6 +1356,7 @@ export class GlassesController {
   }
 
   private async cancelVoice(): Promise<void> {
+    this.clearRecordTimer()
     if (this.recording) {
       this.recording = false
       await this.platform.stopMicCapture()
