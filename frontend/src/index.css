@@ -141,7 +141,16 @@ body {
 	overscroll-behavior: none;
 }
 
+/* Keep the layout viewport pinned; the app follows the visual viewport
+   via --vv-top (set in main.tsx). */
+body {
+	position: fixed;
+	inset: 0;
+	width: 100%;
+}
+
 #root {
+	transform: translateY(var(--vv-top, 0px));
 	height: 100%;
 	height: var(--vh, 100dvh);
 	display: flex;
