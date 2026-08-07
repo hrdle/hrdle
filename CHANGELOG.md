@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.74] - 2026-08-07
 
 ### Added
 - **A recording stops itself after 30 seconds.** Spoken instructions to an agent
