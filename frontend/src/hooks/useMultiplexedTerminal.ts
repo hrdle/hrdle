@@ -232,7 +232,9 @@ function subscribeToSession(
 	subscribedSession = sessionId;
 	subscribedSessionInstance = sessionInstanceId ?? null;
 	activeCallbacks?.setIsConnected?.(false);
-	sendRaw({ type: "subscribe", sessionId });
+	// `force` is set only by the reconnect replay in the `ready` handler, so it
+	// is exactly "the socket asked, not the user".
+	sendRaw({ type: "subscribe", sessionId, resumed: force });
 }
 
 function ensureConnection(token?: string | null, wsBase?: string | null) {

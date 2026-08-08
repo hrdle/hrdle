@@ -1376,7 +1376,16 @@ export interface ClientFocus {
 
 // Client → Server messages for /ws/mux
 export type MuxClientMessage =
-  | { type: 'subscribe'; sessionId: string }
+  /**
+   * `resumed` marks a subscription the *socket* asked for, not a person: after
+   * a reconnect the client replays whatever it had open. Both look identical
+   * on the wire otherwise, and the glasses focus is decided by which screen
+   * was most recently brought up - so a tablet left open on a desk kept
+   * winning that election every time its WebSocket came back, and carried the
+   * wearer off the session they were talking to. Measured on 2026-08-08: 44
+   * switches to one session in a day, all from a device nobody had touched.
+   */
+  | { type: 'subscribe'; sessionId: string; resumed?: boolean }
   | { type: 'unsubscribe'; sessionId: string }
   // `agentSessionId` names the pane's own agent session. Without it the server
   // can only resolve a workspace, and a workspace with two agent panes has two
@@ -1471,7 +1480,7 @@ const controlClientMessageOptions = [
 ] as const;
 
 export const MuxClientMessageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('subscribe'), sessionId: z.string().min(1) }),
+  z.object({ type: z.literal('subscribe'), sessionId: z.string().min(1), resumed: z.boolean().optional() }),
   z.object({ type: z.literal('unsubscribe'), sessionId: z.string().min(1) }),
   z.object({
     type: z.literal('subscribe-conversation'),
