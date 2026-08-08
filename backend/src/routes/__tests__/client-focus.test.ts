@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { pickClientFocus, type MuxData } from '../terminal-mux';
+import { applySubscribeFocus, pickClientFocus, type MuxData } from '../terminal-mux';
 
 /**
  * The glasses follow the session open on the screen a person is looking at, so
@@ -68,5 +68,35 @@ describe('pickClientFocus', () => {
 
   test('nobody connected means nobody to follow', () => {
     expect(pickClientFocus([])).toBeUndefined();
+  });
+});
+
+describe('a reconnect is not a person', () => {
+  /**
+   * The election picks the most recently raised screen. A client replays its
+   * subscription whenever its socket comes back, and that replay used to count
+   * as raising the screen - so a tablet left open on a desk took the wearer off
+   * the session they were talking to every time the network hiccuped. Measured
+   * on 2026-08-08: 44 switches to one session in a day, every one of them from
+   * a device nobody had touched.
+   */
+  test('a resumed subscribe records the session but does not claim', () => {
+    const data = { focusSessionId: 'w66', focusAt: 100 };
+    applySubscribeFocus(data, { sessionId: 'w54', resumed: true }, 999);
+    expect(data.focusSessionId).toBe('w54');
+    expect(data.focusAt).toBe(100);
+  });
+
+  test('a person opening a session claims it', () => {
+    const data = { focusSessionId: 'w66', focusAt: 100 };
+    applySubscribeFocus(data, { sessionId: 'w54' }, 999);
+    expect(data.focusAt).toBe(999);
+  });
+
+  test('the phone in your hand outbids the tablet that reconnected', () => {
+    const tablet = { focusSessionId: 'w54', focusAt: 100, deviceType: 'tablet' as const, visible: true };
+    const phone = { focusSessionId: 'w66', focusAt: 200, deviceType: 'mobile' as const, visible: true };
+    applySubscribeFocus(tablet, { sessionId: 'w54', resumed: true }, 999);
+    expect(pickClientFocus([client(tablet), client(phone)])?.sessionId).toBe('w66');
   });
 });

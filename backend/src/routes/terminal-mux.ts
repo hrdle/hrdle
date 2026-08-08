@@ -123,6 +123,30 @@ const activeMuxConnections = new Set<ServerWebSocket<MuxData>>();
  *
  * Pure and exported for the tests; the caller supplies the connections.
  */
+/**
+ * What a `subscribe` does to this client's claim on the glasses focus.
+ *
+ * Opening a session claims it — watching, not typing, is what a person does
+ * most of the time. A reconnect replaying what was already open claims
+ * nothing: it is the socket asking, not a person, and the election picks the
+ * most recently raised screen. A tablet left open on a desk therefore took the
+ * wearer off the session they were talking to every time its WebSocket came
+ * back — 44 times in one day on 2026-08-08, from a device nobody had touched.
+ *
+ * The session itself is recorded either way, so a resumed client is still
+ * *followable*; it just does not jump the queue by reconnecting.
+ *
+ * Pure and exported for the tests.
+ */
+export function applySubscribeFocus(
+  data: { focusSessionId?: string; focusAt?: number },
+  msg: { sessionId: string; resumed?: boolean },
+  now: number,
+): void {
+  data.focusSessionId = msg.sessionId;
+  if (!msg.resumed) data.focusAt = now;
+}
+
 export function pickClientFocus(clients: MuxData[]): ClientFocus | undefined {
   let best: MuxData | undefined;
   for (const d of clients) {
@@ -301,10 +325,7 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
   if (msg.type === 'subscribe') {
     await handleSubscribe(ws, msg.sessionId);
-    // Opening a session claims the glasses focus — watching, not typing,
-    // is what the user does most of the time.
-    ws.data.focusSessionId = msg.sessionId;
-    ws.data.focusAt = Date.now();
+    applySubscribeFocus(ws.data, msg, Date.now());
     maybePushFocus();
     return;
   }
