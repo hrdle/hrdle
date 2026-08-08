@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.80] - 2026-08-08
+
+### Fixed
+- **A reconnect no longer takes the glasses off the session you are talking
+  to.** The glasses follow the screen a person most recently raised, and a
+  client replays its subscription whenever its socket comes back - so a tablet
+  left open on a desk won that election every time the network hiccuped
+  - Measured across a day of screen recordings: 138 focus changes, 44 of them
+    to one session, every one of those from a device nobody had touched. The
+    phone would claim the session being talked to and the tablet would take it
+    back seconds later, over and over
+  - The reconnect replay now says so, and the server records the session
+    without refreshing the claim. A resumed client stays followable; it just
+    does not jump the queue by reconnecting
+  - Picking a device up still claims, which is what the election is for
+
 ## [0.3.79] - 2026-08-08
 
 ### Added
