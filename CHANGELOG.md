@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.82] - 2026-08-09
+
+### Fixed
+- **iOS: the soft keyboard no longer paints most of the screen black.**
+  Focusing any input on an iPhone covered the terminal with a black band that
+  only scrolling would temporarily clear (#219, contributed in #220 by
+  @Chapapon)
+  - Two corrections were fighting: the app shrinks itself to
+    `visualViewport.height`, and iOS *pans* the layout viewport over the page
+    on top of that. A script cannot undo the pan, so the fix follows it - the
+    app is translated by `visualViewport.offsetTop` and stays glued to the
+    visible area, with re-syncs around focus changes because Safari applies the
+    pan asynchronously
+  - Measured while merging: with the keyboard open, a full-screen overlay now
+    covers the visible area rather than the whole screen, which is the better
+    of the two behaviours. With the keyboard closed nothing changes at all
+
 ## [0.3.81] - 2026-08-09
 
 ### Added
