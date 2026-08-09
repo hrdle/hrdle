@@ -19,6 +19,12 @@ sessions. The hurdle of getting started is in the name too.*
 
 > **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here. Existing installs keep working — that repository stays readable, so `cchub update` still resolves — and Hrdle installs alongside rather than over it (separate binary, service, port and herdr session).
 
+## Demo
+
+![Hrdle demo — the real terminal on a tablet, conversation view, and a voice reply from the G2 glasses landing in the terminal](docs/demo.gif)
+
+Full video: [42s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-en.mp4) · [62s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-en.mp4) (English) — [42秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-ja.mp4) · [62秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-ja.mp4) (日本語)
+
 ## What it does
 
 - **Sessions and panes** — run several agents side by side, split / zoom / resize / close panes, and every connected client sees the same layout. Indicators show which sessions are working, waiting on you, or done, read from the pane itself with no hooks required. Long-press a session to give it a colour.
