@@ -1,5 +1,6 @@
 import type { Terminal } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { copyText } from "../utils/clipboard";
 
 export interface SelectionRange {
 	startCol: number;
@@ -59,46 +60,22 @@ export function useSelectionMode({
 	const exitSelectionModeRef = useRef(exitSelectionMode);
 	exitSelectionModeRef.current = exitSelectionMode;
 
-	const copyFallback = useCallback((text: string) => {
-		try {
-			const ta = document.createElement("textarea");
-			ta.value = text;
-			ta.style.cssText = "position:fixed;left:-9999px;top:-9999px";
-			document.body.appendChild(ta);
-			ta.select();
-			document.execCommand("copy");
-			document.body.removeChild(ta);
-			setCopyFeedback("Copied!");
-		} catch {
-			setCopyFeedback("Failed");
-		}
+	const flashFeedback = useCallback((message: string) => {
+		setCopyFeedback(message);
 		setTimeout(() => setCopyFeedback(null), 1500);
 	}, []);
 
 	const handleCopySelection = useCallback(() => {
 		const sel = terminalRef.current?.getSelection();
 		if (!sel) {
-			setCopyFeedback("No selection");
-			setTimeout(() => setCopyFeedback(null), 1500);
+			flashFeedback("No selection");
 			exitSelectionMode();
 			return;
 		}
 		const text = sel;
 		exitSelectionMode();
-		if (navigator.clipboard?.writeText) {
-			navigator.clipboard
-				.writeText(text)
-				.then(() => {
-					setCopyFeedback("Copied!");
-					setTimeout(() => setCopyFeedback(null), 1500);
-				})
-				.catch(() => {
-					copyFallback(text);
-				});
-		} else {
-			copyFallback(text);
-		}
-	}, [exitSelectionMode, terminalRef, copyFallback]);
+		void copyText(text).then((ok) => flashFeedback(ok ? "Copied!" : "Failed"));
+	}, [exitSelectionMode, terminalRef, flashFeedback]);
 
 	// Touch handle drag
 	const handleHandleDragStart = useCallback(
