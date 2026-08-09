@@ -49,8 +49,9 @@ describe('STT prompt precedence', () => {
     const prompt = await sttPrompt();
     expect(prompt).toContain('確定申告');
     // The glossary is still there behind them - this is the regression.
+    // Two terms from opposite ends of it, so a truncated glossary fails here.
     expect(prompt).toContain('リリース');
-    expect(prompt).toContain('リベース');
+    expect(prompt).toContain('ターミナル');
   });
 
   test('the environment still replaces the whole line, for an A/B run', async () => {
@@ -78,6 +79,9 @@ describe('STT prompt precedence', () => {
   test('with nothing set at all, the glossary is what goes out', async () => {
     const prompt = await sttPrompt();
     expect(prompt).toContain('リリース');
-    expect(prompt).toContain('ペイン');
+    // The spoken word for a pane. `ペイン` is the code's word and was never
+    // said once in 1030 recorded utterances; `パネル` was said eleven times.
+    expect(prompt).toContain('パネル');
+    expect(prompt).not.toContain('ペイン');
   });
 });

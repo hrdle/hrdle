@@ -2,11 +2,14 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { sttPrompt } from '../services/stt-prompt';
 import {
+  STT_MODELS,
   glassesSettingsView,
   resolveGroqApiKey,
   resolveSttLang,
+  resolveSttModel,
   updateGlassesSettings,
 } from '../services/glasses-settings';
+import { applySttCorrections } from '../services/stt-corrections';
 import {
   groqSttUsageService,
   pcmSeconds,
@@ -22,7 +25,6 @@ import {
 const glasses = new Hono();
 
 const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
-const GROQ_MODEL = 'whisper-large-v3-turbo';
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // Groq's file limit
 
 /**
@@ -50,7 +52,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
 }
 
 /**
- * POST /api/glasses/stt — transcribe audio via Groq whisper-large-v3-turbo.
+ * POST /api/glasses/stt — transcribe audio via Groq Whisper.
  *
  * Body: raw audio bytes (application/octet-stream).
  *   - Default: little-endian 16-bit mono PCM at `?sampleRate=` (default 16000);
@@ -59,11 +61,15 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  * Query: `?sampleRate=<n>` (PCM only), `?lang=<code>`.
  * Response: `{ text }`.
  *
- * The key, the language and the prompt come from the settings the glasses app's
- * own web screens write (`glasses-settings.ts`), each falling back to what the
- * server was configured with: `GROQ_API_KEY`, `ja`, and the vocabulary prompt
- * composed from live workspace names (`stt-prompt.ts`). A `?lang=` on the
- * request still wins, and `auto` sends no language so Whisper detects it.
+ * The key, the language, the model and the prompt come from the settings the
+ * glasses app's own web screens write (`glasses-settings.ts`), each falling
+ * back to what the server was configured with: `GROQ_API_KEY`, `ja`,
+ * `whisper-large-v3-turbo`, and the vocabulary prompt (`stt-prompt.ts`). A
+ * `?lang=` on the request still wins, and `auto` sends no language so Whisper
+ * detects it.
+ *
+ * What comes back is repaired by `stt-corrections.ts` before it is returned:
+ * the prompt biases what is heard and has no say over how it is spelled.
  *
  * Used by the G2 glasses voice-input flow (SDK gives raw mic PCM only, so STT
  * is done server-side; the key never leaves this host).
@@ -96,7 +102,7 @@ glasses.post('/stt', async (c) => {
 
     const form = new FormData();
     form.append('file', new Blob([wavBytes.buffer], { type: 'audio/wav' }), 'audio.wav');
-    form.append('model', GROQ_MODEL);
+    form.append('model', (await resolveSttModel()).model);
     // `auto` means send nothing: Whisper detects the language itself. Sending a
     // wrong one is worse than sending none - it transcribes English as though
     // it were the language named.
@@ -141,7 +147,10 @@ glasses.post('/stt', async (c) => {
     }
 
     const data = (await res.json()) as { text?: string };
-    const text = (data.text || '').trim();
+    // Spelling the prompt cannot reach, and the sign-off Whisper writes into
+    // silence. An emptied hallucination is reported as nothing said, not as an
+    // error: the request happened and its quota was spent either way.
+    const text = applySttCorrections(data.text || '');
     return c.json({ text });
   } catch (err) {
     console.error('[glasses/stt] transcription failed:', err);
@@ -176,6 +185,9 @@ const GlassesSettingsPatchSchema = z.object({
     .nullable()
     .optional(),
   sttPrompt: z.string().max(2000).nullable().optional(),
+  // A closed set: an unknown model is a 400 on every utterance, and the wearer
+  // would see only "STT provider error".
+  sttModel: z.enum(STT_MODELS).nullable().optional(),
 });
 
 /**
