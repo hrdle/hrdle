@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **A URL on the screen can be copied without selecting it.** Claude Code's
+  login screen offers `c to copy`, and on this kind of host that key cannot
+  work: with no `DISPLAY` the only thing it produces is an OSC 52 sequence, and
+  herdr's renderer consumes that before any client sees it - absent from the
+  control stream's frames and from `herdr api schema --json` alike, measured on
+  herdr 0.7.5. So a 450-character OAuth URL sat on a tablet's screen, wrapped
+  over four rows, with nothing but touch selection to get it out
+  - A pane's URLs now appear as a chip in its corner, each with copy and open.
+    Nothing is shown while the screen holds none
+  - Rejoining the wrapped rows is a heuristic, and has to be: Claude Code's TUI
+    hard-wraps its own output, so herdr's `recent_unwrapped` read returns the
+    same pieces as `visible` - there is no wrap flag left to consult. The only
+    join made is a URL ending the last column of a row that is full, continued
+    by the leading URL-character run below. Both halves of that test matter, or
+    a URL merely ending a short line would swallow whatever came after it
+  - An OAuth URL is worth nothing if one character is wrong, so the rule would
+    rather truncate than invent. The first thing it caught in the real thing
+    was its own blind spot: every row arrives carrying a trailing `\r`, which
+    made a full 160-column row measure 161 and stop looking full
+  - Asked for upstream as herdrdev/herdr#1459. The OSC 52 handler is kept for
+    the day a pane's copy reaches API clients
+
 ## [0.3.80] - 2026-08-08
 
 ### Fixed

@@ -17,10 +17,12 @@ import "@xterm/xterm/css/xterm.css";
 import type { PaneViewport, SessionTheme } from "../../../shared/types";
 import { useSelectionMode } from "../hooks/useSelectionMode";
 import { bench } from "../utils/bench";
+import { copyText } from "../utils/clipboard";
 import {
 	filterMouseTrackingInput,
 	shouldInterceptKeyEvent,
 } from "../utils/terminal-filters";
+import { extractViewportUrls } from "../utils/terminal-links";
 import { viewportToVTSequence } from "../utils/viewport-render";
 import { InputBar, type InputBarRef, type InputMode } from "./InputBar";
 import { SelectionOverlay } from "./SelectionOverlay";
@@ -156,6 +158,14 @@ export const TerminalComponent = memo(
 			loading: boolean;
 		} | null>(null);
 		const scrollIndicatorTimerRef = useRef<number | null>(null);
+		// URLs on the screen right now, rejoined across the rows they were
+		// wrapped over. The pane's own "c to copy" cannot reach a browser's
+		// clipboard (herdr consumes the OSC 52 it writes), so this is how a
+		// login URL gets off a tablet's screen.
+		const [screenUrls, setScreenUrls] = useState<string[]>([]);
+		const [urlsOpen, setUrlsOpen] = useState(false);
+		const [urlCopied, setUrlCopied] = useState<string | null>(null);
+		const urlCopiedTimerRef = useRef<number | null>(null);
 
 		const [isTouchDevice] = useState(() => {
 			const hasTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -444,7 +454,16 @@ export const TerminalComponent = memo(
 				);
 			}
 
-			// Handle OSC 52 (clipboard)
+			// Handle OSC 52 (clipboard).
+			//
+			// Dormant, and kept anyway. Nothing reaches it today: xterm only sees
+			// what `viewportToVTSequence` writes, and the sequence is consumed by
+			// herdr's renderer well before that — it is absent from the control
+			// stream's frames and from the socket API's schema alike (measured on
+			// herdr 0.7.5, 2026-08-09). It fires the day a pane's copy is
+			// forwarded to API clients, which is asked for in
+			// herdrdev/herdr#1459; until then `terminal-links.ts` recovers URLs
+			// from the rendered rows instead.
 			term.parser.registerOscHandler(52, (data) => {
 				const parts = data.split(";");
 				if (parts.length >= 2) {
@@ -1167,6 +1186,23 @@ export const TerminalComponent = memo(
 				term.write(vt, () => {
 					bench.recordWriteEnd(t0, vt.length);
 				});
+				// Runs on every frame, so the no-URL screen costs one substring
+				// scan and the state is only replaced when the set changes —
+				// otherwise every keystroke would re-render the chip.
+				if (import.meta.env.DEV) {
+					(
+						window as unknown as { __hrdle_viewport?: PaneViewport }
+					).__hrdle_viewport = viewport;
+				}
+				const urls = extractViewportUrls(viewport.lines, viewport.cols);
+				setScreenUrls((prev) =>
+					prev.length === urls.length && prev.every((u, i) => u === urls[i])
+						? prev
+						: urls,
+				);
+				// An empty screen closes the panel, so the next URL to appear does
+				// not reopen it on its own — the list has to be asked for.
+				if (urls.length === 0) setUrlsOpen(false);
 				const state = cm.getScrollState?.();
 				if (state && state.offset > 0) {
 					setScrollIndicator({
@@ -1191,6 +1227,9 @@ export const TerminalComponent = memo(
 			return () => {
 				cleanup();
 				controlCleanupRef.current = null;
+				// Another pane's URLs are not this one's.
+				setScreenUrls([]);
+				setUrlsOpen(false);
 			};
 			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, [!!controlMode, controlMode?.paneId]);
@@ -1336,6 +1375,26 @@ export const TerminalComponent = memo(
 		}, [fitTerminal]);
 		showKeyboardRef.current = handleShowKeyboard;
 
+		const handleCopyUrl = useCallback((url: string) => {
+			void copyText(url).then((ok) => {
+				setUrlCopied(ok ? url : null);
+				if (urlCopiedTimerRef.current)
+					clearTimeout(urlCopiedTimerRef.current);
+				urlCopiedTimerRef.current = window.setTimeout(
+					() => setUrlCopied(null),
+					1500,
+				);
+			});
+		}, []);
+
+		useEffect(
+			() => () => {
+				if (urlCopiedTimerRef.current)
+					clearTimeout(urlCopiedTimerRef.current);
+			},
+			[],
+		);
+
 		const themeColors = getTerminalThemes()[sessionTheme || "default"];
 		const containerStyle: React.CSSProperties = {
 			...(keyboardOffset > 0
@@ -1410,6 +1469,84 @@ export const TerminalComponent = memo(
 							)}
 						</div>
 					)}
+					{/* URLs on screen. The pane's own copy key writes an OSC 52
+					    sequence that herdr consumes, so on a tablet this is the only
+					    way a login URL reaches the browser's clipboard. Hidden in
+					    selection mode, whose panel sits over the same corner. */}
+					{!hideTerminalArea &&
+						!selection.selectionMode &&
+						screenUrls.length > 0 && (
+							<div className="absolute bottom-2 right-2 z-30 flex max-w-[min(30rem,calc(100%-1rem))] flex-col items-end gap-2">
+								{urlsOpen && (
+									<div
+										className="w-full overflow-hidden rounded-lg border border-blue-500/50 bg-black/90 shadow-xl"
+										onMouseDown={(e) => e.stopPropagation()}
+									>
+										{screenUrls.map((url) => (
+											<div
+												key={url}
+												className="border-b border-white/10 px-2.5 py-2 last:border-b-0"
+											>
+												<div className="line-clamp-2 break-all font-mono text-[11px] leading-snug text-blue-200">
+													{url}
+												</div>
+												<div className="mt-1.5 flex gap-2">
+													<button
+														type="button"
+														className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white active:bg-blue-700"
+														onTouchEnd={(e) => {
+															e.preventDefault();
+															e.stopPropagation();
+															handleCopyUrl(url);
+														}}
+														onClick={() => handleCopyUrl(url)}
+													>
+														{urlCopied === url ? "Copied!" : "Copy"}
+													</button>
+													<a
+														href={url}
+														target="_blank"
+														rel="noreferrer"
+														className="rounded bg-gray-600 px-3 py-1 text-xs font-medium text-white active:bg-gray-700"
+														onClick={(e) => e.stopPropagation()}
+													>
+														Open
+													</a>
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+								<button
+									type="button"
+									aria-label="URLs on screen"
+									aria-expanded={urlsOpen}
+									className="flex items-center gap-1 rounded-full bg-[var(--color-overlay)] px-2.5 py-1.5 text-xs text-blue-300/90 active:bg-blue-700/60"
+									onTouchEnd={(e) => {
+										e.preventDefault();
+										e.stopPropagation();
+										setUrlsOpen((open) => !open);
+									}}
+									onClick={() => setUrlsOpen((open) => !open)}
+								>
+									<svg
+										className="h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth={2}
+										strokeLinecap="round"
+									>
+										<title>Link</title>
+										<path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+										<path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+									</svg>
+									{screenUrls.length > 1 && (
+										<span className="font-mono">{screenUrls.length}</span>
+									)}
+								</button>
+							</div>
+						)}
 					{/* Selection mode controls */}
 					{selection.selectionMode && (
 						<SelectionOverlay
