@@ -2,47 +2,39 @@
 
 [日本語](README.ja.md) | English
 
-**Hrdle is herdr plus handle.** herdr runs your coding agents — Claude Code, Codex, Grok and Kimi — in terminal workspaces on a machine of yours. Hrdle is the handle you take hold of them by, from a tablet, a phone, or a pair of EVEN Realities G2 glasses. Not a view of them: a grip on them, so what you would do at the keyboard you do from wherever you are.
+**Your agents, even away from the desk.**
+You are no longer in front of the PC. And still, the work moves on.
 
-**The machine can be headless.** No display, no keyboard, nobody sitting at it — you reach it over Tailscale, so the only thing it owes you is staying awake.
+Hrdle runs your coding agents — Claude Code, Codex, Grok, Kimi and OpenCode — on a machine
+of yours, and puts the controls on your phone and on a pair of EVEN Realities G2 glasses.
 
-> **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here — the name said Claude Code, and this had long since stopped being only that. Existing installs keep working: that repository stays readable, so its releases and `install.sh` remain available and `cchub update` still resolves. Hrdle installs alongside rather than over it (separate binary, service, port and herdr session), so both can run on one machine.
+**Start work without opening a laptop.** Not just watching — starting. Create a session,
+ask by voice, answer its questions from the glasses. The PC stays closed.
 
-## Features
+The machine can be headless: no display, no keyboard, nobody sitting at it. You reach it
+over Tailscale, so the only thing it owes you is staying awake.
 
-- **Multi-session Management** - Run and switch between multiple agent sessions (Claude Code, Codex, Grok, Kimi)
-- **Multi-pane Terminals** - Split panes horizontally/vertically with real-time layout sync across all clients (herdr-backed panes, Hrdle-managed layout)
-- **Pane Operations** - Zoom, resize, focus, close panes via keyboard shortcuts or session modal UI
-- **Team Agent Display** - Shows agent names and colors in pane list and mobile tab bar
-- **Session Color Themes** - Assign colors to sessions for visual distinction
-- **Desktop Support** - Text selection with auto-copy, font size adjustment (Ctrl+=/-)
-- **Tablet-optimized UI** - Split layout, floating keyboard, pinch-to-zoom
-- **Mobile Support** - Tap/long-press for custom keyboard, pane tab bar for multi-pane switching, momentum scrolling
-- **File Viewer** - Syntax-highlighted code, image, Markdown and HTML preview
-- **Change Tracking** - View file diffs from Claude Code edits and git changes (toggle between Claude/Git mode)
-- **Browser Back Navigation** - Navigate back through FileViewer states with browser back gesture
-- **Tailscale Integration** - Secure HTTPS via Tailscale certificates
-- **Password Authentication** - Access control with `-P` option
-- **Auto-update** - Automatic updates from GitHub Releases
-- **Service Integration** - systemd (Linux) and launchd (macOS) with auto-restart
-- **Dashboard** - Usage limits, daily statistics, cost estimates, system metrics, network latency
-- **Session History** - Browse and resume past Claude Code sessions with full-text search
-- **Conversation Viewer** - Markdown rendering, image display, system summary distinction
-- **Prompt Search** - Search across prompt history from all sessions
-- **Session Indicators** - See at a glance which sessions are working, waiting on you, or done — detected from the pane itself, no hooks required
-- **Hook Notifications** - Browser push notifications for Claude Code events (response complete, user input needed)
-- **Codex Support** - Run Codex CLI sessions alongside Claude Code (conversation view, usage tracking)
-- **Chat View** - Conversation-style view of the current session as an alternative to the terminal
-- **Peer Servers** - Connect multiple Hrdle servers over Tailscale (auto-discovery, aggregated sessions/history/dashboard)
-- **Remote Pane Control** - `hrdle send` / `hrdle peek` to drive panes on local or peer servers from the CLI
-- **Smart Glasses** - Read sessions and answer questions on EVEN Realities G2 (see below)
-- **i18n** - English and Japanese UI with automatic language detection
-- **Onboarding Walkthrough** - Spotlight-style guide for first-time users
+*Hrdle = herdr + handle. A handle, held from the G2, for the thing that herds your
+sessions. The hurdle of getting started is in the name too.*
 
-## Smart Glasses (EVEN Realities G2)
+> **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here. Existing installs keep working — that repository stays readable, so `cchub update` still resolves — and Hrdle installs alongside rather than over it (separate binary, service, port and herdr session).
+
+## What it does
+
+- **Sessions and panes** — run several agents side by side, split / zoom / resize / close panes, and every connected client sees the same layout. Indicators show which sessions are working, waiting on you, or done, read from the pane itself with no hooks required. Long-press a session to give it a colour.
+- **Made for touch** — tablet split layout with a draggable floating keyboard, a custom mobile keyboard with a pane tab bar, pinch-to-zoom and momentum scrolling. Long-press a number key for its symbol. On desktop, text selection with auto-copy and font-size shortcuts.
+- **Reading the work** — a chat view that renders the current session as a conversation, and a file viewer with syntax highlighting, images, Markdown and HTML, showing diffs from either Claude Code's edits or git.
+- **History and search** — browse and resume past sessions, full-text search across every message, prompt history from all sessions at once.
+- **Dashboard** — 5-hour / 7-day usage cycles, time to reset and a projection of when you will hit the limit at the current pace, per-model token use, cost estimates, CPU / memory / swap history, WebSocket latency.
+- **Several machines** — peer servers over Tailscale, auto-discovered, with sessions, history and dashboards aggregated. `hrdle send` and `hrdle peek` drive a pane on any of them from the CLI.
+- **Unattended** — HTTPS through Tailscale certificates, optional password, and a systemd / launchd service with auto-restart and auto-update.
+
+The UI is English and Japanese, detected automatically.
+
+## Smart glasses (EVEN Realities G2)
 
 A companion app for the G2 (`glasses/`, built with the EvenHub SDK) turns the glasses
-into a read-and-answer surface for your sessions — useful when the agent needs a decision
+into a read-and-answer surface for your sessions — for when the agent needs a decision
 and you are not at a screen.
 
 - **Read and answer** — session list with status indicators, conversation view, and a
@@ -62,81 +54,73 @@ and you are not at a screen.
 Build and distribution live in [`glasses/README.md`](glasses/README.md). The packaged
 `out.ehpk` is uploaded to EVEN Hub.
 
-## Installation
+## Requirements
 
-### One-line Install (Recommended)
+| Dependency | Installation |
+|------------|--------------|
+| [Tailscale](https://tailscale.com/) | **Install this first.** Linux: `curl -fsSL https://tailscale.com/install.sh \| sh` / macOS: `brew install tailscale` (the App Store build ships no CLI, which certificate generation needs). Then `sudo tailscale set --operator=$USER`, once |
+| [herdr](https://herdr.dev/) | The installer installs it if it is missing (`HRDLE_SKIP_HERDR=1` to do it yourself) |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `npm install -g @anthropic-ai/claude-code`, then sign in once. Codex, Grok Build, Kimi Code and OpenCode work too |
+
+## Install
+
+**Setting it up with the glasses?** [The setup guide](https://hrdle-setup.abe00makoto.workers.dev)
+walks through all of it — machine, agent, Tailscale, install, voice key, connect — in about
+ten minutes. What follows is the same install, condensed.
+
+With Tailscale already installed, this is the whole of it:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 ```
 
-### Manual Installation
+It installs herdr if it is missing, allows certificate generation, registers the service,
+and finishes by printing the server's address as a QR code for the phone app to scan.
 
-1. Download the appropriate binary from [Releases](https://github.com/hrdle/hrdle/releases/latest)
-   - Linux x64: `hrdle-linux-x64`
-   - macOS ARM64: `hrdle-macos-arm64`
+Two things it cannot do for you:
 
-2. Make executable and place in PATH
+- **`sudo tailscale set --operator=$USER`** — sudo cannot prompt for a password from a
+  piped script, so if no cached credential is available the installer prints this line and
+  stops short of the service. Run it, then `hrdle setup`.
+- **A password.** As installed, anything signed in to your tailnet can open it. To be asked
+  for one in the browser, run `hrdle setup -P mypassword`.
+
+Set `HRDLE_NO_SERVICE=1` to install the binary only, or `HRDLE_SKIP_HERDR=1` to install
+herdr yourself.
+
+<details>
+<summary>Manual installation</summary>
+
+Download the binary for your platform from
+[Releases](https://github.com/hrdle/hrdle/releases/latest) — `hrdle-linux-x64` or
+`hrdle-macos-arm64` — then put it on your PATH:
 
 ```bash
 chmod +x hrdle-linux-x64
 mv hrdle-linux-x64 ~/bin/hrdle
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ```
 
-3. Add to PATH (if not already configured)
-
-```bash
-echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-## Requirements
-
-| Dependency | Required | Installation |
-|------------|----------|--------------|
-| [Tailscale](https://tailscale.com/) | Yes, install it first | Linux: `curl -fsSL https://tailscale.com/install.sh \| sh` / macOS: `brew install tailscale` (the App Store build ships no CLI). Then `sudo tailscale set --operator=$USER`, once |
-| [herdr](https://herdr.dev/) | Yes | The installer installs it if it is missing (`HRDLE_SKIP_HERDR=1` to do it yourself) |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | Yes | `npm install -g @anthropic-ai/claude-code`, then sign in once. Codex, Grok Build and Kimi Code work too |
-
-## Quick Start
-
-With Tailscale already installed, the one-line install above is the whole of it.
-It installs herdr if it is missing, allows certificate generation, registers the
-service, and finishes by printing the server's address as a QR code for the
-phone app to scan.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
-```
-
-Two things it cannot do for you:
-
-- **`sudo tailscale set --operator=$USER`** — sudo cannot prompt for a password
-  from a piped script, so if no cached credential is available the installer
-  prints this line and stops short of the service. Run it, then `hrdle setup`.
-- **A password.** As installed, anything signed in to your tailnet can open it.
-  To be asked for one in the browser, run `hrdle setup -P mypassword`.
-
-Set `HRDLE_NO_SERVICE=1` to install the binary only, or `HRDLE_SKIP_HERDR=1` to
-install herdr yourself.
+</details>
 
 ### The service
 
-`hrdle setup` enables:
-- Auto-start on system boot (systemd on Linux, launchd on macOS)
-- Auto-restart on crash
-- Auto-update via `hrdle update`
-- A supervised herdr server, with agent conversations resumed on restart
+`hrdle setup` enables auto-start on boot (systemd on Linux, launchd on macOS),
+auto-restart on crash, auto-update via `hrdle update`, and a supervised herdr server with
+agent conversations resumed on restart.
+
+Sessions live in the herdr server process, so restarting or updating Hrdle never kills
+them.
 
 ## Commands
 
 ```bash
-# Start server
+# Server
 hrdle                        # Start on port 5924
 hrdle -p 8080                # Specify port
 hrdle -P mypassword          # Start with password
 
-# Register service (auto-restart, auto-update)
+# Service (auto-restart, auto-update)
 hrdle setup -P mypassword
 hrdle uninstall              # Remove service registration
 
@@ -145,11 +129,8 @@ hrdle update                 # Update to latest
 hrdle update --check         # Check for updates only
 hrdle update --auto          # Auto-update mode (for timer)
 
-# Hook notification (used by Claude Code hooks)
-hrdle notify                 # Send hook event (reads JSON from stdin)
-
-# Status
-hrdle status
+hrdle status                 # Service status
+hrdle notify                 # Send a hook event (reads JSON from stdin)
 
 # Print this server's address: the short form for the glasses app's Connect
 # step, and the URL for a browser. (`hrdle qr` is the old name for it.)
@@ -159,12 +140,9 @@ hrdle address
 hrdle send <target> [text]   # Send input to a pane on a local or peer server
 hrdle peek <target>          # Snapshot a pane's current viewport
 
-# Debugging
 hrdle debug <sub>            # Bun inspector on the running service
                              # sub: enable | disable | profile | status
 ```
-
-### Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
@@ -174,7 +152,7 @@ hrdle debug <sub>            # Bun inspector on the running service
 | `-h, --help` | Show help | - |
 | `-v, --version` | Show version | - |
 
-**`hrdle send` options** — `<target>` is `<peer>:<session>:<paneId>` where peer is `local`, a peer id, or a nickname:
+**`hrdle send`** — `<target>` is `<peer>:<session>:<paneId>`, where peer is `local`, a peer id, or a nickname:
 
 | Option | Description |
 |--------|-------------|
@@ -186,38 +164,10 @@ hrdle debug <sub>            # Bun inspector on the running service
 | `--wait-ms <n>` | Delay before snapshot when `--wait` is set (default 800) |
 | `--lines <n>` | Trailing rows to include in the viewport (default 20, also for `hrdle peek`) |
 
-**`hrdle debug` options**: `--seconds <n>` (for `profile`: enable for N seconds then auto-disable).
+**`hrdle debug`** — `--seconds <n>` (for `profile`: enable for N seconds then auto-disable).
 
-### Tailscale Configuration
+## Keyboard shortcuts
 
-First-time setup requires allowing certificate generation:
-
-```bash
-sudo tailscale set --operator=$USER
-```
-
-> **macOS**: Install via `brew install tailscale`, not the App Store version. The App Store version lacks CLI commands needed for certificate generation.
-
-### herdr Backend
-
-Hrdle runs every session as a [herdr](https://herdr.dev/) workspace. `hrdle setup` provisions everything: a supervised `herdr server` (systemd on Linux, launchd on macOS), `~/.config/herdr/config.toml` with `resume_agents_on_restore = true` (agent conversations survive server restarts), and the Claude/Codex integration hooks (native session identity).
-
-To update herdr later: `herdr update`, then restart the supervised server (`systemctl --user restart herdr`). The update replaces the binary but leaves the running server on the old version, so the restart is what actually applies it — Hrdle notices that gap and shows a warning on the dashboard, with a button that does both steps for you. Restarting re-creates every pane: agent conversations come back automatically, but commands running in a pane do not, so it waits for you to press it.
-
-Do **not** use `herdr update --handoff` under systemd/launchd — the handed-off server escapes supervision.
-
-## Usage
-
-1. Open Hrdle in browser
-2. Create a Claude Code session with "New Session"
-3. Operate Claude Code in the terminal
-4. Open file viewer with the file icon
-
-### Keyboard Shortcuts
-
-Hrdle streams pane frames from herdr and owns the split layout server-side. All connected clients see the same pane layout.
-
-**Pane & Session Operations**:
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+B` | Toggle session modal |
@@ -225,81 +175,17 @@ Hrdle streams pane frames from herdr and owns the split layout server-side. All 
 | `Ctrl+D` | Split pane vertically (right) |
 | `Ctrl+Shift+D` | Split pane horizontally (bottom) |
 | `Ctrl+W` | Close pane |
+| `Ctrl+Arrow` | Navigate between panes |
 | `Ctrl+Shift+Arrow` | Resize active pane |
 | `Ctrl+Shift+=` | Equalize pane sizes |
-| `Ctrl+Arrow` | Navigate between panes |
 | `Ctrl+1-9` | Switch to session by number |
+| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Font size up / down / reset |
+| `Ctrl+C` (with selection) / `Ctrl+V` | Copy / paste |
 
-**Font Size & Clipboard (Desktop)**:
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+=` or `Ctrl++` | Increase font size |
-| `Ctrl+-` | Decrease font size |
-| `Ctrl+0` | Reset font size to default |
-| `Ctrl+C` (with selection) | Copy selected text |
-| `Ctrl+V` | Paste from clipboard |
+## Hook notifications
 
-**Session Modal** (`Ctrl+B`): Shows session list with pane count badges. Expand to see individual panes with focus/close/split actions.
-
-### Session Color Themes
-
-Assign colors to sessions for visual distinction:
-
-1. **Long-press** a session in the session list
-2. Color selection menu appears
-3. Choose from 9 colors (red, orange, amber, green, teal, blue, indigo, purple, pink) + none
-4. Terminal background changes to selected color
-
-### Tablet Mode
-
-Automatically switches to tablet layout when screen width >= 640px and height >= 500px:
-- Left: Terminal with split pane support (pinch-to-zoom supported)
-- Session modal (`Ctrl+B`) for session switching
-- Floating keyboard (draggable, minimizable)
-
-**Pinch Zoom**: Pinch with two fingers on the terminal to zoom. UI controls are not affected by zoom.
-
-### Keyboard Features
-
-**Mobile (Smartphone)**:
-- **Tap** or **long-press** terminal to show custom keyboard
-- OS standard keyboard does not appear
-- Scroll to dismiss keyboard
-
-**Floating Keyboard (Tablet)**:
-- Drag header to move position
-- Minimize button for compact view
-- Position saved separately for Japanese and keyboard modes
-
-**Key Operations**:
-- **Long-press** - Symbol input on number keys (1->!, 2->@, etc.)
-- **JA** - Switch to Japanese input mode (uses OS standard IME)
-- **ABC** - Return to keyboard mode
-
-### Dashboard
-
-View the following in the "Dashboard" tab:
-
-- **Usage Limits** - 5-hour/7-day cycle usage rate, time until reset
-- **Limit Prediction** - Estimated time to reach limit at current pace
-- **Daily Statistics** - Message and session count graphs
-- **Model Usage** - Opus/Sonnet token usage comparison
-- **Cost Estimate** - Estimated API costs
-- **System Metrics** - CPU, memory, swap usage with history graphs
-- **Network Latency** - WebSocket round-trip latency
-
-### Session History
-
-Browse past Claude Code sessions in the "History" tab:
-
-- Grouped by project
-- View conversation content (Markdown supported)
-- Resume sessions (continues with `claude -r`)
-- Full-text search across all user messages
-
-### Hook Notifications
-
-Receive browser push notifications when Claude Code completes a response or needs input. Add `hrdle notify` to your Claude Code hooks:
+Browser push notifications when Claude Code finishes a response or needs input. Add
+`hrdle notify` to `~/.claude/settings.json`:
 
 ```json
 {
@@ -313,59 +199,66 @@ Receive browser push notifications when Claude Code completes a response or need
 }
 ```
 
-Add this to `~/.claude/settings.json`. The Hrdle server must be running. Allow browser notification permissions on first access.
+The server must be running, and the browser must be allowed to show notifications on first
+access.
 
-Hooks run in a **non-interactive** shell, which never sources `.zshrc`/`.bashrc`. If your PATH additions live there (a `~/bin` or `~/.local/bin` install), the bare name won't resolve and the hook dies with `command not found`. Use the absolute path in that case — `which hrdle` gives it, and Hrdle's own "set up hooks" button already writes the resolved path:
+Session indicators (working / waiting / done) need no hooks at all — herdr reports agent
+status itself. These two carry only what herdr cannot see: the notification text, and the
+name of the tool that asked a question.
+
+Hooks run in a **non-interactive** shell, which never sources `.zshrc`/`.bashrc`. If your
+PATH additions live there (a `~/bin` or `~/.local/bin` install), the bare name will not
+resolve and the hook dies with `command not found`. Use the absolute path from
+`which hrdle` in that case — Hrdle's own "set up hooks" button already writes it:
 
 ```json
 { "type": "command", "command": "/home/you/bin/hrdle notify" }
 ```
 
-Session indicators (working / waiting / done) need no hooks at all — herdr reports agent status itself. These two hooks only carry what herdr can't see: the notification text and the name of the tool that asked a question.
+## herdr backend
 
-## Development Setup
+Hrdle runs every session as a [herdr](https://herdr.dev/) workspace, and `hrdle setup`
+provisions the lot: a supervised `herdr server`, `~/.config/herdr/config.toml` with
+`resume_agents_on_restore = true`, and the Claude / Codex integration hooks for native
+session identity.
 
-For development or building from source, [Bun](https://bun.sh/) 1.0+ is required.
+To update herdr later: `herdr update`, then restart the supervised server
+(`systemctl --user restart herdr`). The update replaces the binary but leaves the running
+server on the old version, so the restart is what applies it — Hrdle notices that gap and
+shows a dashboard warning with a button that does both steps. Restarting re-creates every
+pane: agent conversations come back automatically, commands running in a pane do not,
+which is why it waits for you to press it.
+
+Do **not** use `herdr update --handoff` under systemd/launchd — the handed-off server
+escapes supervision.
+
+## Development
+
+[Bun](https://bun.sh/) 1.0+ is required.
 
 ```bash
-# Install dependencies
 bun install
+bun run dev             # Backend + frontend; open http://localhost:5174
 
-# Start development server
-bun run dev
-```
-
-Open http://localhost:5174 in browser (development mode).
-
-### Build from Source
-
-```bash
-# Build as single binary
-bun run build:binary
-./dist/hrdle
-```
-
-### Development Commands
-
-```bash
 bun run dev:frontend    # Frontend only
 bun run dev:backend     # Backend only
 bun run test            # Run all tests
 bun run test:e2e        # E2E tests
 bun run lint            # Lint all packages
+bun run build:binary    # Single binary at ./dist/hrdle
 ```
 
-## Tech Stack
-
-- **Backend**: Bun, Hono, WebSocket
-- **Frontend**: React 19, Vite, Tailwind CSS v4, xterm.js, react-i18next
-- **Terminal**: [herdr](https://herdr.dev/) socket API + per-pane control streams
+**Stack** — Bun, Hono and WebSocket on the backend; React 19, Vite, Tailwind CSS v4,
+xterm.js and react-i18next on the frontend; herdr's socket API plus per-pane control
+streams for the terminal.
 
 ## Architecture
 
-An interactive overview of backend services, API routes, frontend components, hooks, WebSocket protocol, shared types and the major data flows lives in [`architecture.html`](architecture.html) (data: [`architecture.json`](architecture.json)).
+An interactive overview of backend services, API routes, frontend components, hooks, the
+WebSocket protocol, shared types and the major data flows lives in
+[`architecture.html`](architecture.html) (data: [`architecture.json`](architecture.json)).
 
-- Render in your browser via [raw.githack](https://raw.githack.com/hrdle/hrdle/main/architecture.html) — JSON is embedded, no external fetch required.
+- Render it in your browser via [raw.githack](https://raw.githack.com/hrdle/hrdle/main/architecture.html) — the JSON is embedded, no external fetch required.
 - Edit `architecture.json` and run `python3 scripts/build-architecture-html.py` to refresh the embed.
 
 ## License
