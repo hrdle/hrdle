@@ -19,6 +19,12 @@ Tailscale 越しに届くので、そのマシンに求めるのは起き続け�
 
 > **旧称 CC Hub。** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) は v0.2.98 でアーカイブされ、開発はこちらに移りました。既存のインストールはそのまま動きます — あちらは読み取り可能なまま残るので `cchub update` も解決し続けます。Hrdle は上書きではなく**並べて**インストールされる（別バイナリ・別サービス・別ポート・別 herdr セッション）ので、1台で両方動かせます。
 
+## デモ
+
+![Hrdle デモ — タブレットで本物のターミナル、会話ビュー、G2 グラスからの音声返信がターミナルに届くまで](docs/demo.gif)
+
+フル動画: [42秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-ja.mp4) · [62秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-ja.mp4)（日本語） — [42s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-en.mp4) · [62s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-en.mp4)（English）
+
 ## できること
 
 - **セッションとペイン** — 複数のエージェントを並べて動かし、ペインを分割・ズーム・リサイズ・クローズできます。レイアウトは接続中の全クライアントで共有されます。処理中・入力待ち・完了のインジケータはペイン自体から検出するので hook は不要です。セッションを長押しすると色を割り当てられます。
