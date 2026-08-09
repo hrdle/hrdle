@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.81] - 2026-08-09
+
 ### Added
 - **A URL on the screen can be copied without selecting it.** Claude Code's
   login screen offers `c to copy`, and on this kind of host that key cannot
