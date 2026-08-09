@@ -1211,7 +1211,7 @@ export function App() {
 
 	// Mobile: Show terminal with overlay (position depends on keyboard state)
 	return (
-		<div className="h-screen flex flex-col bg-th-bg relative" data-layout="mobile">
+		<div className="h-full flex flex-col bg-th-bg relative" data-layout="mobile">
 			{/* Terminal - full screen */}
 			{activeSession ? (
 				<div

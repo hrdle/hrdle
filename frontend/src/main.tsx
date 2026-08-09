@@ -39,13 +39,28 @@ console.log(
 
 // Handle visual viewport changes (soft keyboard)
 const updateViewportHeight = () => {
-	const vh = window.visualViewport?.height ?? window.innerHeight;
+	const vv = window.visualViewport;
+	const vh = vv?.height ?? window.innerHeight;
 	document.documentElement.style.setProperty("--vh", `${vh}px`);
+	// iOS pans the visual viewport over the page when the soft keyboard
+	// opens (vv.offsetTop), and scripts cannot undo that pan. Instead of
+	// fighting it, translate the app by the same offset so it stays glued
+	// to the visible area (see index.css #root).
+	document.documentElement.style.setProperty("--vv-top", `${vv?.offsetTop ?? 0}px`);
+	if (window.scrollY) window.scrollTo(0, 0);
 };
 
 updateViewportHeight();
 window.visualViewport?.addEventListener("resize", updateViewportHeight);
+window.visualViewport?.addEventListener("scroll", updateViewportHeight);
 window.addEventListener("resize", updateViewportHeight);
+// Safari applies the keyboard pan asynchronously around focus changes;
+// re-sync a few times so the glue catches the final offset.
+const burstViewportSync = () => {
+	for (const ms of [50, 150, 300, 600]) setTimeout(updateViewportHeight, ms);
+};
+window.addEventListener("focusin", burstViewportSync);
+window.addEventListener("focusout", burstViewportSync);
 
 // Request notification permission for hook event notifications
 if ("Notification" in window && Notification.permission === "default") {
