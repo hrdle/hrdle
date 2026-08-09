@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.83] - 2026-08-09
+
 ### Fixed
 - **Speech no longer comes back as `ハーダー`, and silence no longer comes back
   as `ご視聴ありがとうございました`.** Both were measured rather than guessed:
