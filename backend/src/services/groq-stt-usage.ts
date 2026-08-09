@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { GroqSttRateLimit, GroqSttUsageDay, GroqSttUsageSummary } from '../../../shared/types';
 import { atomicWriteFile, createMutationLock, ensureDataDir } from '../utils/storage';
+import { DEFAULT_STT_MODEL, resolveSttModel } from './glasses-settings';
 import { localDateKey, startOfDayBefore } from './kimi-usage';
 
 /**
@@ -35,11 +36,18 @@ const RETAIN_DAYS = 400;
 const SUMMARY_DAYS = 14;
 
 /**
- * List price for `whisper-large-v3-turbo`, USD per hour of audio. A local
- * estimate, like `KimiUsageWindow.costUsd`: Groq bills on its own rounding and
- * this server never sees the invoice.
+ * List price per hour of audio, USD, by model. A local estimate, like
+ * `KimiUsageWindow.costUsd`: Groq bills on its own rounding and this server
+ * never sees the invoice.
+ *
+ * Only the model this ran on before the model became a setting has a rate
+ * here. A model with no entry reports no cost rather than a guessed one - a
+ * wrong number on the dashboard is worse than a blank, because nothing about
+ * it says it was never checked.
  */
-const USD_PER_AUDIO_HOUR = 0.04;
+const USD_PER_AUDIO_HOUR: Record<string, number> = {
+  'whisper-large-v3-turbo': 0.04,
+};
 
 export interface StoredSttDay {
   requests: number;
@@ -152,8 +160,11 @@ export function wavSeconds(bytes: Uint8Array): number {
   return 0;
 }
 
-export function estimateCostUsd(audioSeconds: number): number {
-  return Math.round((audioSeconds / 3600) * USD_PER_AUDIO_HOUR * 10_000) / 10_000;
+/** Undefined for a model with no list price here - never 0, which reads as free. */
+export function estimateCostUsd(audioSeconds: number, model: string): number | undefined {
+  const rate = USD_PER_AUDIO_HOUR[model];
+  if (rate === undefined) return undefined;
+  return Math.round((audioSeconds / 3600) * rate * 10_000) / 10_000;
 }
 
 function emptyDay(): StoredSttDay {
@@ -233,7 +244,10 @@ export class GroqSttUsageService {
   async getUsageSummary(now = Date.now()): Promise<GroqSttUsageSummary | null> {
     const days = await this.load();
     if (days.size === 0) return null;
-    return buildSummary(days, this.rateLimit, now);
+    // The model in force now, not a constant: it is a setting, and the card
+    // that names it would otherwise keep naming the one it used to be.
+    const { model } = await resolveSttModel();
+    return buildSummary(days, this.rateLimit, now, model);
   }
 }
 
@@ -252,6 +266,7 @@ export function buildSummary(
   days: Map<string, StoredSttDay>,
   rateLimit: GroqSttRateLimit | undefined,
   now: number,
+  model: string = DEFAULT_STT_MODEL,
 ): GroqSttUsageSummary {
   const daily: GroqSttUsageDay[] = [];
   for (let i = SUMMARY_DAYS - 1; i >= 0; i--) {
@@ -262,7 +277,7 @@ export function buildSummary(
       requests: day?.requests ?? 0,
       failures: day?.failures ?? 0,
       audioSeconds: Math.round(day?.audioSeconds ?? 0),
-      costUsd: estimateCostUsd(day?.audioSeconds ?? 0),
+      costUsd: estimateCostUsd(day?.audioSeconds ?? 0, model),
       observed: day !== undefined,
     });
   }
@@ -274,7 +289,7 @@ export function buildSummary(
   const audioSeconds7d = sum((d) => d.audioSeconds);
 
   return {
-    model: 'whisper-large-v3-turbo',
+    model,
     today: {
       requests: today.requests,
       failures: today.failures,
@@ -285,7 +300,7 @@ export function buildSummary(
       requests: sum((d) => d.requests),
       failures: sum((d) => d.failures),
       audioSeconds: audioSeconds7d,
-      costUsd: estimateCostUsd(audioSeconds7d),
+      costUsd: estimateCostUsd(audioSeconds7d, model),
     },
     daily,
     rateLimit,

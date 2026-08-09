@@ -769,13 +769,28 @@ export interface GroqSttRateLimit {
   observedAt: string;
 }
 
+/**
+ * The transcription models Groq offers, verified against its `/models`
+ * endpoint on 2026-08-09. Shared so the dashboard and the glasses app offer
+ * the same set the server will accept.
+ */
+export const STT_MODELS = ['whisper-large-v3-turbo', 'whisper-large-v3'] as const;
+export type SttModel = (typeof STT_MODELS)[number];
+
 export interface GroqSttUsageWindow {
   requests: number;
   /** Requests that failed. Counted within `requests`, not on top of it. */
   failures: number;
   audioSeconds: number;
-  /** Estimated at the list price per hour of audio, never a billed figure. */
-  costUsd: number;
+  /**
+   * Estimated at the list price per hour of audio, never a billed figure.
+   *
+   * **Absent when the model in use has no price here** - never zero, which
+   * would read as free. Only the model this ran on before the setting existed
+   * has a rate written down; inventing one for the other would put a number on
+   * the dashboard that nobody checked.
+   */
+  costUsd?: number;
 }
 
 export interface GroqSttUsageDay extends GroqSttUsageWindow {

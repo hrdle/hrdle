@@ -60,6 +60,12 @@ export function settingsPanelHtml(): string {
       </select>
       <div id="stt-lang-status" style="${S.status}"></div>
 
+      <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
+      <!-- Options come from the server's own list, so this app cannot offer a
+           model the server would reject. Filled in by wireSettingsPanel(). -->
+      <select id="stt-model" style="${S.input}"></select>
+      <div id="stt-model-status" style="${S.status}"></div>
+
       <label style="${S.label}" for="stt-prompt">${t('settings.prompt')}</label>
       <textarea id="stt-prompt" rows="4" style="${S.input};font-family:inherit;resize:vertical;"></textarea>
       <div style="${S.row}">
@@ -96,11 +102,13 @@ function describePrompt(v: GlassesSettingsView): string {
 export async function wireSettingsPanel(): Promise<void> {
   const key = el<HTMLInputElement>('stt-key')
   const lang = el<HTMLSelectElement>('stt-lang')
+  const model = el<HTMLSelectElement>('stt-model')
   const prompt = el<HTMLTextAreaElement>('stt-prompt')
-  if (!key || !lang || !prompt) return
+  if (!key || !lang || !model || !prompt) return
 
   const keyStatus = el('stt-key-status')
   const langStatus = el('stt-lang-status')
+  const modelStatus = el('stt-model-status')
   const promptStatus = el('stt-prompt-status')
 
   const render = (v: GlassesSettingsView) => {
@@ -114,6 +122,20 @@ export async function wireSettingsPanel(): Promise<void> {
         v.sttLangSource === 'setting'
           ? t('settings.langSaved')
           : t('settings.langDefault', { lang: v.sttLang })
+    }
+
+    // The server names the models it accepts; offering any other would be a
+    // 400 on every utterance, reported to the wearer as "STT provider error".
+    const models = v.sttModels?.length ? v.sttModels : [v.sttModel]
+    model.innerHTML = models
+      .map((m) => `<option value="${m}">${m}</option>`)
+      .join('')
+    model.value = v.sttModel
+    if (modelStatus) {
+      modelStatus.textContent =
+        v.sttModelSource === 'setting'
+          ? t('settings.modelSaved')
+          : t('settings.modelDefault', { model: v.sttModel })
     }
 
     prompt.value = v.sttPrompt
@@ -163,6 +185,14 @@ export async function wireSettingsPanel(): Promise<void> {
       render(await putGlassesSettings({ sttLang: lang.value }))
     } catch (err) {
       fail(langStatus, err)
+    }
+  })
+
+  model.addEventListener('change', async () => {
+    try {
+      render(await putGlassesSettings({ sttModel: model.value }))
+    } catch (err) {
+      fail(modelStatus, err)
     }
   })
 
