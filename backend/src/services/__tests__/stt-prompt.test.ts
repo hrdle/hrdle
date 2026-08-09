@@ -52,7 +52,7 @@ describe('buildSttPrompt', () => {
     // cost the words misheard in every session.
     const session = Array.from({ length: 30 }, (_, i) => `セッション語彙${i}`);
     const prompt = buildSttPrompt({ session });
-    for (const term of ['リリース', 'マージ', 'コミット', 'リベース']) {
+    for (const term of ['リリース', 'マージ', 'コミット', 'パネル']) {
       expect(prompt).toContain(term);
     }
     expect(prompt.length).toBeLessThanOrEqual(190);
@@ -73,7 +73,8 @@ describe('buildSttPrompt', () => {
       session: ['温泉式', '文字起こし', 'ハルシネーション'],
       shared: ['確定申告', '固定資産税'],
     });
-    for (const term of ['温泉式', '確定申告', 'リリース', 'マージ', 'リベース', 'ペイン']) {
+    // The last glossary term too, so a glossary cut short fails here.
+    for (const term of ['温泉式', '確定申告', 'リリース', 'マージ', 'パネル', 'ターミナル']) {
       expect(prompt).toContain(term);
     }
   });
@@ -83,7 +84,7 @@ describe('buildSttPrompt', () => {
     // prompt, `タブ` was the only glossary term that fit and `リリース`,
     // `コミット`, `リベース` and `ペイン` were all pushed out.
     const prompt = buildSttPrompt();
-    for (const term of ['リリース', 'コミット', 'リベース', 'ペイン', 'デプロイ']) {
+    for (const term of ['リリース', 'コミット', 'パネル', 'デプロイ', 'ターミナル']) {
       expect(prompt).toContain(term);
     }
   });

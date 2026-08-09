@@ -32,6 +32,36 @@ export interface GlassesSettings {
    * which is #210: see the note on `sttPrompt()`.
    */
   sttPrompt?: string;
+  /** Transcription model. One of `STT_MODELS`. */
+  sttModel?: string;
+}
+
+/**
+ * The transcription models Groq offers, verified against its `/models`
+ * endpoint on 2026-08-09 - it lists these two and nothing else for speech.
+ *
+ * Kept as a closed set rather than a free string because the failure mode of a
+ * typo is total: an unknown model is a 400 on every utterance, and the wearer
+ * sees "STT provider error" with no hint that a settings field caused it. A
+ * new model costs one line here.
+ */
+export const STT_MODELS = ['whisper-large-v3-turbo', 'whisper-large-v3'] as const;
+export type SttModel = (typeof STT_MODELS)[number];
+
+/**
+ * Default: `turbo`, which is what this ran on before the setting existed.
+ *
+ * The other one is the accuracy-first model and costs more per hour of audio;
+ * which is better for this speech is a question about this user's voice and
+ * vocabulary, so it is answered by switching and listening rather than by
+ * picking here.
+ */
+export const DEFAULT_STT_MODEL: SttModel = 'whisper-large-v3-turbo';
+
+function asSttModel(value: unknown): SttModel | undefined {
+  return typeof value === 'string' && (STT_MODELS as readonly string[]).includes(value)
+    ? (value as SttModel)
+    : undefined;
 }
 
 /** What a caller may see: everything except the key itself. */
@@ -49,6 +79,10 @@ export interface GlassesSettingsView {
   sttPromptSource: 'composed' | 'env' | 'off';
   /** The prompt that would be sent right now, so the editor can show it. */
   effectivePrompt: string;
+  sttModel: SttModel;
+  sttModelSource: 'setting' | 'default';
+  /** Every model that may be chosen, so the screen need not hardcode them. */
+  sttModels: readonly SttModel[];
 }
 
 export const DEFAULT_STT_LANG = 'ja';
@@ -72,6 +106,10 @@ export async function loadGlassesSettings(): Promise<GlassesSettings> {
       groqApiKey: typeof parsed.groqApiKey === 'string' ? parsed.groqApiKey : undefined,
       sttLang: typeof parsed.sttLang === 'string' ? parsed.sttLang : undefined,
       sttPrompt: typeof parsed.sttPrompt === 'string' ? parsed.sttPrompt : undefined,
+      // A model that is no longer offered reads back as unset rather than as
+      // itself: every transcription would 400 otherwise, and the file is the
+      // one place nobody looks when speech stops working.
+      sttModel: asSttModel(parsed.sttModel),
     };
   } catch {
     cache = {};
@@ -90,12 +128,13 @@ export async function updateGlassesSettings(patch: {
   groqApiKey?: string | null;
   sttLang?: string | null;
   sttPrompt?: string | null;
+  sttModel?: string | null;
 }): Promise<GlassesSettings> {
   return withLock(async () => {
     const current = await loadGlassesSettings();
     const next: GlassesSettings = { ...current };
 
-    for (const key of ['groqApiKey', 'sttLang', 'sttPrompt'] as const) {
+    for (const key of ['groqApiKey', 'sttLang', 'sttPrompt', 'sttModel'] as const) {
       const value = patch[key];
       if (value === undefined) continue;
       const trimmed = value === null ? '' : value.trim();
@@ -130,6 +169,16 @@ export async function resolveSttLang(): Promise<{ lang: SttLang; source: 'settin
   return { lang: DEFAULT_STT_LANG, source: 'default' };
 }
 
+/** The transcription model actually used, and where it came from. */
+export async function resolveSttModel(): Promise<{
+  model: SttModel;
+  source: 'setting' | 'default';
+}> {
+  const stored = asSttModel((await loadGlassesSettings()).sttModel);
+  if (stored) return { model: stored, source: 'setting' };
+  return { model: DEFAULT_STT_MODEL, source: 'default' };
+}
+
 /**
  * A view for the settings screen.
  *
@@ -145,6 +194,7 @@ export async function glassesSettingsView(
   const settings = await loadGlassesSettings();
   const { source: apiKeySource } = await resolveGroqApiKey();
   const { lang, source: sttLangSource } = await resolveSttLang();
+  const { model: sttModel, source: sttModelSource } = await resolveSttModel();
   const envPrompt = process.env[PROMPT_ENV];
 
   const sttPromptSource =
@@ -162,6 +212,9 @@ export async function glassesSettingsView(
     sttPrompt: settings.sttPrompt ?? '',
     sttPromptSource,
     effectivePrompt: effectivePrompt ?? '',
+    sttModel,
+    sttModelSource,
+    sttModels: STT_MODELS,
   };
 }
 

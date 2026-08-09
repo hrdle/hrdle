@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Speech no longer comes back as `ハーダー`, and silence no longer comes back
+  as `ご視聴ありがとうございました`.** Both were measured rather than guessed:
+  the glasses screen recording keeps every frame it drew, and the voice
+  screen's `[confirm]` frame *is* the transcript, so the eight days to
+  2026-08-09 read back as 1030 real utterances
+  - `herdr` had been in the vocabulary prompt the whole time and arrived as
+    `ハーダー` ten times and as `herdr` never once - the model heard it
+    correctly and simply wrote it the ordinary Japanese way, which a prompt has
+    no say over. Same for `issue` (`イシュー`, 23 times), `Codex` and `Claude`.
+    Spelling is now repaired after the fact in `stt-corrections.ts`, where it is
+    a lookup rather than a hope
+  - Whisper fills silence with whatever its training data put after silence,
+    and for Japanese that is a video sign-off. Those are matched as the *whole*
+    transcript only: as a substring the same words are ordinary speech, and
+    cutting them out of a real sentence would be the worse failure
+
+### Changed
+- **The STT glossary is now the words that are actually spoken.** Fourteen of
+  its thirty-four terms were never said once in those 1030 utterances
+  (`リベース`, `プルリクエスト`, `コンフリクト`, `リント`, `タブ`, `タグ`,
+  `エラー`, `ログ`, `バグ`, `リファクタ`, `スクショ`, `Kimi`, `Grok`) and were
+  holding budget inside a 190-character cap. The terms that are only ever
+  misspelled rather than misheard left too, since the correction pass handles
+  them now
+  - `ペイン` went with them for a third reason: it is what the code calls a
+    pane, not what anyone says out loud. `パネル` came back eleven times and
+    `ペイン` never, so the glossary carries the spoken word
+  - The freed budget went to terms the recording shows being said, including
+    `音声認識` - which had been coming back as `温泉式`
+
+### Added
+- **The transcription model is a setting.** It was hardcoded to
+  `whisper-large-v3-turbo`; Groq also offers `whisper-large-v3`, which trades
+  speed and cost for accuracy. Which one suits this user's voice is not a
+  question anyone can answer from here, so it is switchable and can be answered
+  by listening. A closed set of models, because an unknown one is a 400 on
+  every utterance and the wearer would only see "STT provider error"
+
 ## [0.3.82] - 2026-08-09
 
 ### Fixed

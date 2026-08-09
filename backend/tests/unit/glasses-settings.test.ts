@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IDENTITY } from '../../../shared/identity';
 import {
   DEFAULT_STT_LANG,
+  DEFAULT_STT_MODEL,
   glassesSettingsView,
   loadGlassesSettings,
   resetGlassesSettingsCache,
   resolveGroqApiKey,
   resolveSttLang,
+  resolveSttModel,
   updateGlassesSettings,
 } from '../../src/services/glasses-settings';
 
@@ -74,6 +76,28 @@ describe('glasses settings store', () => {
     await updateGlassesSettings({ sttLang: 'ja' });
     expect((await resolveGroqApiKey()).key).toBe('keep-me');
     expect((await resolveSttLang()).lang).toBe('ja');
+  });
+
+  test('the transcription model defaults to turbo and can be switched', async () => {
+    expect(await resolveSttModel()).toEqual({ model: DEFAULT_STT_MODEL, source: 'default' });
+
+    await updateGlassesSettings({ sttModel: 'whisper-large-v3' });
+    expect(await resolveSttModel()).toEqual({ model: 'whisper-large-v3', source: 'setting' });
+
+    await updateGlassesSettings({ sttModel: null });
+    expect(await resolveSttModel()).toEqual({ model: DEFAULT_STT_MODEL, source: 'default' });
+  });
+
+  test('a model Groq no longer offers reads back as unset', async () => {
+    // Otherwise every utterance is a 400 and the only clue is a settings file
+    // nobody thinks to open when speech stops working.
+    await writeFile(
+      join(tempDir, 'glasses-settings.json'),
+      JSON.stringify({ sttModel: 'whisper-tiny-retired' }),
+    );
+    resetGlassesSettingsCache();
+    expect((await loadGlassesSettings()).sttModel).toBeUndefined();
+    expect(await resolveSttModel()).toEqual({ model: DEFAULT_STT_MODEL, source: 'default' });
   });
 
   test('the file holding the key is owner-only', async () => {

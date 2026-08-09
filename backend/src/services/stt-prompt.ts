@@ -1,4 +1,4 @@
-import { IDENTITY, envVar } from '../../../shared/identity';
+import { envVar } from '../../../shared/identity';
 import { type GlassesSettings, loadGlassesSettings } from './glasses-settings';
 import { getAllSessionMetadata } from './session-metadata';
 
@@ -33,45 +33,55 @@ import { getAllSessionMetadata } from './session-metadata';
 /**
  * Terms this product's speech is made of, most-said first.
  *
- * These are ordinary-sounding words that the model has a competing reading for
- * — `リリース` and `リベース` are the ones that come back wrong most — so the
- * order here is the order they survive in when the budget runs out.
+ * The order is the order they survive in when the budget runs out, and it is
+ * now measured rather than assumed. The glasses screen recording keeps the
+ * voice screen's `[confirm]` frame, which is the transcript, so the eight days
+ * to 2026-08-09 read back as 1030 utterances and say exactly which of these
+ * words are spoken and which never were.
+ *
+ * Two groups were dropped on that evidence:
+ *
+ * - **Never said once in 1030 utterances**: `リベース`, `プルリクエスト`,
+ *   `コンフリクト`, `リント`, `タブ`, `タグ`, `エラー`, `ログ`, `バグ`,
+ *   `リファクタ`, `スクショ`, `Kimi`, `Grok`. Fourteen of the thirty-four
+ *   terms were holding budget for speech that does not happen here. They can
+ *   come back the moment a transcript shows them being missed.
+ * - **Spelled, not heard**: `herdr`, the binary name, `issue`, `Codex` and
+ *   `Claude Code`. The model was hearing these correctly all along and writing
+ *   them in katakana - ハーダー ten times, イシュー twenty-three - which a
+ *   prompt cannot change. `stt-corrections.ts` rewrites them afterwards, so
+ *   the budget they were holding buys terms that are still being misheard.
+ *
+ * `ペイン` went with them, for a third reason: it is what the code calls a
+ * pane and not what anyone says out loud. `パネル` came back eleven times and
+ * `ペイン` never, so the glossary now carries the spoken word.
  */
 const GLOSSARY = [
   'リリース',
-  'マージ',
-  'コミット',
-  'リベース',
-  'ブランチ',
-  'プルリクエスト',
-  'ペイン',
   'ワークスペース',
   'セッション',
-  IDENTITY.binaryName,
-  'herdr',
-  'issue',
-  'プッシュ',
-  'コンフリクト',
-  'ビルド',
-  'デプロイ',
+  'マージ',
+  'エージェント',
   'テスト',
-  'リント',
-  'タブ',
-  'ターミナル',
-  'Claude Code',
-  'Codex',
-  'グラス',
   'バージョン',
-  'タグ',
-  'エラー',
-  'ログ',
-  'バグ',
-  'リファクタ',
-  'スクショ',
+  'スマホ',
+  'グラスアプリ',
+  'スキル',
+  'タスク',
+  // What a pane is called out loud. `ペイン` is the code's word for it.
+  'パネル',
+  'グラス',
+  'プッシュ',
+  'デプロイ',
+  'コミット',
+  // Came back as 温泉式 - a real mishearing, and the kind of term a prompt
+  // does help with, unlike the spellings above.
+  '音声認識',
+  'ブランチ',
+  'ビルド',
   'フロントエンド',
   'バックエンド',
-  'Kimi',
-  'Grok',
+  'ターミナル',
 ];
 
 /**
