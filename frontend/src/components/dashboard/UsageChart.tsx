@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { UsageSnapshot } from "../../../../shared/types";
 import { filterToCurrentCycle } from "../../../../shared/usage-cycle";
@@ -25,20 +25,49 @@ interface UsageChartProps {
 	overlays?: UsageChartOverlay[];
 }
 
-const CHART_WIDTH = 300;
+interface ChartGeom {
+	width: number;
+	height: number;
+	padding: { top: number; right: number; bottom: number; left: number };
+	innerW: number;
+	innerH: number;
+}
+
 const CHART_HEIGHT = 80;
-const PADDING = { top: 4, right: 8, bottom: 16, left: 28 };
-const INNER_W = CHART_WIDTH - PADDING.left - PADDING.right;
-const INNER_H = CHART_HEIGHT - PADDING.top - PADDING.bottom;
+const PADDING = { top: 4, right: 6, bottom: 16, left: 24 };
+// Text in an SVG scales with its viewBox, so a box wider than the pixels it is
+// drawn into shrinks the axis labels with it. Below 300 the box therefore
+// tracks the measured width and every label lands at its authored size; at 300
+// it stops, which is every layout that existed before the two cycles could sit
+// side by side. Quantized to 20 so a drag-resize settles instead of rebuilding
+// the geometry each frame, and floored so a very narrow column stretches the
+// chart rather than shrinking the words in it.
+const GEOM_MIN = 140;
+const GEOM_MAX = 300;
+const GEOM_STEP = 20;
+
+function geomForWidth(px: number): ChartGeom {
+	const width = Math.min(
+		GEOM_MAX,
+		Math.max(GEOM_MIN, Math.round(px / GEOM_STEP) * GEOM_STEP),
+	);
+	return {
+		width,
+		height: CHART_HEIGHT,
+		padding: PADDING,
+		innerW: width - PADDING.left - PADDING.right,
+		innerH: CHART_HEIGHT - PADDING.top - PADDING.bottom,
+	};
+}
 
 // Map utilization (0–100) to Y coordinate
-function utilToY(util: number): number {
-	return PADDING.top + INNER_H - (Math.min(util, 110) / 110) * INNER_H;
+function utilToY(g: ChartGeom, util: number): number {
+	return g.padding.top + g.innerH - (Math.min(util, 110) / 110) * g.innerH;
 }
 
 // Map time ratio (0–1) to X coordinate
-function ratioToX(ratio: number): number {
-	return PADDING.left + Math.min(Math.max(ratio, 0), 1) * INNER_W;
+function ratioToX(g: ChartGeom, ratio: number): number {
+	return g.padding.left + Math.min(Math.max(ratio, 0), 1) * g.innerW;
 }
 
 function toPath(points: { x: number; y: number }[]): string {
@@ -106,6 +135,23 @@ export function UsageChart({
 	const { t } = useTranslation();
 	const isLight = useIsLightMode();
 
+	// The viewBox is picked from how wide this chart actually got, so the choice
+	// survives whatever put it there — a container query, a side panel, a peer's
+	// card — without any of them having to say.
+	const rootRef = useRef<HTMLDivElement>(null);
+	const [boxWidth, setBoxWidth] = useState(GEOM_MAX);
+	useLayoutEffect(() => {
+		const el = rootRef.current;
+		if (!el) return;
+		const observer = new ResizeObserver(([entry]) => {
+			const w = entry.contentRect.width;
+			if (w > 0) setBoxWidth(w);
+		});
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+	const geom = useMemo(() => geomForWidth(boxWidth), [boxWidth]);
+
 	const chartData = useMemo(() => {
 		const now = Date.now();
 		const resetTime = new Date(resetsAt).getTime();
@@ -139,21 +185,21 @@ export function UsageChart({
 
 		const actualPoints: { x: number; y: number }[] = [];
 		if (relevantSnapshots.length === 0 || firstRatio > FIRST_GAP_THRESHOLD) {
-			actualPoints.push({ x: ratioToX(0), y: utilToY(0) });
+			actualPoints.push({ x: ratioToX(geom, 0), y: utilToY(geom, 0) });
 		}
 		for (const snap of relevantSnapshots) {
 			const ts = new Date(snap.timestamp).getTime();
 			const ratio = (ts - cycleStart) / cycleDuration;
 			actualPoints.push({
-				x: ratioToX(ratio),
-				y: utilToY(snap[field].utilization),
+				x: ratioToX(geom, ratio),
+				y: utilToY(geom, snap[field].utilization),
 			});
 		}
 
 		// Current point (always present, end of the actual line)
 		const currentPoint = {
-			x: ratioToX(nowRatio),
-			y: utilToY(currentUtilization),
+			x: ratioToX(geom, nowRatio),
+			y: utilToY(geom, currentUtilization),
 		};
 		actualPoints.push(currentPoint);
 
@@ -177,17 +223,17 @@ export function UsageChart({
 			// Same 0% anchor as the primary line, for the same reason: utilization
 			// is cumulative, so a cycle missing early samples provably began at 0.
 			if (samples.length === 0 || firstSampleRatio > FIRST_GAP_THRESHOLD) {
-				points.push({ x: ratioToX(0), y: utilToY(0) });
+				points.push({ x: ratioToX(geom, 0), y: utilToY(geom, 0) });
 			}
 			for (const { ts, sample } of samples) {
 				points.push({
-					x: ratioToX((ts - cycleStart) / cycleDuration),
-					y: utilToY(sample.utilization),
+					x: ratioToX(geom, (ts - cycleStart) / cycleDuration),
+					y: utilToY(geom, sample.utilization),
 				});
 			}
 			const current = {
-				x: ratioToX(nowRatio),
-				y: utilToY(overlay.utilization),
+				x: ratioToX(geom, nowRatio),
+				y: utilToY(geom, overlay.utilization),
 			};
 			points.push(current);
 
@@ -205,7 +251,7 @@ export function UsageChart({
 			if (hitRatio <= 1) {
 				// Will hit limit before reset
 				hitsBeforeReset = true;
-				projectionEnd = { x: ratioToX(hitRatio), y: utilToY(100) };
+				projectionEnd = { x: ratioToX(geom, hitRatio), y: utilToY(geom, 100) };
 				const hitTime = new Date(cycleStart + hitRatio * cycleDuration);
 				if (field === "fiveHour") {
 					hitLabel = `${hitTime.getHours()}:${hitTime.getMinutes().toString().padStart(2, "0")}`;
@@ -215,13 +261,13 @@ export function UsageChart({
 			} else {
 				// Won't hit limit — project to reset time
 				const utilAtReset = rate * 1;
-				projectionEnd = { x: ratioToX(1), y: utilToY(utilAtReset) };
+				projectionEnd = { x: ratioToX(geom, 1), y: utilToY(geom, utilAtReset) };
 			}
 		}
 
 		// --- Ideal pace line (0% at cycle start → 100% at reset) ---
-		const idealStart = { x: ratioToX(0), y: utilToY(0) };
-		const idealEnd = { x: ratioToX(1), y: utilToY(100) };
+		const idealStart = { x: ratioToX(geom, 0), y: utilToY(geom, 0) };
+		const idealEnd = { x: ratioToX(geom, 1), y: utilToY(geom, 100) };
 
 		// --- Time markers ---
 		const markers: number[] = [];
@@ -230,7 +276,7 @@ export function UsageChart({
 		for (let i = 1; i < count; i++) {
 			const ms = cycleStart + i * step;
 			if (ms < now) {
-				markers.push(ratioToX((ms - cycleStart) / cycleDuration));
+				markers.push(ratioToX(geom, (ms - cycleStart) / cycleDuration));
 			}
 		}
 
@@ -245,7 +291,7 @@ export function UsageChart({
 			markers,
 			overlaySeries,
 		};
-	}, [snapshots, field, currentUtilization, resetsAt, overlays]);
+	}, [snapshots, field, currentUtilization, resetsAt, overlays, geom]);
 
 	const {
 		actualPoints,
@@ -268,7 +314,7 @@ export function UsageChart({
 	// Build area under actual usage
 	const areaPath =
 		actualPoints.length > 1
-			? `${actualPath} L${actualPoints[actualPoints.length - 1].x.toFixed(1)},${utilToY(0).toFixed(1)} L${actualPoints[0].x.toFixed(1)},${utilToY(0).toFixed(1)} Z`
+			? `${actualPath} L${actualPoints[actualPoints.length - 1].x.toFixed(1)},${utilToY(geom, 0).toFixed(1)} L${actualPoints[0].x.toFixed(1)},${utilToY(geom, 0).toFixed(1)} Z`
 			: "";
 
 	// Projection dashed line from current point
@@ -282,7 +328,7 @@ export function UsageChart({
 	const yLabels = [0, 50, 100];
 
 	return (
-		<div className="mb-3 last:mb-0">
+		<div ref={rootRef} className="mb-3 last:mb-0">
 			<div className="flex justify-between text-xs mb-1">
 				<span className="text-th-text-secondary">{label}</span>
 				<span className="text-th-text-secondary">
@@ -291,7 +337,7 @@ export function UsageChart({
 			</div>
 			<svg
 				aria-hidden="true"
-				viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+				viewBox={`0 0 ${geom.width} ${geom.height}`}
 				className="w-full"
 				preserveAspectRatio="xMidYMid meet"
 			>
@@ -304,29 +350,29 @@ export function UsageChart({
 
 				{/* Background */}
 				<rect
-					x={PADDING.left}
-					y={PADDING.top}
-					width={INNER_W}
-					height={INNER_H}
+					x={geom.padding.left}
+					y={geom.padding.top}
+					width={geom.innerW}
+					height={geom.innerH}
 					fill={isLight ? "#ffffff" : "#1f2937"}
 					rx="2"
 				/>
 
 				{/* Y-axis grid + labels */}
 				{yLabels.map((val) => {
-					const y = utilToY(val);
+					const y = utilToY(geom, val);
 					return (
 						<g key={val}>
 							<line
-								x1={PADDING.left}
+								x1={geom.padding.left}
 								y1={y}
-								x2={PADDING.left + INNER_W}
+								x2={geom.padding.left + geom.innerW}
 								y2={y}
 								stroke={isLight ? "#d1d5db" : "#374151"}
 								strokeWidth="0.5"
 							/>
 							<text
-								x={PADDING.left - 3}
+								x={geom.padding.left - 3}
 								y={y + 3}
 								textAnchor="end"
 								fill={isLight ? "#6b7280" : "#6b7280"}
@@ -344,9 +390,9 @@ export function UsageChart({
 						// biome-ignore lint/suspicious/noArrayIndexKey: markers are derived from a fixed time scale
 						key={i}
 						x1={x}
-						y1={PADDING.top}
+						y1={geom.padding.top}
 						x2={x}
-						y2={PADDING.top + INNER_H}
+						y2={geom.padding.top + geom.innerH}
 						stroke={isLight ? "#d1d5db" : "#4b5563"}
 						strokeWidth="0.5"
 						strokeDasharray="2,2"
@@ -394,9 +440,9 @@ export function UsageChart({
 					<g>
 						<line
 							x1={projectionEnd.x}
-							y1={PADDING.top}
+							y1={geom.padding.top}
 							x2={projectionEnd.x}
-							y2={PADDING.top + INNER_H}
+							y2={geom.padding.top + geom.innerH}
 							stroke="#ef4444"
 							strokeWidth="0.75"
 							strokeDasharray="2,2"
@@ -405,7 +451,7 @@ export function UsageChart({
 						{hitLabel && (
 							<text
 								x={projectionEnd.x}
-								y={PADDING.top + INNER_H + 9}
+								y={geom.padding.top + geom.innerH + 9}
 								textAnchor="middle"
 								fill="#ef4444"
 								fontSize="7"
@@ -463,8 +509,8 @@ export function UsageChart({
 				{/* "Now" + "Reset" labels — collapse to a combined label when the
 				    current point is near the right edge to avoid overlap. */}
 				{(() => {
-					const chartRight = PADDING.left + INNER_W;
-					const distFromLeft = currentPoint.x - PADDING.left;
+					const chartRight = geom.padding.left + geom.innerW;
+					const distFromLeft = currentPoint.x - geom.padding.left;
 					const distFromRight = chartRight - currentPoint.x;
 					const minDist = 28;
 					const nowAnchor =
@@ -478,7 +524,7 @@ export function UsageChart({
 						<>
 							<text
 								x={currentPoint.x}
-								y={CHART_HEIGHT - 2}
+								y={geom.height - 2}
 								textAnchor={nowAnchor}
 								fill={isLight ? "#6b7280" : "#9ca3af"}
 								fontSize="6"
@@ -490,7 +536,7 @@ export function UsageChart({
 							{showResetLabel && (
 								<text
 									x={chartRight}
-									y={CHART_HEIGHT - 2}
+									y={geom.height - 2}
 									textAnchor="end"
 									fill="#6b7280"
 									fontSize="6"
