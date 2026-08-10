@@ -1342,6 +1342,43 @@ export interface GlassesInput {
 }
 
 /**
+ * One transcription, as it was actually asked for.
+ *
+ * Written into the screen recording beside the frame that shows its result,
+ * because the recording is the only measurement there is: audio is never
+ * stored, so a model or a prompt cannot be compared after the fact by
+ * re-running anything - only by reading back what was said and how well it
+ * came out. Which left the comparison resting on somebody remembering when
+ * the model was switched. Two hours of that memory were already spent once.
+ *
+ * The Groq key is not here, for the same reason it is not in the preview.
+ */
+export interface RecordedSttRequest {
+  model: string;
+  /** `null` when none was sent and Whisper detected it. */
+  language: string | null;
+  /** The vocabulary prompt as sent, `null` when the bias was off. */
+  prompt: string | null;
+  promptSource: 'composed' | 'env' | 'off';
+  /** The workspace whose words led the prompt, when one was named. */
+  sessionId: string | null;
+  /** Seconds of audio sent. Short clips are where hallucinations live. */
+  audioSeconds: number;
+  /** False when the provider did not answer with a transcript. */
+  ok: boolean;
+  /** What came back, after `stt-corrections`. Absent when the request failed. */
+  text?: string;
+  /**
+   * What came back before corrections, when they changed it.
+   *
+   * Two different questions are asked of this data - "does this model hear
+   * better" and "is the correction table still earning its place" - and the
+   * corrected text alone can only answer the first.
+   */
+  raw?: string;
+}
+
+/**
  * One relay item for the G2 glasses channel (#504): a single piece of
  * information the user needs to make a decision, not a summary. `waiting`
  * items are created by the blocked-transition tracker (source 'auto') or by

@@ -13,6 +13,7 @@ import {
   recordGlassesFocus,
   recordGlassesInput,
   recordGlassesScreen,
+  recordSttRequest,
   resetGlassesRecorderForTest,
 } from '../glasses-screen-recorder';
 
@@ -311,5 +312,80 @@ describe('a recorded line says which build wrote it', () => {
     await flushGlassesRecorder();
     const gap = (await readLines()).find((l) => l.gap === true);
     expect(typeof gap?.server).toBe('string');
+  });
+});
+
+/**
+ * The recording is the only measurement of speech recognition there is: the
+ * audio is never stored, so a model or a vocabulary prompt can only be judged
+ * by reading transcripts back. Until this, a transcript did not say which
+ * model wrote it - the answer lived in somebody's memory of when the setting
+ * was last changed, and once cost two hours of guessing.
+ */
+describe('a transcription is recorded with what produced it', () => {
+  const request = {
+    model: 'whisper-large-v3',
+    language: 'ja',
+    prompt: '音声認識、リリース',
+    promptSource: 'composed' as const,
+    sessionId: 'w4Y',
+    audioSeconds: 3.2,
+    ok: true,
+    text: '音声認識のプロンプト',
+  };
+
+  it('writes the model and the prompt beside the words they produced', async () => {
+    recordSttRequest(request);
+    await flushGlassesRecorder();
+    const [line] = await readLines();
+    expect(line.stt).toMatchObject({
+      model: 'whisper-large-v3',
+      prompt: '音声認識、リリース',
+      promptSource: 'composed',
+      sessionId: 'w4Y',
+      text: '音声認識のプロンプト',
+    });
+    expect(typeof line.at).toBe('number');
+    expect(typeof line.server).toBe('string');
+  });
+
+  it('does not dedup: two identical utterances are two data points', async () => {
+    recordSttRequest(request);
+    recordSttRequest(request);
+    await flushGlassesRecorder();
+    expect((await readLines()).filter((l) => l.stt)).toHaveLength(2);
+  });
+
+  it('records nothing when the recording is off', async () => {
+    process.env[RECORD_ENV] = '0';
+    recordSttRequest(request);
+    await flushGlassesRecorder();
+    expect(existsSync(recordingDir())).toBe(false);
+  });
+
+  /**
+   * A frame is a screen and this is not one. The player decides what to paint
+   * by ruling the event shapes out, so a shape it has not been told about
+   * would be painted - as nonsense, since it has no header, body or footer.
+   */
+  it('is not mistaken for a frame by the reader', async () => {
+    recordSttRequest(request);
+    recordGlassesScreen(frame({ mode: 'voice', body: '音声認識のプロンプト' }));
+    await flushGlassesRecorder();
+    const day = new Date();
+    const stamp = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    const lines = (await readRecordingDay(stamp)) ?? [];
+    const frames = lines.filter((l) => !('stt' in l) && !('gap' in l) && !('input' in l) && !('focus' in l));
+    expect(frames).toHaveLength(1);
+    expect(lines.filter((l) => 'stt' in l)).toHaveLength(1);
+  });
+
+  /** A failed request still spent quota and still says what was asked for. */
+  it('records a failure without a transcript', async () => {
+    recordSttRequest({ ...request, ok: false, text: undefined });
+    await flushGlassesRecorder();
+    const [line] = await readLines();
+    expect((line.stt as { ok: boolean }).ok).toBe(false);
+    expect((line.stt as { text?: string }).text).toBeUndefined();
   });
 });

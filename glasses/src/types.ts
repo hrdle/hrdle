@@ -203,6 +203,26 @@ export type RecordedGlassesLine =
   | { gap: true; at: number; server?: string }
   | { input: GlassesInputKind; at: number; receivedAt: number; server?: string }
   | { focus: string | null; deviceType?: string; at: number; receivedAt: number; server?: string }
+  | { stt: RecordedSttRequest; at: number; server?: string }
+
+/**
+ * One transcription as it was asked for, written beside the frame that shows
+ * its result. Mirror of RecordedSttRequest in shared/types.ts.
+ *
+ * The player draws nothing for it - it is measurement, not screen - but the
+ * type has to exist here so a line carrying it is not mistaken for a frame.
+ */
+export interface RecordedSttRequest {
+  model: string
+  language: string | null
+  prompt: string | null
+  promptSource: 'composed' | 'env' | 'off'
+  sessionId: string | null
+  audioSeconds: number
+  ok: boolean
+  text?: string
+  raw?: string
+}
 
 export interface RecordingDaySummary {
   /** YYYY-MM-DD, server-local. */

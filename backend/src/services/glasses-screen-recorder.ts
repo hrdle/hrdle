@@ -22,7 +22,12 @@ import { appendFile, mkdir, readdir, readFile, stat, unlink } from 'node:fs/prom
 import { join } from 'node:path';
 import { VERSION } from '../cli';
 import { envVar } from '../../../shared/identity';
-import type { ClientFocus, GlassesInput, GlassesScreen } from '../../../shared/types';
+import type {
+  ClientFocus,
+  GlassesInput,
+  GlassesScreen,
+  RecordedSttRequest,
+} from '../../../shared/types';
 import { getDataDir } from '../utils/storage';
 
 const RECORD_ENV = envVar('GLASSES_RECORD');
@@ -56,6 +61,13 @@ export type RecordedGlassesLine =
   | (GlassesScreen & { receivedAt: number } & ServerStamp)
   | ({ gap: true; at: number } & ServerStamp)
   | ({ input: GlassesInput['kind']; at: number; receivedAt: number } & ServerStamp)
+  | ({
+      /** The transcription request behind the confirm frame that follows. */
+      stt: RecordedSttRequest;
+      /** Server clock. This shape is the server speaking, so there is no
+       *  device stamp to reconcile it against. */
+      at: number;
+    } & ServerStamp)
   | ({
       /** Session the focus election picked, `null` when it cleared. */
       focus: string | null;
@@ -185,6 +197,32 @@ export function recordGlassesInput(input: GlassesInput): void {
   recordedSinceGap = true;
   const line: RecordedGlassesLine = { input: input.kind, at: input.at, receivedAt: Date.now(), server: VERSION };
   enqueue(() => appendLine(line, dayStamp(line.receivedAt)));
+}
+
+/**
+ * Record one transcription request, with what came back.
+ *
+ * Written just before the confirm frame that shows the result, so a recording
+ * says which model and which vocabulary prompt produced the words on the next
+ * line. Nothing else can: audio is not stored, so an A/B between models is
+ * only ever a comparison of transcripts, and until this the transcripts did
+ * not say which model wrote them - the answer lived in somebody's memory of
+ * when the setting was last changed.
+ *
+ * No dedup: every utterance happened, and two identical sentences a minute
+ * apart are two data points. It deliberately does **not** touch the gap and
+ * focus state machine - that tracks whether the *device* is alive, and this
+ * line is the server talking about a request the device made. The frame that
+ * follows does the flushing, as it always did.
+ */
+export function recordSttRequest(stt: RecordedSttRequest): void {
+  if (!glassesRecordingEnabled()) return;
+  if (!announced) {
+    announced = true;
+    console.log(`[glasses-recorder] recording to ${recordingDir()} (${RECORD_ENV} is set)`);
+  }
+  const line: RecordedGlassesLine = { stt, at: Date.now(), server: VERSION };
+  enqueue(() => appendLine(line, dayStamp(line.at)));
 }
 
 /** Key of the last focus WRITTEN to disk (not merely observed). */

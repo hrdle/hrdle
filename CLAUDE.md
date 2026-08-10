@@ -508,6 +508,20 @@ diagnosing a per-session vocabulary bug that did not exist out of that field is
 half of why #255 exists. `/stt-preview` is the endpoint that answers, and `hrdle
 stt-prompt` with no arguments prints the same object in the terminal.
 
+**Every transcription is written into the screen recording, with what produced
+it.** `recordSttRequest` (`glasses-screen-recorder.ts`) appends an `stt` line -
+model, language, the prompt as sent and where it came from, the session, the
+audio length, the text, and the raw text when `stt-corrections` changed it -
+just before the `[confirm]` frame that shows the result. This is the whole of
+the measurement: the audio is not stored, so a model or a prompt can only be
+judged by reading transcripts back, and until this a transcript did not say
+which model wrote it. Comparing `whisper-large-v3` against turbo therefore
+rested on remembering when the setting was last changed, which is not a
+measurement. The line is off with the recording (`HRDLE_GLASSES_RECORD`), and
+it is a fifth shape in `RecordedGlassesLine` - the replay player decides what
+to paint by ruling the event shapes out, so a new one must be named in
+`isFrame` or it gets painted as nonsense.
+
 The settings screen ships in the ehpk, so **the phone companion UI only gains it
 after `/glasses-upload`**. The simulator the server serves at `/glasses` updates
 with the server itself.
