@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A peer that is offline is no longer dialled.** The peers poll already
+  reports `status: "offline"` alongside `errorMessage: "unreachable: ..."`, but
+  the session watcher opened a WebSocket to every peer regardless. Each attempt
+  cost a full TCP timeout - around 30s over Tailscale - and the backoff caps at
+  60s, so a peer that had been down for hours kept a CONNECTING socket alive
+  most of the time and logged `[control-mode] Error: WebSocket connection error`
+  every time one expired. Found by attaching to a tablet's Chrome over CDP: it
+  was still dialling a Mac whose `lastSeenAt` was twelve hours old. The watcher
+  now skips peers reported `offline` and reopens as soon as the 5s poll says one
+  is back. `unauthorized` and `unknown` still connect - the first is refused
+  immediately rather than timing out, and the second is what a fresh poll looks
+  like
+
 ## [0.3.89] - 2026-08-10
 
 ### Changed
