@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.91] - 2026-08-11
+
 ### Fixed
 - **Every tap on the virtual keyboard logged an error.** React registers
   `touchstart` as a passive listener, so the `preventDefault()` the key handler
