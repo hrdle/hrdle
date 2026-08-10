@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.89] - 2026-08-10
+
+### Changed
+- **A phone shows both usage cycles side by side too.** 0.3.85 put the 5-hour
+  and 7-day charts in one row from 32rem of card width up, which a phone in
+  portrait never reaches - and it is the width where the row is worth the most,
+  since the card there costs most of a screen. The threshold is 20rem now, in
+  rem so that raising the UI scale moves it with the text
+
+### Fixed
+- **The chart's axis labels no longer shrink with the column.** Text in an SVG
+  scales with its viewBox, so the 300-wide box drawn into a half-width phone
+  column rendered `100% / 50% / 0%` and the `now / reset` pair at around 4px -
+  present, unreadable. The box now follows the width the chart was actually
+  given, up to the 300 it always had, so the labels land near the size they
+  were drawn at. Nothing at 300px or wider changes, which is every layout that
+  existed before the two cycles could share a row
+
 ## [0.3.88] - 2026-08-10
 
 ### Fixed

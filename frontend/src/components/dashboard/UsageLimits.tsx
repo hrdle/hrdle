@@ -251,7 +251,13 @@ export function UsageLimits({
 
 	// Side by side once the card itself is wide enough — a container query, not a
 	// viewport one, because the same card also renders in the narrow side panel.
-	// The charts are viewBox SVGs, so half the width costs nothing but pixels.
+	// The threshold is 20rem rather than something roomier because a phone in
+	// portrait is the case this buys the most: two half-width charts turn a card
+	// that cost most of a screen into one that costs a third of it. UsageChart
+	// swaps to a narrower viewBox under 220px, so the axis labels survive the
+	// halving instead of shrinking with it. In rem on purpose - the UI scale
+	// setting moves the root font size, so a reader who asked for larger text
+	// gets the split later, when the card is correspondingly wider.
 	const sideBySide = !!fiveHourNode && !!sevenDayNode;
 
 	return (
@@ -273,7 +279,7 @@ export function UsageLimits({
 				<div
 					className={
 						sideBySide
-							? "grid gap-x-4 gap-y-3 @lg:grid-cols-2 [&>*]:mb-0 items-start"
+							? "grid gap-x-2 gap-y-3 @lg:gap-x-4 @xs:grid-cols-2 [&>*]:mb-0 items-start"
 							: undefined
 					}
 				>
