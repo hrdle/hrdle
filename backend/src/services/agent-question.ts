@@ -60,6 +60,16 @@ interface RawQuestion {
   options?: unknown;
 }
 
+/** Every question of one call, in the order the call carried them. */
+function toOpenQuestions(questions: unknown[]): OpenQuestion[] {
+  const out: OpenQuestion[] = [];
+  for (const raw of questions) {
+    const q = toOpenQuestion(raw, questions.length);
+    if (q) out.push(q);
+  }
+  return out;
+}
+
 /** Both agents write the same shape, so both parse through here. */
 function toOpenQuestion(raw: unknown, count: number): OpenQuestion | undefined {
   const q = raw as RawQuestion | undefined;
@@ -105,6 +115,18 @@ interface ClaudeEntry {
  * made here for the content rather than for the fact.
  */
 export async function openClaudeQuestion(sessionId: string, projectsDir?: string): Promise<OpenQuestion | undefined> {
+  return (await openClaudeQuestions(sessionId, projectsDir))?.[0];
+}
+
+/**
+ * All questions of Claude's open call, in call order.
+ *
+ * The array is what a caller who can see the pane needs: the record cannot say
+ * which tab is in front, but the pane's own text can, and matching it against
+ * anything requires having everything the call asked rather than its first
+ * question alone.
+ */
+export async function openClaudeQuestions(sessionId: string, projectsDir?: string): Promise<OpenQuestion[] | undefined> {
   const path = await locateSessionFile(sessionId, projectsDir);
   if (!path) return undefined;
   const text = await readLastLines(path, TAIL_LINES);
@@ -135,7 +157,8 @@ export async function openClaudeQuestion(sessionId: string, projectsDir?: string
       if (typeof part.id === 'string' && answered.has(part.id)) continue;
       const questions = part.input?.questions;
       if (!Array.isArray(questions) || questions.length === 0) continue;
-      return toOpenQuestion(questions[0], questions.length);
+      const open = toOpenQuestions(questions);
+      if (open.length > 0) return open;
     }
   }
   return undefined;
@@ -157,6 +180,11 @@ interface KimiRecord {
  * prompt, which the screen still owns.
  */
 export async function openKimiQuestion(sessionId: string, store = new KimiSessionStore()): Promise<OpenQuestion | undefined> {
+  return (await openKimiQuestions(sessionId, store))?.[0];
+}
+
+/** All questions of kimi's open call, in call order — see openClaudeQuestions. */
+export async function openKimiQuestions(sessionId: string, store = new KimiSessionStore()): Promise<OpenQuestion[] | undefined> {
   const session = await store.findSession(sessionId);
   if (!session) return undefined;
   let text: string;
@@ -189,7 +217,8 @@ export async function openKimiQuestion(sessionId: string, store = new KimiSessio
     if (typeof record.id === 'string' && resolved.has(record.id)) continue;
     const questions = record.request?.questions;
     if (!Array.isArray(questions) || questions.length === 0) continue;
-    return toOpenQuestion(questions[0], questions.length);
+    const open = toOpenQuestions(questions);
+    if (open.length > 0) return open;
   }
   return undefined;
 }
@@ -214,8 +243,22 @@ export async function readAgentQuestion(
   agent: AgentProvider | undefined,
   sessionId: string | undefined,
 ): Promise<QuestionRead> {
+  const read = await readAgentQuestions(agent, sessionId);
+  if (!read.known) return { known: false };
+  return { known: true, question: read.questions?.[0] };
+}
+
+/** Same read, keeping every question of the call. */
+export type QuestionsRead =
+  | { known: false }
+  | { known: true; questions?: OpenQuestion[] };
+
+export async function readAgentQuestions(
+  agent: AgentProvider | undefined,
+  sessionId: string | undefined,
+): Promise<QuestionsRead> {
   if (!sessionId) return { known: false };
-  if (agent === 'claude') return { known: true, question: await openClaudeQuestion(sessionId) };
-  if (agent === 'kimi') return { known: true, question: await openKimiQuestion(sessionId) };
+  if (agent === 'claude') return { known: true, questions: await openClaudeQuestions(sessionId) };
+  if (agent === 'kimi') return { known: true, questions: await openKimiQuestions(sessionId) };
   return { known: false };
 }

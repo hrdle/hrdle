@@ -17,9 +17,11 @@
 
 import { randomUUID } from 'node:crypto';
 import { extractInlineChoices } from '../../../shared/inline-choices';
-import type { GlassesRelayItem } from '../../../shared/types';
+import type { AgentProvider, GlassesRelayItem } from '../../../shared/types';
+import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
 import { HerdrService, type WorkspaceInfo } from './herdr';
 import { readPane, readPaneText, toHerdrPaneId } from './herdr-client';
+import { detectPaneState } from './pane-state';
 
 // =============================================================================
 // Tunables / defenses (unauthenticated local endpoint — see routes)
@@ -614,6 +616,48 @@ interface WaitingPayload {
   choiceSelected?: number;
 }
 
+/**
+ * Which of a call's questions the pane is showing.
+ *
+ * One question needs no matching. Several draw a tab each, and the record
+ * cannot say which is in front - but the front tab's question text is painted
+ * on the pane and the others' is not (their headers are, and a header is a
+ * word, not the question). Compared with all whitespace removed, because the
+ * pane wraps the question wherever its width falls - mid-word in Japanese -
+ * and every break is a character the record does not have. No match, or more
+ * than one, returns nothing rather than a guess.
+ */
+export function matchOpenQuestion(questions: OpenQuestion[], paneText: string): OpenQuestion | undefined {
+  if (questions.length === 1) return questions[0];
+  const flat = (s: string) => s.replace(/\s+/g, '');
+  const pane = flat(paneText);
+  const hits = questions.filter((q) => pane.includes(flat(q.question)));
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/**
+ * The payload a recorded question builds - the options as the agent wrote
+ * them, in call order.
+ *
+ * Call order is the pane's own numbering, which is what makes the picker's
+ * digits land: claude and kimi both number their options as the call listed
+ * them. A multi-select's rows get the checkbox the pane draws on theirs,
+ * because the box is what tells the app it is a multi-select at all
+ * (`looksMultiSelect` on the glasses).
+ */
+function recordedPayload(q: OpenQuestion): WaitingPayload {
+  const box = q.multiSelect ? '[ ] ' : '';
+  const choices = q.options.map((o) =>
+    clampDisplayWidth(
+      normalizeRelayText(
+        o.description ? `${box}${o.label} - ${truncate(o.description, MAX_DETAIL_CHARS)}` : `${box}${o.label}`,
+      ),
+      MAX_CHOICE_WIDTH,
+    ),
+  );
+  return { text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH), choices };
+}
+
 async function assembleWaitingPayload(
   ws: WorkspaceInfo,
   tmuxPaneId: string,
@@ -627,15 +671,62 @@ async function assembleWaitingPayload(
   if (!raw) return { text: fallback };
 
   const lines = raw.split('\n');
+
+  // What the agent recorded beats anything read off the screen: the options
+  // as it wrote them, in the pane's own numbering, with the descriptions the
+  // screen truncates. The scrape proved it the hard way on 2026-08-10 (#267):
+  // a three-question AskUserQuestion draws a tab per question plus the rows
+  // that move between them, and the scrape served the description block, the
+  // `Next` row and finally `Submit answers` / `Cancel` as options - every
+  // digit the picker sent counted against a list the pane never had.
+  //
+  // `known: true` with no questions falls through on purpose: that is a
+  // permission prompt or a between-turns block, and the screen still owns
+  // both.
+  const pane = ws.panes?.find((p) => p.paneId === tmuxPaneId);
+  const record = await glassesRelayDeps.readAgentQuestions(pane?.agent, pane?.agentSessionId);
+  if (record.known && record.questions?.length) {
+    const open = matchOpenQuestion(record.questions, raw);
+    if (open) return recordedPayload(open);
+    // Several questions and the pane's text does not say which tab is in
+    // front. The question the scrape can see still tells the wearer something
+    // is being decided; options belonging to a tab they may not be shown
+    // would be answered with keys meant for a different one, so none go.
+    const guess = findQuestion(lines, optionBlockStart(lines));
+    return { text: clampDisplayWidth(normalizeRelayText(guess.text ?? fallback), MAX_TEXT_WIDTH) || fallback };
+  }
   const clamp = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH);
   const permission = extractPermissionRequest(lines);
   const guess = findQuestion(lines, optionBlockStart(lines));
   const question = permission ?? guess.text;
   const text = clampDisplayWidth(normalizeRelayText(question ?? fallback), MAX_TEXT_WIDTH);
 
-  const numbered = extractNumberedChoices(lines);
+  // Claude with no open question is asking nothing - it says so itself. The
+  // only numbered thing such a pane legitimately shows is a permission
+  // prompt, which no record carries; anything else that parses as a menu is
+  // the agent's own output. On 2026-08-10 that was a code listing and the
+  // wearer's own queued message, served as a two-row picker reading `4` /
+  // `DANDORI_TOKEN: string` (#267). Claude only: kimi's approval prompt is
+  // recordless too and its wording is not one `detectPaneState` recognises,
+  // so kimi keeps the scrape it has.
+  const askingNothing =
+    pane?.agent === 'claude' &&
+    record.known &&
+    !record.questions?.length &&
+    permission === undefined &&
+    detectPaneState(lines) !== 'permission_prompt';
+
+  const numbered = askingNothing ? [] : extractNumberedChoices(lines);
   if (numbered.length > 0) {
     return { text: text || fallback, choices: numbered.map(clamp) };
+  }
+  if (askingNothing) {
+    // Same exit as a pane with nothing list-shaped on it, skipping the colour
+    // read below as well: that read is a guess about paint, and both times it
+    // guessed wrong it was on an agent that could have been asked and said
+    // "nothing" (see agent-question.ts). A question or permission line still
+    // makes a text-only item; otherwise nothing here is worth a notification.
+    return permission || guess.confident ? { text: text || fallback } : undefined;
   }
 
   // Nothing a list-shaped reader recognises. The pane may still be offering a
@@ -1211,6 +1302,11 @@ export const glassesRelayDeps = {
   listWorkspaces: (): Promise<WorkspaceInfo[]> => herdrService.listWorkspaces(),
   readPaneText: (herdrPaneId: string): Promise<string | null> =>
     readPaneText(herdrPaneId, 'recent', 30),
+  /** The agent's own record of what it is asking — see agent-question.ts. */
+  readAgentQuestions: (
+    agent: AgentProvider | undefined,
+    agentSessionId: string | undefined,
+  ): Promise<QuestionsRead> => readAgentQuestions(agent, agentSessionId),
   /**
    * The same read with its escape sequences left on.
    *
