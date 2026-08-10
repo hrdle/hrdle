@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.85] - 2026-08-10
+
+### Changed
+- **The two usage cycles sit side by side once the card is wide enough.** The
+  5-hour and 7-day charts were stacked at every width, so on a tablet the card
+  spent a screen and a half on two lines that each used a third of their own
+  row. They are SVGs with a viewBox, so half the width costs pixels and nothing
+  else
+  - The switch is a container query on the card, not a viewport one: the same
+    card also renders in the 480px dashboard side panel, where two columns
+    would be worse than one. Below 32rem of card width it stacks exactly as
+    before
+  - A plan with only one of the two cycles (Codex's free tier has no 5-hour
+    window) keeps the single chart at full width rather than leaving half the
+    row empty
+
 ## [0.3.84] - 2026-08-10
 
 ### Added
