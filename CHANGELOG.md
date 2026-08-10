@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A multi-question AskUserQuestion no longer collapses the glasses picker**
+  (#267). The waiting item's choices now come from the agent's own record for
+  Claude and kimi panes: the options as the call wrote them, in the pane's own
+  numbering, with a checkbox on multi-select rows. A call carrying several
+  questions is matched to the tab the pane is showing by its painted question
+  text; when the pane names no tab, the question travels without options rather
+  than with someone else's. Previously the screen scrape was the only source,
+  and on a tabbed call it served the description block, the `Next` row and
+  finally `Submit answers` / `Cancel` as answers - the recorded incident
+  submitted two of three questions and skipped the multi-select entirely
+- **A Claude pane that is asking nothing can no longer produce a picker.** With
+  the record saying no question is open and no permission prompt on screen,
+  numbered rows in the pane are Claude's own output - a code listing, a
+  markdown list, the wearer's queued message - and were still served as
+  choices (`4` / `DANDORI_TOKEN: string`, observed the same day). Permission
+  prompts keep the scrape: no record carries them
+- **A recorded multi-select opened as a single pick on the glasses-local
+  path.** The record's options carried no checkbox, which is the mark
+  `looksMultiSelect` reads, so one digit closed the picker mid-selection
+
 ## [0.3.87] - 2026-08-10
 
 ### Added

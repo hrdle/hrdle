@@ -10,6 +10,7 @@ import {
   extractQuestionLine,
   glassesDeviceCount,
   glassesRelayDeps,
+  matchOpenQuestion,
   normalizeRelayText,
   optionBlockStart,
   postAgentRelay,
@@ -40,6 +41,9 @@ beforeEach(() => {
   // reach for a herdr socket, and every pane below whose options DO matter says
   // so for itself.
   glassesRelayDeps.readPaneAnsi = async () => null;
+  // Stubbed to "keeps no record" rather than restored, for the same reason:
+  // the real read opens agent transcripts. Tests about the record say so.
+  glassesRelayDeps.readAgentQuestions = async () => ({ known: false });
 });
 
 /**
@@ -81,7 +85,7 @@ const OPENCODE_PANE_ANSI = [
 /** Minimal WorkspaceInfo stub — only the fields the tracker reads. */
 function ws(
   id: string,
-  panes: Array<{ paneId: string; agentStatus: string }>,
+  panes: Array<{ paneId: string; agentStatus: string; agent?: string; agentSessionId?: string }>,
 ): WorkspaceInfo {
   return {
     id,
@@ -1431,5 +1435,159 @@ describe('a pane that redraws does not mint questions', () => {
     const ids = new Set(sock.ofType('glasses-relay').map((m) => (m.item as Record<string, unknown>).id));
     expect(ids).toEqual(new Set([first.id]));
     expect(sock.ofType('glasses-relay-remove')).toEqual([]);
+  });
+});
+
+// =============================================================================
+// recorded questions beat the scrape (#267)
+// =============================================================================
+
+/** A claude pane whose visible tail is its own output, parsing as a menu:
+ *  a markdown list and the wearer's queued message. What the picker served
+ *  as answers on 2026-08-10. */
+const OUTPUT_PANE = [
+  'Wrote 481 lines to backend/src/tools.ts',
+  '  4. DANDORI_TOKEN: string',
+  '✽ Unravelling… (3m 27s)',
+  '❯ ちなみに専用のセッションを作ってもらっていいですか?',
+].join('\n');
+
+const RECORDED_MULTI = {
+  question: 'どの方向で作りたいですか?（複数選択可）',
+  options: [
+    { label: '登壇プロンプター', description: '台本をレンズに1画面ずつ表示' },
+    { label: '声メモ→自動振り分け', description: '喋るだけでtodoへ' },
+  ],
+  multiSelect: true,
+  ambiguous: true,
+};
+
+const RECORDED_SINGLE = {
+  question: '作るものの位置づけは?',
+  options: [
+    { label: '公開前提', description: 'ストア配布し、発信ネタにする' },
+    { label: '自分専用', description: '最短で実用に到達できる' },
+  ],
+  multiSelect: false,
+  ambiguous: true,
+};
+
+async function blockedClaudePane(paneText: string): Promise<FakeSocket> {
+  const sock = new FakeSocket();
+  const pane = { paneId: '%0', agent: 'claude', agentSessionId: 'cc-uuid' };
+  glassesRelayDeps.readPaneText = async () => paneText;
+  glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ ...pane, agentStatus: 'working' }])];
+  await subscribeGlassesRelay(sock);
+  await trackGlassesRelay();
+  glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ ...pane, agentStatus: 'blocked' }])];
+  await trackGlassesRelay();
+  return sock;
+}
+
+describe('recorded questions beat the scrape', () => {
+  test('a single recorded question supplies text and options, not the screen', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [{ ...RECORDED_SINGLE, ambiguous: false }],
+    });
+    const sock = await blockedClaudePane(QUESTION_PANE);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('作るものの位置づけは?');
+    expect(item.choices).toEqual([
+      '公開前提 - ストア配布し、発信ネタにする',
+      '自分専用 - 最短で実用に到達できる',
+    ]);
+  });
+
+  test('a recorded multi-select carries the checkbox looksMultiSelect reads', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [{ ...RECORDED_MULTI, ambiguous: false }],
+    });
+    const sock = await blockedClaudePane(QUESTION_PANE);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect((item.choices as string[])[0]).toBe('[ ] 登壇プロンプター - 台本をレンズに1画面ずつ表示');
+  });
+
+  test('several questions: the tab the pane paints is the one served', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [RECORDED_MULTI, RECORDED_SINGLE],
+    });
+    // The pane wraps the front tab's question mid-word; the record's text has
+    // no break there. Matching must survive the wrap.
+    const sock = await blockedClaudePane(['作るものの位置づけ', 'は?', '❯ 1. 公開前提', '  2. 自分専用'].join('\n'));
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('作るものの位置づけは?');
+    expect(item.choices).toEqual([
+      '公開前提 - ストア配布し、発信ネタにする',
+      '自分専用 - 最短で実用に到達できる',
+    ]);
+  });
+
+  test('several questions and no tab named: the question goes without options', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({
+      known: true,
+      questions: [RECORDED_MULTI, RECORDED_SINGLE],
+    });
+    const sock = await blockedClaudePane(QUESTION_PANE);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toBeUndefined();
+    // The scrape's own question read still tells the wearer something waits.
+    expect(item.text).toBe('Which approach should I take?');
+  });
+
+  test('claude asking nothing: its output is not served as a picker', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(OUTPUT_PANE);
+
+    // The queued message's `?` still reads as a question, so a text-only item
+    // may exist - but nothing on this pane may become choices.
+    for (const m of sock.ofType('glasses-relay')) {
+      expect((m.item as Record<string, unknown>).choices).toBeUndefined();
+    }
+  });
+
+  test('claude asking nothing but a permission prompt on screen still scrapes', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(
+      ['Do you want to proceed?', '❯ 1. Yes', '  2. No, and tell Claude what to do differently'].join('\n'),
+    );
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe('Do you want to proceed?');
+    expect(item.choices).toEqual(['Yes', 'No, and tell Claude what to do differently']);
+  });
+
+  test('an agent with no record keeps the scrape (numbered menu)', async () => {
+    // readAgentQuestions default stub says known: false.
+    const sock = await blockedClaudePane(QUESTION_PANE);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toEqual(['Rewrite it', 'Patch minimally', 'Leave as is']);
+  });
+});
+
+describe('matchOpenQuestion', () => {
+  const q = (question: string) => ({ question, options: [], multiSelect: false, ambiguous: true });
+
+  test('one question needs no match', () => {
+    expect(matchOpenQuestion([q('anything?')], 'unrelated pane')?.question).toBe('anything?');
+  });
+
+  test('picks the question the pane paints, across wraps', () => {
+    const questions = [q('どの方向で作りたいですか?（複数選択可）'), q('作るものの位置づけは?')];
+    expect(matchOpenQuestion(questions, '作るものの位置\nづけは?')?.question).toBe('作るものの位置づけは?');
+  });
+
+  test('no hit, or two, is no answer', () => {
+    const questions = [q('Deploy now?'), q('Deploy now? Really?')];
+    expect(matchOpenQuestion(questions, 'nothing relevant')).toBeUndefined();
+    // Both questions appear (the second contains the first): ambiguous.
+    expect(matchOpenQuestion(questions, 'Deploy now? Really?')).toBeUndefined();
   });
 });

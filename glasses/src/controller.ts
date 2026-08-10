@@ -1646,13 +1646,24 @@ export class GlassesController {
 
     // What the agent recorded beats anything read off the screen: the options
     // as it wrote them, with the descriptions the screen never carried. A call
-    // holding several questions is skipped - the pane draws a tab each and
-    // answers whichever is in front, and which one that is is not in the
-    // record.
+    // holding several questions gets NO options rather than scraped ones - the
+    // pane draws a tab each and answers whichever is in front, which the
+    // record cannot say; and the scrape read that used to fill the gap served
+    // the tabbed TUI's own furniture as answers (the description block, the
+    // `Next` row, finally `Submit answers` / `Cancel` - #267). The server's
+    // relay item carries the front tab's options when the pane text names it,
+    // so this local path declining is not the wearer losing the question.
     const recorded = pane?.pendingQuestion
-    if (recorded && !recorded.ambiguous) {
+    if (recorded) {
       this.scrapedInline = undefined
-      return recorded.options.map((o) => (o.description ? `${o.label} - ${o.description}` : o.label))
+      if (recorded.ambiguous) return []
+      // A multi-select's rows carry the checkbox the pane draws on theirs -
+      // the box is what `looksMultiSelect` reads, and without it the picker
+      // opened a multi-select as a single pick and closed after one digit.
+      const box = recorded.multiSelect ? '[ ] ' : ''
+      return recorded.options.map((o) =>
+        o.description ? `${box}${o.label} - ${o.description}` : `${box}${o.label}`,
+      )
     }
 
     await this.ws.requestContentAndWait(sessionId)

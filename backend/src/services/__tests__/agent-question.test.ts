@@ -2,7 +2,14 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openClaudeQuestion, openKimiQuestion, readAgentQuestion } from '../agent-question';
+import {
+  openClaudeQuestion,
+  openClaudeQuestions,
+  openKimiQuestion,
+  openKimiQuestions,
+  readAgentQuestion,
+  readAgentQuestions,
+} from '../agent-question';
 import { KimiSessionStore } from '../kimi';
 
 /**
@@ -95,6 +102,13 @@ describe('claude', () => {
     expect((await openClaudeQuestion(SESSION, home))?.ambiguous).toBe(true);
   });
 
+  test('the plural read keeps every question of the call, in call order', async () => {
+    const home = claudeTranscript(SESSION, [askEntry('toolu_1', [CLAUDE_QUESTION, { ...CLAUDE_QUESTION, question: '2つめ' }])]);
+    const all = await openClaudeQuestions(SESSION, home);
+    expect(all?.map((q) => q.question)).toEqual(['頭脳にする Android 端末はどれにしますか?', '2つめ']);
+    expect(all?.every((q) => q.ambiguous)).toBe(true);
+  });
+
   test('a pane that never asked has no question', async () => {
     const home = claudeTranscript(SESSION, [
       { type: 'assistant', message: { content: [{ type: 'tool_use', id: 't', name: 'Read', input: {} }] } },
@@ -154,6 +168,14 @@ describe('kimi', () => {
     ]);
     expect(await openKimiQuestion('session_1', store)).toBeUndefined();
   });
+
+  test('the plural read keeps every question of the call', async () => {
+    const store = kimiSessions('session_1', [
+      { type: 'interaction.request', id: 'q', kind: 'question', request: { questions: [KIMI_QUESTION, { ...KIMI_QUESTION, question: '2つめ' }] } },
+    ]);
+    const all = await openKimiQuestions('session_1', store);
+    expect(all?.map((q) => q.question)).toEqual(['intro.lead(冒頭リード文)をどの案に差し替えますか?', '2つめ']);
+  });
 });
 
 describe('whether the agent can be asked at all', () => {
@@ -167,5 +189,10 @@ describe('whether the agent can be asked at all', () => {
 
   test('no session id is not an answer either', async () => {
     expect(await readAgentQuestion('claude', undefined)).toEqual({ known: false });
+  });
+
+  test('the plural read answers the same way', async () => {
+    expect(await readAgentQuestions('codex', 'whatever')).toEqual({ known: false });
+    expect(await readAgentQuestions('claude', undefined)).toEqual({ known: false });
   });
 });
