@@ -48,6 +48,31 @@ function isLocalPeer(peer: PeerClientView): boolean {
 	return peer.id === LOCAL_PEER_ID || peer.url === "self";
 }
 
+/**
+ * Whether to hold a socket open for this peer.
+ *
+ * The peers poll already knows when a peer cannot be reached: it reports
+ * `status: "offline"` along with `errorMessage: "unreachable: ..."`. Dialling
+ * one anyway costs a full TCP timeout per attempt - measured at roughly 30s
+ * over Tailscale - and the backoff caps at 60s, so a peer that has been down
+ * for hours keeps a CONNECTING socket alive most of the time and logs a
+ * WebSocket error every time one expires.
+ *
+ * Found by attaching to a tablet's Chrome over CDP: it was still dialling a
+ * Mac whose `lastSeenAt` was twelve hours old, and each failure also produced
+ * a `[control-mode] Error: WebSocket connection error` line.
+ *
+ * Only `offline` is skipped. `unauthorized` is refused immediately rather than
+ * timing out, so it does not pile up the same way, and `unknown` is what a
+ * fresh poll looks like - treating "not yet known" as "do not connect" would
+ * keep the first attempt from ever happening.
+ */
+export function shouldDial(peer: PeerClientView): boolean {
+	// The local Hub is this very page's origin; its reported status is never a
+	// reason to stop watching it.
+	return isLocalPeer(peer) || peer.status !== "offline";
+}
+
 function peerWsUrl(peer: PeerClientView): string {
 	if (isLocalPeer(peer)) {
 		const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -100,6 +125,19 @@ function openWatcher(peer: PeerClientView) {
 		};
 		watchers.set(peer.id, watcher);
 	}
+
+	if (!shouldDial(peer)) {
+		// Drop the pending backoff and wait to be told it is back. `reconcile`
+		// re-runs whenever a peer's status changes, so the 5s peers poll is what
+		// reopens this - no timer of our own has to survive here.
+		if (watcher.retryTimer !== null) {
+			window.clearTimeout(watcher.retryTimer);
+			watcher.retryTimer = null;
+		}
+		watcher.retryAttempt = 0;
+		return;
+	}
+
 	if (
 		watcher.ws &&
 		(watcher.ws.readyState === WebSocket.OPEN ||
@@ -268,12 +306,16 @@ function reconcile(peers: PeerClientView[]) {
 
 /**
  * Stabilize the dependency for reconcile. `usePeers()` returns a new array
- * reference on every poll, but only `id|url|wsToken` actually affect the
+ * reference on every poll, but only `id|url|wsToken|status` actually affect the
  * watcher; rerun reconcile only when one of those changes.
+ *
+ * `status` belongs here because `shouldDial` reads it: without it, a peer that
+ * came back online would keep its watcher closed until something else happened
+ * to change the key.
  */
-function peersWatcherKey(peers: PeerClientView[]): string {
+export function peersWatcherKey(peers: PeerClientView[]): string {
 	return peers
-		.map((p) => `${p.id}|${p.url}|${p.wsToken ?? ""}`)
+		.map((p) => `${p.id}|${p.url}|${p.wsToken ?? ""}|${p.status}`)
 		.sort()
 		.join(";");
 }
