@@ -658,6 +658,14 @@ than an optional afterthought.
 served from Cloudflare Workers, and the glasses app frames it in an iframe.
 Do not "fix the wording" in `glasses/src` — there is none there to fix.
 
+**A push to that repository's `main` is the deploy** — Cloudflare builds and
+publishes it, and there is nothing to run afterwards. Its `bun run deploy` is
+the other path, for a change that must not be on `main` first, and it needs a
+`CLOUDFLARE_API_TOKEN` the automatic build does not. Said here because the
+change that reaches for it is usually one made *here*: a server response the
+guide's mirrored settings panel reads, where the merge over there looks like
+half a job and is not.
+
 `phone-ui.ts` is a frame plus answers to three postMessage requests, and the
 boundary is not a preference:
 
