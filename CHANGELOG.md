@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.90] - 2026-08-11
+
 ### Fixed
 - **A peer that is offline is no longer dialled.** The peers poll already
   reports `status: "offline"` alongside `errorMessage: "unreachable: ..."`, but
