@@ -18,6 +18,7 @@ import {
   glassesRecordingEnabled,
   listRecordingDays,
   readRecordingDay,
+  recordSttRequest,
 } from '../services/glasses-screen-recorder';
 
 const glasses = new Hono();
@@ -96,6 +97,32 @@ glasses.post('/stt', async (c) => {
   }
 
   const wav = format === 'wav' ? raw : pcmToWav(raw, sampleRate);
+  const audioSeconds = format === 'wav' ? wavSeconds(raw) : pcmSeconds(raw.length, sampleRate);
+
+  /**
+   * Write the request into the screen recording, beside the frame that will
+   * show its result.
+   *
+   * Audio is never stored, so a model or a prompt can only be judged by
+   * reading transcripts back - and a transcript that does not say which model
+   * wrote it leaves the comparison resting on somebody's memory of when the
+   * setting was last changed. Off unless the recording is on.
+   */
+  const recordAttempt = (result: { ok: boolean; text?: string; raw?: string }) => {
+    recordSttRequest({
+      model: stt.model,
+      language: stt.language,
+      prompt: stt.prompt,
+      promptSource: stt.promptSource,
+      sessionId: stt.sessionId,
+      audioSeconds,
+      ok: result.ok,
+      text: result.text,
+      // Only when the correction table actually changed something - otherwise
+      // it is the same sentence stored twice.
+      raw: result.raw !== result.text ? result.raw : undefined,
+    });
+  };
 
   try {
     // Copy into a freshly-allocated ArrayBuffer-backed view so the Blob part
@@ -131,8 +158,7 @@ glasses.post('/stt', async (c) => {
     // quota, and the headers on a 429 are the ones worth having. Not awaited -
     // the user is waiting on the transcript, not on a tally.
     void groqSttUsageService.record({
-      audioSeconds:
-        format === 'wav' ? wavSeconds(raw) : pcmSeconds(raw.length, sampleRate),
+      audioSeconds,
       ok: res.ok,
       rateLimit: readRateLimitHeaders(res.headers, new Date().toISOString()),
     });
@@ -140,6 +166,7 @@ glasses.post('/stt', async (c) => {
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
       console.error(`[glasses/stt] Groq ${res.status}: ${detail.slice(0, 300)}`);
+      recordAttempt({ ok: false });
       return c.json({ error: `STT provider error (${res.status})` }, 502);
     }
 
@@ -148,9 +175,11 @@ glasses.post('/stt', async (c) => {
     // silence. An emptied hallucination is reported as nothing said, not as an
     // error: the request happened and its quota was spent either way.
     const text = applySttCorrections(data.text || '');
+    recordAttempt({ ok: true, text, raw: data.text || '' });
     return c.json({ text });
   } catch (err) {
     console.error('[glasses/stt] transcription failed:', err);
+    recordAttempt({ ok: false });
     return c.json({ error: 'transcription failed' }, 500);
   }
 });

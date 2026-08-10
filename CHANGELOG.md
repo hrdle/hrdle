@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **A transcription is now recorded with the model and the vocabulary prompt
+  that produced it.** The screen recording is the only measurement of speech
+  recognition there is - the audio is never stored, so a model can only be
+  judged by reading transcripts back - and a transcript did not say which
+  model wrote it. Comparing `whisper-large-v3` against turbo rested on
+  remembering when the setting was last changed, which is not a measurement
+  - The line sits beside the confirm frame that shows the result and carries
+    the model, the language, the prompt as sent and where it came from, the
+    session, the audio length, and the text. The pre-correction text is kept
+    only when `stt-corrections` changed something, which makes "is that table
+    still earning its place" answerable from the same file
+  - A failed request is recorded too. It spent quota and it still says what
+    was asked for
+  - It follows the recording's own switch (`HRDLE_GLASSES_RECORD`, off by
+    default), because it holds the same speech the frames already do
+
 ## [0.3.91] - 2026-08-11
 
 ### Fixed

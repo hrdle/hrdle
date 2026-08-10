@@ -220,13 +220,16 @@ export function startPlayerUI(): void {
    *  claimed, which can predate the whole recording. */
   const timeOf = (line: RecordedGlassesLine): number => {
     if ('focus' in line) return line.receivedAt
-    if ('gap' in line || 'input' in line) return line.at
+    if ('gap' in line || 'input' in line || 'stt' in line) return line.at
     return line.receivedAt ?? line.at
   }
 
-  /** A drawable screen, as opposed to the event lines (gap, gesture, focus). */
+  /** A drawable screen, as opposed to the event lines (gap, gesture, focus,
+   *  transcription). The list is a denylist rather than a check for `header`,
+   *  so a new event shape has to be named here - which is the point: an
+   *  unnamed one would be painted, and paint as nonsense. */
   const isFrame = (line: RecordedGlassesLine): line is GlassesScreen & { receivedAt: number } =>
-    !('gap' in line) && !('input' in line) && !('focus' in line)
+    !('gap' in line) && !('input' in line) && !('focus' in line) && !('stt' in line)
 
   const GESTURE_LABEL: Record<GlassesInputKind, string> = {
     tap: '● tap',
@@ -277,7 +280,7 @@ export function startPlayerUI(): void {
       status.textContent = `${pos} - device disconnected`
       return
     }
-    if ('input' in line || 'focus' in line) {
+    if ('input' in line || 'focus' in line || 'stt' in line) {
       // An event line rides over whichever frame was on screen when it
       // happened; after a seek that frame has to be found and repainted.
       for (let j = i - 1; j >= 0; j--) {
@@ -297,6 +300,11 @@ export function startPlayerUI(): void {
       if ('input' in line) {
         flashGesture(line.input)
         status.textContent = `${pos} - ${GESTURE_LABEL[line.input]}`
+      } else if ('stt' in line) {
+        // Nothing to draw - this line is why the next frame says what it
+        // says. The status bar is where a replay can see that.
+        const { model, audioSeconds, ok } = line.stt
+        status.textContent = `${pos} - heard by ${model} · ${audioSeconds.toFixed(1)}s${ok ? '' : ' · failed'}`
       } else {
         status.textContent = line.focus
           ? `${pos} - working in ${line.focus}${line.deviceType ? ` (${line.deviceType})` : ''}`
