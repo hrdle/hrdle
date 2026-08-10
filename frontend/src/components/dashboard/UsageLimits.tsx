@@ -203,6 +203,57 @@ export function UsageLimits({
 
 	const missingMessage = t("dashboard.cycleNotInPlan");
 
+	const fiveHourNode = data.fiveHour ? (
+		<UsageChart
+			label={t("dashboard.fiveHourCycle")}
+			field="fiveHour"
+			snapshots={history}
+			currentUtilization={data.fiveHour.utilization}
+			resetsAt={data.fiveHour.resetsAt}
+			status={data.fiveHour.status || "safe"}
+			statusMessage={getStatusMessage(
+				t,
+				data.fiveHour.status,
+				data.fiveHour.timeRemaining,
+				data.fiveHour.estimatedHitTime,
+			)}
+			overlays={toOverlays(data.scopedLimits, "session")}
+		/>
+	) : showMissingCycles ? (
+		<MissingCyclePlaceholder
+			label={t("dashboard.fiveHourCycle")}
+			message={missingMessage}
+		/>
+	) : null;
+
+	const sevenDayNode = data.sevenDay ? (
+		<UsageChart
+			label={t("dashboard.sevenDayCycle")}
+			field="sevenDay"
+			snapshots={history}
+			currentUtilization={data.sevenDay.utilization}
+			resetsAt={data.sevenDay.resetsAt}
+			status={data.sevenDay.status || "safe"}
+			statusMessage={getStatusMessage(
+				t,
+				data.sevenDay.status,
+				data.sevenDay.timeRemaining,
+				data.sevenDay.estimatedHitTime,
+			)}
+			overlays={toOverlays(data.scopedLimits, "weekly")}
+		/>
+	) : showMissingCycles ? (
+		<MissingCyclePlaceholder
+			label={t("dashboard.sevenDayCycle")}
+			message={missingMessage}
+		/>
+	) : null;
+
+	// Side by side once the card itself is wide enough — a container query, not a
+	// viewport one, because the same card also renders in the narrow side panel.
+	// The charts are viewBox SVGs, so half the width costs nothing but pixels.
+	const sideBySide = !!fiveHourNode && !!sevenDayNode;
+
 	return (
 		<Card
 			title={headingNode}
@@ -218,55 +269,18 @@ export function UsageLimits({
 			{status?.errorReason && <ErrorMessage status={status} />}
 			{banner && <Banner banner={banner} />}
 
-			{data.fiveHour ? (
-				<UsageChart
-					label={t("dashboard.fiveHourCycle")}
-					field="fiveHour"
-					snapshots={history}
-					currentUtilization={data.fiveHour.utilization}
-					resetsAt={data.fiveHour.resetsAt}
-					status={data.fiveHour.status || "safe"}
-					statusMessage={getStatusMessage(
-						t,
-						data.fiveHour.status,
-						data.fiveHour.timeRemaining,
-						data.fiveHour.estimatedHitTime,
-					)}
-					overlays={toOverlays(data.scopedLimits, "session")}
-				/>
-			) : (
-				showMissingCycles && (
-					<MissingCyclePlaceholder
-						label={t("dashboard.fiveHourCycle")}
-						message={missingMessage}
-					/>
-				)
-			)}
-
-			{data.sevenDay ? (
-				<UsageChart
-					label={t("dashboard.sevenDayCycle")}
-					field="sevenDay"
-					snapshots={history}
-					currentUtilization={data.sevenDay.utilization}
-					resetsAt={data.sevenDay.resetsAt}
-					status={data.sevenDay.status || "safe"}
-					statusMessage={getStatusMessage(
-						t,
-						data.sevenDay.status,
-						data.sevenDay.timeRemaining,
-						data.sevenDay.estimatedHitTime,
-					)}
-					overlays={toOverlays(data.scopedLimits, "weekly")}
-				/>
-			) : (
-				showMissingCycles && (
-					<MissingCyclePlaceholder
-						label={t("dashboard.sevenDayCycle")}
-						message={missingMessage}
-					/>
-				)
-			)}
+			<div className={sideBySide ? "@container" : undefined}>
+				<div
+					className={
+						sideBySide
+							? "grid gap-x-4 gap-y-3 @lg:grid-cols-2 [&>*]:mb-0 items-start"
+							: undefined
+					}
+				>
+					{fiveHourNode}
+					{sevenDayNode}
+				</div>
+			</div>
 		</Card>
 	);
 }
