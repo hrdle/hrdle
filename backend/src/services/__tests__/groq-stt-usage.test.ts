@@ -66,8 +66,15 @@ describe('wavSeconds', () => {
 
 describe('estimateCostUsd', () => {
   it('prices an hour of audio at the list rate', () => {
-    expect(estimateCostUsd(3600)).toBeCloseTo(0.04, 6);
-    expect(estimateCostUsd(0)).toBe(0);
+    expect(estimateCostUsd(3600, 'whisper-large-v3-turbo')).toBeCloseTo(0.04, 6);
+    expect(estimateCostUsd(0, 'whisper-large-v3-turbo')).toBe(0);
+  });
+
+  it('reports nothing for a model with no list price here', () => {
+    // Never 0: that reads as free. A model priced by guesswork would put a
+    // number on the dashboard that nobody checked.
+    expect(estimateCostUsd(3600, 'whisper-large-v3')).toBeUndefined();
+    expect(estimateCostUsd(3600, 'something-new')).toBeUndefined();
   });
 });
 

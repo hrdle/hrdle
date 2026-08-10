@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { GroqSttUsageSummary } from "../../../../shared/types";
+import { STT_MODELS, type GroqSttUsageSummary } from "../../../../shared/types";
+import { API_BASE, authFetch } from "../../services/api";
 import { formatUsd } from "../../utils/format";
 import { Card, StatTile } from "./Card";
 
@@ -9,6 +11,13 @@ interface GroqSttUsageCardProps {
 }
 
 const BAR_HEIGHT_PX = 40;
+
+/**
+ * A cost this server cannot price. Shown as a dash rather than as $0.00,
+ * which would read as free - only the model this ran on before the model
+ * became a setting has a list price written down.
+ */
+const NO_COST = "—";
 
 /** Audio durations read as minutes past a minute, and as seconds below one. */
 function formatAudio(seconds: number): string {
@@ -35,6 +44,31 @@ export function GroqSttUsageCard({ usage, className = "" }: GroqSttUsageCardProp
 	const { today, last7d, daily, rateLimit } = usage;
 	const maxAudio = Math.max(...daily.map((d) => d.audioSeconds), 1);
 
+	// Shown from local state so the select responds to the click rather than to
+	// the next poll 30s later. The server's answer wins whenever it arrives.
+	const [model, setModel] = useState(usage.model);
+	const [failed, setFailed] = useState(false);
+	useEffect(() => setModel(usage.model), [usage.model]);
+
+	const changeModel = async (next: string) => {
+		const previous = model;
+		setModel(next);
+		setFailed(false);
+		try {
+			const res = await authFetch(`${API_BASE}/api/glasses/settings`, {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ sttModel: next }),
+			});
+			if (!res.ok) throw new Error(`settings ${res.status}`);
+		} catch {
+			// Put the select back rather than leaving it showing a model that is
+			// not in force: the next utterance would use the old one.
+			setModel(previous);
+			setFailed(true);
+		}
+	};
+
 	const quotas = [
 		{
 			key: "requests",
@@ -58,20 +92,36 @@ export function GroqSttUsageCard({ usage, className = "" }: GroqSttUsageCardProp
 		<Card
 			title={t("dashboard.groqStt")}
 			aside={
-				<span className="text-[11px] text-th-text-muted shrink-0 truncate">
-					{usage.model}
-				</span>
+				<select
+					value={model}
+					onChange={(e) => changeModel(e.target.value)}
+					aria-label={t("dashboard.groqSttModel")}
+					title={t("dashboard.groqSttModel")}
+					className="max-w-[11rem] shrink-0 truncate bg-th-bg border border-th-border rounded px-1.5 py-0.5 text-[11px] text-th-text-muted focus:outline-none focus:border-blue-500"
+				>
+					{STT_MODELS.map((option) => (
+						<option key={option} value={option}>
+							{option}
+						</option>
+					))}
+				</select>
 			}
 			className={className}
 			footnote={
 				<>
-					{t("dashboard.groqSttNote", {
-						requests: last7d.requests,
-						audio: formatAudio(last7d.audioSeconds),
-						cost: formatUsd(last7d.costUsd),
-					})}
+					{last7d.costUsd === undefined
+						? t("dashboard.groqSttNoteNoCost", {
+								requests: last7d.requests,
+								audio: formatAudio(last7d.audioSeconds),
+							})
+						: t("dashboard.groqSttNote", {
+								requests: last7d.requests,
+								audio: formatAudio(last7d.audioSeconds),
+								cost: formatUsd(last7d.costUsd),
+							})}
 					{last7d.failures > 0 &&
 						` ${t("dashboard.groqSttFailures", { count: last7d.failures })}`}
+					{failed && ` ${t("dashboard.groqSttModelFailed")}`}
 				</>
 			}
 		>
@@ -87,12 +137,17 @@ export function GroqSttUsageCard({ usage, className = "" }: GroqSttUsageCardProp
 					</div>
 				</StatTile>
 				<StatTile label={t("dashboard.groqSttCost")}>
-					<div className="text-lg font-semibold text-emerald-300 tabular-nums">
+					<div
+						className="text-lg font-semibold text-emerald-300 tabular-nums"
+						title={today.costUsd === undefined ? t("dashboard.groqSttCostUnknown") : undefined}
+					>
 						{/* Four decimals is right for a figure that spends whole days
 						    below a cent, but the tile is not wide enough to read them. */}
-						{today.costUsd > 0 && today.costUsd < 0.01
-							? "<$0.01"
-							: formatUsd(today.costUsd)}
+						{today.costUsd === undefined
+							? NO_COST
+							: today.costUsd > 0 && today.costUsd < 0.01
+								? "<$0.01"
+								: formatUsd(today.costUsd)}
 					</div>
 				</StatTile>
 			</div>

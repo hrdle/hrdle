@@ -17,6 +17,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { atomicWriteFile, createMutationLock, ensureDataDir, getDataDir } from '../utils/storage';
 import { envVar } from '../../../shared/identity';
+import { STT_MODELS, type SttModel } from '../../../shared/types';
 
 /** `auto` sends no language at all and lets Whisper detect it. */
 export type SttLang = 'auto' | string;
@@ -37,16 +38,14 @@ export interface GlassesSettings {
 }
 
 /**
- * The transcription models Groq offers, verified against its `/models`
- * endpoint on 2026-08-09 - it lists these two and nothing else for speech.
+ * The models a caller may choose. Defined in `shared/types` so the dashboard
+ * and the glasses app offer exactly the set this will accept.
  *
- * Kept as a closed set rather than a free string because the failure mode of a
- * typo is total: an unknown model is a 400 on every utterance, and the wearer
- * sees "STT provider error" with no hint that a settings field caused it. A
- * new model costs one line here.
+ * A closed set rather than a free string because the failure mode of a typo is
+ * total: an unknown model is a 400 on every utterance, and the wearer sees
+ * "STT provider error" with no hint that a settings field caused it.
  */
-export const STT_MODELS = ['whisper-large-v3-turbo', 'whisper-large-v3'] as const;
-export type SttModel = (typeof STT_MODELS)[number];
+export { STT_MODELS, type SttModel } from '../../../shared/types';
 
 /**
  * Default: `turbo`, which is what this ran on before the setting existed.

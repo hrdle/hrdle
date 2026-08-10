@@ -4,7 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [0.3.83] - 2026-08-09
+### Added
+- **The transcription model can be switched from the dashboard and from the
+  glasses settings screen.** It became a setting in 0.3.83 but only over the
+  API, which meant a curl on the host that runs the server - fine for trying it
+  once, wrong for a choice that is answered by listening for a few days and
+  changing your mind
+  - The dashboard's Groq card carries the select, since that is where the
+    consequences already are: requests, audio and remaining quota are on the
+    same card
+  - The glasses screen fills its options from the server's own list rather than
+    hardcoding them, so it cannot offer a model the server would reject
+
+### Fixed
+- **The dashboard was naming the wrong model.** The Groq card's model label was
+  a constant, so it read `whisper-large-v3-turbo` whatever was actually in use -
+  including right after switching away from it
+- **A cost is no longer shown for a model this server cannot price.** The
+  estimate was always at the turbo list rate; with the model switchable that
+  figure would be silently wrong rather than merely approximate. Only the model
+  with a rate written down gets a number, and the others show a dash - never
+  `$0.00`, which reads as free
 
 ### Fixed
 - **Speech no longer comes back as `ハーダー`, and silence no longer comes back

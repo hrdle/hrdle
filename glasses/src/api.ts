@@ -168,6 +168,10 @@ export interface GlassesSettingsView {
   /** What is saved here joins the composed line rather than replacing it (#210). */
   sttPromptSource: 'composed' | 'env' | 'off'
   effectivePrompt: string
+  sttModel: string
+  sttModelSource: 'setting' | 'default'
+  /** Every model the server will accept, so this app need not hardcode them. */
+  sttModels: string[]
 }
 
 export function getGlassesSettings(): Promise<GlassesSettingsView> {
@@ -179,6 +183,7 @@ export async function putGlassesSettings(patch: {
   groqApiKey?: string | null
   sttLang?: string | null
   sttPrompt?: string | null
+  sttModel?: string | null
 }): Promise<GlassesSettingsView> {
   const res = await fetch(`${baseUrl}/api/glasses/settings`, {
     method: 'PUT',
