@@ -10,6 +10,7 @@ import {
   loadGlassesSettings,
   resetGlassesSettingsCache,
   resolveGroqApiKey,
+  resolveSttBias,
   resolveSttLang,
   resolveSttModel,
   updateGlassesSettings,
@@ -113,41 +114,81 @@ describe('glasses settings store', () => {
 
   test('the view never carries the key, only whether one is set', async () => {
     await updateGlassesSettings({ groqApiKey: 'secret' });
-    const view = await glassesSettingsView('composed prompt');
+    const view = await glassesSettingsView();
     expect(JSON.stringify(view)).not.toContain('secret');
     expect(view.hasApiKey).toBe(true);
     expect(view.apiKeySource).toBe('setting');
   });
 
   test('the view reports where each value comes from', async () => {
-    const composed = 'release, merge, pane';
-    let view = await glassesSettingsView(composed);
-    expect(view.sttPromptSource).toBe('composed');
-    expect(view.effectivePrompt).toBe(composed);
+    let view = await glassesSettingsView();
     expect(view.sttLangSource).toBe('default');
+    expect(view.sttBias).toBe(true);
+    expect(view.sttBiasSource).toBe('default');
 
-    // Saved words no longer make a source of their own: they are one group
-    // inside the composed line the caller hands in (#210).
-    await updateGlassesSettings({ sttPrompt: 'from settings', sttLang: 'auto' });
-    view = await glassesSettingsView(`from settings, ${composed}`);
-    expect(view.sttPromptSource).toBe('composed');
-    expect(view.sttPrompt).toBe('from settings');
-    expect(view.effectivePrompt).toBe(`from settings, ${composed}`);
+    await updateGlassesSettings({ sttLang: 'auto' });
+    view = await glassesSettingsView();
     expect(view.sttLang).toBe('auto');
     expect(view.sttLangSource).toBe('setting');
-
-    process.env[`${IDENTITY.binaryName.toUpperCase()}_STT_PROMPT`] = 'from env';
-    resetGlassesSettingsCache();
-    view = await glassesSettingsView('from env');
-    expect(view.sttPromptSource).toBe('env');
-    expect(view.effectivePrompt).toBe('from env');
   });
 
-  test('`off` says so, and shows no prompt rather than the literal word', async () => {
-    await updateGlassesSettings({ sttPrompt: 'off' });
-    // Composing returns undefined for `off`; the view must not print it.
-    const view = await glassesSettingsView(undefined);
-    expect(view.sttPromptSource).toBe('off');
-    expect(view.effectivePrompt).toBe('');
+  test('the view claims nothing about what would be sent', async () => {
+    // It has no session, so it never could. The field that read as though it
+    // did cost an afternoon (#255); /stt-preview is the endpoint that answers.
+    const view = await glassesSettingsView();
+    expect(view).not.toHaveProperty('effectivePrompt');
+    expect(view).not.toHaveProperty('sttPrompt');
+  });
+});
+
+/**
+ * The bias switch, and the one thing carried over from the shared-words field
+ * it replaced (#255).
+ */
+describe('the vocabulary bias switch', () => {
+  test('it is on until somebody says otherwise', async () => {
+    expect(await resolveSttBias()).toEqual({ enabled: true, source: 'default' });
+  });
+
+  test('off is saved, and clearing it returns to on', async () => {
+    await updateGlassesSettings({ sttBias: 'off' });
+    expect(await resolveSttBias()).toEqual({ enabled: false, source: 'setting' });
+
+    await updateGlassesSettings({ sttBias: null });
+    expect(await resolveSttBias()).toEqual({ enabled: true, source: 'default' });
+  });
+
+  test('the environment can switch it off but the screen cannot switch that back on', async () => {
+    process.env[`${IDENTITY.binaryName.toUpperCase()}_STT_PROMPT`] = 'off';
+    await updateGlassesSettings({ sttBias: 'on' });
+    const view = await glassesSettingsView();
+    expect(view.sttBias).toBe(false);
+    expect(view.sttBiasSource).toBe('env');
+  });
+
+  test('an `off` left in the old shared-words field stays off after the update', async () => {
+    // Somebody switched the bias off deliberately by typing `off` into the
+    // field that is now gone. An update must not quietly switch it back on.
+    await writeFile(
+      join(tempDir, 'glasses-settings.json'),
+      JSON.stringify({ sttPrompt: 'off', sttLang: 'en' }),
+    );
+    resetGlassesSettingsCache();
+    expect(await resolveSttBias()).toEqual({ enabled: false, source: 'setting' });
+    expect((await loadGlassesSettings()).sttLang).toBe('en');
+  });
+
+  test('words left in that field are dropped, and the next write forgets them', async () => {
+    // They were a group in the prompt and there is no group for them now.
+    await writeFile(
+      join(tempDir, 'glasses-settings.json'),
+      JSON.stringify({ sttPrompt: '確定申告、固定資産税' }),
+    );
+    resetGlassesSettingsCache();
+    expect(await resolveSttBias()).toEqual({ enabled: true, source: 'default' });
+
+    await updateGlassesSettings({ sttLang: 'ja' });
+    const onDisk = JSON.parse(await readFile(join(tempDir, 'glasses-settings.json'), 'utf-8'));
+    expect(onDisk).toEqual({ sttLang: 'ja' });
   });
 });

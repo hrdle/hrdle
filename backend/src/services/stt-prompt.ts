@@ -1,5 +1,3 @@
-import { envVar } from '../../../shared/identity';
-import { type GlassesSettings, loadGlassesSettings } from './glasses-settings';
 import { getAllSessionMetadata } from './session-metadata';
 
 /**
@@ -93,7 +91,7 @@ const GLOSSARY = [
 const MAX_PROMPT_CHARS = 190;
 
 /**
- * How much of it the contributed groups may take between them.
+ * How much of it the session's own words may take.
  *
  * Half is kept for the glossary no matter what else is set, because the failure
  * this file is named after was not "the wrong words were chosen" but "one group
@@ -102,61 +100,104 @@ const MAX_PROMPT_CHARS = 190;
  * told it may write 100 characters would do exactly the same thing, and the
  * words it would push out are the ones misheard every day in every session.
  */
-const CONTRIBUTED_MAX_CHARS = Math.floor(MAX_PROMPT_CHARS / 2);
+export const SESSION_MAX_CHARS = Math.floor(MAX_PROMPT_CHARS / 2);
+
+/** Which group a term came from. */
+export type SttPromptGroupName = 'session' | 'glossary';
+
+/** What one group offered, and what became of it. */
+export interface SttPromptGroup {
+  name: SttPromptGroupName;
+  /**
+   * The running total this group had to stay inside, separators counted. The
+   * session's is half the line; the glossary's is the whole of what is left.
+   */
+  budget: number;
+  /** Terms that made it into the line, in the order they appear in it. */
+  taken: string[];
+  /** Terms offered and left out - the budget was full, or it was already said. */
+  skipped: Array<{ term: string; reason: 'budget' | 'duplicate' }>;
+}
+
+/** A composed line, and how it was arrived at. */
+export interface SttPromptComposition {
+  /** The line itself. Empty when no group had anything to give. */
+  prompt: string;
+  groups: SttPromptGroup[];
+  usedChars: number;
+  maxChars: number;
+}
 
 /**
  * Fold the vocabulary into one line of plausible preceding transcript.
  *
- * Three groups, in the order they are worth their characters, because the
- * budget does run out:
+ * Two groups, in the order they are worth their characters, because the budget
+ * does run out:
  *
  *  1. **This session's own words** (#166). The only group that knows what is
  *     about to be said rather than what is generally said here. A session
  *     about the G2 display and one about tax paperwork were biased identically
  *     before this, and neither got the terms it needed.
- *  2. **Shared words.** What the glasses' own settings screen adds — terms a
- *     person wants in every session's prompt. These outrank the glossary
- *     because someone typed them on purpose; the glossary is only our guess at
- *     the same thing.
- *  3. **Glossary.** Said constantly and misheard constantly, in every session.
+ *  2. **Glossary.** Said constantly and misheard constantly, in every session.
  *
- * Neither of the first two can replace the glossary: between them they may
- * take half the budget, and the rest is the glossary's whatever they hold. It
- * is what is said every day everywhere, and a session that spent the whole
- * budget on its own vocabulary would start mishearing `リリース` again — which
+ * There used to be a third between them - words the settings screen added to
+ * every session's prompt - and it is gone (#255). Squeezed from both sides it
+ * never had a job of its own: a word said always belongs in the glossary, and a
+ * word about to be said is the session's to write. It was empty from the day it
+ * shipped except for the five days a leftover `off` in it disabled the whole
+ * prompt (#210).
+ *
+ * The first group cannot replace the glossary: it may take half the budget, and
+ * the rest is the glossary's whatever it holds. A session that spent the whole
+ * budget on its own vocabulary would start mishearing `リリース` again - which
  * is exactly what the removed workspace labels did (see the note at the top of
  * this file).
  *
  * Terms are taken whole: half a word biases nothing.
+ *
+ * The return value says which group produced which term, because nothing else
+ * can: the line itself is one string of comma-separated words by the time it
+ * leaves here, and "why is my session's word not in it" is the question this
+ * file gets asked (#255).
  */
-export function buildSttPrompt(
-  terms_: { session?: string[]; shared?: string[] } = {},
+export function composeSttPrompt(
+  sessionTerms: string[] = [],
   glossary: string[] = GLOSSARY,
-): string {
-  const { session = [], shared = [] } = terms_;
+): SttPromptComposition {
   const terms: string[] = [];
   const seen = new Set<string>();
   let length = 0;
 
-  const take = (candidates: string[], budget: number) => {
+  const take = (name: SttPromptGroupName, candidates: string[], budget: number) => {
+    const group: SttPromptGroup = { name, budget, taken: [], skipped: [] };
     for (const term of candidates) {
       const trimmed = term.trim();
       if (!trimmed) continue;
       const key = trimmed.toLowerCase();
-      if (seen.has(key)) continue;
+      if (seen.has(key)) {
+        group.skipped.push({ term: trimmed, reason: 'duplicate' });
+        continue;
+      }
       // +1 for the separator this term would bring with it.
       const cost = trimmed.length + (terms.length > 0 ? 1 : 0);
-      if (length + cost > budget) continue;
+      if (length + cost > budget) {
+        group.skipped.push({ term: trimmed, reason: 'budget' });
+        continue;
+      }
       seen.add(key);
       terms.push(trimmed);
+      group.taken.push(trimmed);
       length += cost;
     }
+    return group;
   };
 
-  take([...session, ...shared], CONTRIBUTED_MAX_CHARS);
-  take(glossary, MAX_PROMPT_CHARS);
+  const groups = [
+    take('session', sessionTerms, SESSION_MAX_CHARS),
+    take('glossary', glossary, MAX_PROMPT_CHARS),
+  ];
 
-  return terms.join('、');
+  return { prompt: terms.join('、'), groups, usedChars: length, maxChars: MAX_PROMPT_CHARS };
 }
 
 /**
@@ -183,40 +224,10 @@ export async function sessionSttTerms(sessionId: string | undefined): Promise<st
   return sessionPromptTerms(metadata[sessionId]?.sttPrompt);
 }
 
-/** `HRDLE_STT_PROMPT`, composed so a rename cannot leave it behind again. */
-const OVERRIDE_ENV = envVar('STT_PROMPT');
-
 /**
- * The prompt to send with a transcription, or `undefined` to send none.
+ * Composing is all this file does now.
  *
- * `off` from either the saved setting or `HRDLE_STT_PROMPT` means no bias at
- * all, from any session. Any other value of the env var replaces the whole
- * line, which is how a composed prompt and a hand-written one are compared
- * without a rebuild — and it now outranks the saved setting rather than the
- * other way round, because the two no longer do the same job: one replaces,
- * the other contributes.
- *
- * The **saved setting no longer replaces anything** (#210). It did, and one
- * left over from a comparison in early August meant that for five days the
- * glasses were sent five words and none of the glossary, which took a "speech
- * recognition feels worse today" report and a code read to find. A setting that
- * silently disables everything else is the wrong shape for the one field
- * reachable from the device, so it is now a group inside the composition —
- * words added to every session's prompt — and replacing outright is left to the
- * env var, which does not outlive the process that set it.
+ * Whether a composed line is what actually goes out - against `off`, against
+ * `HRDLE_STT_PROMPT` replacing it outright - is decided in `stt-request.ts`,
+ * with the model and the language, in one place a caller can ask (#255).
  */
-export async function sttPrompt(
-  options: { sessionId?: string } = {},
-): Promise<string | undefined> {
-  const { sessionId } = options;
-  const saved = (await loadGlassesSettings().catch((): GlassesSettings => ({}))).sttPrompt;
-  const fromEnv = process.env[OVERRIDE_ENV];
-  if (saved === 'off' || fromEnv === 'off') return undefined;
-  if (fromEnv) return fromEnv;
-
-  const prompt = buildSttPrompt({
-    session: await sessionSttTerms(sessionId),
-    shared: sessionPromptTerms(saved),
-  });
-  return prompt || undefined;
-}

@@ -104,6 +104,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **OpenCodeHistoryService** (`services/opencode-history.ts`) - OpenCode session history + conversation reader. A `tool` part holds the call **and** its result in one row (`state.input` / `state.output`), which the parser splits back across an assistant/user turn boundary because that is the shape `ConversationViewer` pairs by `toolUseId`; `reasoning`, `step-start` and `step-finish` parts are dropped
 - **OpenCodeUsageService** (`services/opencode-usage.ts`) - Aggregates OpenCode token consumption (24h/7d windows, per-model) from assistant message rows for the dashboard's OpenCode tab. Like Grok and Kimi it has no rate-limit windows to show, but unlike them **the cost is not our estimate**: OpenCode computes and stores a per-turn `cost`, so the figure is its own. Absent (never zeroed) when no turn in the window carried one; a genuine 0 is what free models report
 - **GroqSttUsageService** (`services/groq-stt-usage.ts`) - Groq speech-to-text consumption by the glasses, **recorded rather than aggregated**: Groq has no usage endpoint and reports remaining quota only in `x-ratelimit-*` headers on a transcription response, so a request not written down as it happened is unrecoverable. `routes/glasses.ts` records on the way past (before the status is acted on - a 429 still spends quota - and without awaiting it), into `<dataDir>/groq-stt-usage.json`. Tracks requests (capped per day) and audio seconds (capped per hour, and what the API is priced on) separately, because the two ceilings empty on different clocks. Cost is an estimate at the list price per hour of audio, never a billed figure
+- **SttRequestResolver** (`services/stt-request.ts`) - The one place that decides what a transcription carries (#255): `resolveSttRequest({ sessionId, lang })` returns the model, the language, the vocabulary prompt, each value's source and how the prompt was composed. `routes/glasses.ts` calls it once for `/stt` and serves it verbatim from `/stt-preview`, so the settings screen, the simulator and the terminal all read the object the transcription itself uses. Composition stays in `stt-prompt.ts`; the key stays out of the return value, because it is write-only
 - **OpenRouterPricingService / OpenRouterAccountService** (`services/openrouter.ts`) - Pay-as-you-go cost reporting: list prices from the public `/api/v1/models` (no auth, 24h cache) drive *estimated* per-window costs, while `/api/v1/key` + `/api/v1/credits` (keyed, 60s cache, 5min failure backoff) report OpenRouter's *billed* daily/weekly/monthly spend and credit balance. Estimates use rolling windows, OpenRouter's are calendar windows, so the two never match exactly
 - **ConversationWatcher** (`services/conversation-watcher.ts`) - Watches Claude Code / Codex `.jsonl` files and emits conversation updates to subscribed WebSocket clients
 - **HookStatusService** (`services/hook-status.ts`) - Reports whether the hooks Hrdle still needs are installed (`Stop` for notification text, `PostToolUse`/`AskUserQuestion` for the question's tool name). Indicator transitions come from herdr, not hooks
@@ -186,6 +187,9 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `GET /api/dashboard` - Dashboard data (usage limits, statistics, cost estimates, system metrics, usage history, herdr version skew)
 - `POST /api/herdr/apply-update` - Apply a pending herdr update (`herdr update` + supervised restart). User-initiated only; restarts every pane PTY
 - `POST /api/upload/image` - Upload image file
+- `POST /api/glasses/stt` - Transcribe glasses audio through Groq
+- `GET /api/glasses/stt-preview?session=&lang=` - What a transcription from that session would carry (model, language, prompt, each value's source, how the prompt was composed). The same object `/stt` resolves; never the API key
+- `GET /api/glasses/settings` / `PUT /api/glasses/settings` - The voice-input settings the glasses app's own screens edit (key write-only)
 - `POST /api/notify` - Receive hook events from Claude Code / Codex
 - `GET /api/notify/hook-status` - Per-session hook indicator state (lists sessions with missing hook setup)
 - `POST /api/auth/login` - Login
@@ -355,7 +359,9 @@ hrdle peek local:dev:%1             # Snapshot a pane viewport (--lines <n>, def
 # Speech vocabulary for the session this runs in (session auto-resolved: cwd, then
 # /proc ancestry - same as `hrdle glasses`; --session <id> to name one)
 hrdle stt-prompt "音声認識、語彙バイアス"   # Set the words this session is about
-hrdle stt-prompt                           # Print what is set
+hrdle stt-prompt                           # Print what is set, and what is
+                                           # actually sent (model, language,
+                                           # prompt, how it was composed)
 hrdle stt-prompt --clear                   # Back to the glossary alone
 
 # Debugging (Bun inspector on the running service)
@@ -432,14 +438,36 @@ The G2's SDK only hands over raw PCM, so transcription happens on the server at
 `POST /api/glasses/stt` (`routes/glasses.ts`) through Groq
 `whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
+**One function resolves what is sent, and one endpoint reports it** (#255).
+`services/stt-request.ts`'s `resolveSttRequest({ sessionId, lang })` returns the
+whole request - model, language, prompt, each value's source, and for the prompt
+which group produced which term and where the budget cut - and
+`GET /api/glasses/stt-preview?session=&lang=` serves exactly that object. The
+route calls it once and packs the result into the `FormData`; it decides
+nothing. The Groq key is deliberately **not** in there: it is write-only, and a
+preview carrying it would be the way it came back out. Before this, the four
+values came from four functions with four precedence rules and the request
+existed as one thing only for the length of one `fetch`, so "what is this
+session sending" could only be answered by reading four files - which twice in
+one day produced a confident wrong answer.
+
 `services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
-**the speaking session's own words, then the shared words from the settings
-screen, then the glossary**, filled up to what fits Whisper's 224-token ceiling
-(190 characters) - and the first two together may take **no more than half of
-it**, so the glossary is there whatever else is set. `HRDLE_STT_PROMPT=off`
-disables the bias entirely, and any other value replaces the whole line (for A/B
-testing; the variable name is composed by `envVar()` from `binaryName` in
-`identity.json`).
+**the speaking session's own words, then the glossary**, filled up to what fits
+Whisper's 224-token ceiling (190 characters) - and the session may take **no
+more than half of it**, so the glossary is there whatever else is set.
+`HRDLE_STT_PROMPT=off` disables the bias entirely, and any other value replaces
+the whole line (for A/B testing; the variable name is composed by `envVar()`
+from `binaryName` in `identity.json`). A switch on the settings screen
+(`sttBias`) disables it too, which is the same decision made by someone wearing
+the glasses rather than someone with a shell.
+
+There was a third group between the two, until #255: words the settings screen
+added to every session's prompt. It is gone. Squeezed from both sides it never
+had a job - a word said always belongs in the glossary, and a word about to be
+said is the session's to write - and it was empty from the day it shipped except
+for the five days a leftover `off` in it disabled the whole prompt (#210). An
+`off` still in that field of an existing `glasses-settings.json` is carried over
+as the new switch's "disabled"; words in it are dropped.
 
 The first group is per session (#166): `?session=<workspace id>` on the STT
 request names who is speaking, and `PUT /api/sessions/:id/stt-prompt` stores a
@@ -461,7 +489,7 @@ while `リリース`, `コミット`, `リベース` and `ペイン` - the words
 reported as misheard - were all pushed out. The half-the-budget cap exists so
 that the group which replaced them cannot repeat it.
 
-The key, the language and that prompt are also settings, editable from the
+The key, the language, the model and that switch are settings, editable from the
 glasses app's own web screens (the phone companion UI and the simulator) and
 stored by `services/glasses-settings.ts` in `<dataDir>/glasses-settings.json`
 (0600, since it can hold a key):
@@ -470,7 +498,15 @@ stored by `services/glasses-settings.ts` in `<dataDir>/glasses-settings.json`
 |---|---|---|
 | Groq key | setting, then `GROQ_API_KEY` | Write-only through the API - `GET /api/glasses/settings` reports only whether one is set and where it came from |
 | Language | `?lang=` on the request, then the setting, then `ja` | `auto` sends no language at all and lets Whisper detect it. The glossary is Japanese, so a prompt of its own is what makes another language work properly |
-| Prompt | `HRDLE_STT_PROMPT`, then composed - and the setting is *one group inside* composed, not a source of its own | The setting used to replace the composition, and outrank the env var doing it. One left over from a comparison then sent five words and no glossary for five days, silently (#210). The env var still replaces, because an A/B run does not outlive the process that set it; the field reachable from the device now contributes instead. `off` from either side still means no bias at all |
+| Model | setting, then `whisper-large-v3-turbo` | A closed set (`STT_MODELS` in `shared/types.ts`) - an unknown model is a 400 on every utterance and the wearer sees only "STT provider error" |
+| Vocabulary bias | `HRDLE_STT_PROMPT=off` or the `sttBias` switch turns it off; `HRDLE_STT_PROMPT` set to anything else replaces the line; otherwise composed | The env var replaces and the switch disables, and nothing a screen saves does either - that asymmetry is #210, where the one field reachable from the device could silently disable everything else, and did, for five days. The env var can switch the bias off but the screen cannot switch *that* back on, and says so |
+
+**`GET /api/glasses/settings` reports what is stored, never what would be
+sent.** It has no session, so it never could. It used to carry an
+`effectivePrompt`, which was the no-session line and was read as the sent value;
+diagnosing a per-session vocabulary bug that did not exist out of that field is
+half of why #255 exists. `/stt-preview` is the endpoint that answers, and `hrdle
+stt-prompt` with no arguments prints the same object in the terminal.
 
 The settings screen ships in the ehpk, so **the phone companion UI only gains it
 after `/glasses-upload`**. The simulator the server serves at `/glasses` updates

@@ -1,12 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { sttPrompt } from '../services/stt-prompt';
+import { resolveSttRequest } from '../services/stt-request';
 import {
   STT_MODELS,
   glassesSettingsView,
   resolveGroqApiKey,
-  resolveSttLang,
-  resolveSttModel,
   updateGlassesSettings,
 } from '../services/glasses-settings';
 import { applySttCorrections } from '../services/stt-corrections';
@@ -58,15 +56,15 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  *   - Default: little-endian 16-bit mono PCM at `?sampleRate=` (default 16000);
  *     the server wraps it into a WAV before forwarding to Groq.
  *   - `?format=wav`: body is already a complete WAV/other audio file — forwarded as-is.
- * Query: `?sampleRate=<n>` (PCM only), `?lang=<code>`.
+ * Query: `?sampleRate=<n>` (PCM only), `?lang=<code>`, `?session=<workspace id>`.
  * Response: `{ text }`.
  *
- * The key, the language, the model and the prompt come from the settings the
- * glasses app's own web screens write (`glasses-settings.ts`), each falling
- * back to what the server was configured with: `GROQ_API_KEY`, `ja`,
- * `whisper-large-v3-turbo`, and the vocabulary prompt (`stt-prompt.ts`). A
- * `?lang=` on the request still wins, and `auto` sends no language so Whisper
- * detects it.
+ * **This handler decides nothing about what is sent.** The model, the language
+ * and the vocabulary prompt come from one call to `resolveSttRequest()`, which
+ * holds every precedence rule between them and is what
+ * `GET /api/glasses/stt-preview` reports (#255). The key is resolved
+ * separately, and only here, because it is write-only and must not be
+ * reachable through a preview.
  *
  * What comes back is repaired by `stt-corrections.ts` before it is returned:
  * the prompt biases what is heard and has no say over how it is spelled.
@@ -82,7 +80,12 @@ glasses.post('/stt', async (c) => {
 
   const format = c.req.query('format') || 'pcm';
   const sampleRate = Number(c.req.query('sampleRate')) || 16000;
-  const lang = c.req.query('lang') || (await resolveSttLang()).lang;
+  // `?session=` names the workspace being spoken to, so its own vocabulary
+  // leads the prompt (#166).
+  const stt = await resolveSttRequest({
+    sessionId: c.req.query('session'),
+    lang: c.req.query('lang'),
+  });
 
   const raw = new Uint8Array(await c.req.arrayBuffer());
   if (raw.length === 0) {
@@ -102,21 +105,15 @@ glasses.post('/stt', async (c) => {
 
     const form = new FormData();
     form.append('file', new Blob([wavBytes.buffer], { type: 'audio/wav' }), 'audio.wav');
-    form.append('model', (await resolveSttModel()).model);
-    // `auto` means send nothing: Whisper detects the language itself. Sending a
-    // wrong one is worse than sending none - it transcribes English as though
-    // it were the language named.
-    if (lang && lang !== 'auto') form.append('language', lang);
+    form.append('model', stt.model);
+    // A null language means send none, so Whisper detects it.
+    if (stt.language) form.append('language', stt.language);
     form.append('response_format', 'json');
     // Greedy decoding keeps short commands fast and deterministic.
     form.append('temperature', '0');
-    // What the speech is about: product terms and the user's own workspace
-    // names. Without it the model has no reason to produce `herdr` or
-    // 「2脚ロボ開発」, and reaches for the ordinary Japanese word instead.
-    // `?session=` names the workspace being spoken to, so its own vocabulary
-    // leads the prompt (#166). Absent, the composed one is what it always was.
-    const prompt = await sttPrompt({ sessionId: c.req.query('session') });
-    if (prompt) form.append('prompt', prompt);
+    // What the speech is about. Without it the model has no reason to produce
+    // `パネル` over `ペイント`, and reaches for the ordinary Japanese word.
+    if (stt.prompt) form.append('prompt', stt.prompt);
 
     // The server's own idle timeout is 120s (#209), and the wearer is watching
     // "Transcribing..." for all of it. Bound the leg we do not control well
@@ -159,16 +156,35 @@ glasses.post('/stt', async (c) => {
 });
 
 /**
+ * What would be sent with an utterance from this session, right now (#255).
+ *
+ * `?session=<workspace id>` and `?lang=<code>` are the two things a real
+ * transcription request carries besides the audio, so passing them here gives
+ * the same answer that request would get - it is the same call. Without a
+ * session, the answer is the one every session shares: the glossary.
+ *
+ * The Groq key is not in it. Nothing reads that back out, including this.
+ */
+glasses.get('/stt-preview', async (c) => {
+  return c.json(
+    await resolveSttRequest({ sessionId: c.req.query('session'), lang: c.req.query('lang') }),
+  );
+});
+
+/**
  * The settings the glasses app's own web screens edit.
  *
  * GET returns everything except the key itself — whether one is set, and which
  * source each value comes from, so the screen can say "this is coming from the
  * environment" rather than showing a box that looks empty but is not.
+ *
+ * It reports what is *stored*. For what would be sent, the screen asks
+ * `/stt-preview`: this endpoint has no session and so could never answer that
+ * question, and the field that looked as though it did was where an afternoon
+ * went (#255).
  */
 glasses.get('/settings', async (c) => {
-  // The line as it would go out with no session named: the saved words and the
-  // glossary. A session speaking adds its own group in front of these.
-  return c.json(await glassesSettingsView(await sttPrompt()));
+  return c.json(await glassesSettingsView());
 });
 
 /**
@@ -184,7 +200,9 @@ const GlassesSettingsPatchSchema = z.object({
     .regex(/^(auto|[a-z]{2}(-[A-Za-z]{2,4})?)$/, 'expected `auto` or a language code such as `en`')
     .nullable()
     .optional(),
-  sttPrompt: z.string().max(2000).nullable().optional(),
+  // The vocabulary bias, as a switch. It replaced a free-text field whose one
+  // documented use was the word `off` typed into it (#255).
+  sttBias: z.enum(['on', 'off']).nullable().optional(),
   // A closed set: an unknown model is a 400 on every utterance, and the wearer
   // would see only "STT provider error".
   sttModel: z.enum(STT_MODELS).nullable().optional(),
@@ -217,9 +235,7 @@ glasses.put('/settings', async (c) => {
     return c.json({ error: parsed.error.issues[0]?.message || 'invalid settings' }, 400);
   }
   await updateGlassesSettings(parsed.data);
-  // The line as it would go out with no session named: the saved words and the
-  // glossary. A session speaking adds its own group in front of these.
-  return c.json(await glassesSettingsView(await sttPrompt()));
+  return c.json(await glassesSettingsView());
 });
 
 export { glasses };

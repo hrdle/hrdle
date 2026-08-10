@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **You can now ask what is being sent to the transcription service, and get
+  an answer.** A request carries four values - the key, the model, the language
+  and the vocabulary prompt - and each used to come from its own function with
+  its own precedence rules. The request existed as one thing only for the
+  length of one `fetch`, so "what is this session sending" had no one to ask:
+  the answer meant reading four files and reassembling them in your head, and
+  twice in one day that produced a confident wrong diagnosis
+  - One resolver decides all of it, and `GET /api/glasses/stt-preview?session=`
+    serves exactly what it returns - model, language, prompt, where each came
+    from, and which vocabulary group contributed which term. The transcription
+    endpoint calls the same function, so this is the sent value rather than a
+    second guess at it
+  - `hrdle stt-prompt` with no arguments now prints that alongside the
+    session's own words. What was set, and what it turned into
+  - The settings screen no longer shows an "effective prompt". It never was one
+    - that screen has no session, so the line it showed left out the words of
+    whoever is speaking - and the name is what sent an afternoon after a
+    per-session vocabulary bug that did not exist. It shows the line it can
+    honestly show: the one every session shares
+  - The API key is not in the preview. It is write-only and stays that way
+- **The shared-words field is gone, replaced by a switch.** It sat between the
+  session's own words and the glossary and was squeezed thin by both: a word
+  said always belongs in the glossary, and a word about to be said is the
+  session's to write with `hrdle stt-prompt`. It was empty from the day it
+  shipped except for the five days a leftover `off` in it silently disabled the
+  whole vocabulary prompt. Switching the bias off was the one thing it was
+  really used for, so that is now what it is: a switch, reachable from the
+  glasses, with the line it would send shown under it. An `off` left in the old
+  field is carried over as "off" - nobody's deliberate silence gets switched
+  back on by an update
+
 ## [0.3.85] - 2026-08-10
 
 ### Changed

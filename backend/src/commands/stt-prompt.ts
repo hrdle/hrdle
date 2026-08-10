@@ -2,7 +2,8 @@
  * hrdle stt-prompt - the words this session's speech is made of (#210).
  *
  *   hrdle stt-prompt "音声認識、Groq、ハルシネーション"   # set
- *   hrdle stt-prompt                                      # show what is set
+ *   hrdle stt-prompt                                      # show what is set,
+ *                                                         # and what is sent
  *   hrdle stt-prompt --clear                              # back to the glossary alone
  *
  * These lead the vocabulary prompt sent with this session's transcriptions,
@@ -55,6 +56,64 @@ async function putSttPrompt(
   }
 }
 
+/**
+ * What a transcription from this session would carry, as the server resolves it.
+ *
+ * The same object `/stt-preview` serves the settings screen, printed here
+ * because a session's words are usually being read in a terminal by whoever is
+ * about to change them, and "did that reach the prompt" is the next question
+ * (#255). Best-effort: a server that will not answer costs a line on stderr,
+ * not an exit code - the words above were still shown.
+ */
+async function printSttRequest(port: number, sessionId: string): Promise<void> {
+  interface Preview {
+    model: string;
+    modelSource: string;
+    language: string | null;
+    languageSource: string;
+    prompt: string | null;
+    promptSource: 'composed' | 'env' | 'off';
+    promptComposition: {
+      groups: Array<{ name: string; taken: string[] }>;
+      usedChars: number;
+      maxChars: number;
+    } | null;
+  }
+
+  let preview: Preview;
+  try {
+    const res = await fetch(
+      `https://localhost:${port}/api/glasses/stt-preview?session=${encodeURIComponent(sessionId)}`,
+    );
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+    preview = (await res.json()) as Preview;
+  } catch (err) {
+    console.error(`(cannot show what is sent: ${err instanceof Error ? err.message : 'failed'})`);
+    return;
+  }
+
+  const promptLine =
+    preview.promptSource === 'off'
+      ? '(none - the vocabulary bias is switched off)'
+      : preview.prompt || '(none)';
+
+  console.log('');
+  console.log('Sent with this session\'s speech:');
+  console.log(`  model     ${preview.model} (${preview.modelSource})`);
+  console.log(`  language  ${preview.language ?? 'auto (detected by Whisper)'} (${preview.languageSource})`);
+  console.log(`  prompt    ${promptLine}`);
+  if (preview.promptSource === 'env') {
+    console.log('            replaced wholesale by the environment');
+  }
+  const composition = preview.promptComposition;
+  if (composition) {
+    const groups = composition.groups
+      .map((group) => `${group.name} ${group.taken.length}`)
+      .join(', ');
+    console.log(`            ${composition.usedChars}/${composition.maxChars} chars - ${groups}`);
+  }
+}
+
 export async function runSttPrompt(options: SttPromptCliOptions): Promise<void> {
   // hrdle serves HTTPS on localhost (Tailscale cert for the hostname, not
   // localhost) - same TLS-skip pattern as notify.ts.
@@ -77,13 +136,20 @@ export async function runSttPrompt(options: SttPromptCliOptions): Promise<void> 
   }
   const port = 'port' in resolved ? resolved.port : ports[0];
 
-  // Show: what this session has now, read from the list already fetched.
+  // Show: what this session has now, read from the list already fetched, and
+  // then what is actually sent with it - which is the question these words are
+  // usually being read to answer (#255).
   if (options.text === undefined) {
-    const current =
+    // `(none)` only when the list was read and this session is not in it. With
+    // no list - an explicit --session against a server that could not tell us
+    // who we are - saying "none" would be inventing an answer, which is the
+    // shape of mistake this command is being fixed for.
+    console.log(
       'sessions' in resolved
-        ? resolved.sessions.find((s) => s.id === sessionId)?.sttPrompt
-        : undefined;
-    console.log(current || '(none)');
+        ? resolved.sessions.find((s) => s.id === sessionId)?.sttPrompt || '(none)'
+        : '(not read - the server did not list this session)',
+    );
+    await printSttRequest(port, sessionId);
     return;
   }
 

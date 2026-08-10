@@ -36,6 +36,7 @@ import {
   getDashboard,
   getGlassesSettings,
   getSessions,
+  getSttPreview,
   putGlassesSettings,
   setBaseUrl,
 } from './api.ts'
@@ -67,7 +68,12 @@ interface FromGuide {
   url?: string
   /** What was typed into the address field: a short address, a hostname or a URL. */
   host?: string
-  patch?: { groqApiKey?: string | null; sttLang?: string | null; sttPrompt?: string | null }
+  patch?: {
+    groqApiKey?: string | null
+    sttLang?: string | null
+    sttBias?: 'on' | 'off' | null
+    sttModel?: string | null
+  }
 }
 
 function reason(err: unknown): string {
@@ -234,6 +240,18 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
           reply({ type: 'hrdle:settings', view: await putGlassesSettings(data.patch ?? {}) })
         } catch (err) {
           reply({ type: 'hrdle:settings', error: reason(err) })
+        }
+        break
+
+      // What a transcription would actually send (#255). The guide cannot ask
+      // the server itself - it is a public origin and a tailnet address is
+      // inside CGNAT space, which Private Network Access refuses whatever CORS
+      // says - so every request it makes comes through here.
+      case 'hrdle:stt-preview':
+        try {
+          reply({ type: 'hrdle:stt-preview-result', preview: await getSttPreview() })
+        } catch (err) {
+          reply({ type: 'hrdle:stt-preview-result', error: reason(err) })
         }
         break
     }

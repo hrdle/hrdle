@@ -77,13 +77,15 @@ const EN: Table = {
   'settings.model': 'Transcription model',
   'settings.modelSaved': 'Saved here.',
   'settings.modelDefault': 'Server default ({model}). Pick one to change it.',
-  'settings.prompt': 'Shared vocabulary',
-  'settings.promptSave': 'Save words',
-  'settings.promptReset': 'Clear',
-  'settings.promptOff': 'No vocabulary is sent at all (this is set to `off`).',
-  'settings.promptEnv': 'Replaced by HRDLE_STT_PROMPT in the server environment.',
-  'settings.promptComposed':
-    'These words are sent with every transcription, ahead of the glossary. A session adds its own words in front of them.',
+  'settings.bias': 'Vocabulary',
+  'settings.biasToggle': 'Tell Whisper which words to expect',
+  'settings.biasNone': '(nothing is sent)',
+  'settings.biasOff': 'Off. Speech is transcribed with no vocabulary to go on.',
+  'settings.biasEnvOff':
+    'Switched off by HRDLE_STT_PROMPT=off in the server environment. That is not something this screen can switch back on.',
+  'settings.biasEnv': 'Replaced by HRDLE_STT_PROMPT in the server environment.',
+  'settings.biasComposed':
+    'Sent with every transcription. A session speaking adds its own words in front of these - set those with `hrdle stt-prompt` in it, or from its settings.',
   'settings.failed': 'Failed: {error}',
 
   // The demo, which is a tutorial: every string is a caption for the thing it
@@ -159,13 +161,15 @@ const JA: Table = {
   'settings.model': '文字起こしモデル',
   'settings.modelSaved': 'ここに保存されています。',
   'settings.modelDefault': 'サーバーの既定値 ({model})。変更するには選んでください。',
-  'settings.prompt': '共通の語彙',
-  'settings.promptSave': '語彙を保存',
-  'settings.promptReset': '消す',
-  'settings.promptOff': '語彙を送らない設定（off）になっています。',
-  'settings.promptEnv': 'サーバー環境変数の HRDLE_STT_PROMPT で置き換えられています。',
-  'settings.promptComposed':
-    'ここの語を毎回の音声認識に、用語集より先に送っています。セッション独自の語はさらにその前に付きます。',
+  'settings.bias': '語彙',
+  'settings.biasToggle': '出てくる語を音声認識に伝える',
+  'settings.biasNone': '（何も送られません）',
+  'settings.biasOff': 'オフ。語彙の手がかりなしで文字起こしします。',
+  'settings.biasEnvOff':
+    'サーバー環境変数の HRDLE_STT_PROMPT=off でオフになっています。この画面から戻すことはできません。',
+  'settings.biasEnv': 'サーバー環境変数の HRDLE_STT_PROMPT で置き換えられています。',
+  'settings.biasComposed':
+    '毎回の文字起こしに送られます。話しかけるセッション自身の語はこの前に付きます（そのセッションで `hrdle stt-prompt`、または設定から）。',
   'settings.failed': '失敗しました: {error}',
 
   // The demo. Japanese is full-width, so each of these has half the room the
