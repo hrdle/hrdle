@@ -11,7 +11,13 @@
 // key itself; what it can say about the key is whether one is set and where it
 // came from.
 
-import { getGlassesSettings, putGlassesSettings, type GlassesSettingsView } from './api.ts'
+import {
+  getGlassesSettings,
+  getSttPreview,
+  putGlassesSettings,
+  type GlassesSettingsView,
+  type SttRequestPreview,
+} from './api.ts'
 import { t } from './i18n.ts'
 
 /** Languages offered. `auto` sends none and lets Whisper detect it. */
@@ -37,6 +43,12 @@ const S = {
   btnGhost:
     'padding:10px 14px;border-radius:8px;border:1px solid #444;background:transparent;color:#aaa;font-size:13px;cursor:pointer;',
   status: 'font-size:12px;color:#888;margin-top:8px;min-height:16px;',
+  toggle:
+    'display:flex;align-items:center;gap:8px;font-size:14px;color:#eee;margin-top:4px;cursor:pointer;',
+  // The line as it goes out: read-only, wrapping, and monospaced so a term cut
+  // by the budget is visible as a term rather than as prose.
+  preview:
+    'margin-top:8px;padding:10px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#bbb;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-word;',
 }
 
 /** Markup for the panel. Mount it wherever, then call `wireSettingsPanel()`. */
@@ -66,13 +78,16 @@ export function settingsPanelHtml(): string {
       <select id="stt-model" style="${S.input}"></select>
       <div id="stt-model-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="stt-prompt">${t('settings.prompt')}</label>
-      <textarea id="stt-prompt" rows="4" style="${S.input};font-family:inherit;resize:vertical;"></textarea>
-      <div style="${S.row}">
-        <button type="button" id="stt-prompt-save" style="${S.btn}">${t('settings.promptSave')}</button>
-        <button type="button" id="stt-prompt-reset" style="${S.btnGhost}">${t('settings.promptReset')}</button>
-      </div>
-      <div id="stt-prompt-status" style="${S.status}"></div>
+      <span style="${S.label}">${t('settings.bias')}</span>
+      <label style="${S.toggle}">
+        <input type="checkbox" id="stt-bias" />
+        <span>${t('settings.biasToggle')}</span>
+      </label>
+      <!-- Not an editor: the line comes from the same call the transcription
+           makes, so what is shown is what is sent (#255). With no session
+           named, that is the glossary every session shares. -->
+      <div id="stt-bias-preview" style="${S.preview}"></div>
+      <div id="stt-bias-status" style="${S.status}"></div>
     </div>
   `
 }
@@ -86,10 +101,21 @@ function describeKey(v: GlassesSettingsView): string {
   return v.apiKeySource === 'env' ? t('settings.keyEnv') : t('settings.keySaved')
 }
 
-function describePrompt(v: GlassesSettingsView): string {
-  if (v.sttPromptSource === 'off') return t('settings.promptOff')
-  if (v.sttPromptSource === 'env') return t('settings.promptEnv')
-  return t('settings.promptComposed')
+/**
+ * What the line below the switch is, said from the preview rather than guessed.
+ *
+ * The three cases are the three the resolver reports, and they are not the same
+ * sentence: `off` means nothing is sent, `env` means the server was handed a
+ * line to send instead, and `composed` means this is the shared part of one -
+ * a session speaking adds its own words in front of it.
+ */
+function describeBias(p: SttRequestPreview, v: GlassesSettingsView | null): string {
+  // Off *and* not by this screen's doing: a disabled switch with no reason
+  // beside it is the same unexplained silence #210 was.
+  if (p.promptSource === 'off' && v?.sttBiasSource === 'env') return t('settings.biasEnvOff')
+  if (p.promptSource === 'off') return t('settings.biasOff')
+  if (p.promptSource === 'env') return t('settings.biasEnv')
+  return t('settings.biasComposed')
 }
 
 /**
@@ -103,15 +129,21 @@ export async function wireSettingsPanel(): Promise<void> {
   const key = el<HTMLInputElement>('stt-key')
   const lang = el<HTMLSelectElement>('stt-lang')
   const model = el<HTMLSelectElement>('stt-model')
-  const prompt = el<HTMLTextAreaElement>('stt-prompt')
-  if (!key || !lang || !model || !prompt) return
+  const bias = el<HTMLInputElement>('stt-bias')
+  if (!key || !lang || !model || !bias) return
 
   const keyStatus = el('stt-key-status')
   const langStatus = el('stt-lang-status')
   const modelStatus = el('stt-model-status')
-  const promptStatus = el('stt-prompt-status')
+  const biasStatus = el('stt-bias-status')
+  const biasPreview = el('stt-bias-preview')
+
+  // The last view, for the one thing the preview cannot say on its own: why it
+  // is off. `off` looks the same from down there whoever switched it.
+  let current: GlassesSettingsView | null = null
 
   const render = (v: GlassesSettingsView) => {
+    current = v
     key.value = ''
     key.placeholder = v.hasApiKey ? t('settings.keyPlaceholderSet') : 'gsk_...'
     if (keyStatus) keyStatus.textContent = describeKey(v)
@@ -138,11 +170,27 @@ export async function wireSettingsPanel(): Promise<void> {
           : t('settings.modelDefault', { model: v.sttModel })
     }
 
-    prompt.value = v.sttPrompt
-    // The whole line as the placeholder: an empty box is not an empty prompt,
-    // and this is what would go out right now with these words folded in.
-    prompt.placeholder = v.effectivePrompt || 'off'
-    if (promptStatus) promptStatus.textContent = describePrompt(v)
+    bias.checked = v.sttBias
+    // `HRDLE_STT_PROMPT=off` is a decision made at the process level and this
+    // screen cannot undo it, so the switch says so rather than pretending.
+    bias.disabled = v.sttBiasSource === 'env'
+  }
+
+  /**
+   * The line itself, asked of the server after every change.
+   *
+   * A second request rather than a field on the settings response, because it
+   * is a different question: this one has an answer per session, and the
+   * settings screen is asking the no-session case of it.
+   */
+  const renderPreview = async () => {
+    try {
+      const preview = await getSttPreview()
+      if (biasPreview) biasPreview.textContent = preview.prompt || t('settings.biasNone')
+      if (biasStatus) biasStatus.textContent = describeBias(preview, current)
+    } catch (err) {
+      fail(biasStatus, err)
+    }
   }
 
   const fail = (node: HTMLElement | null, err: unknown) => {
@@ -159,6 +207,7 @@ export async function wireSettingsPanel(): Promise<void> {
     fail(keyStatus, err)
     return
   }
+  await renderPreview()
 
   el('stt-key-save')?.addEventListener('click', async () => {
     if (!key.value.trim()) {
@@ -196,19 +245,12 @@ export async function wireSettingsPanel(): Promise<void> {
     }
   })
 
-  el('stt-prompt-save')?.addEventListener('click', async () => {
+  bias.addEventListener('change', async () => {
     try {
-      render(await putGlassesSettings({ sttPrompt: prompt.value }))
+      render(await putGlassesSettings({ sttBias: bias.checked ? 'on' : 'off' }))
+      await renderPreview()
     } catch (err) {
-      fail(promptStatus, err)
-    }
-  })
-
-  el('stt-prompt-reset')?.addEventListener('click', async () => {
-    try {
-      render(await putGlassesSettings({ sttPrompt: null }))
-    } catch (err) {
-      fail(promptStatus, err)
+      fail(biasStatus, err)
     }
   })
 }

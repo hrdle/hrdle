@@ -158,31 +158,74 @@ export async function dismissRelayItem(id: string): Promise<void> {
   if (!res.ok) throw new Error(`dismiss ${res.status}`)
 }
 
-/** What the settings screen may see. The Groq key is write-only, so it is not here. */
+/**
+ * What the settings screen may see. The Groq key is write-only, so it is not here.
+ *
+ * Nor is the prompt that would be sent: this screen has no session, so it never
+ * had one to show. Ask `getSttPreview()` for that (#255).
+ */
 export interface GlassesSettingsView {
   hasApiKey: boolean
   apiKeySource: 'setting' | 'env' | 'none'
   sttLang: string
   sttLangSource: 'setting' | 'default'
-  sttPrompt: string
-  /** What is saved here joins the composed line rather than replacing it (#210). */
-  sttPromptSource: 'composed' | 'env' | 'off'
-  effectivePrompt: string
+  /** Whether a vocabulary prompt is sent at all. */
+  sttBias: boolean
+  /** `env` is `HRDLE_STT_PROMPT=off`, which this screen cannot switch back on. */
+  sttBiasSource: 'setting' | 'env' | 'default'
   sttModel: string
   sttModelSource: 'setting' | 'default'
   /** Every model the server will accept, so this app need not hardcode them. */
   sttModels: string[]
 }
 
+/**
+ * What a transcription would carry, for a session and a language (#255).
+ *
+ * The same object the transcription itself resolves, so this is the answer to
+ * "what is being sent right now" rather than a second guess at it.
+ */
+export interface SttRequestPreview {
+  model: string
+  modelSource: 'setting' | 'default'
+  /** `null` sends no language and lets Whisper detect it. */
+  language: string | null
+  languageSource: 'request' | 'setting' | 'default'
+  /** `null` sends no vocabulary prompt at all. */
+  prompt: string | null
+  promptSource: 'composed' | 'env' | 'off'
+  promptComposition: {
+    prompt: string
+    groups: Array<{
+      name: 'session' | 'glossary'
+      budget: number
+      taken: string[]
+      skipped: Array<{ term: string; reason: 'budget' | 'duplicate' }>
+    }>
+    usedChars: number
+    maxChars: number
+  } | null
+  sessionId: string | null
+}
+
 export function getGlassesSettings(): Promise<GlassesSettingsView> {
   return fetchJson('/api/glasses/settings')
+}
+
+/** What would be sent with an utterance from `session`, right now. */
+export function getSttPreview(session?: string, lang?: string): Promise<SttRequestPreview> {
+  const query = new URLSearchParams()
+  if (session) query.set('session', session)
+  if (lang) query.set('lang', lang)
+  const suffix = query.toString()
+  return fetchJson(`/api/glasses/stt-preview${suffix ? `?${suffix}` : ''}`)
 }
 
 /** Patch the settings. `null` clears a field; omitting it leaves that one alone. */
 export async function putGlassesSettings(patch: {
   groqApiKey?: string | null
   sttLang?: string | null
-  sttPrompt?: string | null
+  sttBias?: 'on' | 'off' | null
   sttModel?: string | null
 }): Promise<GlassesSettingsView> {
   const res = await fetch(`${baseUrl}/api/glasses/settings`, {
