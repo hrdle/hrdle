@@ -894,8 +894,10 @@ function SplitContainer({
 
 	// Touch fallback for devices that don't support pointer capture well
 	const handleTouchStart = useCallback(
-		(index: number) => (e: React.TouchEvent) => {
-			e.preventDefault();
+		(index: number) => () => {
+			// No preventDefault: React registers `touchstart` passively, so it is
+			// ignored and only produces a console violation. The `touchAction:
+			// "none"` on this element is what keeps the drag from scrolling.
 			setIsDragging(index);
 			draggingRef.current = index;
 			dragStateChangeRef.current?.(true);

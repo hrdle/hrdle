@@ -122,7 +122,9 @@ export const SelectionOverlay = memo(function SelectionOverlay({
 								}}
 								onTouchStart={(e) => {
 									e.stopPropagation();
-									e.preventDefault();
+									// No preventDefault: React registers `touchstart` passively,
+									// so it is ignored. `touch-none` above is what stops the drag
+									// from scrolling the page.
 									onHandleTouchDragStart(e, "start");
 								}}
 								onMouseDown={(e) => {
@@ -151,7 +153,7 @@ export const SelectionOverlay = memo(function SelectionOverlay({
 								}}
 								onTouchStart={(e) => {
 									e.stopPropagation();
-									e.preventDefault();
+									// See the start handle above: passive, so this would be ignored.
 									onHandleTouchDragStart(e, "end");
 								}}
 								onMouseDown={(e) => {

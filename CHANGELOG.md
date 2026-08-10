@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Every tap on the virtual keyboard logged an error.** React registers
+  `touchstart` as a passive listener, so the `preventDefault()` the key handler
+  called was ignored and Chrome logged `Unable to preventDefault inside passive
+  event listener invocation.` each time. The keys now carry `touch-action: none`,
+  which is what actually stops a finger sliding off a key from scrolling the
+  page - the thing the ignored call had been there to do
+  - The same dead call is gone from the selection handles and the pane divider.
+    Both already had `touch-action: none` in CSS, so only the console noise was
+    real there
+  - `preventDefault()` on **mouse** down stays: it keeps a key from taking focus
+    away from whatever is being typed into. So does the one on `touchend`, which
+    is not passive, does work, and is the only thing suppressing the synthesized
+    mouse events that would otherwise send every character twice
+  - Found on a tablet over the Chrome DevTools Protocol. It never appeared in
+    `/tmp/hrdle-browser.log` because Chrome reports it through the Log domain
+    rather than as a page `console.error`, so the frontend's own log forwarding
+    could not see it
+
 ## [0.3.90] - 2026-08-11
 
 ### Fixed

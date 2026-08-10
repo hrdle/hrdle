@@ -266,7 +266,15 @@ export function Keyboard({
 	// Keyboard key component
 	const KeyboardKey = ({ keyDef }: { keyDef: KeyDef }) => {
 		const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
-			e.preventDefault();
+			// Not on touch: React registers `touchstart` passively, so calling
+			// preventDefault() there does nothing except make Chrome log
+			// "Unable to preventDefault inside passive event listener invocation."
+			// as an error on every key tap. `touch-none` on the button below is
+			// what actually stops the browser scrolling from a key.
+			//
+			// On mouse it still earns its place - it keeps the button from taking
+			// focus away from whatever is being typed into.
+			if (!("touches" in e)) e.preventDefault();
 			// Clear any existing timer (prevents duplicate from touch+mouse double-fire)
 			if (longPressTimerRef.current) {
 				clearTimeout(longPressTimerRef.current);
@@ -370,7 +378,7 @@ export function Keyboard({
 				onTouchCancel={handleCancel}
 				onContextMenu={(e) => e.preventDefault()}
 				className={`
-          ${compact ? "h-8 text-[11px]" : "h-[38px] text-[13px]"} font-medium select-none relative
+          ${compact ? "h-8 text-[11px]" : "h-[38px] text-[13px]"} font-medium select-none touch-none relative
           rounded-md m-0.5 flex items-center justify-center
           ${getBgColor()} ${getTextColor()}
           ${keyDef.type === "modifier" || keyDef.type === "layer" ? (compact ? "text-[9px]" : "text-[10px]") : ""}
