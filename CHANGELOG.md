@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The dashboard says which versions this machine is running, and whether they
+  are current** - Hrdle's own and herdr's, on every server card. Previously the
+  only version anywhere was a grey `v0.3.84` in a corner of the settings row,
+  and nothing at all said whether it was the published one (#259)
+  - herdr's newest release comes from the manifest herdr itself updates from
+    (`herdr.dev/latest.json`), cached six hours; Hrdle's from its own GitHub
+    releases, the same lookup `hrdle update --check` has always done
+  - An unreachable network reports the installed version and no verdict, rather
+    than claiming either answer
+
+### Fixed
+- **The "update herdr" button could never install anything.** It ran `herdr
+  update` while the server was still running, and herdr refuses to replace the
+  binary while any server answers its socket - by printing `Herdr was not
+  updated.` and **exiting 0**. So the button downloaded the release, discarded
+  it, restarted every pane PTY, and reported success. Measured on this machine:
+  fifteen workspaces and eighteen agents restarted, one of them mid-turn, to
+  install nothing (#260). The order is now stop, update, start
+  - The result is verified rather than inferred from an exit code: if the
+    version on disk did not move, the apply fails and shows what herdr actually
+    said
+  - **With nothing to install, nothing is restarted.** The old path ran the same
+    two commands on every press regardless
+- **A newer herdr no longer goes unmentioned.** The check compared the binary
+  against the running server and nothing else, so with both on the same old
+  version there was no warning and no button - which is exactly the state a
+  machine sits in between updates (#259)
+- **The terminal no longer looks hung after herdr restarts.** Every pane PTY is
+  re-created, and nothing told the browser: it kept showing the last frame of
+  processes that had ceased to exist, ignoring input, until someone reloaded the
+  page. The restart is announced while it happens and the panes are re-subscribed
+  when it ends (#261)
+
 ## [0.3.86] - 2026-08-10
 
 ### Changed

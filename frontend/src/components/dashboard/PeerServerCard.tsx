@@ -22,6 +22,7 @@ export function PeerServerCard({ peer }: PeerServerCardProps) {
 		diskUsage,
 		connectedClients,
 		herdrUpdate,
+		hrdleUpdate,
 		error,
 		refetch,
 	} = usePeerServerMetrics(peer.id);
@@ -63,6 +64,7 @@ export function PeerServerCard({ peer }: PeerServerCardProps) {
 				diskUsage={diskUsage}
 				hideThroughput={!isLocal}
 				herdrUpdate={herdrUpdate}
+				hrdleUpdate={hrdleUpdate}
 				allowHerdrApply={isLocal}
 				onHerdrApplied={refetch}
 			/>

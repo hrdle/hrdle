@@ -182,6 +182,13 @@
 		"herdrUpdateApplying": "更新中…",
 		"herdrUpdateManualHint": "herdr が systemd/launchd の管理下にないため、herdr サーバを手動で再起動してください。",
 		"herdrUpdateFailed": "更新に失敗しました: {{error}}",
+		"herdrRestartApply": "herdr を再起動",
+		"herdrReleaseTitle": "herdr {{version}} が公開されています",
+		"herdrReleaseVersions": "インストール済み {{installed}} → {{latest}}",
+		"herdrServerRunning": "(サーバ {{version}})",
+		"versionCurrent": "最新",
+		"versionOutdated": "{{latest}} あり",
+		"versionUnknown": "不明",
 		"opencodeUsage": "OpenCode 使用量",
 		"opencodeLast24h": "過去24時間",
 		"opencodeLast7d": "過去7日間",
@@ -300,7 +307,8 @@
 	"terminal": {
 		"connecting": "接続中...",
 		"disconnected": "切断されました",
-		"reconnect": "再接続"
+		"reconnect": "再接続",
+		"herdrRestarting": "herdr を再起動中 — ペインを張り直しています。エージェントの会話は自動で復元されます。"
 	},
 	"connection": {
 		"unreachable": "サーバーに接続できません",

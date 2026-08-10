@@ -11,6 +11,7 @@ import {
 	Unplug,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
 	paneIdFromLayout,
 	type PaneViewport,
@@ -407,6 +408,7 @@ export function DesktopLayout({
 	isTablet = false,
 	keyboardControlRef,
 }: DesktopLayoutProps) {
+	const { t } = useTranslation();
 	const terminalRefs = useRef<Map<string, TerminalRef | null>>(new Map());
 	const floatingKeyboardRef = useRef<FloatingKeyboardRef>(null);
 	const activePaneRef = useRef<string>("");
@@ -1839,6 +1841,16 @@ export function DesktopLayout({
 								</button>
 							</div>
 						</div>
+					</div>
+				)}
+
+				{/* Every pane PTY is being re-created; the terminals below are showing
+				    the last frame of processes that no longer exist. Saying so is the
+				    difference between a wait and a hang (#261). */}
+				{controlTerminal.herdrRestarting && (
+					<div className="shrink-0 px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/30 text-[11px] text-amber-200 flex items-center gap-2">
+						<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
+						{t("terminal.herdrRestarting")}
 					</div>
 				)}
 

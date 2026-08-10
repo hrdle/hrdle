@@ -184,6 +184,13 @@
 		"herdrUpdateApplying": "Updating…",
 		"herdrUpdateManualHint": "herdr isn't managed by systemd/launchd here, so restart the herdr server manually to apply.",
 		"herdrUpdateFailed": "Update failed: {{error}}",
+		"herdrRestartApply": "Restart herdr",
+		"herdrReleaseTitle": "herdr {{version}} is available",
+		"herdrReleaseVersions": "installed {{installed}} → {{latest}}",
+		"herdrServerRunning": "(server {{version}})",
+		"versionCurrent": "up to date",
+		"versionOutdated": "{{latest}} available",
+		"versionUnknown": "unknown",
 		"opencodeUsage": "OpenCode Usage",
 		"opencodeLast24h": "Last 24 hours",
 		"opencodeLast7d": "Last 7 days",
@@ -302,7 +309,8 @@
 	"terminal": {
 		"connecting": "Connecting...",
 		"disconnected": "Disconnected",
-		"reconnect": "Reconnect"
+		"reconnect": "Reconnect",
+		"herdrRestarting": "Restarting herdr — panes are being re-created. Agent conversations are restored automatically."
 	},
 	"connection": {
 		"unreachable": "Can't reach the server",

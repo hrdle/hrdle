@@ -905,6 +905,32 @@ export interface HerdrUpdateStatus {
   restartNeeded: boolean;
   /** True when herdr runs under systemd/launchd, so cchub can restart it. */
   canApply: boolean;
+  /**
+   * Newest stable release herdr publishes at `herdr.dev/latest.json`. Absent
+   * when the manifest could not be read — comparing versions we don't have
+   * would only produce a wrong answer confidently.
+   */
+  latestVersion?: string;
+  /**
+   * The published release is newer than the binary on disk (#259). Independent
+   * of `restartNeeded`: with binary and server on the same old version there is
+   * no skew to see, and this is the only thing that says an update exists.
+   */
+  updateAvailable?: boolean;
+}
+
+/**
+ * Whether cchub itself is current (#259). Reported beside herdr's so the
+ * dashboard answers "am I running the current thing?" for both halves of the
+ * stack, rather than only warning once something is already inconsistent.
+ */
+export interface HrdleUpdateStatus {
+  /** The running build. */
+  currentVersion: string;
+  /** Newest published release; absent when GitHub could not be reached. */
+  latestVersion?: string;
+  /** Absent (never false) when there is no `latestVersion` to compare against. */
+  updateAvailable?: boolean;
 }
 
 export interface DashboardResponse {
@@ -930,6 +956,7 @@ export interface DashboardResponse {
   diskUsage?: { total: number; used: number; available: number; mountpoint: string };
   connectedClients?: number;
   herdrUpdate?: HerdrUpdateStatus;
+  hrdleUpdate?: HrdleUpdateStatus;
   /** When this payload's slow parts were assembled. */
   generatedAt?: string;
   /**
@@ -1574,4 +1601,10 @@ export type MuxServerMessage =
   // when nothing is live, and again when the publisher disconnects, so a demo
   // audience sees "Disconnected" rather than a frozen screen.
   | { type: 'glasses-screen'; screen: GlassesScreen | null }
+  // The herdr server is being restarted by this host (#261). Every pane PTY is
+  // re-created, so the terminal a client is showing goes stale with no frame to
+  // announce it — the page just stops responding and reads as hung. `restored`
+  // is the cue to re-subscribe and ask for a fresh viewport rather than waiting
+  // for output that will never be prompted.
+  | { type: 'herdr-restart'; phase: 'restarting' | 'restored' | 'failed' }
   | (ControlServerMessage & { sessionId: string });

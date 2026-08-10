@@ -11,6 +11,7 @@ import { groqSttUsageService } from '../services/groq-stt-usage';
 import { UsageHistoryService } from '../services/usage-history';
 import { SystemMetricsService } from '../services/system-metrics';
 import { HerdrUpdateService } from '../services/herdr-update';
+import { hrdleUpdateService } from '../services/hrdle-update';
 import { getConnectedClientCount } from './terminal-mux';
 import { staleWhileRevalidate } from '../utils/stale-while-revalidate';
 import { VERSION } from '../cli';
@@ -83,7 +84,7 @@ export async function leg<T>(label: string, work: () => T | Promise<T>, fallback
 export async function buildDashboard(): Promise<DashboardResponse> {
   // The herdr skew check rides on this poll instead of its own timer (#393);
   // it is cached, so the extra spawn is far rarer than the request rate.
-  const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, groqSttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate] = await Promise.all([
+  const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, groqSttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate, hrdleUpdate] = await Promise.all([
     leg('anthropic usage', () => anthropicUsageService.getUsageLimits(), null),
     leg('codex usage', () => codexUsageService.getUsageLimits(), null),
     leg('grok usage', () => grokUsageService.getUsageSummary(), null),
@@ -98,6 +99,7 @@ export async function buildDashboard(): Promise<DashboardResponse> {
     leg('system metrics', () => systemMetricsService.getMetrics(), undefined),
     leg('disk usage', () => getDiskUsage(), null),
     leg('herdr update', () => herdrUpdateService.getStatus(), undefined),
+    leg('hrdle update', () => hrdleUpdateService.getStatus(), undefined),
   ]);
 
   // Record snapshot for history
@@ -128,6 +130,7 @@ export async function buildDashboard(): Promise<DashboardResponse> {
     diskUsage: diskUsage || undefined,
     connectedClients: getConnectedClientCount(),
     herdrUpdate,
+    hrdleUpdate,
     generatedAt: new Date().toISOString(),
   };
 }
