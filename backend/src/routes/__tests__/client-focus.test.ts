@@ -9,34 +9,41 @@ import { applySubscribeFocus, pickClientFocus, type MuxData } from '../terminal-
  * loses it.
  */
 
+/** Any clock will do; the code only ever reads differences from it. */
+const NOW = 1_000_000;
+
 function client(over: Partial<MuxData> = {}): MuxData {
   return {
     deviceType: 'desktop',
     visible: true,
     focusSessionId: 's1',
     focusAt: 1,
+    lastPingAt: NOW,
     ...over,
   } as MuxData;
 }
 
 describe('pickClientFocus', () => {
   test('the visible client that claimed most recently wins', () => {
-    const focus = pickClientFocus([
-      client({ focusSessionId: 'old', focusAt: 1 }),
-      client({ focusSessionId: 'new', focusAt: 2, deviceType: 'mobile' }),
-    ]);
+    const focus = pickClientFocus(
+      [
+        client({ focusSessionId: 'old', focusAt: 1 }),
+        client({ focusSessionId: 'new', focusAt: 2, deviceType: 'mobile' }),
+      ],
+      NOW,
+    );
     expect(focus).toEqual({ sessionId: 'new', deviceType: 'mobile', at: 2 });
   });
 
   test('a pocketed or undeclared client claims nothing', () => {
-    expect(pickClientFocus([client({ visible: false })])).toBeUndefined();
-    expect(pickClientFocus([client({ visible: undefined })])).toBeUndefined();
-    expect(pickClientFocus([client({ deviceType: undefined })])).toBeUndefined();
+    expect(pickClientFocus([client({ visible: false })], NOW)).toBeUndefined();
+    expect(pickClientFocus([client({ visible: undefined })], NOW)).toBeUndefined();
+    expect(pickClientFocus([client({ deviceType: undefined })], NOW)).toBeUndefined();
   });
 
   /** Following its own focus would be a feedback loop. */
   test('the glasses do not claim the focus they follow', () => {
-    expect(pickClientFocus([client({ isGlasses: true } as Partial<MuxData>)])).toBeUndefined();
+    expect(pickClientFocus([client({ isGlasses: true } as Partial<MuxData>)], NOW)).toBeUndefined();
   });
 
   /**
@@ -47,14 +54,17 @@ describe('pickClientFocus', () => {
    * recording, with every gesture of their own somewhere else.
    */
   test('a driven browser claims nothing', () => {
-    expect(pickClientFocus([client({ automated: true })])).toBeUndefined();
+    expect(pickClientFocus([client({ automated: true })], NOW)).toBeUndefined();
   });
 
   test('and does not outbid a real one by being newer', () => {
-    const focus = pickClientFocus([
-      client({ focusSessionId: 'phone', focusAt: 1, deviceType: 'mobile' }),
-      client({ focusSessionId: 'robot', focusAt: 99, automated: true }),
-    ]);
+    const focus = pickClientFocus(
+      [
+        client({ focusSessionId: 'phone', focusAt: 1, deviceType: 'mobile' }),
+        client({ focusSessionId: 'robot', focusAt: 99, automated: true }),
+      ],
+      NOW,
+    );
     expect(focus?.sessionId).toBe('phone');
   });
 
@@ -63,11 +73,50 @@ describe('pickClientFocus', () => {
    * excluded - the device type says where you are, not whether you are there.
    */
   test('a desktop is followed like any other screen', () => {
-    expect(pickClientFocus([client({ deviceType: 'desktop' })])?.deviceType).toBe('desktop');
+    expect(pickClientFocus([client({ deviceType: 'desktop' })], NOW)?.deviceType).toBe('desktop');
   });
 
   test('nobody connected means nobody to follow', () => {
-    expect(pickClientFocus([])).toBeUndefined();
+    expect(pickClientFocus([], NOW)).toBeUndefined();
+  });
+});
+
+/**
+ * A lid closing does not clear `visible`, and the socket outlives the machine
+ * being awake by up to 90 seconds. Measured on 2026-08-10: a Mac woke, its
+ * restored tab claimed w4H, and 51 seconds later the G2 left the conversation
+ * the wearer was reading for a workspace finished days before - 17 such claims
+ * that day, some at 00:08 and 01:19, all from a shut lid.
+ */
+describe('a claim needs a heartbeat behind it', () => {
+  test('a client that stopped pinging drops out of the election', () => {
+    const asleep = client({ lastPingAt: NOW - 26_000 });
+    expect(pickClientFocus([asleep], NOW)).toBeUndefined();
+  });
+
+  test('and cannot outbid a live client by having claimed later', () => {
+    const focus = pickClientFocus(
+      [
+        client({ focusSessionId: 'phone', focusAt: 1, deviceType: 'mobile' }),
+        client({ focusSessionId: 'asleep', focusAt: 99, lastPingAt: NOW - 60_000 }),
+      ],
+      NOW,
+    );
+    expect(focus?.sessionId).toBe('phone');
+  });
+
+  /** Two missed beats is the budget; one is ordinary jitter. */
+  test('a beat late is still someone at the screen', () => {
+    expect(pickClientFocus([client({ lastPingAt: NOW - 11_000 })], NOW)?.sessionId).toBe('s1');
+  });
+
+  /**
+   * The claim itself is not what goes stale. A client that opened a session an
+   * hour ago and has been pinging ever since is a screen someone is at.
+   */
+  test('an old claim from a client still present is followed', () => {
+    const focus = pickClientFocus([client({ focusAt: NOW - 3_600_000 })], NOW);
+    expect(focus?.sessionId).toBe('s1');
   });
 });
 
@@ -97,6 +146,6 @@ describe('a reconnect is not a person', () => {
     const tablet = { focusSessionId: 'w54', focusAt: 100, deviceType: 'tablet' as const, visible: true };
     const phone = { focusSessionId: 'w66', focusAt: 200, deviceType: 'mobile' as const, visible: true };
     applySubscribeFocus(tablet, { sessionId: 'w54', resumed: true }, 999);
-    expect(pickClientFocus([client(tablet), client(phone)])?.sessionId).toBe('w66');
+    expect(pickClientFocus([client(tablet), client(phone)], NOW)?.sessionId).toBe('w66');
   });
 });

@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.88] - 2026-08-10
+
 ### Fixed
+- **The glasses no longer follow a laptop that is asleep.** A client's `visible`
+  flag is its own word for "a person is looking at this", and a closed lid keeps
+  saying it: the restored tab stays foregrounded and the claim stands until the
+  socket is reaped, which is a 60s timeout checked every 30s. Measured on
+  2026-08-10 from the screen recording: a Mac woke for a few seconds, its
+  restored tab claimed a workspace finished days earlier, and 51 seconds later -
+  13 seconds after the wearer last touched the glasses - the G2 left the
+  conversation being read for it. The same claim landed 17 times that day and 53
+  times on 2026-08-08, at 00:08 and 01:19 among them, from a lid that was shut
+  throughout. A claim now needs a ping within 25s behind it; clients ping every
+  10s, so a screen someone is at keeps its place and the next ping restores one
+  that lapsed
 - **A multi-question AskUserQuestion no longer collapses the glasses picker**
   (#267). The waiting item's choices now come from the agent's own record for
   Claude and kimi panes: the options as the call wrote them, in the pane's own

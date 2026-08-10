@@ -147,11 +147,37 @@ export function applySubscribeFocus(
   if (!msg.resumed) data.focusAt = now;
 }
 
-export function pickClientFocus(clients: MuxData[]): ClientFocus | undefined {
+/**
+ * How long a claim outlives the heartbeat behind it.
+ *
+ * `visible` is the client's own word for "a person is looking at this", and a
+ * sleeping laptop keeps saying it: the lid closes, the restored tab stays
+ * foregrounded, and the claim stands until the socket is reaped. Reaping is a
+ * 60s timeout checked every 30s, so that is up to 90 seconds in which a machine
+ * nobody is near wins the election.
+ *
+ * Measured on 2026-08-10: a Mac woke for a few seconds, its restored tab
+ * claimed w4H, and 51 seconds later - still inside the reaping window, 13
+ * seconds after the wearer last touched the glasses - the G2 left the
+ * conversation being read for a workspace finished days earlier. That same
+ * claim landed 17 times that day and 53 times on 2026-08-08, at 00:08 and
+ * 01:19 among them, from a lid that was shut the whole time.
+ *
+ * Clients ping every 10s (PING_INTERVAL_MS in useMultiplexedTerminal.ts), so
+ * this drops one after two missed beats with room for jitter. It removes them
+ * from the election only - the connection is still theirs to use, and the next
+ * ping puts them straight back in.
+ */
+const FOCUS_HEARTBEAT_MS = 25_000;
+
+export function pickClientFocus(clients: MuxData[], now: number): ClientFocus | undefined {
   let best: MuxData | undefined;
   for (const d of clients) {
     // The glasses follow focus; letting them claim it would be a feedback loop.
     if (d.isGlasses) continue;
+    // A screen that stopped saying it is there is not one anyone is looking at,
+    // whatever its last `visible` said.
+    if (now - d.lastPingAt > FOCUS_HEARTBEAT_MS) continue;
     // Focus means "the screen a person is looking at", and a driven browser is
     // not one. This machine runs several agents that open the web UI headlessly
     // to take screenshots; each claimed the focus, and a wearer reading a
@@ -167,7 +193,7 @@ export function pickClientFocus(clients: MuxData[]): ClientFocus | undefined {
 }
 
 function computeClientFocus(): ClientFocus | undefined {
-  return pickClientFocus([...activeMuxConnections].map((ws) => ws.data));
+  return pickClientFocus([...activeMuxConnections].map((ws) => ws.data), Date.now());
 }
 
 /** Last broadcast focus, so a re-election that lands on the same session
