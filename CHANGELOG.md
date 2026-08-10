@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.92] - 2026-08-11
+
 ### Added
 - **A transcription is now recorded with the model and the vocabulary prompt
   that produced it.** The screen recording is the only measurement of speech
