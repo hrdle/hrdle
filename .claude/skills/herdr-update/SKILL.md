@@ -42,9 +42,16 @@ A restart **recreates every pane's PTY**.
 - Agent conversations come back (confirm `resume_agents_on_restore = true` in
   `~/.config/herdr/config.toml`)
 - **A running command does not come back**
-- Workspace ids change (labels are preserved)
+- Workspace ids *may* change (labels are preserved). They did on 2026-07-30
+  (`w4W` -> `w53` -> `w54`); across both restarts on 2026-08-10 they were
+  preserved. Record them and check rather than assuming either way
 - **If you are inside one of those panes, you are restarted too.** Write down
   what matters before running it
+- Expect some attrition among panes that were only *records* of an agent. After
+  the 0.8.0 upgrade, `w5C` closed itself (`workspace.close` in herdr's log) and
+  `w68` came back with only a shell — both had held agents already sitting at
+  `revision: 0` with no `foreground_cwd`, i.e. restored session ids rather than
+  live processes
 
 ### 2. Record the state first
 
@@ -58,26 +65,76 @@ herdr agent list                         # agent count and native session ids
 grep resume_agents_on_restore ~/.config/herdr/config.toml
 ```
 
-### 3. Apply it through hrdle
+### 3. Stop, update, start — in that order
+
+**`herdr update` refuses to swap the binary while a server is running, and exits
+0 while refusing.** Measured 2026-08-10:
+
+```
+checking stable channel for updates...
+running herdr targets:
+  /home/m0a/.config/herdr/herdr.sock: server v0.7.5
+  update: 0.8.0
+
+downloading 0.8.0...
+downloaded 0.8.0
+Herdr was not updated.
+Stop running Herdr sessions when ready, then run `herdr update` again.
+```
+
+So the server has to be down for the swap, and the three steps have to run from
+**outside** the panes they are taking down — the first one kills the shell that
+issued it. A transient systemd unit outlives them:
+
+```bash
+systemd-run --user --unit=herdr-upgrade --collect --service-type=oneshot \
+  /path/to/upgrade.sh
+```
+
+with the script doing, and logging to a file that survives the pane:
+
+```bash
+systemctl --user stop herdr
+herdr update                             # expect "installed <version>"
+herdr --version                          # verify before starting back up
+systemctl --user start herdr
+herdr status server
+```
+
+`herdr update` from inside a pane is refused outright on `HERDR_ENV`
+(`update failed: run 'herdr update' outside herdr after detaching from the
+session`). Under `systemd-run` the environment is already clean; running it by
+hand from a pane needs `env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u
+HERDR_WORKSPACE_ID`.
+
+### 3a. Or the apply button — but check which version of hrdle is running
 
 ```bash
 curl -sk -X POST https://localhost:5924/api/herdr/apply-update
 ```
 
-The dashboard button in the web UI does the same thing. Under systemd it runs
-`herdr update` and then `systemctl --user restart herdr`, and a failed
-`herdr update` never reaches the restart (`buildHerdrApplyCommands` in
-`services/herdr-update.ts`).
+The dashboard button does the same thing. It does the stop/update/start above,
+verifies the version actually moved, and restarts nothing when there is nothing
+to install. It also now reports that a new herdr exists at all, which is what
+makes the button appear.
 
-**This is the only correct route.** hrdle's server process lives outside herdr,
-so `herdr update` is allowed there. Run from inside a pane it is refused (see
-below).
-
-With `canApply: false` the button does not appear. Look at `herdrUpdate` in
-`GET /api/dashboard`:
+**Before that fix (hrdle#259, #260) it did none of those things.** On an older
+hrdle the endpoint runs `herdr update` *first* and restarts herdr *after*, so it
+always hits the refusal above, always exits 0, and reports success while
+restarting every pane PTY for nothing — on 2026-08-10 that cost fifteen
+workspaces and eighteen agents a restart, one of them mid-turn, and left the
+version exactly where it was. And with binary and server on the same old version
+there was no skew to see, so nothing appeared at all:
 
 ```json
 {"binaryVersion":"0.7.5","serverVersion":"0.7.5","restartNeeded":false,"canApply":false}
+```
+
+So on an older hrdle, use section 3 and treat a 200 from this endpoint as
+meaningless. What is actually available is one request away, unauthenticated:
+
+```bash
+curl -s https://herdr.dev/latest.json | jq '{version, protocol}'
 ```
 
 ### 4. Confirm the restore
@@ -88,11 +145,38 @@ herdr agent list                         # the count matches what was recorded
 curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'
 ```
 
+When the restart went through hrdle's own endpoint, connected browsers are told
+(`herdr-restart` over `/ws/mux`) and re-subscribe when it ends. **A restart done
+any other way — including the stop/update/start in section 3 — says nothing**,
+so the browser keeps showing the pane it was watching, with no output and no
+response to input, which reads as a hung page (hrdle#261). Tell the user to
+reload; the backend is fine by then.
+
+### 5. Update the integrations it asks for
+
+`herdr update` ends by naming the integrations its new version outgrew:
+
+```
+installed herdr integrations need updating; run herdr integration install codex and herdr integration install kimi.
+```
+
+Do it — a stale integration degrades agent status reporting silently, which is
+the kind of failure nobody attributes to the update weeks later.
+
+```bash
+herdr integration status                 # per agent: current / outdated / not installed
+herdr integration install codex
+herdr integration install kimi
+```
+
 ## What not to do
 
 - **`herdr update` from inside a pane** — refused with `update failed: run
   'herdr update' outside herdr after detaching from the session`. An agent is
   normally inside a pane
+- **`herdr update` with the server still up** — it downloads, discards, prints
+  `Herdr was not updated.` and **exits 0**. Never trust its exit code; compare
+  `herdr --version` before and after
 - **`herdr update --handoff`** — `CLAUDE.md` forbids it explicitly. A handed-over
   server is not supervised
 - **Replacing the binary by hand** (`gh release download` then `mv`) — this is
@@ -104,16 +188,23 @@ curl -sk https://localhost:5924/api/sessions | jq '.sessions | length'
 ## When a specific version is needed
 
 `herdr update` moves to the latest stable. For a preview or a specific version,
-`gh release list --repo ogulcancelik/herdr` shows what exists, but **a manual
-swap is to be avoided for the reason above**. Check first whether herdr itself
-offers a way to switch channels (`herdr update --help` only shows `[--handoff]`,
-so a channel would be somewhere else).
+`gh release list --repo herdrdev/herdr` shows what exists (the GitHub org moved
+from `ogulcancelik` to `herdrdev` in 0.8.0; the old paths still redirect), but
+**a manual swap is to be avoided for the reason above**. Check first whether
+herdr itself offers a way to switch channels (`herdr update --help` only shows
+`[--handoff]`, so a channel would be somewhere else) — the binary does know
+about a preview channel, `https://herdr.dev/preview.json`.
 
 ## Related
 
 - Do not judge whether a fix is in from a release date; compare it against the
-  issue's creation date. [herdr#1789](https://github.com/ogulcancelik/herdr/issues/1789),
+  issue's creation date. [herdr#1789](https://github.com/herdrdev/herdr/issues/1789),
   reported on 2026-07-23, is not in v0.7.5 (released 2026-07-21), and it still
-  reproduced after updating to v0.7.5 (measured)
+  reproduced after updating to v0.7.5 (measured). It is listed as fixed in
+  v0.8.0
+- The three hrdle-side defects this procedure works around: hrdle#259 (no
+  detection of an available release), hrdle#260 (the apply command order can
+  never install), hrdle#261 (the UI needs a manual reload afterwards). When
+  those land, section 3a is the part that changes
 - Driving herdr itself is the `herdr` skill (`~/.claude/skills/herdr/` — that is
   herdr's own repository, so do not write to it)

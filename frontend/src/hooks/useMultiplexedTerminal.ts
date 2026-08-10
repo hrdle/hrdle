@@ -40,6 +40,12 @@ interface UseMultiplexedTerminalOptions {
 
 interface UseMultiplexedTerminalReturn {
 	isConnected: boolean;
+	/**
+	 * This host is restarting herdr and every pane PTY with it (#261). The socket
+	 * stays up throughout, so without this the UI has no way to tell that the
+	 * terminal it is showing has stopped being live.
+	 */
+	herdrRestarting: boolean;
 	connect: () => void;
 	disconnect: () => void;
 	sendInput: (paneId: string, data: string) => void;
@@ -172,6 +178,7 @@ type MuxCallbacks = {
 	onDisconnect?: () => void;
 	onSessionExit?: (reason: string) => void;
 	onError?: (error: string, paneId?: string) => void;
+	onHerdrRestart?: (phase: "restarting" | "restored" | "failed") => void;
 	setIsConnected?: (v: boolean) => void;
 	sessionId: string;
 	sessionInstanceId?: string;
@@ -397,6 +404,25 @@ function ensureConnection(token?: string | null, wsBase?: string | null) {
 				// per peer including the Hub itself), so the terminal sharedWs ignores
 				// these pushes to avoid double-updating the cache.
 				break;
+			// This host is restarting herdr, so every pane PTY is being re-created
+			// under us (#261). The socket survives, which is exactly the problem: no
+			// frame ever arrives to say the terminal on screen is now a corpse, so
+			// the page reads as hung until someone reloads it.
+			case "herdr-restart": {
+				const phase = msg.phase as "restarting" | "restored" | "failed";
+				cb?.onHerdrRestart?.(phase);
+				if (phase === "restarting") break;
+				// Re-subscribe against the panes that exist now and pull a fresh
+				// viewport, rather than waiting for output nothing will prompt.
+				if (currentSession) {
+					subscribeToSession(currentSession, cb?.sessionInstanceId, true);
+				}
+				for (const sid of subscribedConversations) {
+					pendingConversationSubs.add(sid);
+				}
+				flushConversationPending();
+				break;
+			}
 			case "viewport": {
 				if (msgSessionId !== currentSession) return;
 				const viewport = msg.viewport as PaneViewport;
@@ -588,6 +614,8 @@ export function useMultiplexedTerminal(
 ): UseMultiplexedTerminalReturn {
 	const { sessionId, sessionInstanceId, token, peerWsBase } = options;
 	const [isConnected, setIsConnected] = useState(false);
+	/** True between this host's `herdr restarting` and `restored` broadcasts (#261). */
+	const [herdrRestarting, setHerdrRestarting] = useState(false);
 
 	const onPaneViewportRef = useRef(options.onPaneViewport);
 	const onLayoutChangeRef = useRef(options.onLayoutChange);
@@ -615,6 +643,7 @@ export function useMultiplexedTerminal(
 			onDisconnect: () => onDisconnectRef.current?.(),
 			onSessionExit: (reason) => onSessionExitRef.current?.(reason),
 			onError: (e, p) => onErrorRef.current?.(e, p),
+			onHerdrRestart: (phase) => setHerdrRestarting(phase === "restarting"),
 			setIsConnected,
 			sessionId,
 			sessionInstanceId,
@@ -758,6 +787,7 @@ export function useMultiplexedTerminal(
 
 	return {
 		isConnected,
+		herdrRestarting,
 		connect,
 		disconnect,
 		sendInput,

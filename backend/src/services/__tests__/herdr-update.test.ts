@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildHerdrApplyCommands, parseHerdrStatus } from '../herdr-update';
+import {
+  buildHerdrApplyCommands,
+  compareVersions,
+  parseHerdrStatus,
+  parseLatestManifest,
+  planHerdrApply,
+} from '../herdr-update';
 
 /**
  * #393: `herdr update` swaps the binary but leaves the running server on the
@@ -134,18 +140,65 @@ describe('parseHerdrStatus', () => {
  * `systemctl restart` would be a silent no-op there.
  */
 describe('buildHerdrApplyCommands', () => {
-  it('updates then restarts the systemd user unit', () => {
-    expect(buildHerdrApplyCommands('systemd', '/home/u/.local/bin/herdr', 1000)).toEqual([
+  it('stops the systemd unit before updating, then starts it again', () => {
+    expect(buildHerdrApplyCommands('systemd', '/home/u/.local/bin/herdr', 1000, 'install')).toEqual([
+      ['systemctl', '--user', 'stop', 'herdr'],
       ['/home/u/.local/bin/herdr', 'update'],
-      ['systemctl', '--user', 'restart', 'herdr'],
+      ['systemctl', '--user', 'start', 'herdr'],
     ]);
   });
 
-  it('updates then kickstarts the launchd job on macOS', () => {
-    expect(buildHerdrApplyCommands('launchd', '/opt/homebrew/bin/herdr', 501)).toEqual([
+  /**
+   * #260: `herdr update` refuses to replace the binary while a server answers
+   * its socket, and refuses by exiting 0. Running it before the stop is why the
+   * apply button could never install anything — it downloaded the release,
+   * discarded it, and restarted every pane PTY while reporting success.
+   */
+  it('never runs the update while the server is still up', () => {
+    for (const supervisor of ['systemd', 'launchd'] as const) {
+      const commands =
+        buildHerdrApplyCommands(supervisor, 'herdr', 1000, 'install', '/tmp/com.herdr.server.plist') ??
+        [];
+      const updateAt = commands.findIndex((cmd) => cmd.includes('update'));
+      expect(updateAt).toBeGreaterThan(0);
+      const stop = commands[updateAt - 1].join(' ');
+      expect(stop === 'systemctl --user stop herdr' || stop.startsWith('launchctl bootout')).toBe(true);
+    }
+  });
+
+  it('boots the launchd job out and back in around the update', () => {
+    expect(
+      buildHerdrApplyCommands(
+        'launchd',
+        '/opt/homebrew/bin/herdr',
+        501,
+        'install',
+        '/Users/u/Library/LaunchAgents/com.herdr.server.plist',
+      ),
+    ).toEqual([
+      ['launchctl', 'bootout', 'gui/501/com.herdr.server'],
       ['/opt/homebrew/bin/herdr', 'update'],
+      ['launchctl', 'bootstrap', 'gui/501', '/Users/u/Library/LaunchAgents/com.herdr.server.plist'],
+    ]);
+  });
+
+  /** `bootstrap` cannot bring the job back without it, so offering the button would strand herdr. */
+  it('refuses a launchd install when the plist is unknown', () => {
+    expect(buildHerdrApplyCommands('launchd', 'herdr', 501, 'install')).toBeNull();
+  });
+
+  /** Skew alone means the binary is already right; only the server is stale. */
+  it('only bounces the server in restart mode, without touching the binary', () => {
+    expect(buildHerdrApplyCommands('systemd', 'herdr', 1000, 'restart')).toEqual([
+      ['systemctl', '--user', 'restart', 'herdr'],
+    ]);
+    expect(buildHerdrApplyCommands('launchd', 'herdr', 501, 'restart')).toEqual([
       ['launchctl', 'kickstart', '-k', 'gui/501/com.herdr.server'],
     ]);
+    for (const supervisor of ['systemd', 'launchd'] as const) {
+      const flat = (buildHerdrApplyCommands(supervisor, 'herdr', 1000, 'restart') ?? []).flat();
+      expect(flat).not.toContain('update');
+    }
   });
 
   it('refuses to act when nothing supervises herdr', () => {
@@ -154,15 +207,125 @@ describe('buildHerdrApplyCommands', () => {
 
   it('never passes --handoff', () => {
     for (const supervisor of ['systemd', 'launchd'] as const) {
-      const flat = (buildHerdrApplyCommands(supervisor, 'herdr', 1000) ?? []).flat();
-      expect(flat).not.toContain('--handoff');
+      for (const mode of ['install', 'restart'] as const) {
+        const flat = (
+          buildHerdrApplyCommands(supervisor, 'herdr', 1000, mode, '/tmp/p.plist') ?? []
+        ).flat();
+        expect(flat).not.toContain('--handoff');
+      }
     }
   });
+});
 
-  it('updates before restarting so a failed download never bounces the server', () => {
-    const commands = buildHerdrApplyCommands('systemd', 'herdr', 1000) ?? [];
-    expect(commands[0]).toContain('update');
-    expect(commands[1]).toContain('restart');
+/**
+ * #259: with the binary and the server on the same old version there is no skew
+ * to detect, so this manifest is the only thing that can say an update exists.
+ * A format we cannot read must produce silence rather than a version prompt
+ * that would restart every pane on the strength of a misparse.
+ */
+describe('parseLatestManifest', () => {
+  it('reads the version and protocol herdr publishes', () => {
+    const raw = JSON.stringify({
+      version: '0.8.0',
+      protocol: 19,
+      notes: '### Added\n- things',
+      assets: { 'linux-x86_64': 'https://example.invalid/herdr' },
+      sha256: { 'linux-x86_64': 'abc' },
+    });
+    expect(parseLatestManifest(raw)).toEqual({ version: '0.8.0', protocol: 19 });
+  });
+
+  it('accepts a manifest with no protocol field', () => {
+    expect(parseLatestManifest('{"version":"0.8.0"}')).toEqual({
+      version: '0.8.0',
+      protocol: undefined,
+    });
+  });
+
+  it('returns null for unusable input', () => {
+    expect(parseLatestManifest('not json')).toBeNull();
+    expect(parseLatestManifest('[]')).toBeNull();
+    expect(parseLatestManifest('{}')).toBeNull();
+    expect(parseLatestManifest('{"version":""}')).toBeNull();
+    expect(parseLatestManifest('{"version":123}')).toBeNull();
+  });
+});
+
+/**
+ * The decision the old apply never made. It ran the same two commands on every
+ * press, so a click with nothing to install still restarted every pane PTY and
+ * killed whatever was running in them — measured on 2026-08-10 as fifteen
+ * workspaces and eighteen agents restarted to install nothing (#260).
+ */
+describe('planHerdrApply', () => {
+  it('does nothing when the binary is current and the server matches it', () => {
+    expect(
+      planHerdrApply({
+        binaryVersion: '0.8.0',
+        serverVersion: '0.8.0',
+        latestVersion: '0.8.0',
+        updateAvailable: false,
+        restartNeeded: false,
+        canApply: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('installs when a newer release exists', () => {
+    expect(
+      planHerdrApply({
+        binaryVersion: '0.7.5',
+        serverVersion: '0.7.5',
+        latestVersion: '0.8.0',
+        updateAvailable: true,
+        restartNeeded: false,
+        canApply: true,
+      }),
+    ).toBe('install');
+  });
+
+  /** The binary is already right here; downloading it again would install nothing. */
+  it('only restarts when the server is behind a binary that is already current', () => {
+    expect(
+      planHerdrApply({
+        binaryVersion: '0.8.0',
+        serverVersion: '0.7.5',
+        latestVersion: '0.8.0',
+        updateAvailable: false,
+        restartNeeded: true,
+        canApply: true,
+      }),
+    ).toBe('restart');
+  });
+
+  /** An unreachable manifest leaves `updateAvailable` undefined, not false. */
+  it('still restarts on skew when the latest version is unknown', () => {
+    expect(
+      planHerdrApply({ binaryVersion: '0.8.0', serverVersion: '0.7.5', restartNeeded: true, canApply: true }),
+    ).toBe('restart');
+    expect(planHerdrApply({ binaryVersion: '0.8.0', restartNeeded: false, canApply: false })).toBeNull();
+  });
+});
+
+describe('compareVersions', () => {
+  it('orders releases', () => {
+    expect(compareVersions('0.8.0', '0.7.5')).toBeGreaterThan(0);
+    expect(compareVersions('0.7.5', '0.8.0')).toBeLessThan(0);
+    expect(compareVersions('0.8.0', '0.8.0')).toBe(0);
+    expect(compareVersions('0.10.0', '0.9.9')).toBeGreaterThan(0);
+    expect(compareVersions('1.0.0', '0.99.99')).toBeGreaterThan(0);
+  });
+
+  it('ignores a leading v and a missing patch component', () => {
+    expect(compareVersions('v0.8.0', '0.8.0')).toBe(0);
+    expect(compareVersions('0.8', '0.8.0')).toBe(0);
+    expect(compareVersions('0.8.1', '0.8')).toBeGreaterThan(0);
+  });
+
+  /** Equal means "no update", which is the direction that costs nothing. */
+  it('treats anything unparseable as equal', () => {
+    expect(compareVersions('nightly', '0.8.0')).toBe(0);
+    expect(compareVersions('0.8.0', '')).toBe(0);
   });
 });
 

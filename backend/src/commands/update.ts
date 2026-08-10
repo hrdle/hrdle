@@ -194,13 +194,23 @@ async function getLatestRelease(tokenInfo: GitHubTokenInfo | null): Promise<GitH
   }
 }
 
+/**
+ * The newest published release tag, for callers that only want to *report*
+ * whether one exists — the dashboard's version panel. `checkAndUpdate` remains
+ * the only path that acts on it.
+ */
+export async function fetchLatestReleaseTag(): Promise<string | null> {
+  const release = await getLatestRelease(getGitHubToken());
+  return release?.tag_name ?? null;
+}
+
 function parseVersion(version: string): number[] {
   // Remove 'v' prefix if present
   const clean = version.replace(/^v/, '');
   return clean.split('.').map(n => parseInt(n, 10));
 }
 
-function isNewerVersion(latest: string, current: string): boolean {
+export function isNewerVersion(latest: string, current: string): boolean {
   const latestParts = parseVersion(latest);
   const currentParts = parseVersion(current);
 

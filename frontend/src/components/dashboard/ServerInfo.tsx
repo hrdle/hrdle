@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	HerdrUpdateStatus,
+	HrdleUpdateStatus,
 	SystemMetrics,
 	SystemMetricsSnapshot,
 } from "../../../../shared/types";
+import { IDENTITY } from "../../../../shared/identity";
 import { useIsLightMode } from "../../hooks/useIsLightMode";
 import { authFetch } from "../../services/api";
 import { storageKey } from "../../utils/app-storage";
@@ -311,22 +313,41 @@ function HerdrUpdateNotice({
 	// host's herdr, and an unsupervised server can't be restarted at all.
 	const canApply = allowApply && status.canApply;
 
+	// Two different situations wear the same button. A newer release means a
+	// stop/update/start; skew alone means only the running server is stale, and
+	// saying "a new version is available" there would be a lie (#259, #260).
+	const isNewRelease = status.updateAvailable === true;
+
 	return (
 		<div className="rounded-md border border-amber-500/30 bg-amber-500/[0.08] p-2 space-y-1.5">
 			<div className="flex items-start gap-1.5">
 				<AlertTriangle className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />
 				<div className="min-w-0 space-y-0.5">
 					<p className="text-[11px] font-medium text-amber-300">
-						{t("dashboard.herdrUpdateTitle")}
+						{isNewRelease
+							? t("dashboard.herdrReleaseTitle", {
+									version: status.latestVersion,
+								})
+							: t("dashboard.herdrUpdateTitle")}
 					</p>
-					{status.serverVersion && status.binaryVersion && (
-						<p className="text-[10px] text-amber-200/60 font-mono tabular-nums">
-							{t("dashboard.herdrUpdateVersions", {
-								server: status.serverVersion,
-								binary: status.binaryVersion,
-							})}
-						</p>
-					)}
+					{isNewRelease
+						? status.binaryVersion && (
+								<p className="text-[10px] text-amber-200/60 font-mono tabular-nums">
+									{t("dashboard.herdrReleaseVersions", {
+										installed: status.binaryVersion,
+										latest: status.latestVersion,
+									})}
+								</p>
+							)
+						: status.serverVersion &&
+							status.binaryVersion && (
+								<p className="text-[10px] text-amber-200/60 font-mono tabular-nums">
+									{t("dashboard.herdrUpdateVersions", {
+										server: status.serverVersion,
+										binary: status.binaryVersion,
+									})}
+								</p>
+							)}
 					<p className="text-[10px] text-amber-200/70 leading-snug">
 						{t("dashboard.herdrUpdateCost")}
 					</p>
@@ -341,7 +362,9 @@ function HerdrUpdateNotice({
 				>
 					{applying
 						? t("dashboard.herdrUpdateApplying")
-						: t("dashboard.herdrUpdateApply")}
+						: isNewRelease
+							? t("dashboard.herdrUpdateApply")
+							: t("dashboard.herdrRestartApply")}
 				</button>
 			) : (
 				allowApply && (
@@ -359,6 +382,57 @@ function HerdrUpdateNotice({
 	);
 }
 
+// ─── Versions ───
+/**
+ * What this machine is running, and whether it is current — for both halves of
+ * the stack. Shown always, not only when something is wrong: "am I on the
+ * latest?" is a question people ask before anything is wrong, and the warning
+ * above only ever appears once the answer is already no.
+ */
+function VersionRow({
+	name,
+	installed,
+	latest,
+	updateAvailable,
+	detail,
+}: {
+	name: string;
+	installed?: string;
+	latest?: string;
+	updateAvailable?: boolean;
+	/** Extra qualifier shown after the version, e.g. a stale server behind a newer binary. */
+	detail?: string;
+}) {
+	const { t } = useTranslation();
+	if (!installed) return null;
+	return (
+		<div className="flex items-baseline gap-2 text-[11px]">
+			<span className="text-th-text-muted shrink-0">{name}</span>
+			<span className="font-mono tabular-nums text-th-text truncate">
+				{installed}
+				{detail && (
+					<span className="text-th-text-muted"> {detail}</span>
+				)}
+			</span>
+			<span className="ml-auto shrink-0 text-[10px]">
+				{updateAvailable === true ? (
+					<span className="text-amber-400">
+						{t("dashboard.versionOutdated", { latest })}
+					</span>
+				) : updateAvailable === false ? (
+					<span className="text-emerald-500/80">
+						{t("dashboard.versionCurrent")}
+					</span>
+				) : (
+					<span className="text-th-text-muted/60">
+						{t("dashboard.versionUnknown")}
+					</span>
+				)}
+			</span>
+		</div>
+	);
+}
+
 // ─── Main component ───
 interface ServerInfoProps {
 	systemMetrics?: SystemMetrics;
@@ -370,8 +444,10 @@ interface ServerInfoProps {
 	};
 	/** Hide the throughput chart (it tracks this browser's WS bytes, not the peer's). */
 	hideThroughput?: boolean;
-	/** herdr binary-vs-server skew for this server (#393). */
+	/** herdr binary-vs-server skew, and whether a newer release exists (#393, #259). */
 	herdrUpdate?: HerdrUpdateStatus;
+	/** This server's own version and whether it is the published one (#259). */
+	hrdleUpdate?: HrdleUpdateStatus;
 	/** Offer the apply button — local server only; the endpoint restarts this host's herdr. */
 	allowHerdrApply?: boolean;
 	/** Re-poll after an apply so the warning clears once the server is current. */
@@ -408,6 +484,7 @@ export function ServerInfo({
 	diskUsage,
 	hideThroughput = false,
 	herdrUpdate,
+	hrdleUpdate,
 	allowHerdrApply = false,
 	onHerdrApplied,
 }: ServerInfoProps) {
@@ -465,12 +542,38 @@ export function ServerInfo({
 	// muted and once bold, directly above each other.
 	return (
 		<div className="space-y-3">
-			{herdrUpdate?.restartNeeded && (
+			{(herdrUpdate?.restartNeeded || herdrUpdate?.updateAvailable) && (
 				<HerdrUpdateNotice
 					status={herdrUpdate}
 					allowApply={allowHerdrApply}
 					onApplied={onHerdrApplied}
 				/>
+			)}
+
+			{(hrdleUpdate || herdrUpdate?.binaryVersion) && (
+				<div className="space-y-1">
+					<VersionRow
+						name={IDENTITY.productName}
+						installed={hrdleUpdate?.currentVersion}
+						latest={hrdleUpdate?.latestVersion}
+						updateAvailable={hrdleUpdate?.updateAvailable}
+					/>
+					<VersionRow
+						name="herdr"
+						installed={herdrUpdate?.binaryVersion}
+						latest={herdrUpdate?.latestVersion}
+						updateAvailable={herdrUpdate?.updateAvailable}
+						// Only worth printing when it disagrees with the binary; equal
+						// versions are the normal case and would just be noise.
+						detail={
+							herdrUpdate?.restartNeeded && herdrUpdate?.serverVersion
+								? t("dashboard.herdrServerRunning", {
+										version: herdrUpdate.serverVersion,
+									})
+								: undefined
+						}
+					/>
+				</div>
 			)}
 
 			{/* One line per metric. The full charts are behind the toggle below. */}
