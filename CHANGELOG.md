@@ -4,10 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.87] - 2026-08-10
+
 ### Added
 - **The dashboard says which versions this machine is running, and whether they
   are current** - Hrdle's own and herdr's, on every server card. Previously the
-  only version anywhere was a grey `v0.3.84` in a corner of the settings row,
+  only version anywhere was a grey `v0.3.86` in a corner of the settings row,
   and nothing at all said whether it was the published one (#259)
   - herdr's newest release comes from the manifest herdr itself updates from
     (`herdr.dev/latest.json`), cached six hours; Hrdle's from its own GitHub
