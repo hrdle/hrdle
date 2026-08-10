@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.86] - 2026-08-10
+
 ### Changed
 - **You can now ask what is being sent to the transcription service, and get
   an answer.** A request carries four values - the key, the model, the language
