@@ -1,7 +1,7 @@
 {
   "name": "Hrdle",
-  "version": "0.3.83",
-  "generated": "2026-08-09",
+  "version": "0.3.84",
+  "generated": "2026-08-10",
   "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones",
   "stack": {
     "backend": "Bun runtime + Hono",

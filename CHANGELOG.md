@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.84] - 2026-08-10
+
 ### Added
 - **The transcription model can be switched from the dashboard and from the
   glasses settings screen.** It became a setting in 0.3.83 but only over the
