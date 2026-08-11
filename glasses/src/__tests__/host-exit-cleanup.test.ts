@@ -1,4 +1,4 @@
-// What the app releases when the host takes it down (#46).
+// What the app releases when the host takes it down.
 //
 // It used to release nothing. The exit event arrived, `saveResumePoint` ran, and
 // then two interval clocks, a WebSocket that reconnected itself, an open

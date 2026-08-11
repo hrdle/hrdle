@@ -1,5 +1,5 @@
 /**
- * Glasses relay service (#504) — the "tell the user only what they need to
+ * Glasses relay service — the "tell the user only what they need to
  * decide" channel for the G2 glasses.
  *
  * Three responsibilities:
@@ -27,10 +27,10 @@ import { detectPaneState } from './pane-state';
 // Tunables / defenses (unauthenticated local endpoint — see routes)
 // =============================================================================
 
-/** Cap on sessions held in the store; oldest evicted beyond this (#254 pattern). */
+/** Cap on sessions held in the store; oldest evicted beyond this. */
 const MAX_STORE_SESSIONS = 200;
 /** One G2 page ≈ 364 display columns, but a full page of question text is
- *  already unreadable in practice (#504 real-device feedback): the question
+ *  already unreadable in practice on the device: the question
  *  must share the page with the choice list and still be glanceable. */
 const MAX_TEXT_WIDTH = 120;
 const MAX_CHOICES = 9;
@@ -39,7 +39,7 @@ const INFO_TTL_MS = 5 * 60_000;
 /**
  * Hook-sourced info items expire far sooner than agent self-notes.
  *
- * An agent's `cchub glasses` note is something it chose to say and wants read;
+ * An agent's `hrdle glasses` note is something it chose to say and wants read;
  * a hook notification is the glasses' answer to a browser push, and a push
  * that is still on screen five minutes later has stopped being news. Long
  * enough to catch on the next glance, short enough to clear itself.
@@ -662,7 +662,7 @@ async function assembleWaitingPayload(
   ws: WorkspaceInfo,
   tmuxPaneId: string,
 ): Promise<WaitingPayload | undefined> {
-  // The name, not the id: since #186 the id is `w5Q`, which tells a wearer
+  // The name, not the id: the id is `w5Q`, which tells a wearer
   // nothing about which session is asking.
   const fallback = `Waiting for input: ${ws.name || ws.id}`;
   if (!ws.instanceId || !/^%[0-9A-Za-z]+$/.test(tmuxPaneId)) return { text: fallback };
@@ -674,7 +674,7 @@ async function assembleWaitingPayload(
 
   // What the agent recorded beats anything read off the screen: the options
   // as it wrote them, in the pane's own numbering, with the descriptions the
-  // screen truncates. The scrape proved it the hard way on 2026-08-10 (#267):
+  // screen truncates. The scrape proved it the hard way on 2026-08-10:
   // a three-question AskUserQuestion draws a tab per question plus the rows
   // that move between them, and the scrape served the description block, the
   // `Next` row and finally `Submit answers` / `Cancel` as options - every
@@ -706,7 +706,7 @@ async function assembleWaitingPayload(
   // prompt, which no record carries; anything else that parses as a menu is
   // the agent's own output. On 2026-08-10 that was a code listing and the
   // wearer's own queued message, served as a two-row picker reading `4` /
-  // `DANDORI_TOKEN: string` (#267). Claude only: kimi's approval prompt is
+  // `DANDORI_TOKEN: string`. Claude only: kimi's approval prompt is
   // recordless too and its wording is not one `detectPaneState` recognises,
   // so kimi keeps the scrape it has.
   const askingNothing =
@@ -837,7 +837,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
 }
 
 /**
- * Agent self-note via `POST /api/glasses/relay` (the `cchub glasses` CLI).
+ * Agent self-note via `POST /api/glasses/relay` (the `hrdle glasses` CLI).
  * waiting: at most one ACTIVE per session — a second one is rejected (409)
  * because unanswered decisions must not be silently replaced. info: latest
  * one per session wins, with a TTL.
@@ -1121,9 +1121,9 @@ function sameChoices(a: string[] | undefined, b: string[] | undefined): boolean 
  * still waits.
  *
  * Only `auto` items follow the herdr blocked epoch. Agent self-notes
- * (source 'agent', posted via `cchub glasses`) have their own lifecycle —
+ * (source 'agent', posted via `hrdle glasses`) have their own lifecycle —
  * answered→dismissed — and are NOT tied to any pane's blocked state, so an
- * unrelated pane unblocking must never drop them (#504). Auto items always
+ * unrelated pane unblocking must never drop them. Auto items always
  * carry the blocked pane's id, so an exact paneId match is the right test.
  */
 async function exitBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {

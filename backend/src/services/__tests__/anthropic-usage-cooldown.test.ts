@@ -3,7 +3,7 @@ import { AnthropicUsageService } from '../anthropic-usage';
 
 /**
  * The dashboard polls every 30s, per open client, and `/api/oauth/usage` is
- * rate limited per ACCOUNT — cchub's cache is the only thing standing between
+ * rate limited per ACCOUNT — hrdle's cache is the only thing standing between
  * that poll rate and a 429 that then blinds every client for up to an hour.
  *
  * The cache used to require a stored success to engage, and only a 429 set a

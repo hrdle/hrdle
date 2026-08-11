@@ -16,13 +16,13 @@ function readFlag(): boolean {
 /**
  * Remote-control mode flag (PC/desktop only).
  *
- * When enabled, CC Hub stops the live terminal render (WS `subscribe` →
+ * When enabled, Hrdle stops the live terminal render (WS `subscribe` →
  * PaneController) so it never takes over the pane — the running local herdr
  * client keeps ownership of the terminal. Everything else (workspace/pane list,
  * focus, split/close, new session, tab ops, prompt, Files, Dashboard, Chat)
  * still works because those paths don't need a control stream.
  *
- * Persisted in `cchub-remote-control` (default OFF). Listens for the storage
+ * Persisted in `hrdle-remote-control` (default OFF). Listens for the storage
  * event so toggling in another tab updates this one live. Mirrors the
  * `useTheme` (getter init + `setItem` on change) / `useHistoryV2Flag`
  * (storage-event sync) conventions.

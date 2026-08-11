@@ -5,7 +5,7 @@ import { ClaudeCodeService } from '../claude-code';
 // ClaudeCodeService uses to bound its long-lived per-instance Maps.
 //
 // We reach the private static through a typed alias purely for testability;
-// the runtime contract (TTL sweep + size cap) is the public guarantee. #249
+// the runtime contract (TTL sweep + size cap) is the public guarantee.
 const evictAndCap = (
   ClaudeCodeService as unknown as {
     evictAndCap: <V extends { timestamp: number }>(cache: Map<string, V>, ttlMs: number) => void;

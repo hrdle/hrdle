@@ -73,7 +73,7 @@ function asSttModel(value: unknown): SttModel | undefined {
  * `effectivePrompt` field, and it was not one either - this screen has no
  * session, so it never carried the words of whoever is speaking. The name was
  * read as the sent value anyway and cost an afternoon diagnosing a
- * session-vocabulary bug that did not exist (#255). Ask
+ * session-vocabulary bug that did not exist. Ask
  * `GET /api/glasses/stt-preview` instead: it answers with the object the
  * transcription itself uses.
  */
@@ -134,7 +134,7 @@ export async function loadGlassesSettings(): Promise<GlassesSettings> {
 /**
  * The switch, reading a file that may predate it.
  *
- * `sttPrompt` was the shared-words field and is gone (#255). Its words are
+ * `sttPrompt` was the shared-words field and is gone. Its words are
  * dropped - they were a group in the prompt and there is no group for them any
  * more - but the one value that meant something other than words is carried
  * over: `off` disabled the bias entirely, and somebody who switched it off
@@ -218,7 +218,7 @@ export async function resolveSttModel(): Promise<{
  *
  * The environment can only switch it off, never on: `HRDLE_STT_PROMPT=off` is
  * a decision made at the process level, and a screen quietly overriding it
- * would be the same shape of surprise as #210 in the other direction. The
+ * would be the same shape of surprise in the other direction. The
  * screen is told which of the two it is looking at.
  */
 export async function resolveSttBias(): Promise<{
@@ -236,7 +236,7 @@ export async function resolveSttBias(): Promise<{
  * from when nothing is stored.
  *
  * What would actually be sent is a different question with a different answer
- * per session, and it is `resolveSttRequest` that answers it (#255).
+ * per session, and it is `resolveSttRequest` that answers it.
  */
 export async function glassesSettingsView(): Promise<GlassesSettingsView> {
   const { source: apiKeySource } = await resolveGroqApiKey();

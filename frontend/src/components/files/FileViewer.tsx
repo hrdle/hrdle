@@ -116,8 +116,8 @@ export function FileViewer({
 	const uploadInputRef = useRef<HTMLInputElement>(null);
 
 	// `<img src>` / `<video src>` / `<audio src>` cannot send the Bearer auth
-	// header, so /files/raw 401s when CCHUB_PASSWORD is set. Fetch the bytes via
-	// authFetch and present them as a same-origin blob: URL instead. #260
+	// header, so /files/raw 401s when HRDLE_PASSWORD is set. Fetch the bytes via
+	// authFetch and present them as a same-origin blob: URL instead.
 	const rawUrl =
 		selectedFile &&
 		(isImageFile(selectedFile.path) || isMediaFile(selectedFile.path))
@@ -182,7 +182,7 @@ export function FileViewer({
 				console.log("[upload] sending POST /api/files/upload");
 				// authFetch attaches the Bearer token while letting the browser set
 				// the multipart Content-Type itself. Plain fetch() would 401 whenever
-				// CCHUB_PASSWORD is set. #259
+				// HRDLE_PASSWORD is set.
 				const res = await authFetch(
 					`${filesApiBase}/upload`,
 					{ method: "POST", body: formData },
@@ -230,8 +230,8 @@ export function FileViewer({
 		if (!selectedFile) return;
 		const url = `${filesApiBase}/download?path=${encodeURIComponent(selectedFile.path)}&sessionWorkingDir=${encodeURIComponent(sessionWorkingDir)}`;
 		// <a href> cannot send the Bearer header, so /files/download 401s when
-		// CCHUB_PASSWORD is set. Fetch via authFetch, materialise into a blob,
-		// and trigger the anchor against the object URL. #260
+		// HRDLE_PASSWORD is set. Fetch via authFetch, materialise into a blob,
+		// and trigger the anchor against the object URL.
 		try {
 			const res = await authFetch(url, {}, 300_000);
 			if (!res.ok) return;

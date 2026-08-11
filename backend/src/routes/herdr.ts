@@ -7,16 +7,16 @@ export const herdr = new Hono();
 /**
  * Apply a pending herdr update: stop the supervised server, `herdr update`,
  * start it again — in that order, because `herdr update` refuses to replace the
- * binary while a server is answering (#260).
+ * binary while a server is answering.
  *
- * Deliberately POST-only and driven by an explicit dashboard click (#393).
+ * Deliberately POST-only and driven by an explicit dashboard click.
  * Restarting herdr re-creates every pane PTY — agent conversations come back
- * via `resume_agents_on_restore`, but running commands do not — so cchub never
- * triggers this on its own, and never from the `cchub update --auto` timer.
+ * via `resume_agents_on_restore`, but running commands do not — so hrdle never
+ * triggers this on its own, and never from the `hrdle update --auto` timer.
  */
 herdr.post('/apply-update', async (c) => {
   // Every connected client is about to have its panes pulled out from under it,
-  // and only this host knows it is coming (#261).
+  // and only this host knows it is coming.
   const result = await herdrUpdateService.apply((phase) =>
     broadcastToMuxClients({ type: 'herdr-restart', phase }),
   );

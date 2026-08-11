@@ -30,7 +30,7 @@ let cachedSessions: ExtendedSessionResponse[] = [];
  */
 export function applyLocalSessionReorder(ordered: ExtendedSessionResponse[]) {
 	cachedSessions = ordered;
-	window.dispatchEvent(new CustomEvent("cchub-sessions-reorder"));
+	window.dispatchEvent(new CustomEvent("hrdle-sessions-reorder"));
 }
 
 /** Updates the indicatorState of a hub-local session as soon as a hook event arrives */
@@ -41,7 +41,7 @@ export function updateCachedSessionsByHookEvent(
 	const newState = hookEventToIndicatorState(event);
 	if (!newState || !ccSessionId) return;
 	if (applyHookIndicatorUpdate(ccSessionId, newState)) {
-		window.dispatchEvent(new CustomEvent("cchub-hook-event"));
+		window.dispatchEvent(new CustomEvent("hrdle-hook-event"));
 	}
 }
 
@@ -119,11 +119,11 @@ export function useWorkspaces(): UseWorkspacesReturn {
 	useEffect(() => {
 		const hookHandler = () => setSessions(cachedSessions);
 		const reorderHandler = () => setSessions(cachedSessions);
-		window.addEventListener("cchub-hook-event", hookHandler);
-		window.addEventListener("cchub-sessions-reorder", reorderHandler);
+		window.addEventListener("hrdle-hook-event", hookHandler);
+		window.addEventListener("hrdle-sessions-reorder", reorderHandler);
 		return () => {
-			window.removeEventListener("cchub-hook-event", hookHandler);
-			window.removeEventListener("cchub-sessions-reorder", reorderHandler);
+			window.removeEventListener("hrdle-hook-event", hookHandler);
+			window.removeEventListener("hrdle-sessions-reorder", reorderHandler);
 		};
 	}, []);
 

@@ -40,7 +40,7 @@ const listeners = new Set<() => void>();
 
 // usePeers is called from several components at once, but the polling timer is
 // kept as a single module-level one (reference counted). An interval per instance
-// would multiply the 5s /api/peers polling by N (#336)
+// would multiply the 5s /api/peers polling by N
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let refreshInFlight: Promise<void> | null = null;
 

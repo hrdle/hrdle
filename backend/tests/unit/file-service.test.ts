@@ -13,7 +13,7 @@ describe('FileService', () => {
     // Create a temporary test directory.
     // Resolve symlinks (e.g. macOS /var -> /private/var) so comparisons
     // against validatePath's realpath output are stable
-    testDir = await realpath(await mkdtemp(join(tmpdir(), 'cchub-test-')));
+    testDir = await realpath(await mkdtemp(join(tmpdir(), 'hrdle-test-')));
 
     // Create test files and directories
     await mkdir(join(testDir, 'subdir'));

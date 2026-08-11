@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 ;(globalThis as unknown as { __STORAGE_PREFIX__: string }).__STORAGE_PREFIX__ = 'hrdle-'
-;(globalThis as unknown as { __LEGACY_STORAGE_PREFIXES__: string[] }).__LEGACY_STORAGE_PREFIXES__ = []
 
 import { inlineChoicesInRow } from '../../../shared/inline-choices'
 import { KIMI_QUESTION_TAB_BAR_PLAIN, OPENCODE_PERMISSION_ROW } from './fixtures/opencode-permission'

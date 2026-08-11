@@ -37,9 +37,9 @@ test('ChatView does not show missing-agent error after initial load', async ({ p
   // restore-saved-sessions path *and* chat mode is on (otherwise ChatView
   // never mounts and the bug is unreachable).
   await page.addInitScript(([id]) => {
-    localStorage.setItem('cchub-open-sessions', JSON.stringify([id]));
-    localStorage.setItem('cchub-last-session-id', id);
-    localStorage.setItem('cchub-conversation-mode-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-open-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-last-session-id', id);
+    localStorage.setItem('hrdle-conversation-mode-sessions', JSON.stringify([id]));
   }, [sessionId]);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });

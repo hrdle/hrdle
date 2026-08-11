@@ -10,8 +10,8 @@ import {
 } from '../herdr-update';
 
 /**
- * #393: `herdr update` swaps the binary but leaves the running server on the
- * old version, and cchub spawns the binary to drive panes. The parser has to
+ * `herdr update` swaps the binary but leaves the running server on the
+ * old version, and hrdle spawns the binary to drive panes. The parser has to
  * catch that skew, but a herdr release that changes the status format must
  * degrade to silence — a false "restart your server" nag costs the user every
  * running command in every pane.
@@ -149,7 +149,7 @@ describe('buildHerdrApplyCommands', () => {
   });
 
   /**
-   * #260: `herdr update` refuses to replace the binary while a server answers
+   * `herdr update` refuses to replace the binary while a server answers
    * its socket, and refuses by exiting 0. Running it before the stop is why the
    * apply button could never install anything — it downloaded the release,
    * discarded it, and restarted every pane PTY while reporting success.
@@ -218,7 +218,7 @@ describe('buildHerdrApplyCommands', () => {
 });
 
 /**
- * #259: with the binary and the server on the same old version there is no skew
+ * with the binary and the server on the same old version there is no skew
  * to detect, so this manifest is the only thing that can say an update exists.
  * A format we cannot read must produce silence rather than a version prompt
  * that would restart every pane on the strength of a misparse.
@@ -255,7 +255,7 @@ describe('parseLatestManifest', () => {
  * The decision the old apply never made. It ran the same two commands on every
  * press, so a click with nothing to install still restarted every pane PTY and
  * killed whatever was running in them — measured on 2026-08-10 as fifteen
- * workspaces and eighteen agents restarted to install nothing (#260).
+ * workspaces and eighteen agents restarted to install nothing.
  */
 describe('planHerdrApply', () => {
   it('does nothing when the binary is current and the server matches it', () => {
@@ -330,12 +330,12 @@ describe('compareVersions', () => {
 });
 
 /**
- * `cchub update --auto` runs unattended from a timer. Restarting herdr there
+ * `hrdle update --auto` runs unattended from a timer. Restarting herdr there
  * would silently kill whatever builds/tests/long jobs were running in every
  * pane overnight, so the auto path must never reach herdr — hence this guard
  * on the source itself rather than on behavior.
  */
-describe('cchub update timer', () => {
+describe('hrdle update timer', () => {
   it('never touches herdr', () => {
     const source = readFileSync(join(import.meta.dir, '../../commands/update.ts'), 'utf-8');
     expect(source).not.toMatch(/herdr/i);

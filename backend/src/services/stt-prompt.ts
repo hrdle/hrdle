@@ -10,7 +10,7 @@ import { getAllSessionMetadata } from './session-metadata';
  * it has no reason to pick.
  *
  * The half that cannot be hardcoded is what is about to be said, and it is the
- * *session* that supplies it (#210). Workspace labels used to: they led the
+ * *session* that supplies it. Workspace labels used to: they led the
  * prompt, on the reasoning that 「2脚ロボ開発」 is the user's own coinage and
  * unguessable. That held while a label was a name. It stopped being one — the
  * naming convention appends a status suffix (`— 作業中`, `— 完了済`) and agents
@@ -134,18 +134,18 @@ export interface SttPromptComposition {
  * Two groups, in the order they are worth their characters, because the budget
  * does run out:
  *
- *  1. **This session's own words** (#166). The only group that knows what is
+ *  1. **This session's own words**. The only group that knows what is
  *     about to be said rather than what is generally said here. A session
  *     about the G2 display and one about tax paperwork were biased identically
  *     before this, and neither got the terms it needed.
  *  2. **Glossary.** Said constantly and misheard constantly, in every session.
  *
  * There used to be a third between them - words the settings screen added to
- * every session's prompt - and it is gone (#255). Squeezed from both sides it
+ * every session's prompt - and it is gone. Squeezed from both sides it
  * never had a job of its own: a word said always belongs in the glossary, and a
  * word about to be said is the session's to write. It was empty from the day it
  * shipped except for the five days a leftover `off` in it disabled the whole
- * prompt (#210).
+ * prompt.
  *
  * The first group cannot replace the glossary: it may take half the budget, and
  * the rest is the glossary's whatever it holds. A session that spent the whole
@@ -158,7 +158,7 @@ export interface SttPromptComposition {
  * The return value says which group produced which term, because nothing else
  * can: the line itself is one string of comma-separated words by the time it
  * leaves here, and "why is my session's word not in it" is the question this
- * file gets asked (#255).
+ * file gets asked.
  */
 export function composeSttPrompt(
   sessionTerms: string[] = [],
@@ -229,5 +229,5 @@ export async function sessionSttTerms(sessionId: string | undefined): Promise<st
  *
  * Whether a composed line is what actually goes out - against `off`, against
  * `HRDLE_STT_PROMPT` replacing it outright - is decided in `stt-request.ts`,
- * with the model and the language, in one place a caller can ask (#255).
+ * with the model and the language, in one place a caller can ask.
  */

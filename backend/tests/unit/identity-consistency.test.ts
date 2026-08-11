@@ -95,29 +95,26 @@ describe('derived service names', () => {
  * this file.
  *
  * The rename (#459) is such an edit. It also has to keep these clear of the
- * cchub install they replace, which keeps its own files under the same /tmp
+ * hrdle install they replace, which keeps its own files under the same /tmp
  * while the two run side by side.
  */
 describe('scratch paths only move when someone means to move them', () => {
-  test('images dir is what the three consumers used to hardcode', () => {
+  test('images dir is the one path all three consumers resolve to', () => {
     expect(TMP_PATHS.imagesDir).toBe('/tmp/hrdle-images');
   });
 
-  test('usage history file is separate from the one cchub writes', () => {
+  test('usage history file carries our own prefix', () => {
     expect(TMP_PATHS.usageHistoryFile).toBe('/tmp/hrdle-usage-history.json');
   });
 
-  test('browser log drops the spelling that never matched the prefix', () => {
-    // Was `/tmp/cc-hub-browser.log` while everything else used `cchub`. It was
-    // left alone because CLAUDE.md tells people to `tail -f` that exact path;
-    // the rename invalidates the instruction anyway, so it is normalised here.
+  test('browser log is spelled the way CLAUDE.md tells people to tail it', () => {
     expect(TMP_PATHS.browserLogFile).toBe('/tmp/hrdle-browser.log');
   });
 
   test('keychain service name is our own', () => {
     // The macOS password lives under this service name. Changing it does not
     // fail — it just stops finding the password already stored, which is what
-    // a separate product should do: cchub's password stays cchub's.
+    // a separate product should do: hrdle's password stays hrdle's.
     expect(IDENTITY.keychainService).toBe('hrdle');
   });
 });

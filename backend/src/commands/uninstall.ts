@@ -1,4 +1,4 @@
-// cchub uninstall command - remove service registration (systemd on Linux, launchd on macOS)
+// hrdle uninstall command - remove service registration (systemd on Linux, launchd on macOS)
 
 import { unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';

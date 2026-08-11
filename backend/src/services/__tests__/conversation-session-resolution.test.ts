@@ -6,7 +6,7 @@ import { ClaudeCodeService } from '../claude-code';
 import { claudeProjectDirName } from '../../utils/claude-project-path';
 
 /**
- * Which transcript a conversation subscription reads (#80).
+ * Which transcript a conversation subscription reads.
  *
  * Two Claude panes in one workspace, in one directory, are two conversations
  * in one project folder. Resolving by directory answers with whichever wrote

@@ -1,6 +1,6 @@
 import { LOCAL_PEER_ID } from "../../../shared/types";
 
-export const NOTIFICATION_NAVIGATION_EVENT = "cchub-notification-click";
+export const NOTIFICATION_NAVIGATION_EVENT = "hrdle-notification-click";
 
 export interface NotificationTarget {
 	sessionId: string;

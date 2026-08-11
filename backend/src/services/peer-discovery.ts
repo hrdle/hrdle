@@ -17,7 +17,7 @@ const DISCOVERY_TIMEOUT_MS = 3_000;
  *
  * Composed from identity rather than written here: this was a literal 5923 from
  * before the rename, so after it every probe went to a port nothing listens on
- * and a tailnet full of installs discovered nothing (#459). A port number is
+ * and a tailnet full of installs discovered nothing. A port number is
  * exactly the kind of constant that looks too obvious to be wrong.
  */
 const DEFAULT_PORT = IDENTITY.defaultPort;
@@ -48,7 +48,7 @@ async function fetchTailscaleStatus(): Promise<TailscaleStatus | null> {
   }
 }
 
-async function probeCchub(url: string): Promise<{ ok: true; version?: string } | { ok: false }> {
+async function probeHrdle(url: string): Promise<{ ok: true; version?: string } | { ok: false }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS);
 
@@ -101,7 +101,7 @@ export async function discoverPeers(): Promise<DiscoveredPeer[]> {
   // Probe in parallel
   const results = await Promise.all(candidates.map(async (c) => {
     const url = `https://${c.hostname}:${DEFAULT_PORT}`;
-    const probe = await probeCchub(url);
+    const probe = await probeHrdle(url);
     if (!probe.ok) return null;
     const existing = existingByHost.get(`${c.hostname}:${DEFAULT_PORT}`);
     const discovered: DiscoveredPeer = {

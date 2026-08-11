@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { Database } from 'bun:sqlite';
 import { CodexService } from '../../src/services/codex';
 
-const TEST_DIR = join(tmpdir(), `cchub-codex-service-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `hrdle-codex-service-${Date.now()}`);
 const DB_PATH = join(TEST_DIR, 'state_5.sqlite');
 
 function createThreadsTable(db: Database): void {

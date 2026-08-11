@@ -1,4 +1,4 @@
-// cchub update command - check and apply updates from GitHub Releases
+// hrdle update command - check and apply updates from GitHub Releases
 
 import { createHash } from 'node:crypto';
 import { copyFile, rename, chmod, readFile, unlink } from 'node:fs/promises';
@@ -19,7 +19,7 @@ const SHA256SUMS_ASSET = 'SHA256SUMS';
 /**
  * Verify the first bytes of the downloaded buffer look like a real executable
  * for our target platform. Defense in depth against a tampered/corrupted
- * download even before the SHA-256 check runs. #255
+ * download even before the SHA-256 check runs.
  */
 export function isExecutableMagic(bytes: Uint8Array, binaryName: string): boolean {
   if (bytes.length < 4) return false;
@@ -47,7 +47,7 @@ export function isExecutableMagic(bytes: Uint8Array, binaryName: string): boolea
 /**
  * Parse a SHA256SUMS file (one "<hex>  <name>" per line, optional '*' before
  * the name for binary mode) and return the lowercase hash for `binaryName`,
- * or null if absent. #255
+ * or null if absent.
  */
 export function parseSha256Sums(text: string, binaryName: string): string | null {
   for (const raw of text.split(/\r?\n/)) {
@@ -87,7 +87,7 @@ async function getServiceBinaryPath(): Promise<string | null> {
         SERVICE.unitFile,
       );
       const content = await readFile(servicePath, 'utf-8');
-      // Extract exec path from: ExecStart=/bin/zsh -lc 'exec /path/to/cchub ...'
+      // Extract exec path from: ExecStart=/bin/zsh -lc 'exec /path/to/hrdle ...'
       const bin = IDENTITY.binaryName;
       const match =
         content.match(new RegExp(`exec\\s+(\\S+${bin})\\b`)) ||
@@ -244,7 +244,7 @@ async function fetchExpectedSha256(
  * (b) the executable magic bytes for the target platform, and
  * (c) the SHA-256 against the value published in the release's SHA256SUMS.
  * Any failure deletes `destPath` and returns false so the caller never renames
- * an unverified file over the running service binary. #255
+ * an unverified file over the running service binary.
  */
 async function downloadBinary(
   url: string,
@@ -334,7 +334,7 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   if (checkOnly) {
     console.log('');
     // The one line here that tells the reader what to type. Spelled out, a
-    // renamed build hands them a command that does not exist (#459).
+    // renamed build hands them a command that does not exist.
     console.log(`To update: ${IDENTITY.binaryName} update`);
     return;
   }
@@ -358,7 +358,7 @@ export async function checkAndUpdate(checkOnly: boolean, autoMode: boolean): Pro
   // Verify the release publishes a SHA256SUMS file and that it contains an
   // entry for our binary BEFORE downloading. Older releases (<= v0.1.161) do
   // not have this; users on those versions are upgrading to the first version
-  // that publishes one, so the next update naturally succeeds. #255
+  // that publishes one, so the next update naturally succeeds.
   const expectedSha256 = await fetchExpectedSha256(release, binaryName);
   if (!expectedSha256) {
     console.error(

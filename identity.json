@@ -1,5 +1,5 @@
 {
-  "$comment": "Single source of truth for everything that names this product. Renaming the product (see #459) should be a change to this file plus the display strings, not a sweep of 1200 literals. install.sh and .github/workflows/release.yml cannot read it — the installer runs via `curl | bash` with no checkout, and Actions matrix values must be literals — so they keep their own copies, guarded by backend/tests/unit/identity-consistency.test.ts. defaultPort is 5924 and stays there after the switch: 5923 is left free on purpose so the cchub install this replaces can be started again if something goes wrong, without either side moving. devPort and frontendDevPort are offset by one from cchub's for the same reason — both products' dev servers have to be able to run at once.",
+  "$comment": "Single source of truth for everything that names this product. Renaming the product should be a change to this file plus the display strings, not a sweep of 1200 literals. install.sh and .github/workflows/release.yml cannot read it — the installer runs via `curl | bash` with no checkout, and Actions matrix values must be literals — so they keep their own copies, guarded by backend/tests/unit/identity-consistency.test.ts.",
   "productName": "Hrdle",
   "tagline": "Coding Agent Session Manager",
   "binaryName": "hrdle",
@@ -14,10 +14,6 @@
   "serviceName": "hrdle",
   "launchdPrefix": "com.hrdle",
   "storagePrefix": "hrdle-",
-  "legacyStoragePrefixes": [
-    "cchub-",
-    "cc-hub-"
-  ],
   "tmpPrefix": "hrdle",
   "browserLogName": "hrdle-browser.log",
   "keychainService": "hrdle"

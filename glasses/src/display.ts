@@ -247,12 +247,12 @@ export interface AppState {
    *
    * Both used to read "(nothing was recognized)", and one of them is worth
    * saying again more slowly while the other is worth saying again at all
-   * (#209). A request cut off mid-upload - which is what a 10-second HTTP
+   *. A request cut off mid-upload - which is what a 10-second HTTP
    * timeout was doing to long recordings on a slow link - looked exactly like
    * a clear recording of silence.
    */
   voiceFailed?: boolean
-  // ── Glasses relay channel (#504) ──
+  // ── Glasses relay channel ──
   /** Active waiting items, priority order (first = shown in the overlay). */
   /**
    * What the wearer just answered, and until when to say so.
@@ -596,7 +596,7 @@ export const SENT_LABEL = 'Sent'
  *  question of a multi-step ask arrives. */
 export const ANSWER_ECHO_MS = 2500
 
-/** Waiting/info banner prepended to the TOP of the conversation tab (#504).
+/** Waiting/info banner prepended to the TOP of the conversation tab.
  *  Waiting-first is the core philosophy: the highest-priority waiting item
  *  always heads the view; an info item shows only when nothing is waiting. */
 function relayBannerLines(state: AppState): string[] {
@@ -1501,7 +1501,7 @@ function choiceBody(state: AppState): string {
 }
 
 /**
- * Full-screen presentation of one relay item (#504). Swipe cycles the queue,
+ * Full-screen presentation of one relay item. Swipe cycles the queue,
  * tap jumps to the item's session, double-tap dismisses.
  *
  * Questions and notifications share this screen because they are the same

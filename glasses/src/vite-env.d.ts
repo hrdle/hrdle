@@ -33,4 +33,3 @@ declare const __STORAGE_PREFIX__: string
 
 /** Prefixes this app stored under before the current one. Read-only fallbacks:
  *  renaming a key does not fail, it forgets. */
-declare const __LEGACY_STORAGE_PREFIXES__: readonly string[]

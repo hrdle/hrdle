@@ -6,7 +6,7 @@ import { KimiService, KimiSessionStore, parseKimiRecap, readLatestKimiTokenUsage
 import { KimiHistoryService, parseKimiWire } from '../../src/services/kimi-history';
 import { claudeProjectDirName } from '../../src/utils/claude-project-path';
 
-const TEST_DIR = join(tmpdir(), `cchub-kimi-service-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `hrdle-kimi-service-${Date.now()}`);
 const SESSIONS_DIR = join(TEST_DIR, 'sessions');
 
 const CWD = '/home/user/my-project';

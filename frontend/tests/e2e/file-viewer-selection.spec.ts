@@ -37,10 +37,10 @@ test('FileBrowser keeps scroll and shows selection when switching files (desktop
   const sessionId = await pickFirstClaudeSession(request);
 
   await page.addInitScript(([id]) => {
-    localStorage.setItem('cchub-open-sessions', JSON.stringify([id]));
-    localStorage.setItem('cchub-last-session-id', id);
-    localStorage.setItem('cchub-onboarding-completed', 'true');
-    localStorage.setItem('cchub-onboarding-sessionlist-completed', 'true');
+    localStorage.setItem('hrdle-open-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-last-session-id', id);
+    localStorage.setItem('hrdle-onboarding-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   }, [sessionId]);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -88,10 +88,10 @@ test('FileBrowser scroll survives switching to file view and back (mobile flow)'
   const sessionId = await pickFirstClaudeSession(request);
 
   await page.addInitScript(([id]) => {
-    localStorage.setItem('cchub-open-sessions', JSON.stringify([id]));
-    localStorage.setItem('cchub-last-session-id', id);
-    localStorage.setItem('cchub-onboarding-completed', 'true');
-    localStorage.setItem('cchub-onboarding-sessionlist-completed', 'true');
+    localStorage.setItem('hrdle-open-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-last-session-id', id);
+    localStorage.setItem('hrdle-onboarding-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   }, [sessionId]);
 
   await page.setViewportSize({ width: 393, height: 851 });

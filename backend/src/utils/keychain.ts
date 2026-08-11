@@ -1,4 +1,4 @@
-// macOS Keychain helpers for storing the cchub server password.
+// macOS Keychain helpers for storing the hrdle server password.
 //
 // Linux has no equivalent reliable headless secret store, so these helpers are
 // no-ops on non-darwin platforms.
@@ -11,7 +11,7 @@ function getAccount(): string {
   return process.env.USER || IDENTITY.keychainService;
 }
 
-/** Read the cchub password from the macOS Keychain. Returns undefined if not stored or not on darwin. */
+/** Read the hrdle password from the macOS Keychain. Returns undefined if not stored or not on darwin. */
 export function readPassword(): string | undefined {
   if (process.platform !== 'darwin') return undefined;
   try {
@@ -24,7 +24,7 @@ export function readPassword(): string | undefined {
   }
 }
 
-/** Store (or update) the cchub password in the macOS Keychain. Returns true on success. */
+/** Store (or update) the hrdle password in the macOS Keychain. Returns true on success. */
 export function storePassword(password: string): boolean {
   if (process.platform !== 'darwin') return false;
   try {
@@ -42,7 +42,7 @@ export function storePassword(password: string): boolean {
   }
 }
 
-/** Delete the cchub password from the macOS Keychain. Returns true if deleted. */
+/** Delete the hrdle password from the macOS Keychain. Returns true if deleted. */
 export function deletePassword(): boolean {
   if (process.platform !== 'darwin') return false;
   try {

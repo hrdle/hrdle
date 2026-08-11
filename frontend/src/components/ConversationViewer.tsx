@@ -90,7 +90,7 @@ function getPinchDistance(touches: TouchList): number {
 
 // Convert [Image: source: <imagesDir>/xxx.png] into an actual image.
 //
-// The directory is identity's (#459) — spelled out, it stops matching the
+// The directory is identity's — spelled out, it stops matching the
 // moment the name changes and every screenshot in the conversation degrades
 // into its own raw path. Transcripts written under the old name keep the old
 // path forever, but the files they point at live in the previous install's
@@ -117,7 +117,7 @@ function isSystemSummary(content: string): boolean {
 
 function openLightbox(src: string) {
 	window.dispatchEvent(
-		new CustomEvent("cchub-image-zoom", { detail: { src } }),
+		new CustomEvent("hrdle-image-zoom", { detail: { src } }),
 	);
 }
 
@@ -808,8 +808,8 @@ export function ConversationViewer({
 			const detail = (e as CustomEvent<{ src: string }>).detail;
 			if (detail?.src) setLightboxSrc(detail.src);
 		};
-		window.addEventListener("cchub-image-zoom", onZoom);
-		return () => window.removeEventListener("cchub-image-zoom", onZoom);
+		window.addEventListener("hrdle-image-zoom", onZoom);
+		return () => window.removeEventListener("hrdle-image-zoom", onZoom);
 	}, []);
 
 	// Esc to close lightbox

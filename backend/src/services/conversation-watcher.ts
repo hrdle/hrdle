@@ -52,7 +52,7 @@ export class ConversationWatcher {
     // Re-entrant start: close any previous fs.watch before re-initialising.
     // Otherwise the old watcher leaks and its change events trigger reparse
     // against the overwritten filePath, delivering the wrong file's
-    // conversation (#334). Listeners are kept — they belong to the subscriber.
+    // conversation. Listeners are kept — they belong to the subscriber.
     this.closeWatcher();
 
     const session = agentSessionId

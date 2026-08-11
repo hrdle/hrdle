@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { storageKey } from "../utils/app-storage";
 import {
 	type AgentProvider,
 	type PaneInfo,
@@ -205,7 +206,7 @@ function TerminalPane({
 	// Persist chat-mode state per pane so it survives remounts (e.g. after a
 	// split changes the React tree from <TerminalPane> to <SplitContainer>).
 	const conversationModeKey = sessionKey
-		? `cchub-pane-conv-mode:${sessionKey}:${paneId}`
+		? storageKey(`pane-conv-mode:${sessionKey}:${paneId}`)
 		: null;
 	const [showConversation, setShowConversationState] = useState<boolean>(() => {
 		if (!conversationModeKey) return false;

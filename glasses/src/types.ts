@@ -143,7 +143,7 @@ export interface DashboardResponse {
   version?: string
 }
 
-// ─── Glasses relay channel (#504) ───
+// ─── Glasses relay channel ───
 // Mirror of GlassesRelayItem in shared/types.ts (glasses keeps its own subset
 // of types and does not import from shared/).
 
@@ -188,14 +188,14 @@ export interface GlassesScreen {
   at: number
 }
 
-/** A ring gesture published by the device for the recording (#129).
+/** A ring gesture published by the device for the recording.
  *  Mirror of GlassesInput in shared/types.ts. */
 export type GlassesInputKind = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
 /**
- * One line of the server's screen-mirror recording (#127): a frame as it was
+ * One line of the server's screen-mirror recording: a frame as it was
  * recorded (with the server's own arrival clock), a gap marking the device
- * disconnecting, or a ring gesture (#129). The replay player feeds frames
+ * disconnecting, or a ring gesture. The replay player feeds frames
  * back through the same painter the live mirror uses and overlays gestures.
  */
 export type RecordedGlassesLine =
@@ -409,7 +409,7 @@ export function sanitizeForG2(text: string): string {
 /**
  * Conversation-top recap block (`Summary: ...` head + <=maxLines-1 more + separator).
  * Empty when no recap. The glasses conversation view leads with the gist —
- * full history reading is the phone's job (real-device feedback, #504).
+ * full history reading is the phone's job (real-device feedback).
  */
 export function recapBlockLines(recap: string | undefined, _maxLines = 2): string[] {
   const clean = sanitizeForG2((recap ?? '').trim())

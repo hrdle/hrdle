@@ -465,11 +465,11 @@ describe('trackGlassesRelay blocked transitions', () => {
     expect(await buildGlassesRelaySnapshot()).toHaveLength(0);
   });
 
-  test('an agent self-note survives an unrelated pane exiting blocked (#504)', async () => {
+  test('an agent self-note survives an unrelated pane exiting blocked', async () => {
     const sock = new FakeSocket();
     glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
     glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ paneId: '%1', agentStatus: 'working' }])];
-    // Agent self-note posted via `cchub glasses --session` → source 'agent',
+    // Agent self-note posted via `hrdle glasses --session` → source 'agent',
     // no paneId. It is NOT tied to any pane's blocked epoch.
     const agentItem = mustItem(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'deploy?' }));
     await subscribeGlassesRelay(sock);
@@ -1439,7 +1439,7 @@ describe('a pane that redraws does not mint questions', () => {
 });
 
 // =============================================================================
-// recorded questions beat the scrape (#267)
+// recorded questions beat the scrape
 // =============================================================================
 
 /** A claude pane whose visible tail is its own output, parsing as a menu:

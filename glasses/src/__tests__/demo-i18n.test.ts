@@ -14,7 +14,6 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 // The storage key is built from constants Vite injects, and `setLang` writes
 // through it. Unit tests import the module directly, with nothing injected.
 ;(globalThis as unknown as { __STORAGE_PREFIX__: string }).__STORAGE_PREFIX__ = 'hrdle-'
-;(globalThis as unknown as { __LEGACY_STORAGE_PREFIXES__: string[] }).__LEGACY_STORAGE_PREFIXES__ = []
 
 import { BODY_WIDTH, splitLines, textWidth } from '../metrics.ts'
 import { conversationLines, screenText } from '../display.ts'

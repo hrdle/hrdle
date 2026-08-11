@@ -3,12 +3,12 @@ import { IDENTITY } from '../../../shared/identity';
 import { readFileSync, existsSync } from 'node:fs';
 
 // Channel C smoke test. Requires the dev server to be started with
-// CCHUB_SELF_VERIFY=1. Drives a brief session and asserts the server wrote
-// drift records to /tmp/cchub-drift.log.
+// HRDLE_SELF_VERIFY=1. Drives a brief session and asserts the server wrote
+// drift records to /tmp/hrdle-drift.log.
 
 const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
 const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
-const DRIFT_LOG = '/tmp/cchub-drift.log';
+const DRIFT_LOG = '/tmp/hrdle-drift.log';
 
 test.use({
   ignoreHTTPSErrors: true,
@@ -26,14 +26,14 @@ async function pickFirstClaudeSession(request: APIRequestContext): Promise<strin
   return target.id as string;
 }
 
-test('Channel C writes drift records to log under CCHUB_SELF_VERIFY=1', async ({ page, request }) => {
+test('Channel C writes drift records to log under HRDLE_SELF_VERIFY=1', async ({ page, request }) => {
   const sessionId = await pickFirstClaudeSession(request);
 
   await page.addInitScript(([id]) => {
-    localStorage.setItem('cchub-open-sessions', JSON.stringify([id]));
-    localStorage.setItem('cchub-last-session-id', id);
-    localStorage.setItem('cchub-onboarding-completed', 'true');
-    localStorage.setItem('cchub-onboarding-sessionlist-completed', 'true');
+    localStorage.setItem('hrdle-open-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-last-session-id', id);
+    localStorage.setItem('hrdle-onboarding-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   }, [sessionId]);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });

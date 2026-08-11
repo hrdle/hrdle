@@ -7,9 +7,9 @@ import { authFetch } from "../services/api";
  * unmounts. Returns `null` while loading or on error.
  *
  * The `/api/files/raw|download` routes sit behind header-only auth, so an
- * `<img src>` / `<video src>` / `<a href>` cannot reach them when CCHUB_PASSWORD
+ * `<img src>` / `<video src>` / `<a href>` cannot reach them when HRDLE_PASSWORD
  * is set. This hook fixes that without changing server semantics by routing
- * the actual GET through authFetch. #259 #260
+ * the actual GET through authFetch.
  */
 export function useAuthBlobUrl(
 	url: string | null | undefined,

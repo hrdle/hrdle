@@ -60,7 +60,7 @@ const LOAD_TIMEOUT_MS = 12_000
 
 // ── The protocol ──
 //
-// Mirrored in `src/host-bridge.ts` on the other side. Two copies of a handful of
+// Mirrored in hrdle-setup's `src/host-bridge.ts`. Two copies of a handful of
 // string literals, because the two run in different places and share no build.
 
 interface FromGuide {
@@ -243,7 +243,7 @@ export async function startPhoneUI(bridge: Bridge | null): Promise<void> {
         }
         break
 
-      // What a transcription would actually send (#255). The guide cannot ask
+      // What a transcription would actually send. The guide cannot ask
       // the server itself - it is a public origin and a tailnet address is
       // inside CGNAT space, which Private Network Access refuses whatever CORS
       // says - so every request it makes comes through here.

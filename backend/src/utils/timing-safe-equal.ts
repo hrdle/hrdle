@@ -8,7 +8,7 @@ import { createHash, timingSafeEqual } from 'node:crypto';
  * Both inputs are SHA-256 hashed first so the comparison runs over
  * fixed-length (32-byte) digests: timingSafeEqual requires equal-length
  * buffers, and hashing also avoids leaking the secret's length when the
- * inputs differ in size. #353
+ * inputs differ in size.
  */
 export function timingSafeStringEqual(a: string, b: string): boolean {
   const ha = createHash('sha256').update(a, 'utf8').digest();

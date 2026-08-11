@@ -4,7 +4,7 @@ import { parseHookJson, parseHookToml } from '../hook-status';
 import { HOOK_COMMAND } from '../../../../shared/identity';
 
 /**
- * #390: herdr's own agent detection drives the indicator, so the
+ * herdr's own agent detection drives the indicator, so the
  * status-transition hooks (PreToolUse / UserPromptSubmit) are gone. These lock
  * in the mapping and the "don't ask for hooks we no longer need" contract.
  */

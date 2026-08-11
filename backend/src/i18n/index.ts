@@ -63,8 +63,8 @@ const translations: Record<string, Translations> = {
       agentsNotInitialized: "warning: {{agents}} are installed, but their configuration is not initialized.",
       agentsNotFound: "warning: Claude Code / Codex were not found.",
       agentInitHint: "   Start an agent once, then run {{bin}} setup again",
-      codexHooksMigrated: "Merged Codex hooks into ~/.codex/hooks.json",
-      codexHooksMigrationFailed: "warning: Failed to merge Codex hooks into hooks.json:",
+      codexHooksInstalled: "Merged Codex hooks into ~/.codex/hooks.json",
+      codexHooksInstallFailed: "warning: Failed to merge Codex hooks into hooks.json:",
       macTitle: "{{product}} setup (macOS)",
       keychainSaved: "Saved password to Keychain (service: {{keychain}})",
       keychainFailed: "warning: Failed to save password to Keychain",
@@ -175,8 +175,8 @@ const translations: Record<string, Translations> = {
       agentsNotInitialized: "警告: {{agents}} はインストールされていますが、設定が初期化されていません。",
       agentsNotFound: "警告: Claude Code / Codex が見つかりません。",
       agentInitHint: "   エージェントを一度起動してから {{bin}} setup を再実行してください",
-      codexHooksMigrated: "Codex hook を ~/.codex/hooks.json に統合しました",
-      codexHooksMigrationFailed: "警告: Codex hook の hooks.json 統合に失敗しました:",
+      codexHooksInstalled: "Codex hook を ~/.codex/hooks.json に統合しました",
+      codexHooksInstallFailed: "警告: Codex hook の hooks.json 統合に失敗しました:",
       macTitle: "{{product}} セットアップ (macOS)",
       keychainSaved: "パスワードを Keychain に保存しました (service: {{keychain}})",
       keychainFailed: "警告: Keychain への保存に失敗しました",
@@ -269,10 +269,10 @@ function getNestedValue(obj: Translations, key: string): string | undefined {
 // Translation function with interpolation support
 /**
  * Always available to every message, so the catalog can name the product
- * without hard-coding it (#459) and no call site has to remember to pass it.
+ * without hard-coding it and no call site has to remember to pass it.
  *
  * Note for a rename: the CLI help aligns its columns with literal spaces, so a
- * name of a different length needs those adjusted. `cchub` and `hrdle` are both
+ * name of a different length needs those adjusted. `hrdle` and `hrdle` are both
  * five characters, which is luck rather than design.
  */
 const IDENTITY_PARAMS: Record<string, string | number> = {

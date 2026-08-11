@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.94] - 2026-08-11
+
+### Changed
+- **Comments carry non-obvious why, and nothing else.** A rule in CLAUDE.md, and
+  the codebase brought in line with it: not what the code plainly does, not
+  change history, not issue references. Length is not confidence - padding an
+  uncertain passage reads as certainty to whoever reads it next, and the place
+  to say "this part is unverified" is the PR description. Docs and README follow
+  the same rule: a snapshot of the current specification
+  - 255 issue references out of comments, JSDoc, JSX comments and test names.
+    Cross-project references stay - an upstream bug a workaround depends on is
+    the constraint itself, not our tracker
+  - Dated incident logs in CLAUDE.md and the skills rewritten as the constraints
+    they were evidence for
+  - `HANDOFF.md` deleted. It recorded a finished migration; the three
+    operational facts in it that were written down nowhere else moved to
+    CLAUDE.md's debugging section
+- **Migration code expires after a week.** Also a rule in CLAUDE.md. A week is
+  long enough for every install and every browser to come through; past that a
+  compatibility path is dead weight everyone working around it still has to
+  read. So a migration is written to be removed, and removing it is a deletion
+  rather than an untangling
+- The old product name is gone from the code: 211 occurrences in comments, event
+  names, globals, environment variables and test fixtures. Two localStorage keys
+  written by hand now go through `storageKey()`, and the hook command shown in
+  the UI comes from `identity.json` instead of a literal
+
+### Removed
+- Seven expired migrations: the legacy localStorage prefixes and their
+  copy-forward, the `{snapshots:[...]}` usage-history format, the `qr` command
+  alias, the bare-session-id normalisation and the stored pane-tree upgrade,
+  `CCHUB_PASSWORD`, and the Codex `config.toml` hook migration. Writing
+  `hooks.json` is not a migration and stays, as `installCodexNotifyHooks`
+- Spec Kit. `specs/` was empty, `.specify/feature.json` pointed at a directory
+  that never existed, and its constitution recorded decisions about a TUI
+  deleted with its implementation. `.specify/` and the ten `speckit-*` skills go
+  together - the skills cannot run without the scripts
+
+### Fixed
+- The e2e specs seeded the old localStorage keys and relied on the copy-forward
+  that is now gone. `bun run test` does not cover them, so this was invisible
+
 ## [0.3.93] - 2026-08-11
 
 ### Fixed

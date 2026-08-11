@@ -86,7 +86,7 @@ function notifySessionChange(): void {
 }
 
 /**
- * Capture a pane viewport for peer-dialog tooling (cchub send --wait, peek).
+ * Capture a pane viewport for peer-dialog tooling (hrdle send --wait, peek).
  * Returns the trailing `lines` rows (0 = all), with both ANSI-preserved and
  * stripped variants plus a heuristic `detectedState`.
  */
@@ -123,7 +123,7 @@ async function captureViewportSnapshot(
 /**
  * Run `fn` against the session's control session with REST client
  * accounting: addClient/removeClient bracket the call so a control session
- * created solely for a one-shot REST request (cchub peek/send, peer calls)
+ * created solely for a one-shot REST request (hrdle peek/send, peer calls)
  * starts its grace timer afterwards and gets cleaned up instead of leaking
  * its per-pane controller subprocesses forever.
  */
@@ -176,7 +176,7 @@ async function sendTextToSession(
 }
 
 /**
- * herdr's agent status → CC Hub indicator.
+ * herdr's agent status → Hrdle indicator.
  *
  * Verified against Claude 2.x on herdr 0.7.3: `working` while responding,
  * `blocked` while a TUI prompt waits on the user (AskUserQuestion and
@@ -208,7 +208,7 @@ export function herdrStatusToIndicator(status?: string): IndicatorState | null {
  * permission-pending badge on the workspace card).
  *
  * This now holds for thread agents too. They used to keep hooks first because
- * herdr's accuracy for them was unverified (#390), and the cost of that was a
+ * herdr's accuracy for them was unverified, and the cost of that was a
  * Kimi pane frozen at `completed` while it worked: the documented Kimi setup
  * registers `Stop` and nothing else, so the only hook event that ever arrives
  * says "finished" — and it then outranked herdr for the next 24 hours.
@@ -839,8 +839,8 @@ sessions.post('/history/resume', async (c) => {
 sessions.get('/:id', async (c) => {
   const id = c.req.param('id');
   const herdrSessions = await herdrService.listWorkspaces();
-  // By id, then by name - the same two ways every other route accepts since
-  // #186, and for the same reason: a name is what a person types and what an
+  // By id, then by name - the same two ways every other route accepts, and
+  // for the same reason: a name is what a person types and what an
   // older client still holds. An ambiguous name resolves to nothing rather
   // than to whichever workspace happens to sort first.
   const { session, ambiguous } = findSessionByAddress(herdrSessions, id);
@@ -939,7 +939,7 @@ sessions.put('/:id/theme', async (c) => {
 
 // PUT /sessions/:id/title - Rename the session's herdr workspace. The name
 // lives in herdr (workspace label), not in an hrdle-side store — same rule as
-// the display order. Since #186 the label is *not* the session id, so a rename
+// the display order. The label is *not* the session id, so a rename
 // changes what it is called and nothing about how it is reached.
 const UpdateTitleSchema = z.object({
   title: z.string().max(100).nullable(),
@@ -964,9 +964,9 @@ sessions.put('/:id/title', async (c) => {
   }
 
   try {
-    // The id does not change with the name since #186, so nothing is rekeyed
-    // and nothing has to switch addresses - which is the whole point: this
-    // rename used to retire the session's address mid-conversation.
+    // The id does not change with the name, so nothing is rekeyed and
+    // nothing has to switch addresses, which is the whole point: a rename
+    // must not retire the session's address mid-conversation.
     const sessionId = await herdrService.renameWorkspace(id, title);
     return c.json({ success: true, title, id: sessionId });
   } catch (error) {
@@ -978,12 +978,12 @@ sessions.put('/:id/title', async (c) => {
   }
 });
 
-// PUT /sessions/:id/stt-prompt - Words this session's speech is made of (#166).
+// PUT /sessions/:id/stt-prompt - Words this session's speech is made of.
 //
 // Kept short deliberately: Whisper's prompt is capped at 224 tokens and this
 // group leads the composition, so a long one would push out the glossary it is
 // meant to sit in front of. 100 rather than the 200 it started at, because the
-// composition now hard-limits the contributed groups to half its budget (#210)
+// composition now hard-limits the contributed groups to half its budget
 // and a field that accepts twice what can be used is a field that silently
 // drops the rest.
 const UpdateSttPromptSchema = z.object({
@@ -1013,8 +1013,8 @@ sessions.put('/:id/stt-prompt', async (c) => {
 });
 
 // POST /sessions/:id/move - Move a session to `index` in the display order.
-// The order lives in herdr (workspace order), not in cchub — so this is a
-// write straight through to herdr rather than to a cchub-side store.
+// The order lives in herdr (workspace order), not in hrdle — so this is a
+// write straight through to herdr rather than to a hrdle-side store.
 sessions.post('/:id/move', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json().catch(() => ({}));
@@ -1303,7 +1303,7 @@ sessions.get('/:id/panes/:paneId/viewport', async (c) => {
 });
 
 // POST /sessions/:id/prompt - Send a prompt text to the session's active pane.
-// Optional `paneId` targets a specific pane (glasses relay reply routing #504):
+// Optional `paneId` targets a specific pane (glasses relay reply routing):
 // in a multi-pane workspace the blocked pane is not necessarily the active one.
 sessions.post('/:id/prompt', async (c) => {
   const id = c.req.param('id');
@@ -1323,7 +1323,7 @@ sessions.post('/:id/prompt', async (c) => {
 
   // The delivery paths say *why* nothing was reached: a name that now points at
   // two workspaces has to be answered differently from one that points at none
-  // (#186), because only one of them is fixed by saying which session.
+  //, because only one of them is fixed by saying which session.
   const status = await herdrService.addressStatus(id);
   if (status !== 'ok') {
     return c.json(

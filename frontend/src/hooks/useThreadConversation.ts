@@ -37,7 +37,7 @@ export function useThreadConversation({
 	useEffect(() => {
 		// Per-effect cancellation flag. A shared ref would be reset when the
 		// next effect run sets it back to false, letting a late response from
-		// the previous threadId overwrite the new thread's messages. #257
+		// the previous threadId overwrite the new thread's messages.
 		let cancelled = false;
 		setMessages([]);
 		setIsReady(false);

@@ -8,7 +8,7 @@ Codex and other coding agents should use this file as the single source of repos
 
 Hrdle is a web-based terminal session manager for coding agents — Claude Code, Codex, Grok, Kimi and OpenCode. It runs them in herdr workspaces and provides a web UI for remote access from tablets/mobile devices.
 
-Formerly CC Hub, renamed in #459: the old name said Claude Code, which stopped being the whole story once the other agents arrived. `m0a/cc-hub` is archived at v0.2.98 and this repository carries development forward. It is **not** a remote here and must not be added as one — it was, until it overwrote this repository's `main` with its own history on 2026-08-07 (recovered from the release tags; see the release skill). The rename lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
+The product identity lives in `identity.json` — everything composed from it (service units, data directory, scratch paths, hook command, storage keys) follows without a call site changing.
 
 ## Language and Style Rules
 
@@ -32,6 +32,50 @@ No emoji in comments, log output, CLI output, `CHANGELOG.md` or commit messages.
 
 - `glasses/src/metrics.ts` — the emoji-to-G2-symbol substitution table; the emoji are input data the firmware cannot render
 - Emoji used as a control's own label where it is the affordance (the file-picker key in `frontend/src/components/Keyboard.tsx`)
+
+## Code Comments
+
+**A comment carries non-obvious WHY and nothing else.** Write only what cannot be
+recovered from the code itself: a hidden constraint, the reason a workaround is
+there, behavior that will surprise whoever reads it next.
+
+Do not write:
+
+- **WHAT** — what the code plainly does (`// get the user id`), or a paraphrase
+  of a function or variable name
+- **Change history** — "added X", "the old implementation did Y", "renamed from
+  Z". `git log` is where that lives, and it stays correct without anyone
+  maintaining it
+- **Task or issue references** — `(#538)`, `(UZU-1234)`. The tracker is where
+  that lives
+
+**Length is not confidence.** A passage you are unsure of does not become surer
+for being explained at more length, and the padding reads as certainty to the
+next person. Say "this part is unverified" in the PR description or in the reply
+to whoever asked, where someone deciding whether to trust it will actually look.
+
+Docs and `README.md` follow the same rule: a snapshot of the current
+specification. Not issue references, not how it came to be, not migration
+history.
+
+## Migration Code Expires After a Week
+
+Code that exists only to carry an old shape forward — a legacy storage key, a
+previous file format, a renamed command's alias, a config the setup used to
+write somewhere else — **lives for one week and is then deleted**. A week is
+long enough for every install and every browser to have come through; past that
+the compatibility path is dead weight that still has to be read, tested and
+reasoned about by everyone who touches the code around it.
+
+So a migration is written to be removed:
+
+- Keep it in as few places as possible, and prefer one function with one caller
+  over a fallback threaded through every read
+- Deleting it must be a deletion, not an untangling
+- When it goes, its tests and its config keys go with it
+
+Judge the week from when the migration landed, not from when the old shape was
+last seen in the wild.
 
 ## Commands
 
@@ -72,7 +116,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **HerdrClient** (`services/herdr-client.ts`) - Low-level herdr socket API client: NDJSON RPC over `~/.config/herdr/herdr.sock` (one connection per request; `events.subscribe` held open), streaming-safe UTF-8 line reader, pane id mapping (`%N ↔ wK:pN`), and `PaneController` — a persistent `herdr terminal session control` subprocess per pane carrying raw PTY input (base64, no sanitization), absolute PTY resizes, and `terminal.frame` output records
 - **HerdrControlSession** (`services/herdr-control.ts`) - One instance per Hrdle session (= one herdr workspace). Owns the pane split tree, tracks the focused pane, spawns lazy per-pane controllers (WS subscribe / first input only — read-only REST never takes over a pane), scans frames for cursor position and alt-screen state, client lifecycle with 30s grace period. **Renders a single tab**: a herdr workspace is `workspace > tab > pane`, so it filters to the active tab (`workspace.get`'s `active_tab_id`), follows tab switches via `tab.*` events (`switchActiveTab` re-hydrates the tree), and never merges tabs into one flat chain. `selectTab`/`createTab`/`closeTab` drive the tab set. Also `captureViewportHerdr`: viewport composition from `pane.read` (visible at offset 0, `recent` slice for scrollback, capped at herdr's 1000-line read limit)
 - **HerdrLayout** (`services/herdr-layout.ts`) - Hrdle-owned split tree (herdr's own grid can't be resized headlessly): split/close/zoom/ratio adjust/absolute pane sizing, rendered to tmux-convention `TmuxLayoutNode` rects for the frontend
-- **HerdrService** (`services/herdr.ts`) - Session-level operations mapping Hrdle sessions onto herdr workspaces: list (with agent detection from `pane.process_info`, native agent session ids from `agent.list`, `blocked` status), create/kill, previews, and `moveSession` — herdr's workspace order **is** the session display order, so a reorder is a `workspace.move` and nothing is stored on the hrdle side. **A session's id is herdr's `workspace_id` (`w5Q`), never its label** (#186): the label is text a person edits, and the workspace-naming convention has every agent rewrite it twice per task, so addressing by it meant a session's address changed mid-conversation — ten spoken replies in a row 404'd against a name that had just been rewritten, and the next thing said went to a different session. A label is still *accepted* (it is what `hrdle send local:dev:%1` types, and what an already-installed ehpk still holds), but an ambiguous one resolves to nothing rather than to whichever workspace sorts first, and the delivery paths say so instead of answering 404. `session-id-migration.ts` moves settings keyed by an old label onto the workspace id at startup, and only when exactly one live workspace carries that name
+- **HerdrService** (`services/herdr.ts`) - Session-level operations mapping Hrdle sessions onto herdr workspaces: list (with agent detection from `pane.process_info`, native agent session ids from `agent.list`, `blocked` status), create/kill, previews, and `moveSession` — herdr's workspace order **is** the session display order, so a reorder is a `workspace.move` and nothing is stored on the hrdle side. **A session's id is herdr's `workspace_id` (`w5Q`), never its label**: the label is text a person edits, and the workspace-naming convention has every agent rewrite it twice per task, so addressing by it makes a session's address change mid-conversation — spoken replies 404 against a name that has just been rewritten, and the next thing said goes to a different session. A label is still *accepted* (it is what `hrdle send local:dev:%1` types, and what an already-installed ehpk still holds), but an ambiguous one resolves to nothing rather than to whichever workspace sorts first, and the delivery paths say so instead of answering 404. `session-id-migration.ts` moves settings keyed by a label onto the workspace id at startup, and only when exactly one live workspace carries that name
 - **HerdrUpdateService** (`services/herdr-update.ts`) - Detects herdr binary-vs-server version skew (`herdr update` swaps the binary but leaves the running server old) by parsing `herdr status --json`, cached 30s and refreshed off the dashboard poll. Reports only — applying (`herdr update` + supervised restart) is an explicit user action via `POST /api/herdr/apply-update`; never the `hrdle update --auto` timer, never `--handoff`. Unreadable status degrades to no warning
 - **PaneState** (`services/pane-state.ts`) - Backend-agnostic `stripAnsi` / `detectPaneState` heuristics for peer-dialog tooling (`hrdle send --wait`, `hrdle peek`)
 - **ClaudeCodeService** (`services/claude-code.ts`) - Monitors Claude Code state from `.jsonl` files; active-session matching uses only herdr's native agent session id
@@ -104,7 +148,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **OpenCodeHistoryService** (`services/opencode-history.ts`) - OpenCode session history + conversation reader. A `tool` part holds the call **and** its result in one row (`state.input` / `state.output`), which the parser splits back across an assistant/user turn boundary because that is the shape `ConversationViewer` pairs by `toolUseId`; `reasoning`, `step-start` and `step-finish` parts are dropped
 - **OpenCodeUsageService** (`services/opencode-usage.ts`) - Aggregates OpenCode token consumption (24h/7d windows, per-model) from assistant message rows for the dashboard's OpenCode tab. Like Grok and Kimi it has no rate-limit windows to show, but unlike them **the cost is not our estimate**: OpenCode computes and stores a per-turn `cost`, so the figure is its own. Absent (never zeroed) when no turn in the window carried one; a genuine 0 is what free models report
 - **GroqSttUsageService** (`services/groq-stt-usage.ts`) - Groq speech-to-text consumption by the glasses, **recorded rather than aggregated**: Groq has no usage endpoint and reports remaining quota only in `x-ratelimit-*` headers on a transcription response, so a request not written down as it happened is unrecoverable. `routes/glasses.ts` records on the way past (before the status is acted on - a 429 still spends quota - and without awaiting it), into `<dataDir>/groq-stt-usage.json`. Tracks requests (capped per day) and audio seconds (capped per hour, and what the API is priced on) separately, because the two ceilings empty on different clocks. Cost is an estimate at the list price per hour of audio, never a billed figure
-- **SttRequestResolver** (`services/stt-request.ts`) - The one place that decides what a transcription carries (#255): `resolveSttRequest({ sessionId, lang })` returns the model, the language, the vocabulary prompt, each value's source and how the prompt was composed. `routes/glasses.ts` calls it once for `/stt` and serves it verbatim from `/stt-preview`, so the settings screen, the simulator and the terminal all read the object the transcription itself uses. Composition stays in `stt-prompt.ts`; the key stays out of the return value, because it is write-only
+- **SttRequestResolver** (`services/stt-request.ts`) - The one place that decides what a transcription carries: `resolveSttRequest({ sessionId, lang })` returns the model, the language, the vocabulary prompt, each value's source and how the prompt was composed. `routes/glasses.ts` calls it once for `/stt` and serves it verbatim from `/stt-preview`, so the settings screen, the simulator and the terminal all read the object the transcription itself uses. Composition stays in `stt-prompt.ts`; the key stays out of the return value, because it is write-only
 - **OpenRouterPricingService / OpenRouterAccountService** (`services/openrouter.ts`) - Pay-as-you-go cost reporting: list prices from the public `/api/v1/models` (no auth, 24h cache) drive *estimated* per-window costs, while `/api/v1/key` + `/api/v1/credits` (keyed, 60s cache, 5min failure backoff) report OpenRouter's *billed* daily/weekly/monthly spend and credit balance. Estimates use rolling windows, OpenRouter's are calendar windows, so the two never match exactly
 - **ConversationWatcher** (`services/conversation-watcher.ts`) - Watches Claude Code / Codex `.jsonl` files and emits conversation updates to subscribed WebSocket clients
 - **HookStatusService** (`services/hook-status.ts`) - Reports whether the hooks Hrdle still needs are installed (`Stop` for notification text, `PostToolUse`/`AskUserQuestion` for the question's tool name). Indicator transitions come from herdr, not hooks
@@ -112,9 +156,9 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **AuthService** (`services/auth.ts`) - Password-based authentication with session tokens
 - **PeerRegistry** (`services/peer-registry.ts`) - Persists peer server metadata to `peers.json` (with mutation locking), records per-peer success/failure state
 - **PeerAuth** (`services/peer-auth.ts`) - Proxy login to peer servers (`POST /api/auth/login`), stores JWT tokens for subsequent API/WS calls, marks peers `unauthorized` on 401
-- **PeerDiscovery** (`services/peer-discovery.ts`) - Scans the Tailscale tailnet (`tailscale status --json`) and probes each peer's `/health` in parallel to find running Hrdle instances. The probe port was a literal 5923 from before the rename, so for months it found nothing on a tailnet full of installs (#459, fixed in 0.3.28); it composes the port from `IDENTITY.defaultPort` now
+- **PeerDiscovery** (`services/peer-discovery.ts`) - Scans the Tailscale tailnet (`tailscale status --json`) and probes each peer's `/health` in parallel to find running Hrdle instances. The probe port comes from `IDENTITY.defaultPort`. A literal there stops matching the moment the identity changes, and the failure is silent: a tailnet full of installs discovers nothing
 - **Discovery** (`services/discovery.ts`) - One plaintext endpoint, `GET /whoami`, on `port + 1`, answering with the server's Tailscale FQDN, product name and version and nothing else. It exists so a phone can be told `91.210.90` instead of `https://beelink-arch.tail4459c9.ts.net:5924` — **plaintext is the requirement, not a shortcut**: the certificate is issued for the FQDN, so reaching the machine by IP or short hostname fails TLS, and `fetch` has no way past a certificate error the way a browser's warning page does. One unverified request buys the name; everything after it is ordinary verified HTTPS, and a tailnet caller's packets are inside WireGuard regardless. Only callers on a private or CGNAT address get an answer. `100.` is the only part of a Tailscale address that can be dropped — the second octet onwards is allocated per node, not per tailnet
-- **PeerUrl** (`services/peer-url.ts`) - SSRF guard for peer URLs (#235): only allows Tailscale hosts (`*.ts.net`, CGNAT `100.64.0.0/10`, ULA `fd7a:115c:a1e0::/48`)
+- **PeerUrl** (`services/peer-url.ts`) - SSRF guard for peer URLs: only allows Tailscale hosts (`*.ts.net`, CGNAT `100.64.0.0/10`, ULA `fd7a:115c:a1e0::/48`)
 
 ### Key API Routes
 
@@ -209,12 +253,12 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **Terminal.tsx** - xterm.js terminal with WebGL rendering, **`scrollback: 0`** (server-side scrollback). `ControlModeConfig` for pane size sync (`proposeDimensions()` instead of `fit()`, `setExactSize()` from the layout) and viewport delivery (`registerOnViewport`, `scrollBy`, `scrollToLive`). Each new viewport is converted to a VT escape sequence (`viewport-render.ts`) and `term.write()`-ed to refresh the screen. Supports font size adjustment, desktop text selection with auto-copy, touch selection mode for mobile/tablet
 - **SelectionOverlay.tsx** - Touch-selection overlay rendered above the terminal: draggable start/end handles, copy/cancel controls, computed from xterm `_core` cell metrics
 - **viewport-render.ts** (`utils/viewport-render.ts`) - Converts a `PaneViewport` into a VT sequence (`\x1b[?25l` + per-row `\x1b[r;1H\x1b[2K<line>` + cursor restore) that xterm.js can apply with a single `term.write()`
-- **terminal-links.ts** (`utils/terminal-links.ts`) - URLs visible in a viewport, rejoined across the rows they were wrapped over, shown as a copy/open chip in the corner of the pane. **A pane's own copy key cannot reach the browser's clipboard**, which is why this exists: `c to copy` on Claude Code's login screen writes `ESC ] 52 ; c ; <base64> ST` and nothing else once the host has no `DISPLAY` — and herdr's renderer consumes that sequence, so it appears neither in the control stream's frames nor anywhere in `herdr api schema --json` (measured on herdr 0.7.5, 2026-08-09; asked for upstream in herdrdev/herdr#1459). The `registerOscHandler(52, ...)` in `Terminal.tsx` is therefore dormant, deliberately kept for the day that lands. Rejoining is a heuristic and has to be: `recent_unwrapped` returns the same pieces as `visible`, because Claude Code's TUI hard-wraps its own output and leaves no wrap flag to consult. So the only join made is at the boundary itself — a URL ending the last column of a row that is *full*, continued by the leading URL-character run below. Both halves matter, and so does stripping the `\r` every row arrives with: with it left on, a full 160-column row measures 161, stops looking full, and every wrapped URL silently truncates
+- **terminal-links.ts** (`utils/terminal-links.ts`) - URLs visible in a viewport, rejoined across the rows they were wrapped over, shown as a copy/open chip in the corner of the pane. **A pane's own copy key cannot reach the browser's clipboard**, which is why this exists: `c to copy` on Claude Code's login screen writes `ESC ] 52 ; c ; <base64> ST` and nothing else once the host has no `DISPLAY` — and herdr's renderer consumes that sequence, so it appears neither in the control stream's frames nor anywhere in `herdr api schema --json` (measured on herdr 0.7.5; asked for upstream in herdrdev/herdr#1459). The `registerOscHandler(52, ...)` in `Terminal.tsx` is therefore dormant, deliberately kept for the day that lands. Rejoining is a heuristic and has to be: `recent_unwrapped` returns the same pieces as `visible`, because Claude Code's TUI hard-wraps its own output and leaves no wrap flag to consult. So the only join made is at the boundary itself — a URL ending the last column of a row that is *full*, continued by the leading URL-character run below. Both halves matter, and so does stripping the `\r` every row arrives with: with it left on, a full 160-column row measures 161, stops looking full, and every wrapped URL silently truncates
 
 **Session Management**:
 - **SessionList.tsx** - Full session list with tabs (Active/History/Dashboard), pane list with focus/close/split actions, pinch-to-zoom support
 - **SessionHistory.tsx** - Past session browser with project grouping
-- **ConversationViewer.tsx** - The transcript, read-only, laid out after the Claude app: the user's turns as bubbles on the right, the agent's as a full-width column, on a warm neutral surface of its own (`--color-conv-*` in `index.css`, not the session's terminal color). A tool call and its result render as **one** collapsed card - the transcript stores them a message apart (call on the assistant turn, result on the user turn after it), so `buildRows` pairs them by `toolUseId` and drops the result-only message that used to appear as a "System" speaker saying the output of something two screens up. Consecutive turns from one speaker are labelled once. Code is syntax-highlighted through highlight.js (already in the bundle for the file viewer), but **not** with one of its themes - the `hljs-*` classes are re-coloured against the conversation palette under `.cv-code` in `index.css`, because every shipped theme is a different room's lighting and all the dark ones are cold. A fence names its own language; a tool result never does, so it borrows the language of the file the call named - and only when the output has line breaks, since a one-line result is a status message rather than a listing
+- **ConversationViewer.tsx** - The transcript, read-only, laid out after the Claude app: the user's turns as bubbles on the right, the agent's as a full-width column, on a warm neutral surface of its own (`--color-conv-*` in `index.css`, not the session's terminal color). A tool call and its result render as **one** collapsed card - the transcript stores them a message apart (call on the assistant turn, result on the user turn after it), so `buildRows` pairs them by `toolUseId` and drops the result-only message, which otherwise appears as a "System" speaker saying the output of something two screens up. Consecutive turns from one speaker are labelled once. Code is syntax-highlighted through highlight.js (already in the bundle for the file viewer), but **not** with one of its themes - the `hljs-*` classes are re-coloured against the conversation palette under `.cv-code` in `index.css`, because every shipped theme is a different room's lighting and all the dark ones are cold. A fence names its own language; a tool result never does, so it borrows the language of the file the call named - and only when the output has line breaks, since a one-line result is a status message rather than a listing
 
 **History V2** (`components/history/`, on by default; `hrdle-history-v2: "false"` opts back into the legacy list). Shares the conversation's palette (`--color-conv-*`): browsing past sessions and reading one are the same act, and a cold list opening onto a warm transcript announced a seam that isn't there.
 - **SessionHistoryV2.tsx** - Flat searchable history list with facet filtering
@@ -228,7 +272,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **dashboard/PeerServerCard.tsx** - Per-peer server info card with system metrics
 
 **Chat** (`components/chat/`):
-- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. **Read-only**: there is no composer, and chat mode no longer raises the soft keyboard. Two places to type into one pane only made it ambiguous which one was listening, and the answer was never the one on screen
+- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. **Read-only**: there is no composer, and chat mode does not raise the soft keyboard. Two places to type into one pane make it ambiguous which one is listening, and it is never the one on screen
 
 **Keyboard / Input**:
 - **InputBar.tsx** - Persistent input bar above the terminal with prompt history, slash-command picker, image upload, sendable to the focused pane
@@ -275,7 +319,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **useNetworkLatency.ts** - WebSocket latency tracking
 - **useLineSelection.ts** - Text line selection utilities
 - **useSelectionMode.ts** - Touch-selection state machine for `SelectionOverlay` (start/end cell, drag handles, copy-to-clipboard)
-- **useConversationStream.ts** - Subscribes to `/ws/mux` conversation streams (`subscribe-conversation`) and exposes incremental conversation updates. The subscription carries the **pane's** `agentSessionId`, not just the workspace id: a workspace with two agent panes holds two conversations, and resolving by directory alone answered with whichever transcript was written last - a different agent from the one on screen (#80)
+- **useConversationStream.ts** - Subscribes to `/ws/mux` conversation streams (`subscribe-conversation`) and exposes incremental conversation updates. The subscription carries the **pane's** `agentSessionId`, not just the workspace id: a workspace with two agent panes holds two conversations, and resolving by directory alone answers with whichever transcript was written last - a different agent from the one on screen
 - **useAgentConversation.ts** - Unified conversation hook: Claude streams over the WebSocket, thread agents (Codex/Grok) poll over HTTP — chosen from the shared `AGENT_PROVIDERS` registry
 - **useThreadConversation.ts** - Polling conversation loader for thread-based agents (`?agent=codex|grok`)
 - **usePeers.ts** - Peer list CRUD and state management (`/api/peers`)
@@ -438,18 +482,17 @@ The G2's SDK only hands over raw PCM, so transcription happens on the server at
 `POST /api/glasses/stt` (`routes/glasses.ts`) through Groq
 `whisper-large-v3-turbo`. `GROQ_API_KEY` never leaves this host.
 
-**One function resolves what is sent, and one endpoint reports it** (#255).
+**One function resolves what is sent, and one endpoint reports it.**
 `services/stt-request.ts`'s `resolveSttRequest({ sessionId, lang })` returns the
 whole request - model, language, prompt, each value's source, and for the prompt
 which group produced which term and where the budget cut - and
 `GET /api/glasses/stt-preview?session=&lang=` serves exactly that object. The
 route calls it once and packs the result into the `FormData`; it decides
-nothing. The Groq key is deliberately **not** in there: it is write-only, and a
-preview carrying it would be the way it came back out. Before this, the four
-values came from four functions with four precedence rules and the request
-existed as one thing only for the length of one `fetch`, so "what is this
-session sending" could only be answered by reading four files - which twice in
-one day produced a confident wrong answer.
+nothing. Split across several functions with a precedence rule each, "what is
+this session sending" can only be answered by reading all of them, and the
+answer comes out confidently wrong. The Groq key is deliberately **not** in
+there: it is write-only, and a preview carrying it would be the way it came back
+out.
 
 `services/stt-prompt.ts` composes the vocabulary-biasing `prompt`. Its order is
 **the speaking session's own words, then the glossary**, filled up to what fits
@@ -461,15 +504,13 @@ from `binaryName` in `identity.json`). A switch on the settings screen
 (`sttBias`) disables it too, which is the same decision made by someone wearing
 the glasses rather than someone with a shell.
 
-There was a third group between the two, until #255: words the settings screen
-added to every session's prompt. It is gone. Squeezed from both sides it never
-had a job - a word said always belongs in the glossary, and a word about to be
-said is the session's to write - and it was empty from the day it shipped except
-for the five days a leftover `off` in it disabled the whole prompt (#210). An
-`off` still in that field of an existing `glasses-settings.json` is carried over
-as the new switch's "disabled"; words in it are dropped.
+There is no third group between the two, and adding one has no job to do: a word
+that gets said belongs in the glossary, and a word about to be said is the
+session's to write. A `glasses-settings.json` may still carry a free-text
+vocabulary field of that shape - an `off` in it reads as the `sttBias` switch's
+"disabled", and any other words in it are dropped.
 
-The first group is per session (#166): `?session=<workspace id>` on the STT
+The first group is per session: `?session=<workspace id>` on the STT
 request names who is speaking, and `PUT /api/sessions/:id/stt-prompt` stores a
 short phrase against that session in `SessionMetadataService`, beside its theme.
 The glasses send it from `voiceTarget.sessionId`, which is the workspace the
@@ -478,16 +519,15 @@ stt-prompt "音声認識、ハルシネーション"` resolves which session it 
 the same way `hrdle glasses` does (`commands/session-target.ts`) - which is the
 point: what is about to be said is known in the session, and not anywhere else.
 
-**Workspace names are not in the prompt, and putting them back would undo
-#210.** They used to lead it, on the reasoning that 「2脚ロボ開発」 is a coinage
-nothing else can supply. That held while a label was a name. The naming
-convention appends a status suffix (`— 作業中`, `— 完了済`) and agents write the
-reason for an interruption into parentheses, so a label became a sentence
-written for a person reading a list - and measured on 2026-08-07, thirteen of
-them spent 189 of the 190 characters: `タブ` was the only glossary term that fit,
-while `リリース`, `コミット`, `リベース` and `ペイン` - the words actually
-reported as misheard - were all pushed out. The half-the-budget cap exists so
-that the group which replaced them cannot repeat it.
+**Workspace names are not in the prompt, and do not put them back.** A label
+looks like a coinage nothing else can supply (「2脚ロボ開発」), but it is not a
+name: the naming convention appends a status suffix (`— 作業中`, `— 完了済`) and
+agents write the reason for an interruption into parentheses, so a label is a
+sentence written for a person reading a list. Thirteen of them spend 189 of the
+190 characters, which leaves `タブ` as the only glossary term that fits while
+`リリース`, `コミット`, `リベース` and `ペイン` - the words actually reported as
+misheard - are all pushed out. The half-the-budget cap is what stops the
+session's own group doing the same.
 
 The key, the language, the model and that switch are settings, editable from the
 glasses app's own web screens (the phone companion UI and the simulator) and
@@ -499,14 +539,13 @@ stored by `services/glasses-settings.ts` in `<dataDir>/glasses-settings.json`
 | Groq key | setting, then `GROQ_API_KEY` | Write-only through the API - `GET /api/glasses/settings` reports only whether one is set and where it came from |
 | Language | `?lang=` on the request, then the setting, then `ja` | `auto` sends no language at all and lets Whisper detect it. The glossary is Japanese, so a prompt of its own is what makes another language work properly |
 | Model | setting, then `whisper-large-v3-turbo` | A closed set (`STT_MODELS` in `shared/types.ts`) - an unknown model is a 400 on every utterance and the wearer sees only "STT provider error" |
-| Vocabulary bias | `HRDLE_STT_PROMPT=off` or the `sttBias` switch turns it off; `HRDLE_STT_PROMPT` set to anything else replaces the line; otherwise composed | The env var replaces and the switch disables, and nothing a screen saves does either - that asymmetry is #210, where the one field reachable from the device could silently disable everything else, and did, for five days. The env var can switch the bias off but the screen cannot switch *that* back on, and says so |
+| Vocabulary bias | `HRDLE_STT_PROMPT=off` or the `sttBias` switch turns it off; `HRDLE_STT_PROMPT` set to anything else replaces the line; otherwise composed | The env var replaces and the switch disables, and nothing a screen saves does either: a field reachable from the device must not be able to silently disable everything else. The env var can switch the bias off but the screen cannot switch *that* back on, and says so |
 
 **`GET /api/glasses/settings` reports what is stored, never what would be
-sent.** It has no session, so it never could. It used to carry an
-`effectivePrompt`, which was the no-session line and was read as the sent value;
-diagnosing a per-session vocabulary bug that did not exist out of that field is
-half of why #255 exists. `/stt-preview` is the endpoint that answers, and `hrdle
-stt-prompt` with no arguments prints the same object in the terminal.
+sent.** It has no session, so it never could, and a field on it that looks like
+the sent prompt only buys a per-session bug that does not exist.
+`/stt-preview` is the endpoint that answers, and `hrdle stt-prompt` with no
+arguments prints the same object in the terminal.
 
 **Every transcription is written into the screen recording, with what produced
 it.** `recordSttRequest` (`glasses-screen-recorder.ts`) appends an `stt` line -
@@ -549,7 +588,7 @@ volume floor is needed separately.
 }
 ```
 
-`PreToolUse` and `UserPromptSubmit` are no longer needed (since v0.2.2). The
+`PreToolUse` and `UserPromptSubmit` are not needed. The
 indicator's state transitions come from herdr's `pane.agent_status_changed`, so a
 hook only carries what herdr does not have: the notification body and the
 question's tool name. Leaving them registered does no harm.
@@ -557,7 +596,7 @@ question's tool name. Leaving them registered does no harm.
 2. Make sure the `hrdle` binary is on PATH (hooks run from the Claude Code /
    Codex process). A hook runs in a **non-interactive shell**, so `.zshrc` is not
    read: a setup that adds `~/bin` or `~/.local/bin` to PATH from `.zshrc` cannot
-   resolve the bare name and fails with `command not found` (#538). Write the
+   resolve the bare name and fails with `command not found`. Write the
    absolute path there instead (`/home/you/bin/hrdle notify`). Where hrdle writes
    the command itself (`migrateCodexHooksToJson`, the hook setup prompt in the
    UI), it uses the resolved path from `resolveNotifyCommand()`
@@ -634,8 +673,8 @@ Key types: `ControlClientMessage`, `ControlServerMessage` (per-session terminal 
 
 ## What Hrdle is next to
 
-Written down because it was got wrong three times in one afternoon (2026-07-31),
-each time by assuming rather than looking. Anyone about to describe this product
+Written down because it is easy to get wrong by assuming rather than looking.
+Anyone about to describe this product
 — a README, a store listing, the setup guide — should read this first.
 
 The agents are not the competition. Claude Code, Codex, Grok, Kimi and OpenCode are the
@@ -720,8 +759,8 @@ animation falls back to the artwork as drawn rather than to something flat.
 
 ### What the phone app's WebView will not do
 
-Measured on device on 2026-08-01, against an Android 16 phone with the app
-holding camera permission at the OS level. The WebView is
+Measured on device, against an Android 16 phone with the app holding camera
+permission at the OS level. The WebView is
 **flutter_inappwebview** (it announces itself in `globalThis`), and it refuses
 web content three ways:
 
@@ -741,20 +780,17 @@ So **the setup screen asks for a short address instead of scanning anything**
 accept typing, so the job was making the typing short: nine characters rather
 than forty-three.
 
-**The scanner is gone, and so is the code it read.** `qr-scan.ts`,
-`qr-decode.ts`, `photo-capture.ts` and `camera-probe.ts` were kept for a while
-with no route to them, on the theory that they would work the day the host
-implements `onPermissionRequest`. Keeping them cost more than that day is worth:
-four modules, a jsQR dependency, two blocks of translated strings and — the
-expensive part — a story told across the app, the setup site and the installer
-about a code that nothing could read. `hrdle qr` is now `hrdle address` (the old
-name still works) and prints two lines of text instead of drawing anything.
+**There is no QR scanner, and writing one back is not the fix.** Code with no
+route to it costs more than the day the host might implement
+`onPermissionRequest` is worth: modules, a jsQR dependency, blocks of translated
+strings and — the expensive part — a story told across the app, the setup site
+and the installer about a code that nothing can read. `hrdle address` prints two
+lines of text instead of drawing anything (`hrdle qr` is accepted as an alias).
 
-They are in the history, deleted together, if the platform ever changes: the
-decoder was better than what it replaced (BarcodeDetector first, then jsQR over
-the full frame, a centre crop and native resolution — a 150px code in a
-4000x3000 photo reads from the crop and fails everything else), and
-`camera-probe.ts` is the screen that produced the table above. Recover that
+A decoder (BarcodeDetector first, then jsQR over the full frame, a centre crop
+and native resolution — a 150px code in a 4000x3000 photo reads from the crop
+and fails everything else) and `camera-probe.ts`, the screen that produced the
+table above, are in the git history. If the platform ever changes, recover that
 commit before re-testing any of this rather than starting the investigation
 over.
 
@@ -768,12 +804,12 @@ what the app looks like it might want:
 | `network` | Every request to the server, and the guide iframe |
 | `g2-microphone` | `audioControl(true, AudioInputSource.Glasses)` in `display.ts` |
 
-`camera` was declared until 0.0.28 and never bought anything. It grants the
-SDK's `captureImageFromCamera()`, which **nothing in `glasses/src` calls** — the
-routeless scanners reach for `getUserMedia` and `<input capture>`, which are web
-APIs the manifest has no say over (the table above). So it asked a user to grant
-a camera that could not then be opened. If the host ever implements
-`onPermissionRequest` and those files are wired up again, it still will not be
+**`camera` is not one of them, and declaring it buys nothing.** It grants the
+SDK's `captureImageFromCamera()`, which **nothing in `glasses/src` calls** — web
+content reaching for `getUserMedia` or `<input capture>` is reaching for web
+APIs the manifest has no say over (the table above). Declaring it asks a user to
+grant a camera that cannot then be opened. If the host ever implements
+`onPermissionRequest` and a scanner is wired up again, it still will not be
 needed; `captureImageFromCamera()` would be.
 
 The valid names are fixed by the packer, not by us —
@@ -794,12 +830,11 @@ and the canvas paints what that bridge holds. So the rebuild-vs-upgrade
 decision, the skip-if-unchanged record, which container id a string is addressed
 to, and every container's geometry are decided once, in `display.ts`, for both.
 
-It did not always. It used to lay the screen out itself from `screenText()` -
-same strings, second implementation of where they go - and every divergence that
-cost real debugging time was of that shape: character widths off by one, paging
-repeating the previous line on the device only, tofu on the device only, a recap
-missing in the simulator only (all four found on 2026-07-27 and 28), a notice
-strip 36px from where the device drew it.
+A second implementation of where those strings go - the simulator laying the
+screen out itself from `screenText()` - is what produces the divergences that
+cost real debugging time: character widths off by one, paging repeating the
+previous line on the device only, tofu on the device only, a recap missing in
+the simulator only, a notice strip 36px from where the device drew it.
 
 What is still **not** shared is the glyphs themselves: this window draws with a
 browser font at the firmware's own advances, so a character the panel has no
@@ -829,7 +864,7 @@ The simulator:
 
 ```
 https://<host>:5924/glasses          # served by production
-https://<host>:5924/glasses?player   # screen-mirror recording replay player (#127)
+https://<host>:5924/glasses?player   # screen-mirror recording replay player
 bun run --filter glasses dev         # vite dev -> :8391
 ```
 
@@ -929,14 +964,13 @@ herdr --session <name> server stop                    # and close its workspaces
   directory still follows `$HOME`, so a second server restores the *user's*
   workspaces and two processes then own one `session.json`
 - **`HERDR_CONFIG_PATH` does not either** — it overrides `config.toml` and
-  nothing else. Measured on 2026-08-04: a server started with both pointed at a
-  scratch directory came up holding all 16 of the user's workspaces
+  nothing else. Measured: a server started with both pointed at a scratch
+  directory comes up holding every one of the user's workspaces
 - A socket path is capped by `sun_path` (104 bytes). A scratchpad path is
   already longer than that, which is a hint that the socket does not belong
   there
 
-Two more things a test on the default server gets wrong, both found the same
-day:
+Two more things a test on the default server gets wrong:
 
 - **`pane.split` ignores the `pane_id` it is given and splits the focused
   pane** — which is the user's, not the test's. Drive a test pane through
@@ -947,3 +981,41 @@ day:
   appear in `GET /api/sessions` with `panes: null`. Harmless to read, but do
   not mistake them for the test's own, and do not write session metadata from a
   test run
+
+### A test server started by hand loses its agents' transcripts
+
+Claude Code sets `CLAUDE_CODE_CHILD_SESSION=1` on its children, so an hrdle
+started from an agent's shell propagates the marker down to the agents in its
+own panes:
+
+```
+me (Claude Code)  CLAUDE_CODE_CHILD_SESSION=1
+      | starting hrdle by hand from here
+hrdle -> herdr(hrdle) -> pane -> claude
+                                  \- judged a "child session" -> transcript saving OFF
+```
+
+The pane says `Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION
+marker`, and nothing else does. The conversation works normally, so the damage
+surfaces only when a restart tries to restore it and
+`claude --resume <id>` answers `No conversation found with session ID`:
+`resume_agents_on_restore` does its job against a log that was never written.
+
+Started through the systemd unit the environment is clean, so **test through the
+service** when the thing under test is session restore. Unset the marker
+otherwise.
+
+### Run `bun install` in a new worktree
+
+The working directories are `git worktree`s sharing one `.git`, and
+`node_modules` is not shared. Without it `hono` fails to resolve and a pile of
+backend tests fail in a way indistinguishable from real damage.
+
+### Tests must take the data directory from `IDENTITY`
+
+Tests that escape their writes to a temp directory do it by setting the data
+directory env var, and a literal there (`process.env.HRDLE_DATA_DIR = tempDir`)
+silently stops matching if the identity changes — the line then sets nothing and
+the test writes into the **real** data directory. That shows up as
+contamination, not as failure, so a green suite hides it. Go through
+`IDENTITY.dataDirEnv`.

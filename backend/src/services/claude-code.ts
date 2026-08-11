@@ -81,7 +81,7 @@ export class ClaudeCodeService {
   // an entry per ever-seen JSONL/path/tty — every distinct session a self-hosted
   // server ever saw would stay resident forever. Evict on insert by sweeping
   // expired entries first, then dropping the oldest (Map insertion order) until
-  // size <= cap. #249
+  // size <= cap.
   private static readonly CACHE_MAX_ENTRIES = 1000;
 
   private static evictAndCap<V extends { timestamp: number }>(
@@ -146,7 +146,7 @@ export class ClaudeCodeService {
 
   /**
    * Convert a path to Claude Code project directory name
-   * e.g., /home/m0a/cchub -> -home-m0a-cchub
+   * e.g., /home/m0a/hrdle -> -home-m0a-hrdle
    */
   private pathToProjectName(path: string): string {
     return claudeProjectDirName(path);

@@ -270,10 +270,10 @@ function formatSpeed(bps: number): string {
 	return `${bps.toFixed(0)} B/s`;
 }
 
-// ─── herdr version skew notice (#393) ───
+// ─── herdr version skew notice ───
 /**
  * `herdr update` swaps the binary but leaves the running server on the old
- * version, and cchub spawns that binary to drive panes — so the skew shows up
+ * version, and hrdle spawns that binary to drive panes — so the skew shows up
  * as "the terminal won't connect". Applying costs every running command, so
  * the restart happens only when the user presses this button.
  */
@@ -315,7 +315,7 @@ function HerdrUpdateNotice({
 
 	// Two different situations wear the same button. A newer release means a
 	// stop/update/start; skew alone means only the running server is stale, and
-	// saying "a new version is available" there would be a lie (#259, #260).
+	// saying "a new version is available" there would be a lie.
 	const isNewRelease = status.updateAvailable === true;
 
 	return (
@@ -444,9 +444,9 @@ interface ServerInfoProps {
 	};
 	/** Hide the throughput chart (it tracks this browser's WS bytes, not the peer's). */
 	hideThroughput?: boolean;
-	/** herdr binary-vs-server skew, and whether a newer release exists (#393, #259). */
+	/** herdr binary-vs-server skew, and whether a newer release exists. */
 	herdrUpdate?: HerdrUpdateStatus;
-	/** This server's own version and whether it is the published one (#259). */
+	/** This server's own version and whether it is the published one. */
 	hrdleUpdate?: HrdleUpdateStatus;
 	/** Offer the apply button — local server only; the endpoint restarts this host's herdr. */
 	allowHerdrApply?: boolean;
@@ -496,7 +496,7 @@ export function ServerInfo({
 	useEffect(() => {
 		if (hideThroughput) return;
 		const interval = setInterval(() => {
-			const val = window.__cchub_ws_bytes_per_sec || 0;
+			const val = window.__hrdle_ws_bytes_per_sec || 0;
 			setThroughput(val);
 			throughputHistory.push({ timestamp: Date.now(), value: val });
 			if (throughputHistory.length > MAX_THROUGHPUT_HISTORY) {

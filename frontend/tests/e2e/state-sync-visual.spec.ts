@@ -23,10 +23,10 @@ test('xterm receives non-empty content via state-sync', async ({ page, request }
   const sessionId = await pickClaudeSession(request);
 
   await page.addInitScript(([id]) => {
-    localStorage.setItem('cchub-open-sessions', JSON.stringify([id]));
-    localStorage.setItem('cchub-last-session-id', id);
-    localStorage.setItem('cchub-onboarding-completed', 'true');
-    localStorage.setItem('cchub-onboarding-sessionlist-completed', 'true');
+    localStorage.setItem('hrdle-open-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-last-session-id', id);
+    localStorage.setItem('hrdle-onboarding-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   }, [sessionId]);
 
   // Capture browser console messages for diagnosis.

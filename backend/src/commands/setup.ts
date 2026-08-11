@@ -1,4 +1,4 @@
-// cchub setup command - service registration (systemd on Linux, launchd on macOS)
+// hrdle setup command - service registration (systemd on Linux, launchd on macOS)
 
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile, chmod } from 'node:fs/promises';
@@ -7,19 +7,19 @@ import { homedir, platform } from 'node:os';
 import { IDENTITY, PASSWORD_ENV, SERVICE } from '../../../shared/identity';
 import { t } from '../i18n';
 import { herdrBinaryPath } from '../services/herdr-client';
-import { migrateCodexHooksToJson } from '../services/codex-hook-config';
+import { installCodexNotifyHooks } from '../services/codex-hook-config';
 import { storePassword as storePasswordInKeychain } from '../utils/keychain';
 
 /**
  * PATH to bake into the systemd units (`Environment=PATH=`).
  *
- * #499: the supervised units launch via `zsh -lc`, a *login but non-interactive*
+ * the supervised units launch via `zsh -lc`, a *login but non-interactive*
  * shell that sources `.zshenv`/`.zprofile` but NOT `.zshrc`. Users commonly add
  * `~/.local/bin` / `~/bin` to PATH in `.zshrc`, so the supervised server (and
  * everything it spawns — resumed agents and their Claude Code hooks) can't find
- * `cchub` / `herdr` / `rtk` / `claude` and hooks fail with `command not found`.
+ * `hrdle` / `herdr` / `rtk` / `claude` and hooks fail with `command not found`.
  *
- * `cchub setup` is run from the user's interactive terminal, so `process.env.PATH`
+ * `hrdle setup` is run from the user's interactive terminal, so `process.env.PATH`
  * here already includes their `.zshrc` additions. Bake that in, guaranteeing the
  * two home bin dirs are present up front regardless of what the inherited PATH
  * looks like. `%` is doubled because systemd treats it as a specifier in units.
@@ -93,9 +93,9 @@ WantedBy=timers.target
 // ─── macOS: launchd ───
 
 /**
- * Build the launchd plist for the cchub server.
+ * Build the launchd plist for the hrdle server.
  * The password is NOT embedded here — it is read from the macOS Keychain at
- * runtime by `cchub` itself, so the plist file stays free of secrets.
+ * runtime by `hrdle` itself, so the plist file stays free of secrets.
  */
 export function buildLaunchdPlist(execPath: string, port: number): string {
   const args = [execPath, '-p', String(port)];
@@ -359,12 +359,12 @@ async function provisionHerdr(): Promise<void> {
   const installedAgents = provisionAgentIntegrations(herdrPath);
   if (installedAgents.some(agent => agent.command === 'codex')) {
     try {
-      const migration = await migrateCodexHooksToJson(join(homedir(), '.codex'));
-      if (migration.changed) {
-        console.log(t('setup.codexHooksMigrated'));
+      const installed = await installCodexNotifyHooks(join(homedir(), '.codex'));
+      if (installed.changed) {
+        console.log(t('setup.codexHooksInstalled'));
       }
     } catch (error) {
-      console.error(t('setup.codexHooksMigrationFailed'));
+      console.error(t('setup.codexHooksInstallFailed'));
       console.error(error instanceof Error ? error.message : String(error));
     }
   }
@@ -384,7 +384,7 @@ function isHerdrSystemdActive(): boolean {
  * Contents of the systemd EnvironmentFile.
  *
  * The variable name has to be one the server reads. It wrote a bare `PASSWORD=`
- * for a long time while startup looked at `CCHUB_PASSWORD`, so a password set
+ * for a long time while startup looked at `HRDLE_PASSWORD`, so a password set
  * through `setup -P` was configured, reported, and never used — the server came
  * up unauthenticated. Nothing about that combination fails, which is why the
  * name is composed here from the same constant startup reads.
@@ -417,7 +417,7 @@ async function setupLaunchd(port: number, password?: string): Promise<void> {
   await mkdir(logDir, { recursive: true });
 
   // Store password in macOS Keychain instead of embedding in plist (which is
-  // world-readable). cchub at runtime reads it back via `security`.
+  // world-readable). hrdle at runtime reads it back via `security`.
   if (password) {
     if (storePasswordInKeychain(password)) {
       console.log(t('setup.keychainSaved'));

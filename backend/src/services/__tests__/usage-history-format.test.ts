@@ -24,15 +24,6 @@ describe('UsageHistoryService.getHistory format handling', () => {
     expect(history).toHaveLength(1);
   });
 
-  test('reads the legacy { snapshots: [...] } format', async () => {
-    await writeFile(
-      HISTORY_FILE,
-      JSON.stringify({ snapshots: [snap('2026-01-01T00:00:00.000Z'), snap('2026-01-02T00:00:00.000Z')] }),
-    );
-    const history = await new UsageHistoryService().getHistory();
-    expect(history).toHaveLength(2);
-  });
-
   test('drops entries without a timestamp', async () => {
     await writeFile(HISTORY_FILE, JSON.stringify([snap('2026-01-01T00:00:00.000Z'), { bogus: true }]));
     const history = await new UsageHistoryService().getHistory();

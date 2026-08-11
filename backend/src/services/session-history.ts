@@ -17,7 +17,7 @@ export type { HistorySession };
  * A Claude/Codex project dir name and session id are always single flat path
  * segments (no separators). Client-supplied values are joined under
  * ~/.claude/projects, so anything containing a separator or `..` could escape
- * that base and enumerate/read arbitrary host files. Reject those. (#233)
+ * that base and enumerate/read arbitrary host files. Reject those.
  */
 export function isFlatSegment(value: string): boolean {
   return (
@@ -124,7 +124,7 @@ export class SessionHistoryService {
    */
   private async searchInSessionFile(filePath: string, query: string): Promise<string | null> {
     // Stream line-by-line instead of readFile: session JSONL files can be
-    // tens to hundreds of MB, and a search request touches many of them (#335)
+    // tens to hundreds of MB, and a search request touches many of them
     const fileStream = createReadStream(filePath);
     const rl = createInterface({ input: fileStream, crlfDelay: Infinity });
     try {
@@ -483,7 +483,7 @@ export class SessionHistoryService {
 
   async getConversation(sessionId: string, projectDirName?: string): Promise<ConversationMessage[]> {
     // sessionId is interpolated into `${sessionId}.jsonl` under projectsDir;
-    // reject anything that isn't a flat segment so it can't traverse. (#233)
+    // reject anything that isn't a flat segment so it can't traverse.
     if (!isFlatSegment(sessionId)) return [];
     try {
       // If projectDirName is provided, look directly in that directory
@@ -551,7 +551,7 @@ export class SessionHistoryService {
 
       for (const sessionId of sessionIds) {
         // sessionId is interpolated into `${sessionId}.jsonl`; skip any that
-        // isn't a flat segment so it can't traverse out of projectsDir. (#233)
+        // isn't a flat segment so it can't traverse out of projectsDir.
         if (!isFlatSegment(sessionId)) continue;
         // Find the session file
         for (const dir of projectDirs) {
@@ -804,7 +804,7 @@ export class SessionHistoryService {
     // Delegate to the serial generator: the old Promise.all fan-out kicked off
     // a scan of every project directory at once, so the `limit` early-exit
     // never stopped work already in flight and a single request could saturate
-    // I/O across all JSONL files (#335). The generator walks newest-first and
+    // I/O across all JSONL files. The generator walks newest-first and
     // stops as soon as `limit` matches are found.
     const results: HistorySession[] = [];
     for await (const session of this.searchSessionsStream(query, limit)) {

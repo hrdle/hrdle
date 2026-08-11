@@ -1,4 +1,4 @@
-// Glasses relay item queue (#504) — domain layer, no I/O.
+// Glasses relay item queue — domain layer, no I/O.
 //
 // The queue is the central UI model of the glasses app: messages that need a
 // decision (waiting items) always come first, info items (FYI with TTL) trail behind.

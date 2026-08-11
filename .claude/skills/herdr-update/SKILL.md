@@ -14,20 +14,18 @@ exiting as soon as they spawn. That churn makes systemd (`Restart=always`)
 restart herdr, and **the server comes up on the new binary at a time nobody
 chose**.
 
-What actually happened on 2026-07-30 (0.7.4 -> 0.7.5):
+How it plays out:
 
-1. `~/.local/bin/herdr` was replaced with 0.7.5. The server was still 0.7.4
-2. `herdr status server` reported `compatible: no`, and the CLI's `agent list`
-   returned nothing
-3. hrdle's log filled with a `controller exited` -> `controller spawned` loop
-   (w4Y:p1)
-4. The herdr server restarted. It restored from `session.json` and **the
-   workspace ids changed**, `w4W` -> `w53` -> `w54`
-5. The user reported that resume felt broken
-6. Reading the log, the conclusion was "the skew is doing damage, put 0.7.4
-   back" — **but the server was already on 0.7.5**, so rolling back
-   manufactured the mismatch in the other direction
-7. Once noticed, going back to 0.7.5 finally made it consistent
+1. The binary on `PATH` is replaced. The server is still on the old version
+2. `herdr status server` reports `compatible: no`, and the CLI's `agent list`
+   returns nothing
+3. hrdle's log fills with a `controller exited` -> `controller spawned` loop
+4. systemd restarts the herdr server. It restores from `session.json`, and the
+   workspace ids may change
+5. Resume looks broken from the outside
+6. The log reads as "the skew is doing damage, put the old binary back" — but
+   the server has already moved, so rolling back manufactures the mismatch in
+   the other direction
 
 Step 6 is the second failure. **Before undoing anything, ask
 `herdr status server` which version the server is on.** If the swap already
@@ -42,9 +40,8 @@ A restart **recreates every pane's PTY**.
 - Agent conversations come back (confirm `resume_agents_on_restore = true` in
   `~/.config/herdr/config.toml`)
 - **A running command does not come back**
-- Workspace ids *may* change (labels are preserved). They did on 2026-07-30
-  (`w4W` -> `w53` -> `w54`); across both restarts on 2026-08-10 they were
-  preserved. Record them and check rather than assuming either way
+- Workspace ids *may* change (labels are preserved). They sometimes do and
+  sometimes do not. Record them and check rather than assuming either way
 - **If you are inside one of those panes, you are restarted too.** Write down
   what matters before running it
 - Expect some attrition among panes that were only *records* of an agent. After
@@ -68,7 +65,7 @@ grep resume_agents_on_restore ~/.config/herdr/config.toml
 ### 3. Stop, update, start — in that order
 
 **`herdr update` refuses to swap the binary while a server is running, and exits
-0 while refusing.** Measured 2026-08-10:
+0 while refusing.** Measured:
 
 ```
 checking stable channel for updates...
@@ -115,16 +112,16 @@ curl -sk -X POST https://localhost:5924/api/herdr/apply-update
 
 The dashboard button does the same thing. It does the stop/update/start above,
 verifies the version actually moved, and restarts nothing when there is nothing
-to install. It also now reports that a new herdr exists at all, which is what
-makes the button appear.
+to install. It also reports that a new herdr exists at all, which is what makes
+the button appear.
 
-**Before that fix (hrdle#259, #260) it did none of those things.** On an older
-hrdle the endpoint runs `herdr update` *first* and restarts herdr *after*, so it
-always hits the refusal above, always exits 0, and reports success while
-restarting every pane PTY for nothing — on 2026-08-10 that cost fifteen
-workspaces and eighteen agents a restart, one of them mid-turn, and left the
-version exactly where it was. And with binary and server on the same old version
-there was no skew to see, so nothing appeared at all:
+**An hrdle old enough to lack that does none of it.** There the endpoint runs
+`herdr update` *first* and restarts herdr *after*, so it always hits the refusal
+above, always exits 0, and reports success while restarting every pane PTY for
+nothing — every workspace and every agent on the machine restarted, one of them
+possibly mid-turn, with the version exactly where it was. And with binary and
+server on the same old version there is no skew to see, so nothing appears at
+all:
 
 ```json
 {"binaryVersion":"0.7.5","serverVersion":"0.7.5","restartNeeded":false,"canApply":false}
@@ -202,9 +199,9 @@ about a preview channel, `https://herdr.dev/preview.json`.
   reported on 2026-07-23, is not in v0.7.5 (released 2026-07-21), and it still
   reproduced after updating to v0.7.5 (measured). It is listed as fixed in
   v0.8.0
-- The three hrdle-side defects this procedure works around: hrdle#259 (no
-  detection of an available release), hrdle#260 (the apply command order can
-  never install), hrdle#261 (the UI needs a manual reload afterwards). When
-  those land, section 3a is the part that changes
+- The three hrdle-side defects this procedure works around: no detection of an
+  available release, an apply command order that can never install, and a UI
+  that needs a manual reload afterwards. When those are fixed, section 3a is the
+  part that changes
 - Driving herdr itself is the `herdr` skill (`~/.claude/skills/herdr/` — that is
   herdr's own repository, so do not write to it)

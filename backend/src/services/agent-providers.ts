@@ -17,7 +17,7 @@ export interface AgentTokenUsage {
   totalCacheReadTokens?: number;
   totalOutputTokens?: number;
   totalTokens?: number;
-  /** Latest model id the agent ran with (shown in the session list, #424). */
+  /** Latest model id the agent ran with (shown in the session list). */
   model?: string;
 }
 

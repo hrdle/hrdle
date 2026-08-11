@@ -1,6 +1,6 @@
 /**
  * Backend-agnostic helpers for inspecting rendered pane content.
- * Used by peer-dialog tooling (`cchub send --wait`, `cchub peek`).
+ * Used by peer-dialog tooling (`hrdle send --wait`, `hrdle peek`).
  */
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes by design.
@@ -18,8 +18,8 @@ export type DetectedPaneState =
 
 /**
  * Best-effort detection of what state the pane is currently in, based purely
- * on the rendered viewport. Used by peer-dialog tools (`cchub send --wait`,
- * `cchub peek`) so the sender can disambiguate idle vs. permission-prompt vs.
+ * on the rendered viewport. Used by peer-dialog tools (`hrdle send --wait`,
+ * `hrdle peek`) so the sender can disambiguate idle vs. permission-prompt vs.
  * mid-processing — `indicatorState` from hooks is too coarse for this.
  *
  * Heuristics are based on patterns Claude Code prints. They will need updating

@@ -1,4 +1,4 @@
-// The replay player for the glasses screen-mirror recording (#127) — its own
+// The replay player for the glasses screen-mirror recording — its own
 // page (`?player`), reached from the simulator or bookmarked directly.
 //
 // It exists because the first player lived in the simulator's side panel, a

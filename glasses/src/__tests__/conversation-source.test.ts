@@ -1,4 +1,4 @@
-// Which conversation the glasses read, and by whose reader (#5).
+// Which conversation the glasses read, and by whose reader.
 //
 // The history API defaults to Claude's jsonl and only reaches a thread agent's
 // own transcript when asked by name (`?agent=`). Asking unqualified for a kimi

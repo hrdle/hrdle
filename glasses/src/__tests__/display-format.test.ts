@@ -25,20 +25,20 @@ describe('sanitizeForG2: tables', () => {
   const table = [
     '| 対象 | 版 |',
     '|---|---|',
-    '| CC Hub 本体 | **v0.2.55**（本番更新済み） |',
+    '| Hrdle 本体 | **v0.2.55**（本番更新済み） |',
     '| G2 グラスアプリ | `v0.1.32` |',
   ].join('\n')
 
   test('renders the cells instead of a meaningless [table] marker', () => {
     const out = sanitizeForG2(table)
     expect(out).not.toContain('[table]')
-    expect(out).toContain('CC Hub 本体 | v0.2.55（本番更新済み）')
+    expect(out).toContain('Hrdle 本体 | v0.2.55（本番更新済み）')
   })
 
   test('drops the |---|---| delimiter row', () => {
     expect(sanitizeForG2(table).split('\n')).toEqual([
       '対象 | 版',
-      'CC Hub 本体 | v0.2.55（本番更新済み）',
+      'Hrdle 本体 | v0.2.55（本番更新済み）',
       'G2 グラスアプリ | v0.1.32',
     ])
   })
@@ -94,7 +94,7 @@ describe('wrapForPanel: line breaking', () => {
 
   test('no line exceeds the panel width', () => {
     const text = sanitizeForG2(
-      '会話を遡ると数秒で最新に戻る件は、**自動更新がスクロール位置を巻き添えにしていた**のが原因でした。\n\n| 対象 | 版 |\n|---|---|\n| CC Hub 本体 | v0.2.55 |',
+      '会話を遡ると数秒で最新に戻る件は、**自動更新がスクロール位置を巻き添えにしていた**のが原因でした。\n\n| 対象 | 版 |\n|---|---|\n| Hrdle 本体 | v0.2.55 |',
     )
     for (const line of wrapForPanel(text).split('\n')) {
       expect(width(line)).toBeLessThanOrEqual(BODY_WIDTH)
@@ -377,7 +377,7 @@ describe('header clock', () => {
   test('actually reaches the right edge', () => {
     // A space is 5px on this panel. Padding it out as if it were a 10.69px
     // column left the clock near the middle — 293px into a 568px header.
-    for (const name of ['linux', 'グラス開発', 'cchub-work-1']) {
+    for (const name of ['linux', 'グラス開発', 'hrdle-work-1']) {
       const header = screenText({
         ...base,
         mode: 'conversation' as const,

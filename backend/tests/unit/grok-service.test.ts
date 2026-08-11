@@ -6,7 +6,7 @@ import { GrokService, GrokSessionStore, readLatestGrokTokenUsage } from '../../s
 import { GrokHistoryService, parseGrokChatHistory } from '../../src/services/grok-history';
 import { claudeProjectDirName } from '../../src/utils/claude-project-path';
 
-const TEST_DIR = join(tmpdir(), `cchub-grok-service-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `hrdle-grok-service-${Date.now()}`);
 const SESSIONS_DIR = join(TEST_DIR, 'sessions');
 
 const CWD = '/home/user/my-project';

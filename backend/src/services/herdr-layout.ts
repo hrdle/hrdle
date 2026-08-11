@@ -1,9 +1,9 @@
 /**
- * CC Hub-owned pane layout for herdr sessions.
+ * Hrdle-owned pane layout for herdr sessions.
  *
  * herdr's workspace grid cannot be resized headlessly (it stays at the
  * default client size when no interactive client is attached), so in herdr
- * mode CC Hub owns the split geometry itself: a binary split tree with
+ * mode Hrdle owns the split geometry itself: a binary split tree with
  * ratios, rendered to tmux-convention rects (siblings separated by one
  * cell, children partition the parent). The frontend keeps consuming
  * `TmuxLayoutNode` unchanged.
@@ -39,12 +39,12 @@ const MIN_RATIO = 0.1;
 const MAX_RATIO = 0.9;
 
 /**
- * Convert a herdr `layout.export` tree into a CC Hub `LayoutNode`. `mapPaneId`
+ * Convert a herdr `layout.export` tree into a Hrdle `LayoutNode`. `mapPaneId`
  * maps a herdr pane id (`wK:pN`) to a tmux-style `%N`, returning null when the
  * id is unmappable. Returns null if *any* node fails to convert, so the caller
  * can fall back to a flat chain rather than render a partial/corrupt tree.
  *
- * herdr `right`/`down` split directions map to CC Hub `h`/`v`; `first`/`second`
+ * herdr `right`/`down` split directions map to Hrdle `h`/`v`; `first`/`second`
  * children map to `a`/`b`; the ratio is clamped into the tree's valid range.
  */
 export function herdrLayoutToNode(

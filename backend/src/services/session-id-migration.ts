@@ -4,7 +4,7 @@ import { getAllSessionMetadata, rekeySessionMetadata } from './session-metadata'
 import { workspacesLabelled } from './herdr';
 
 /**
- * Move settings written against a workspace *name* onto its workspace id (#186).
+ * Move settings written against a workspace *name* onto its workspace id.
  *
  * Session metadata - a theme, a custom title, a session's STT vocabulary - was
  * keyed by the same mutable id the addressing bug was about, so every rename

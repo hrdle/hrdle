@@ -31,7 +31,7 @@ function placeRollout(relativeDir: string, fileName: string, lines: string[]): v
 
 describe('CodexUsageService', () => {
   beforeEach(() => {
-    scratch = mkdtempSync(join(tmpdir(), 'cchub-codex-usage-'));
+    scratch = mkdtempSync(join(tmpdir(), 'hrdle-codex-usage-'));
     sessionsDir = join(scratch, 'sessions');
   });
 

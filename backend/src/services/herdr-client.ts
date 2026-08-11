@@ -6,10 +6,10 @@
  * one connection per request. `events.subscribe` is the exception: the
  * connection is held open and later lines are pushed events.
  *
- * Pane id mapping: CC Hub's wire protocol and frontend validate pane ids as
+ * Pane id mapping: Hrdle's wire protocol and frontend validate pane ids as
  * tmux-style `%N` (PaneIdSchema). herdr ids are `w<K>:p<N>` with `N` unique
  * within a workspace, so `%N ↔ <workspaceId>:pN` is a lossless mapping as
- * long as one CC Hub session maps to one herdr workspace.
+ * long as one Hrdle session maps to one herdr workspace.
  *
  * `N` is base36, not decimal — a workspace's tenth pane is `pA` and its
  * workspace may be `w5B`. The token is carried through verbatim rather than
@@ -28,7 +28,7 @@ import { join } from 'node:path';
  *
  * A named session is a separate herdr server with its own socket, workspaces
  * and persisted state, which is how two builds of this app share a machine
- * without seeing each other's panes (#459).
+ * without seeing each other's panes.
  */
 export function herdrSessionName(): string | null {
   return process.env.HERDR_SESSION || null;
@@ -198,7 +198,7 @@ export async function herdrRpc<T = Record<string, unknown>>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const sock = connect(herdrSocketPath());
-    const id = `cchub_${++reqCounter}`;
+    const id = `hrdle_${++reqCounter}`;
     let settled = false;
     const settle = (fn: () => void) => {
       if (settled) return;
@@ -289,7 +289,7 @@ export function herdrSubscribe(
   });
   sock.on('connect', () => {
     sock.write(
-      `${JSON.stringify({ id: 'cchub_sub', method: 'events.subscribe', params: { subscriptions } })}\n`,
+      `${JSON.stringify({ id: 'hrdle_sub', method: 'events.subscribe', params: { subscriptions } })}\n`,
     );
   });
   sock.on('data', readLine);
@@ -460,8 +460,8 @@ export interface HerdrLayoutExport {
 
 /**
  * Export a workspace's split tree via any pane it contains. herdr retains the
- * real geometry (structure + direction) across a cchub restart, so this is how
- * CC Hub rehydrates its layout instead of guessing a flat chain. Null on any
+ * real geometry (structure + direction) across a hrdle restart, so this is how
+ * Hrdle rehydrates its layout instead of guessing a flat chain. Null on any
  * failure — the caller falls back to a flat layout.
  */
 export async function exportLayout(herdrPaneId: string): Promise<HerdrLayoutExport | null> {

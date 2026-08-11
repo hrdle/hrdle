@@ -24,7 +24,7 @@ function normalizePeerUrl(url: string): string {
 
 // SSRF guard: every outbound peer request goes through here. Reject non-https
 // or loopback/link-local/private targets before fetching (covers freshly
-// supplied URLs at creation and already-stored URLs). #235
+// supplied URLs at creation and already-stored URLs).
 function assertSafePeerUrl(url: string): void {
   if (!isSafePeerUrl(url)) {
     throw new PeerAuthError(0, 'A peer URL must be https and point at a non-local host');

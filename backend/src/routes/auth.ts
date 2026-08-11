@@ -26,7 +26,7 @@ auth.post(
       return c.json({ error: 'Authentication not enabled' }, 400);
     }
 
-    // Check against server password (constant-time, #353)
+    // Check against server password (constant-time)
     if (!timingSafeStringEqual(password, serverPassword)) {
       return c.json({ error: 'Invalid password' }, 401);
     }

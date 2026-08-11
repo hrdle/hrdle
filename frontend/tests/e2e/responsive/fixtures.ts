@@ -48,8 +48,8 @@ export async function bootApp(page: Page): Promise<void> {
   // Onboarding is a full-screen overlay; skipping it exposes the real UI, which
   // is what these specs are measuring.
   await page.addInitScript(() => {
-    localStorage.setItem('cchub-onboarding-completed', 'true');
-    localStorage.setItem('cchub-onboarding-sessionlist-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   });
 
   await page.route('**/api/**', async (route) => {

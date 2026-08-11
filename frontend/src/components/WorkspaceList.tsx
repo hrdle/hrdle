@@ -115,6 +115,7 @@ import { authFetch } from "../services/api";
 import { ConversationViewer } from "./ConversationViewer";
 import { SessionHistory } from "./SessionHistory";
 import { SessionHistoryV2 } from "./history/SessionHistoryV2";
+import { HOOK_COMMAND } from "../../../shared/identity";
 import { storageKey } from "../utils/app-storage";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -307,7 +308,7 @@ function SessionMenuDialog({
 
 				{/* Speech-to-text vocabulary. This session's own words lead the bias
 				    sent with its transcriptions; the shared glossary follows, so a
-				    short list is worth more than a long one (#166). */}
+				    short list is worth more than a long one. */}
 				{onChangeSttPrompt && (
 					<div className="mb-4">
 						<p className="text-sm text-th-text-secondary mb-2">
@@ -1303,7 +1304,7 @@ function SessionItem({
 		}
 		longPressFiredRef.current = false;
 
-		// Remote Control session: let the user choose between jumping to the CC Hub
+		// Remote Control session: let the user choose between jumping to the Hrdle
 		// terminal and opening the matching session in the Claude app.
 		// Multi-pane sessions skip the session-level jump menu — "go to terminal"
 		// is ambiguous there, so the actions live on the pane rows instead (row
@@ -1649,7 +1650,7 @@ function SessionItem({
 				)}
 			</div>
 
-			{/* Jump menu (Remote Control): choose CC Hub terminal vs the Claude app.
+			{/* Jump menu (Remote Control): choose Hrdle terminal vs the Claude app.
 			    Single-pane only — multi-pane sessions carry these actions per pane. */}
 			{showJumpMenu &&
 				extSession.bridgeSessionId &&
@@ -1820,7 +1821,7 @@ export function WorkspaceList({
 	const [searchQuery, setSearchQuery] = useState("");
 	const [hookConfigured, setHookConfigured] = useState<boolean | null>(null);
 	// Falls back to the bare name until the server answers with a resolved path.
-	const [hookCommand, setHookCommand] = useState("cchub notify");
+	const [hookCommand, setHookCommand] = useState(HOOK_COMMAND);
 	const [hookBannerDismissed, setHookBannerDismissed] = useState(
 		() =>
 			typeof localStorage !== "undefined" &&
@@ -1839,7 +1840,7 @@ export function WorkspaceList({
 	const [loadingConversation, setLoadingConversation] = useState(false);
 
 	// Check hook configuration status. The server also reports the invocation to
-	// write (an absolute path when it can resolve one) — a bare `cchub notify`
+	// write (an absolute path when it can resolve one) — a bare `hrdle notify`
 	// dies in the hook's non-interactive shell if PATH lacks the install dir.
 	useEffect(() => {
 		if (hookBannerDismissed) return;
@@ -2000,7 +2001,7 @@ export function WorkspaceList({
 				// Peer sessions are merged into the same list (flattenPeerSessions),
 				// so the action could target a remote peer's session. Route through
 				// sessionFetch so the request reaches the owning Hub/peer with the
-				// right token, not always the local Hub origin. #258
+				// right token, not always the local Hub origin.
 				const session = sessions.find((s) => s.id === sessionId);
 				const path =
 					action === "split"
@@ -2591,7 +2592,7 @@ export function WorkspaceList({
 										// Route to the owning Hub/peer instead of always the
 										// local Hub — otherwise closing a pane on a remote
 										// peer's session silently fails (or, on id collision,
-										// closes the wrong pane). #258
+										// closes the wrong pane).
 										const session = sessions.find(
 											(s) => s.id === paneToClose.sessionId,
 										);

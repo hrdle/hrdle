@@ -23,7 +23,7 @@ interface RolloutInfo {
 
 /**
  * Encode an absolute path into the same dirName key that Claude uses
- * (`~/.claude/projects/-home-m0a-cchub/...`), so Claude and Codex
+ * (`~/.claude/projects/-home-m0a-hrdle/...`), so Claude and Codex
  * sessions for the same project bucket share one ProjectInfo entry.
  */
 function encodeCwd(cwd: string): string {
@@ -239,7 +239,7 @@ export class CodexHistoryService {
    * TODO(herdr#1789): delete the third route once the fix is in a stable herdr
    * release. It is compensating for someone else's bug and guesses to do it,
    * so it should not outlive the bug. Check with `herdr --version` against the
-   * release notes for #1789 (fixed on master, shipped to the preview channel
+   * release notes for herdr#1789 (fixed on master, shipped to the preview channel
    * as preview-2026-07-29-44b3adb12552, absent from 0.7.4). When it lands:
    * remove this branch, `resolveCwd`/`CwdResolver`, `agentSessionCwd` in
    * herdr-client.ts, and tests/unit/codex-history-cwd-fallback.test.ts. The

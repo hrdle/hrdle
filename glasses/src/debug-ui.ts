@@ -726,7 +726,7 @@ export function startDebugUI(): void {
         // Rethrow rather than answering with an empty transcript. The device
         // passes `transcribe` straight through (`main.ts`), so swallowing it
         // here made the simulator the one place a failed request looked like a
-        // recording of silence - and since #209 the controller draws a
+        // recording of silence - and the controller draws a
         // different screen for each, from this distinction. A panel message is
         // for whoever is at the keyboard; the screen is the thing under test.
         throw err
