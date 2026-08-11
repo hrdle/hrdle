@@ -133,8 +133,8 @@ const activeMuxConnections = new Set<ServerWebSocket<MuxData>>();
  * wearer off the session they were talking to every time its WebSocket came
  * back — 44 times in one day on 2026-08-08, from a device nobody had touched.
  *
- * The session itself is recorded either way, so a resumed client is still
- * *followable*; it just does not jump the queue by reconnecting.
+ * The session itself is recorded either way, so the moment a person does
+ * something on that client it is followed, on the session it already had.
  *
  * Pure and exported for the tests.
  */
@@ -170,6 +170,75 @@ export function applySubscribeFocus(
  */
 const FOCUS_HEARTBEAT_MS = 25_000;
 
+/** What a device last said about itself, kept across its own reconnects. */
+export interface RememberedFocus {
+  visible: boolean;
+  savedAt: number;
+}
+
+/**
+ * `visible` is a transition, not a state a socket owns.
+ *
+ * A person picking a device up is hidden -> visible, and that is the moment
+ * worth calling a claim. But a new socket knows nothing of what came before it,
+ * so *every* reconnect looked like that transition — which undid the fix that
+ * stopped a resumed `subscribe` from claiming, one message later: the page
+ * declares itself again the moment the subscription is confirmed
+ * (`onConnect` -> `sendClientInfo` in DesktopLayout / TerminalPage), and that
+ * declaration re-claimed the focus a resumed subscribe had just declined.
+ *
+ * Measured on 2026-08-11, with the heartbeat fix already running: one desktop
+ * claimed nine times between 08:51 and 13:07 and one phone eight times between
+ * 11:52 and 12:10, in bursts a minute apart, from devices nobody had touched -
+ * each claim ending in a heartbeat lapse and the next reconnect starting
+ * another.
+ *
+ * Keyed by the client's stable deviceId (a localStorage UUID on the WS URL), so
+ * the memory outlives the socket. A connection without one - a direct WS test,
+ * a very old client - simply has no memory and behaves as before.
+ */
+const rememberedFocus = new Map<string, RememberedFocus>();
+
+/** A device silent for a day is one whose last claim has nothing left to say. */
+const FOCUS_MEMORY_MS = 24 * 60 * 60 * 1000;
+
+function rememberFocus(data: MuxData, now: number): void {
+  if (!data.deviceId || data.visible === undefined) return;
+  rememberedFocus.set(data.deviceId, { visible: data.visible, savedAt: now });
+  for (const [id, entry] of rememberedFocus) {
+    if (now - entry.savedAt > FOCUS_MEMORY_MS) rememberedFocus.delete(id);
+  }
+}
+
+/**
+ * What a `client-info` does to this client's claim on the glasses focus.
+ *
+ * A screen becoming visible is a person picking it up, and claims. A screen
+ * that was already visible re-declaring itself is the socket talking, and
+ * claims nothing. Same rule as `applySubscribeFocus`, applied to the message
+ * that arrives right behind it.
+ *
+ * Pure and exported for the tests; the caller supplies the device's memory.
+ */
+export function applyClientInfoFocus(
+  data: { visible?: boolean; focusAt?: number },
+  msg: { visible: boolean },
+  remembered: { visible: boolean } | undefined,
+  now: number,
+): void {
+  // This socket's own word first; the device's memory only when it has none.
+  const wasVisible = data.visible ?? remembered?.visible ?? false;
+  data.visible = msg.visible;
+  if (!msg.visible) return;
+  if (!wasVisible) {
+    data.focusAt = now;
+    return;
+  }
+  // Already visible before this socket existed. Deliberately leaves `focusAt`
+  // as it found it: on a reconnect that is nothing, and nothing is what a
+  // connection with no person behind it should be worth.
+}
+
 export function pickClientFocus(clients: MuxData[], now: number): ClientFocus | undefined {
   let best: MuxData | undefined;
   for (const d of clients) {
@@ -185,6 +254,14 @@ export function pickClientFocus(clients: MuxData[], now: number): ClientFocus | 
     // three times in one recording. Refused here rather than filtered by the
     // glasses, because nothing downstream wants it either.
     if (d.automated) continue;
+    // A claim is minted by a person: opening a session, or picking the device
+    // up. A connection that has done neither since it came back is a machine
+    // that is merely awake, and being the only one awake used to be enough to
+    // win - which is how a laptop left on a workspace finished days ago kept
+    // taking the wearer there, most of the switches recorded on 2026-08-11.
+    // Nobody qualifying leaves the followers holding what they have, which is
+    // the right answer when nobody is at a screen.
+    if (d.focusAt === undefined) continue;
     if (!d.deviceType || !d.focusSessionId || d.visible !== true) continue;
     if (!best || (d.focusAt ?? 0) > (best.focusAt ?? 0)) best = d;
   }
@@ -351,7 +428,9 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
   if (msg.type === 'subscribe') {
     await handleSubscribe(ws, msg.sessionId);
-    applySubscribeFocus(ws.data, msg, Date.now());
+    const now = Date.now();
+    applySubscribeFocus(ws.data, msg, now);
+    rememberFocus(ws.data, now);
     maybePushFocus();
     return;
   }
@@ -946,9 +1025,10 @@ async function handleControlMessage(
         ws.data.deviceType = msg.deviceType;
         if (msg.automated !== undefined) ws.data.automated = msg.automated;
         if (msg.visible !== undefined) {
-          const wasVisible = ws.data.visible;
-          ws.data.visible = msg.visible;
-          if (msg.visible && !wasVisible) ws.data.focusAt = Date.now();
+          const now = Date.now();
+          const remembered = ws.data.deviceId ? rememberedFocus.get(ws.data.deviceId) : undefined;
+          applyClientInfoFocus(ws.data, { visible: msg.visible }, remembered, now);
+          rememberFocus(ws.data, now);
           maybePushFocus();
         }
         break;
