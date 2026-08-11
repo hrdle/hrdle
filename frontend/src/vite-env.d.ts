@@ -7,5 +7,5 @@ declare module "*.css";
 declare const __APP_VERSION__: string;
 
 interface Window {
-	__cchub_ws_bytes_per_sec?: number;
+	__hrdle_ws_bytes_per_sec?: number;
 }

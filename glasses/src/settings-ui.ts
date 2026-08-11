@@ -84,7 +84,7 @@ export function settingsPanelHtml(): string {
         <span>${t('settings.biasToggle')}</span>
       </label>
       <!-- Not an editor: the line comes from the same call the transcription
-           makes, so what is shown is what is sent (#255). With no session
+           makes, so what is shown is what is sent. With no session
            named, that is the glossary every session shares. -->
       <div id="stt-bias-preview" style="${S.preview}"></div>
       <div id="stt-bias-status" style="${S.status}"></div>
@@ -111,7 +111,7 @@ function describeKey(v: GlassesSettingsView): string {
  */
 function describeBias(p: SttRequestPreview, v: GlassesSettingsView | null): string {
   // Off *and* not by this screen's doing: a disabled switch with no reason
-  // beside it is the same unexplained silence #210 was.
+  // beside it is unexplained silence.
   if (p.promptSource === 'off' && v?.sttBiasSource === 'env') return t('settings.biasEnvOff')
   if (p.promptSource === 'off') return t('settings.biasOff')
   if (p.promptSource === 'env') return t('settings.biasEnv')

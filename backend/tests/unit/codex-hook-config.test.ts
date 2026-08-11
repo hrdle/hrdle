@@ -3,16 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  mergeCchubNotifyHooksJson,
-  migrateCodexHooksToJson,
-  removeCchubNotifyHooksToml,
+  installCodexNotifyHooks,
+  mergeNotifyHooksJson,
 } from '../../src/services/codex-hook-config';
 import { HOOK_COMMAND, IDENTITY } from '../../../shared/identity';
-
-// The path form is what setup actually writes (#538), so it is what the
-// migration has to preserve. Both are built from identity so a rename moves
-// them together instead of leaving the fixtures naming a binary nobody ships.
-const ABSOLUTE = `/home/user/bin/${IDENTITY.binaryName} notify`;
 
 const scratchDirs: string[] = [];
 
@@ -20,9 +14,9 @@ afterEach(async () => {
   await Promise.all(scratchDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe('Codex hook JSON migration', () => {
+describe('Codex hook JSON', () => {
   test('preserves herdr SessionStart and adds only the hooks we require', () => {
-    const result = JSON.parse(mergeCchubNotifyHooksJson(JSON.stringify({
+    const result = JSON.parse(mergeNotifyHooksJson(JSON.stringify({
       hooks: {
         SessionStart: [{ hooks: [{ type: 'command', command: 'herdr-session-hook' }] }],
       },
@@ -41,61 +35,34 @@ describe('Codex hook JSON migration', () => {
   });
 
   test('is idempotent and does not duplicate our existing entries', () => {
-    const first = mergeCchubNotifyHooksJson(null, HOOK_COMMAND);
-    const second = mergeCchubNotifyHooksJson(first, HOOK_COMMAND);
+    const first = mergeNotifyHooksJson(null, HOOK_COMMAND);
+    const second = mergeNotifyHooksJson(first, HOOK_COMMAND);
     expect(second).toBe(first);
   });
 
-  test('removes only our notify hook entries from TOML', () => {
-    const input = `model = "gpt-test"
-
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-type = "command"
-command = "${ABSOLUTE}"
-
-[[hooks.PostToolUse]]
-matcher = "Bash"
-[[hooks.PostToolUse.hooks]]
-type = "command"
-command = "keep-me"
-
-[hooks.state]
-[hooks.state."hooks.json:session_start:0:0"]
-trusted_hash = "sha256:abc"
-`;
-
-    const result = removeCchubNotifyHooksToml(input);
-    expect(result).toContain('model = "gpt-test"');
-    expect(result).not.toContain(HOOK_COMMAND);
-    expect(result).toContain('command = "keep-me"');
-    expect(result).toContain('[hooks.state]');
-    expect(result).toContain('hooks.json:session_start:0:0');
-  });
-
-  test('migrates files atomically and keeps the existing absolute command', async () => {
-    const dir = await mkdtemp(join(tmpdir(), `${IDENTITY.tmpPrefix}-codex-hook-migration-`));
+  test('writes hooks.json atomically and leaves unrelated hooks alone', async () => {
+    const dir = await mkdtemp(join(tmpdir(), `${IDENTITY.tmpPrefix}-codex-hook-install-`));
     scratchDirs.push(dir);
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, 'config.toml'), `model = "gpt-test"
-
-[[hooks.Stop]]
-[[hooks.Stop.hooks]]
-command = "${ABSOLUTE}"
-`);
     await writeFile(join(dir, 'hooks.json'), JSON.stringify({
       hooks: {
         SessionStart: [{ hooks: [{ command: 'herdr-hook' }] }],
       },
     }));
 
-    const result = await migrateCodexHooksToJson(dir);
-    const config = await readFile(join(dir, 'config.toml'), 'utf8');
+    const result = await installCodexNotifyHooks(dir);
     const hooks = JSON.parse(await readFile(join(dir, 'hooks.json'), 'utf8'));
 
-    expect(result).toEqual({ changed: true, command: ABSOLUTE });
-    expect(config).toBe('model = "gpt-test"\n');
+    expect(result.changed).toBe(true);
     expect(hooks.hooks.SessionStart).toHaveLength(1);
-    expect(hooks.hooks.Stop[0].hooks[0].command).toBe(ABSOLUTE);
+    expect(hooks.hooks.Stop[0].hooks[0].command).toBe(result.command);
+  });
+
+  test('a second run changes nothing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), `${IDENTITY.tmpPrefix}-codex-hook-install-`));
+    scratchDirs.push(dir);
+    await installCodexNotifyHooks(dir);
+
+    expect((await installCodexNotifyHooks(dir)).changed).toBe(false);
   });
 });

@@ -43,7 +43,7 @@ interface RawLimitEntry {
  * `five_hour` / `seven_day` already carry — only scoped entries add anything.
  *
  * Every field is validated because `limits[]` is newer than the flat fields
- * and cchub must never break the existing chart over an unexpected shape: an
+ * and hrdle must never break the existing chart over an unexpected shape: an
  * entry that doesn't parse (unknown `group`, missing `percent`) is dropped
  * rather than guessed at, and an absent/malformed array yields no overlays.
  */
@@ -65,7 +65,7 @@ export function parseScopedLimits(raw: unknown): UsageScopedLimit[] {
           : null;
     if (!name) continue;
 
-    // Anything other than the two cycles cchub charts would have no axis to
+    // Anything other than the two cycles hrdle charts would have no axis to
     // sit on, so drop it instead of misplacing it.
     const group = entry.group === 'session' || entry.group === 'weekly' ? entry.group : null;
     if (!group) continue;
@@ -116,7 +116,7 @@ export class AnthropicUsageService {
    * cooldown at all: the cache could not engage without a stored result, and
    * only a 429 set a backoff, so the dashboard's 30s poll (times every open
    * client) went straight through to Anthropic and earned the very 429 this
-   * class exists to avoid. Also subsumes the #352 no-credentials cooldown: a
+   * class exists to avoid. Also subsumes the no-credentials cooldown: a
    * missing token is just another attempt that yielded nothing.
    */
   private lastFetchAt = 0;

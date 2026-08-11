@@ -34,7 +34,7 @@ function deps(): SetupGateDeps & { calls: string[] } {
 
 describe('before the demo', () => {
   test('double-tap asks for the exit dialogue', () => {
-    // The whole of #148: an unconfigured app the reviewer could not close.
+    // An unconfigured app must still be closable.
     const d = deps()
     createSetupGate(d).onDoubleTap()
     expect(d.calls).toEqual(['requestExit'])

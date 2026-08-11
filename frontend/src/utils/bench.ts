@@ -2,15 +2,15 @@ import { storageKey } from "./app-storage";
 /**
  * End-to-end terminal latency bench.
  *
- * Activate by running `__cchub_bench.start()` in DevTools console (or by
- * setting localStorage 'cchub-bench' = '1' before reload). When active, every
+ * Activate by running `__hrdle_bench.start()` in DevTools console (or by
+ * setting localStorage 'hrdle-bench' = '1' before reload). When active, every
  * WS frame and every xterm `term.write` is sampled. The bench also watches
  * the incoming byte stream for the marker `__BENCH_END__` and prints a
  * summary report when it is seen.
  *
  * Recommended usage:
  *   1. Open the dev backend (devPort from identity.json) on a PC and open the DevTools console
- *   2. Run `__cchub_bench.start()`
+ *   2. Run `__hrdle_bench.start()`
  *   3. In any session:
  *        cat /tmp/bench-color.txt; echo __BENCH_END__
  *   4. The summary prints to the console
@@ -189,5 +189,5 @@ if (
 
 // Expose on window for DevTools
 if (typeof window !== "undefined") {
-	(window as unknown as { __cchub_bench: typeof bench }).__cchub_bench = bench;
+	(window as unknown as { __hrdle_bench: typeof bench }).__hrdle_bench = bench;
 }

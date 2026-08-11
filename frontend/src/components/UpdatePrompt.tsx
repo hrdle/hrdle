@@ -17,13 +17,13 @@ export function UpdatePrompt() {
 	return (
 		<div
 			role="alertdialog"
-			aria-labelledby="cchub-update-title"
+			aria-labelledby="hrdle-update-title"
 			className="fixed inset-x-0 bottom-0 z-[10010] flex justify-center px-3 pointer-events-none"
 			style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 12px)" }}
 		>
 			<div className="pointer-events-auto w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 shadow-xl">
 				<p
-					id="cchub-update-title"
+					id="hrdle-update-title"
 					className="text-sm font-medium text-zinc-200"
 				>
 					{t("update.available")}

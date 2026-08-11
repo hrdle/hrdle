@@ -22,7 +22,7 @@ i18n
 		interpolation: {
 			escapeValue: false,
 			// Always available to every message, so the catalogs can name the
-			// product without hard-coding it (#459) and no call site has to
+			// product without hard-coding it and no call site has to
 			// remember to pass it. A message may still override one by passing
 			// the same key explicitly.
 			defaultVariables: {

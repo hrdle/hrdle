@@ -1,5 +1,5 @@
 /**
- * Everything a transcription request carries, resolved in one place (#255).
+ * Everything a transcription request carries, resolved in one place.
  *
  * A request to Groq is four values - the key, the model, the language and the
  * vocabulary prompt - and each of them used to come from its own function with
@@ -74,7 +74,7 @@ export interface SttRequest {
  *   glossary
  *
  * The env var replaces and the switch disables, and nothing a screen can save
- * does either. That asymmetry is #210: the one field reachable from the device
+ * does either. That asymmetry is deliberate: the one field reachable from the device
  * used to be able to silently disable everything else, and did, for five days.
  */
 export async function resolveSttRequest(

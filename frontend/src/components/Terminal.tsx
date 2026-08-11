@@ -337,7 +337,6 @@ export const TerminalComponent = memo(
 			const themeColors = getTerminalThemes()[sessionTheme || "default"];
 			// Captured in the effect closure so the cleanup can clear the WebGL
 			// context-loss reload timer if the effect tears down before it fires.
-			// #262
 			let webglReloadTimer: number | null = null;
 			const term = new Terminal({
 				fontSize: initialFontSize,
@@ -490,7 +489,7 @@ export const TerminalComponent = memo(
 			setIsInitialized(true);
 			// Dev-only: expose the xterm instance for browser-console debugging.
 			if (import.meta.env.DEV) {
-				(window as unknown as { __cchub_term?: Terminal }).__cchub_term = term;
+				(window as unknown as { __hrdle_term?: Terminal }).__hrdle_term = term;
 			}
 			console.log(
 				`[Terminal] Initialized for session ${sessionId}, size: ${term.cols}x${term.rows}`,
@@ -1099,7 +1098,7 @@ export const TerminalComponent = memo(
 				// Cancel rAF loops and the WebGL reload timer so they don't keep
 				// running against the disposed terminal — momentum scroll, touch
 				// coalesce, wheel flush, and the queued WebGL re-init all post
-				// scrollBy / setState back into the now-stale closure. #262
+				// scrollBy / setState back into the now-stale closure.
 				if (scrollRafId !== null) cancelAnimationFrame(scrollRafId);
 				if (momentumRafId !== null) cancelAnimationFrame(momentumRafId);
 				if (pendingScrollRafId !== null) cancelAnimationFrame(pendingScrollRafId);

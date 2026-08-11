@@ -13,8 +13,7 @@ the repository.
 Project details in the Console, and only App name / tagline / icon / description /
 privacy have an Edit. Changing the ID means taking the ehpk to "Upload package"
 and **creating a new project**, which carries over neither the build history, nor
-the testing group, nor the store listing. (Done on 2026-07-29 for the cchub ->
-hrdle rename; the old `com.m0a.cchubglasses` stays Private as a fallback.)
+the testing group, nor the store listing.
 
 ## Workflow
 

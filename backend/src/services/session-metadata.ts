@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { ensureDataDir, atomicWriteFile, createMutationLock } from '../utils/storage';
 import type { AgentProvider, SessionTheme } from '../../../shared/types';
 
-// The `herdr-` prefix dates from the tmux-era CC Hub, which shared one data
+// The `herdr-` prefix dates from the tmux-era Hrdle, which shared one data
 // dir between backends running on different ports and needed separate stores
 // so tmux-era session lists didn't bleed into the herdr UI as phantom "Lost"
 // entries. The prefix stays after the rename: these names are what installs
@@ -12,7 +12,7 @@ const METADATA_FILE = 'herdr-session-metadata.json';
 const LAST_KNOWN_FILE = 'herdr-last-known-sessions.json';
 
 // Serialise read-modify-write sequences per store file so concurrent theme /
-// title / order updates can't clobber each other (lost update). #333
+// title / order updates can't clobber each other (lost update).
 const withMetadataLock = createMutationLock();
 const withLastKnownLock = createMutationLock();
 
@@ -20,7 +20,7 @@ interface SessionMeta {
   theme?: SessionTheme;
   title?: string;
   /**
-   * Words this session is about, biasing its speech-to-text (#166).
+   * Words this session is about, biasing its speech-to-text.
    *
    * Here rather than in `glasses-settings.json` because it belongs to the
    * session the way a theme and a title do: it is written when the work is
@@ -126,7 +126,7 @@ export async function removeLastKnownSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Move whole entries from one session id to another (#186 migration).
+ * Move whole entries from one session id to another.
  *
  * One write for the whole plan: a rename per call would leave the file in a
  * half-migrated state if the process stopped in the middle of it.

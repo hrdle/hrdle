@@ -6,7 +6,7 @@ import { paneViewportRows } from '../herdr-control';
  * panes runtime-less on purpose: it defers the agent resume until a client
  * attaches with a non-zero size.
  *
- * cchub used to read a missing `scroll` as "herdr server is older than protocol
+ * hrdle used to read a missing `scroll` as "herdr server is older than protocol
  * 16" and refuse the subscribe. That misdiagnosis deadlocked exactly the panes a
  * subscribe exists to revive — no subscribe → no client size → no resume → still
  * no scroll — and blamed a fully up-to-date herdr for it. Version skew has its

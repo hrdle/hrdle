@@ -1,7 +1,7 @@
 /**
  * HerdrControlSession — herdr-backed drop-in for TmuxControlSession.
  *
- * One instance per CC Hub session (= one herdr workspace). Exposes the same
+ * One instance per Hrdle session (= one herdr workspace). Exposes the same
  * public surface `routes/terminal-mux.ts` consumes from TmuxControlSession,
  * so the WS mux layer and the frontend stay unchanged.
  *
@@ -12,7 +12,7 @@
  *    sequences pass through intact), absolute PTY resizes, and streams
  *    terminal.frame records that (a) trigger viewport recaptures and
  *    (b) are scanned for cursor position and alt-screen state.
- *  - Layout: CC Hub owns the split tree (see herdr-layout.ts) because the
+ *  - Layout: Hrdle owns the split tree (see herdr-layout.ts) because the
  *    herdr workspace grid cannot be resized headlessly.
  *  - Scrollback: herdr's pane.read is capped at 1000 lines, so viewports
  *    clamp history to (1000 - rows) rows above the live edge (see
@@ -44,11 +44,11 @@ import { herdrLayoutToNode, PaneLayoutTree } from './herdr-layout';
 const GRACE_PERIOD_MS = 30_000;
 const RESIZE_DEBOUNCE_MS = 50;
 // Experimental per-pane smallest-wins override (opt-in via
-// CCHUB_PER_CLIENT_SIZING=1). Superseded for the common case by active-client
+// HRDLE_PER_CLIENT_SIZING=1). Superseded for the common case by active-client
 // sizing (the device being used owns the session size), which fixes the
 // dual-view flicker without letterboxing the active device. Kept off by
 // default; may be removed once active-client sizing is proven in the field.
-const PER_CLIENT_SIZING = process.env.CCHUB_PER_CLIENT_SIZING === '1';
+const PER_CLIENT_SIZING = process.env.HRDLE_PER_CLIENT_SIZING === '1';
 // A client's proposeDimensions and the server's ratio split can disagree by a
 // cell or two from rounding; only a demand this many cells smaller than the
 // tree slot counts as a real cross-client conflict worth shrinking a pane for.
@@ -220,7 +220,7 @@ export function scanFrameForState(state: PaneRuntimeState, bytes: Buffer): void 
 export class HerdrControlSession {
   private sessionId: string;
   private workspaceId: string | null = null;
-  // A herdr workspace holds one or more tabs; CC Hub renders a single tab at a
+  // A herdr workspace holds one or more tabs; Hrdle renders a single tab at a
   // time (its split tree is one tab's geometry). This tracks which tab is live,
   // following herdr's `active_tab_id`. null = pre-init or herdr too old to
   // report tabs, in which case every pane is treated as one flat tab.
@@ -365,7 +365,7 @@ export class HerdrControlSession {
 
   /**
    * Rebuild the split tree, preferring herdr's exported layout so a session's
-   * pane geometry (structure + direction) survives a cchub restart instead of
+   * pane geometry (structure + direction) survives a hrdle restart instead of
    * collapsing to a flat horizontal chain. Falls back to a flat chain when the
    * export is unavailable or its pane set disagrees with the live panes — the
    * worst case is then exactly the old behavior, never a corrupt tree.
@@ -656,7 +656,7 @@ export class HerdrControlSession {
   }
 
   // ==========================================================================
-  // Layout (CC Hub-owned split tree)
+  // Layout (Hrdle-owned split tree)
   // ==========================================================================
 
   /** Resize every pane PTY to its computed rect and notify layout listeners. */
@@ -779,7 +779,7 @@ export class HerdrControlSession {
     const controller = this.controllerFor(paneId);
     if (!controller) {
       // Surface the failure instead of silently dropping bytes — callers
-      // like `cchub send` must not get a success response for lost input.
+      // like `hrdle send` must not get a success response for lost input.
       throw new Error(`pane ${paneId} has no active control stream`);
     }
     controller.input(data);
@@ -1228,7 +1228,7 @@ export async function getOrCreateHerdrControlSession(sessionId: string): Promise
 }
 
 // =============================================================================
-// Viewport capture (herdr flavor of services/pane-viewport.ts)
+// Viewport capture
 // =============================================================================
 
 /**

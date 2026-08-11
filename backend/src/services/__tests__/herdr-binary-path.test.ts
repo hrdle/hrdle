@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { herdrBin, herdrBinaryPath } from '../herdr-client';
 
 /**
- * Regression: cchub v0.2.0 failed to start under systemd because it resolved
+ * Regression: hrdle v0.2.0 failed to start under systemd because it resolved
  * herdr through PATH only. `zsh -lc` (the unit's ExecStart) never sources
  * .zshrc, so ~/.local/bin — where herdr's install.sh puts the binary — is
  * absent from PATH at boot, and the service exit-looped with

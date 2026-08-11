@@ -82,7 +82,7 @@ export async function leg<T>(label: string, work: () => T | Promise<T>, fallback
 }
 
 export async function buildDashboard(): Promise<DashboardResponse> {
-  // The herdr skew check rides on this poll instead of its own timer (#393);
+  // The herdr skew check rides on this poll instead of its own timer;
   // it is cached, so the extra spawn is far rarer than the request rate.
   const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, groqSttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate, hrdleUpdate] = await Promise.all([
     leg('anthropic usage', () => anthropicUsageService.getUsageLimits(), null),

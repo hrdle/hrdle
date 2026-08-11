@@ -29,7 +29,7 @@ export function LoginForm({ onLogin, isLoading, error }: LoginFormProps) {
 						<Lock className="w-5 h-5 text-th-text-secondary" />
 					</div>
 					<h1 className="text-xl font-semibold text-th-text tracking-tight">
-						CC Hub
+						Hrdle
 					</h1>
 				</div>
 

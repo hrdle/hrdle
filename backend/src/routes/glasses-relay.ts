@@ -1,8 +1,8 @@
 /**
- * `POST /api/glasses/relay` + `POST /api/glasses/relay/:id/dismiss` (#504).
+ * `POST /api/glasses/relay` + `POST /api/glasses/relay/:id/dismiss`.
  *
  * Intentionally UNAUTHENTICATED (local trust, same pattern as /api/notify):
- * local agents post self-notes via `cchub glasses` from inside panes where no
+ * local agents post self-notes via `hrdle glasses` from inside panes where no
  * token exists. Defenses mirror notify: strict sessionId/id formats, bounded
  * store, per-session rate limit (the latter two enforced in the service).
  * index.ts keeps these paths outside the `/api/glasses/*` auth glob.
@@ -11,7 +11,7 @@
 import { Hono } from 'hono';
 import { dismissRelayItem, postAgentRelay } from '../services/glasses-relay';
 
-// Same alphabet as SessionIdSchema / the notify flood guard (#254).
+// Same alphabet as SessionIdSchema / the notify flood guard.
 const SESSION_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
 const ITEM_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 // Base36 like herdr's own pane token, not digits (`%A` is the tenth pane).

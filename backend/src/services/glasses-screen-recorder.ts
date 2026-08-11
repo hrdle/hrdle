@@ -1,6 +1,6 @@
 /**
  * Records the glasses screen mirror to disk for the public-release demo video
- * (#127).
+ *.
  *
  * The mirror is text state, not pixels: each `glasses-screen` frame is the
  * three container strings the G2 just drew (well under 5KB), published over
@@ -34,14 +34,14 @@ const RECORD_ENV = envVar('GLASSES_RECORD');
 const DIR_NAME = 'glasses-screen-recording';
 
 /** Rolling window. A year: the recording doubles as a debugging trail
- *  (what was on the glasses when the app died, #45), not just demo footage,
+ *  (what was on the glasses when the app died), not just demo footage,
  *  and a year of text frames is tens of MB. */
 const RETENTION_DAYS = 365;
 
 /** A recorded line: a frame as published plus the server's own arrival
  *  clock, a gap marker written when the publisher disconnects (so replay can
  *  tell "screen unchanged for an hour" from "glasses were off for an hour"),
- *  or a ring gesture (#129) so replay shows the wearer driving. `receivedAt`
+ *  or a ring gesture so replay shows the wearer driving. `receivedAt`
  *  guards the timeline against a skewed device clock — and the
  *  `at`/`receivedAt` gap itself is diagnostic (clock drift, WebView
  *  background throttling). The three shapes are discriminated by their own
@@ -180,7 +180,7 @@ export function recordGlassesScreen(screen: GlassesScreen | null): void {
 }
 
 /**
- * Record one ring gesture (#129). No dedup — every gesture happened — and no
+ * Record one ring gesture. No dedup — every gesture happened — and no
  * effect on frame dedup: the gesture's consequence arrives as its own frame.
  * A gesture proves the device is alive, so the next disconnect writes a fresh
  * gap marker even if no frame made it through in between.

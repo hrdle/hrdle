@@ -5,7 +5,7 @@ import "./index";
 
 /**
  * The catalogs name the product through `{{product}}` and `{{bin}}`, filled by
- * i18next's `defaultVariables` rather than by each call site (#459).
+ * i18next's `defaultVariables` rather than by each call site.
  *
  * Nothing about that is visible where the strings are used, so if the config
  * ever loses `defaultVariables` the placeholders reach the user verbatim —

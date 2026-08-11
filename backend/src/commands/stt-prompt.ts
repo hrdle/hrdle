@@ -1,5 +1,5 @@
 /**
- * hrdle stt-prompt - the words this session's speech is made of (#210).
+ * hrdle stt-prompt - the words this session's speech is made of.
  *
  *   hrdle stt-prompt "音声認識、Groq、ハルシネーション"   # set
  *   hrdle stt-prompt                                      # show what is set,
@@ -62,7 +62,7 @@ async function putSttPrompt(
  * The same object `/stt-preview` serves the settings screen, printed here
  * because a session's words are usually being read in a terminal by whoever is
  * about to change them, and "did that reach the prompt" is the next question
- * (#255). Best-effort: a server that will not answer costs a line on stderr,
+ *. Best-effort: a server that will not answer costs a line on stderr,
  * not an exit code - the words above were still shown.
  */
 async function printSttRequest(port: number, sessionId: string): Promise<void> {
@@ -138,7 +138,7 @@ export async function runSttPrompt(options: SttPromptCliOptions): Promise<void> 
 
   // Show: what this session has now, read from the list already fetched, and
   // then what is actually sent with it - which is the question these words are
-  // usually being read to answer (#255).
+  // usually being read to answer.
   if (options.text === undefined) {
     // `(none)` only when the list was read and this session is not in it. With
     // no list - an explicit --session against a server that could not tell us

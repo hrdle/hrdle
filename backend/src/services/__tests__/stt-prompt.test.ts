@@ -11,7 +11,7 @@ function line(session: string[] = [], glossary?: string[]): string {
  * `ペイン` is not `ペイント`. It is also capped, so what gets dropped when it is
  * full is the part worth pinning - which is why what goes in it is now said
  * deliberately (a session's own words) rather than scraped from workspace
- * labels (#210).
+ * labels.
  */
 describe('composeSttPrompt', () => {
   test("the speaking session's own words come first", () => {
@@ -43,9 +43,8 @@ describe('composeSttPrompt', () => {
   });
 
   test('the session cannot take more than half the budget', () => {
-    // The #210 failure mode, reproduced with the group that replaced the one
-    // that caused it: a session naming everything it might ever say must not
-    // cost the words misheard in every session.
+    // The failure mode the cap exists for: a session naming everything it
+    // might ever say must not cost the words misheard in every session.
     const session = Array.from({ length: 30 }, (_, i) => `セッション語彙${i}`);
     const prompt = line(session);
     for (const term of ['リリース', 'マージ', 'コミット', 'パネル']) {
@@ -83,7 +82,7 @@ describe('composeSttPrompt', () => {
 /**
  * The line is one string of comma-separated words by the time it leaves here,
  * so "why is my session's word not in it" can only be answered by what the
- * composition says about the groups (#255).
+ * composition says about the groups.
  */
 describe('composeSttPrompt reports how it got there', () => {
   test('each group says which of its terms made it in', () => {

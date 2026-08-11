@@ -10,7 +10,7 @@ export function getDataDir(): string {
   );
 }
 
-/** `~/.config/cchub` — service env file and other non-data config. */
+/** `~/.config/hrdle` — service env file and other non-data config. */
 export function getConfigDir(): string {
   return join(homedir(), '.config', IDENTITY.configDirName);
 }
@@ -24,7 +24,7 @@ export async function ensureDataDir(): Promise<string> {
 /**
  * Write to a sibling temp file and rename atomically so a crash mid-write
  * can't truncate the target (a truncated JSON store reads back as empty and
- * silently loses everything it held). Same pattern as peer-registry. #251 #333
+ * silently loses everything it held). Same pattern as peer-registry.
  */
 export async function atomicWriteFile(
   filePath: string,
@@ -52,7 +52,7 @@ export async function atomicWriteFile(
 /**
  * Create a mutex that serialises load→mutate→save sequences against a single
  * store file. Without it, overlapping read-modify-write calls clobber each
- * other's changes (lost update). One lock per store file. #251 #333
+ * other's changes (lost update). One lock per store file.
  */
 export function createMutationLock(): <T>(fn: () => Promise<T>) => Promise<T> {
   let queue: Promise<unknown> = Promise.resolve();

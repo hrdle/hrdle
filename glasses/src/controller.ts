@@ -1,4 +1,4 @@
-// Glasses app controller (#504) — domain layer: the relay item queue drives
+// Glasses app controller — domain layer: the relay item queue drives
 // the UI, and an explicit state machine maps ring actions to transitions.
 //
 // This is the SINGLE handler/domain implementation consumed by both the G2
@@ -176,7 +176,7 @@ export interface GlassesPlatform {
   stopMicCapture(): Promise<void>
   /** Transcribe collected PCM into text. `sessionId` is the workspace being
    *  spoken to, which biases the recognition toward that session's own
-   *  vocabulary server-side (#166). */
+   *  vocabulary server-side. */
   transcribeAudio(pcm: Uint8Array, sessionId?: string): Promise<string>
   /** Durable across a WebView restart. The device writes to the host app's
    *  storage, which outlives the page; the simulator uses localStorage. */
@@ -216,13 +216,13 @@ export interface GlassesPlatform {
 }
 
 /** Where a reply (choice keys / voice prompt) is routed. paneId targets the
- *  exact blocked pane in multi-pane workspaces (#504 replyTo routing). */
+ *  exact blocked pane in multi-pane workspaces (replyTo routing). */
 interface ReplyTarget {
   sessionId: string
   paneId?: string
   /** The relay item being answered. Auto items self-clear when herdr reports
    *  the pane unblocked; agent self-notes have no blocked epoch, so they are
-   *  dropped explicitly on a successful reply (#504). */
+   *  dropped explicitly on a successful reply. */
   itemId?: string
 }
 
@@ -447,7 +447,7 @@ export class GlassesController {
     // Already counting down. The client only gives up once — it marks itself
     // closed before saying so — but a second call here would orphan the first
     // timer rather than replace it, and an interval nobody holds is exactly
-    // what #46 was about.
+    // the failure this guard prevents.
     if (this.stopped || this.exitTimer) return
     this.log('error', 'ws: server unreachable — showing the reason, then closing')
     this.state.fatal = 'offline'
@@ -529,7 +529,7 @@ export class GlassesController {
     this.demoTimer = null
   }
 
-  /** Connect the WS and mark this connection as "glasses present" (#504). The
+  /** Connect the WS and mark this connection as "glasses present". The
    *  relay subscription is (re)sent on every connect; the server answers with
    *  a snapshot, then pushes upserts/removals. */
   connect(): void {
@@ -1017,7 +1017,7 @@ export class GlassesController {
         const cur = this.currentSession()
         if (top && cur && top.sessionId !== cur.id) {
           // Tap on the overlay banner: the waiting item belongs to another
-          // session → jump to it (#504).
+          // session → jump to it.
           await this.jumpToItem(top)
           return
         }
@@ -1263,7 +1263,7 @@ export class GlassesController {
 
   /**
    * Choice keys go to the item's sessionId+paneId. REST needs no subscription
-   * and routes to the exact blocked pane; WS input is the fallback (#504).
+   * and routes to the exact blocked pane; WS input is the fallback.
    *
    * Only ever a key that names what it wants - a digit, a Tab, an Enter - and
    * never an arrow. Arrows made this screen a second cursor over the pane's
@@ -1379,7 +1379,7 @@ export class GlassesController {
         this.voiceTarget?.sessionId,
       )
     } catch (err) {
-      // Kept apart from an empty transcript (#209): the request not arriving
+      // Kept apart from an empty transcript: the request not arriving
       // and the audio holding no words are different things to be told, and
       // only one of them is answered by speaking more clearly.
       console.warn('[voice] transcription failed:', err)
@@ -1497,7 +1497,7 @@ export class GlassesController {
   }
 
   /** Jump to a relay item's session: subscribe + open its conversation, and
-   *  enter choice mode straight away when the item carries choices (#504). */
+   *  enter choice mode straight away when the item carries choices. */
   private async jumpToItem(item: GlassesRelayItem): Promise<void> {
     const idx = this.state.sessions.findIndex((s) => s.id === item.sessionId)
     if (idx >= 0) this.state.sessionIndex = idx
@@ -1607,7 +1607,7 @@ export class GlassesController {
    *  themselves when herdr reports the pane unblocked, so they are left alone
    *  here. Agent self-notes have no blocked epoch to clear them, so drop the
    *  item explicitly — optimistic local remove + server dismiss so a reconnect
-   *  snapshot doesn't resurrect it — else it lingers on the glasses (#504). */
+   *  snapshot doesn't resurrect it — else it lingers on the glasses. */
   private answeredItem(itemId: string | undefined): void {
     if (!itemId) return
     const item = this.queue.get(itemId)
@@ -1650,7 +1650,7 @@ export class GlassesController {
     // pane draws a tab each and answers whichever is in front, which the
     // record cannot say; and the scrape read that used to fill the gap served
     // the tabbed TUI's own furniture as answers (the description block, the
-    // `Next` row, finally `Submit answers` / `Cancel` - #267). The server's
+    // `Next` row, finally `Submit answers` / `Cancel`). The server's
     // relay item carries the front tab's options when the pane text names it,
     // so this local path declining is not the wearer losing the question.
     const recorded = pane?.pendingQuestion
@@ -1844,7 +1844,7 @@ export class GlassesController {
     this.queue.applySnapshot(items)
     this.syncRelay()
     // (Re)connected: with waiting items pending and the user idling in the
-    // session list, present the overlay immediately (proactive overlay #504).
+    // session list, present the overlay immediately (proactive overlay).
     if (this.state.mode === 'session_list' && this.queue.topWaiting()) {
       this.enterOverlay()
       return
@@ -1976,7 +1976,7 @@ export class GlassesController {
    * omitted the rest. The workspace level is the fallback, and there a thread
    * agent (kimi/codex/grok) carries `agentSessionId` where Claude carries
    * `ccSessionId`: taking only the latter left those workspaces reading an
-   * empty Claude transcript, which is what `(no messages)` was (#5).
+   * empty Claude transcript, which is what `(no messages)` was.
    */
   private conversationTarget(): { id: string; agent?: string } | undefined {
     const pane = this.currentPane()

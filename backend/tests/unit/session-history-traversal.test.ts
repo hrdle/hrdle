@@ -7,7 +7,7 @@ import { isFlatSegment, SessionHistoryService } from '../../src/services/session
 
 describe('isFlatSegment', () => {
   test('accepts real project dir names and session ids', () => {
-    expect(isFlatSegment('-home-m0a-cchub-work-1')).toBe(true);
+    expect(isFlatSegment('-home-m0a-hrdle-work-1')).toBe(true);
     expect(isFlatSegment('54e8db01-6213-4169-8de9-1d2be2ac3513')).toBe(true);
   });
 

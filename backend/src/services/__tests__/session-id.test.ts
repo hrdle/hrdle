@@ -7,7 +7,7 @@ import { planRekeys } from '../session-id-migration';
  * A session's address used to be its workspace label - text a person edits,
  * and which the workspace-naming convention has every agent rewrite twice per
  * task. Renaming one sent the next message nowhere, and two workspaces sharing
- * a name sent it somewhere wrong with a 200 (#186).
+ * a name sent it somewhere wrong with a 200.
  */
 
 const ws = (workspace_id: string, label?: string): HerdrWorkspace =>

@@ -3,10 +3,10 @@ import { CreateSessionSchema } from '../../../../shared/types';
 
 // CreateSessionSchema.name keeps herdr workspace labels in the SessionId
 // alphabet, so a label stays safe to use wherever a session id appears
-// (URLs, logs, RPC params) without escaping. #250
+// (URLs, logs, RPC params) without escaping.
 describe('CreateSessionSchema.name', () => {
   test('accepts alphanumerics, dot, underscore, hyphen', () => {
-    for (const name of ['linux', 'cchub-work-1', 'my.session', 'A_B-C.1']) {
+    for (const name of ['linux', 'hrdle-work-1', 'my.session', 'A_B-C.1']) {
       expect(CreateSessionSchema.safeParse({ name }).success).toBe(true);
     }
   });

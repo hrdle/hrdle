@@ -6,7 +6,7 @@ import { IDENTITY } from '../../shared/identity';
 const VERSION = pkg.version;
 
 /**
- * The port, from identity (#459). Spelled out, it survives a rename in the
+ * The port, from identity. Spelled out, it survives a rename in the
  * worst way: `--help` reads its number from identity and says one thing, while
  * the server binds the other. A renamed build then goes for the port the
  * product it replaces is already serving on, and dies with EADDRINUSE on a
@@ -17,7 +17,7 @@ const VERSION = pkg.version;
  * `--watch` to the script, so it was false in every run and the explicit
  * `-p` in the dev script was what actually chose the port. Restoring the
  * detection would do more than undo dead code: this default is also where
- * `cchub send` and `cchub peek` address the local server (`options.port`
+ * `hrdle send` and `hrdle peek` address the local server (`options.port`
  * below), and those want the installed service, not whatever a checkout
  * happens to be running. scripts/dev-backend.sh passes `-p` instead.
  */
@@ -64,7 +64,7 @@ ${t('cli.usage')}
   ${IDENTITY.binaryName} status              Show service status
   ${IDENTITY.binaryName} address             Print where this server can be reached: the short
                             address for the glasses app's Connect step, and the
-                            URL for a browser (${IDENTITY.binaryName} qr is the old name)
+                            URL for a browser
   ${IDENTITY.binaryName} notify              Send hook event (reads JSON from stdin)
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
@@ -146,11 +146,7 @@ export function parseArgs(args: string[]): CliOptions {
       case 'status':
         options.command = 'status';
         break;
-      // `qr` is the old name. It used to draw a QR code; nothing could read
-      // one, so it prints the address now and stays only so that the command
-      // people have in their shell history still works.
       case 'address':
-      case 'qr':
         options.command = 'address';
         break;
       case 'notify':

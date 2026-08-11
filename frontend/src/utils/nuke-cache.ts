@@ -1,5 +1,5 @@
 /**
- * Wipe every client-side cache and persistent storage CC Hub touches, then
+ * Wipe every client-side cache and persistent storage Hrdle touches, then
  * hard-reload with a cache-busting query string. Used by the dashboard
  * "Clear cache" button and the Ctrl/Cmd+Shift+F5 keybinding when a PWA gets
  * stuck on an outdated bundle.

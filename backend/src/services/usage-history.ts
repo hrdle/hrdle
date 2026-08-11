@@ -20,15 +20,7 @@ export class UsageHistoryService {
     try {
       const content = await readFile(HISTORY_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      // Handle both the current array format and the legacy
-      // { snapshots: [...] } format written by older versions.
-      if (Array.isArray(parsed)) {
-        return onlySnapshots(parsed);
-      }
-      if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { snapshots?: unknown }).snapshots)) {
-        return onlySnapshots((parsed as { snapshots: unknown[] }).snapshots);
-      }
-      return [];
+      return Array.isArray(parsed) ? onlySnapshots(parsed) : [];
     } catch {
       return [];
     }

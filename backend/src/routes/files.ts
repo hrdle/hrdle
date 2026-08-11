@@ -19,7 +19,7 @@ const herdrService = new HerdrService();
  * only confinement check (requested path startsWith base) would happily read
  * or write arbitrary host files. We resolve the candidate against the
  * authoritative live-session list and compare realpaths so a symlinked base
- * can't smuggle an off-tree path. (#232)
+ * can't smuggle an off-tree path.
  */
 async function isAllowedSessionDir(sessionWorkingDir: string): Promise<boolean> {
   let target: string;
@@ -509,7 +509,7 @@ files.get('/raw', async (c) => {
     // Validate and clamp: Bun.file().slice happily returns a BunFile whose
     // declared .size is the requested chunk but streams fewer bytes if the
     // range goes past EOF, so an un-clamped Content-Length would lie and
-    // keep-alive clients would hang waiting for promised bytes. #253
+    // keep-alive clients would hang waiting for promised bytes.
     const rangeHeader = c.req.header('Range');
     if (rangeHeader) {
       const match = rangeHeader.match(/^bytes=(\d+)-(\d*)$/);
@@ -541,7 +541,7 @@ files.get('/raw', async (c) => {
         // dropped at the transport layer), so Content-Length doesn't match the
         // body and the response is unusable for video seeking. Buffering the
         // chunk (capped at totalSize - start by the clamp above) gives Bun a
-        // sized body it streams correctly. #253
+        // sized body it streams correctly.
         const chunk = await file.slice(start, end + 1).arrayBuffer();
         return new Response(chunk, {
           status: 206,

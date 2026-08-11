@@ -47,7 +47,7 @@ async function readTrailingLines(path: string, lineCount: number): Promise<strin
 // transcript_path in the request body cannot be trusted: generateSmartMessage
 // reads the file and broadcasts text fragments of it to every connected
 // client. Only real transcript locations (the agent CLIs' state dirs) may be
-// read. Symlinks are resolved before the prefix check. #347
+// read. Symlinks are resolved before the prefix check.
 export async function isAllowedTranscriptPath(path: string): Promise<boolean> {
   let resolved: string;
   try {
@@ -213,7 +213,7 @@ const OVERRIDE_TTL = 24 * 60 * 60_000; // 24 hours
 // `/api/notify` is intentionally unauthenticated (local hooks call into it),
 // so a network attacker can flood the endpoint with arbitrary session_ids to
 // blow up `stateOverrides`. Validate the id format and bound the Map size so a
-// flood costs O(MAX) memory rather than O(requests). #254
+// flood costs O(MAX) memory rather than O(requests).
 const SESSION_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
 const MAX_OVERRIDE_ENTRIES = 500;
 
@@ -298,7 +298,7 @@ notify.post('/', async (c) => {
     // Store the indicatorState override
     // session_id must look like a real agent session id (Claude/Codex UUIDs,
     // herdr workspace labels). Reject anything that doesn't and bound the Map so
-    // an unauth flood costs O(MAX) memory, not O(requests). #254
+    // an unauth flood costs O(MAX) memory, not O(requests).
     if (sessionId && SESSION_ID_RE.test(sessionId)) {
       const toolName = body.tool_name as string | undefined;
       const newState = hookEventToState(event, toolName);
@@ -306,7 +306,7 @@ notify.post('/', async (c) => {
         const ttl = OVERRIDE_TTL;
         evictStateOverrides();
         // Keep the tool name from either side of the tool call: PreToolUse is
-        // optional now that herdr reports `blocked` on its own (#390), so
+        // optional now that herdr reports `blocked` on its own, so
         // PostToolUse/AskUserQuestion has to be able to name the question.
         const carriesToolName = event === 'PreToolUse' || event === 'PostToolUse';
         stateOverrides.set(sessionId, { state: newState, expiresAt: Date.now() + ttl, toolName: carriesToolName ? toolName : undefined });
@@ -397,7 +397,7 @@ notify.post('/', async (c) => {
   }
 });
 
-/** Check if cchub notify is configured in ~/.claude or ~/.codex hooks */
+/** Check if hrdle notify is configured in ~/.claude or ~/.codex hooks */
 notify.get('/hook-status', async (c) => {
   try {
     const status = await getHookStatus();

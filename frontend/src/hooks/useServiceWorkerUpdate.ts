@@ -14,14 +14,14 @@ const listeners = new Set<() => void>();
 
 const updateServiceWorker = registerSW({
 	onNeedRefresh() {
-		console.log("[CC Hub] SW: new version waiting, prompting for reload");
+		console.log("[Hrdle] SW: new version waiting, prompting for reload");
 		updateDetected = true;
 		for (const listener of listeners) listener();
 	},
 	onRegisterError(error) {
 		// Without this the registration failure is swallowed and the app silently
 		// loses update detection.
-		console.error("[CC Hub] SW: registration failed", error);
+		console.error("[Hrdle] SW: registration failed", error);
 	},
 	onRegisteredSW(_swUrl, registration) {
 		if (!registration) return;

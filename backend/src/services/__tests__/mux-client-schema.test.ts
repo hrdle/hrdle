@@ -72,7 +72,7 @@ describe('MuxClientMessageSchema — zoom-pane', () => {
   });
 });
 
-describe('MuxClientMessageSchema — glasses-relay subscription (#504)', () => {
+describe('MuxClientMessageSchema — glasses-relay subscription', () => {
   test('accepts subscribe/unsubscribe-glasses-relay with no sessionId', () => {
     expect(MuxClientMessageSchema.safeParse({ type: 'subscribe-glasses-relay' }).success).toBe(true);
     expect(MuxClientMessageSchema.safeParse({ type: 'unsubscribe-glasses-relay' }).success).toBe(
@@ -88,7 +88,7 @@ describe('MuxClientMessageSchema — glasses-relay subscription (#504)', () => {
   });
 });
 
-describe('MuxClientMessageSchema — per-pane conversation subscription (#80)', () => {
+describe('MuxClientMessageSchema — per-pane conversation subscription', () => {
   test('keeps agentSessionId, which names which conversation of a workspace', () => {
     const r = MuxClientMessageSchema.safeParse({
       type: 'subscribe-conversation',

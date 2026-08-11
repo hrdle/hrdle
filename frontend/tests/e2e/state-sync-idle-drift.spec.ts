@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 
 const FRONTEND_URL = `https://localhost:${IDENTITY.frontendDevPort}`;
 const BACKEND_URL = `https://localhost:${IDENTITY.devPort}`;
-const DRIFT_LOG = '/tmp/cchub-drift.log';
+const DRIFT_LOG = '/tmp/hrdle-drift.log';
 
 test.use({ ignoreHTTPSErrors: true, baseURL: FRONTEND_URL });
 
@@ -24,10 +24,10 @@ test('idle session: drift rate should be low after state-sync', async ({ page, r
   const sessionId = await pickSessionByName(request, 'state-sync-test');
 
   await page.addInitScript(([id]) => {
-    localStorage.setItem('cchub-open-sessions', JSON.stringify([id]));
-    localStorage.setItem('cchub-last-session-id', id);
-    localStorage.setItem('cchub-onboarding-completed', 'true');
-    localStorage.setItem('cchub-onboarding-sessionlist-completed', 'true');
+    localStorage.setItem('hrdle-open-sessions', JSON.stringify([id]));
+    localStorage.setItem('hrdle-last-session-id', id);
+    localStorage.setItem('hrdle-onboarding-completed', 'true');
+    localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   }, [sessionId]);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });

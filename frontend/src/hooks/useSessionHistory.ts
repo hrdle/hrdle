@@ -221,7 +221,7 @@ export function useSessionHistory(): UseSessionHistoryResult {
 	// EventSource cannot send an Authorization header and fails silently with 401
 	// under password auth, so the Bearer goes through fetch + ReadableStream and the
 	// SSE is parsed by hand. An AbortController closes the previous stream on a
-	// repeated search or unmount. #238
+	// repeated search or unmount.
 	const searchAbortRef = useRef<AbortController | null>(null);
 	const searchSessions = useCallback(async (query: string) => {
 		setSearchQuery(query);
@@ -300,7 +300,7 @@ export function useSessionHistory(): UseSessionHistoryResult {
 	}, []);
 
 	// Abort any in-flight search stream on unmount (also closes the stream
-	// across repeated searches, fixing the old EventSource leak). #238
+	// across repeated searches, fixing the old EventSource leak).
 	useEffect(() => () => searchAbortRef.current?.abort(), []);
 
 	const clearSearch = useCallback(() => {

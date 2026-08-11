@@ -63,7 +63,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  * **This handler decides nothing about what is sent.** The model, the language
  * and the vocabulary prompt come from one call to `resolveSttRequest()`, which
  * holds every precedence rule between them and is what
- * `GET /api/glasses/stt-preview` reports (#255). The key is resolved
+ * `GET /api/glasses/stt-preview` reports. The key is resolved
  * separately, and only here, because it is write-only and must not be
  * reachable through a preview.
  *
@@ -82,7 +82,7 @@ glasses.post('/stt', async (c) => {
   const format = c.req.query('format') || 'pcm';
   const sampleRate = Number(c.req.query('sampleRate')) || 16000;
   // `?session=` names the workspace being spoken to, so its own vocabulary
-  // leads the prompt (#166).
+  // leads the prompt.
   const stt = await resolveSttRequest({
     sessionId: c.req.query('session'),
     lang: c.req.query('lang'),
@@ -142,7 +142,7 @@ glasses.post('/stt', async (c) => {
     // `パネル` over `ペイント`, and reaches for the ordinary Japanese word.
     if (stt.prompt) form.append('prompt', stt.prompt);
 
-    // The server's own idle timeout is 120s (#209), and the wearer is watching
+    // The server's own idle timeout is 120s, and the wearer is watching
     // "Transcribing..." for all of it. Bound the leg we do not control well
     // inside that, so a stalled provider comes back as a 502 the glasses can
     // report rather than as the connection dying under them: 8 seconds of
@@ -185,7 +185,7 @@ glasses.post('/stt', async (c) => {
 });
 
 /**
- * What would be sent with an utterance from this session, right now (#255).
+ * What would be sent with an utterance from this session, right now.
  *
  * `?session=<workspace id>` and `?lang=<code>` are the two things a real
  * transcription request carries besides the audio, so passing them here gives
@@ -210,7 +210,7 @@ glasses.get('/stt-preview', async (c) => {
  * It reports what is *stored*. For what would be sent, the screen asks
  * `/stt-preview`: this endpoint has no session and so could never answer that
  * question, and the field that looked as though it did was where an afternoon
- * went (#255).
+ * went.
  */
 glasses.get('/settings', async (c) => {
   return c.json(await glassesSettingsView());
@@ -230,7 +230,7 @@ const GlassesSettingsPatchSchema = z.object({
     .nullable()
     .optional(),
   // The vocabulary bias, as a switch. It replaced a free-text field whose one
-  // documented use was the word `off` typed into it (#255).
+  // documented use was the word `off` typed into it.
   sttBias: z.enum(['on', 'off']).nullable().optional(),
   // A closed set: an unknown model is a 400 on every utterance, and the wearer
   // would see only "STT provider error".
@@ -238,7 +238,7 @@ const GlassesSettingsPatchSchema = z.object({
 });
 
 /**
- * The screen-mirror recording (#127), for the simulator's replay player.
+ * The screen-mirror recording, for the simulator's replay player.
  *
  * Recorded frames are this user's own prompts and notification text, so both
  * endpoints sit inside the auth glob (unlike `/relay*`). Reading works even

@@ -2,17 +2,17 @@ import { basename } from 'node:path';
 import { HOOK_COMMAND, IDENTITY } from '../../../shared/identity';
 
 /**
- * The `cchub notify` invocation to write into an agent's hook config.
+ * The `hrdle notify` invocation to write into an agent's hook config.
  *
- * A bare `cchub notify` only resolves if the hook's shell can find cchub, and
+ * A bare `hrdle notify` only resolves if the hook's shell can find hrdle, and
  * hooks run in a *non-interactive* shell: `.zshrc` is never sourced, so the
  * `~/bin` / `~/.local/bin` that most installs land in are absent from PATH
- * (#538). The supervised units sidestep this with a baked `Environment=PATH=`,
+ *. The supervised units sidestep this with a baked `Environment=PATH=`,
  * but hooks are spawned by the agent, outside the unit — the notification just
  * silently stops arriving.
  *
  * An absolute path has no PATH to be wrong about, and it also settles which
- * binary answers when both `~/bin/cchub` and `~/.local/bin/cchub` exist.
+ * binary answers when both `~/bin/hrdle` and `~/.local/bin/hrdle` exist.
  */
 export function notifyCommandFor(execPath: string): string {
   // Running from source (`bun run src/index.ts`) makes execPath the *bun*

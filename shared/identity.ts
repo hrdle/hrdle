@@ -1,10 +1,10 @@
 /**
  * Product identity — the names, paths, ports and service units that would all
- * have to change together to rename this product (#459).
+ * have to change together to rename this product.
  *
  * The raw values live in `identity.json` at the repo root so that non-TypeScript
  * consumers can read them too. Everything composed from those values belongs
- * here rather than at the call site: `cchub-update.timer` is not a name anyone
+ * here rather than at the call site: `hrdle-update.timer` is not a name anyone
  * chose, it is `${serviceName}-update.timer`, and spelling it out at the call
  * site is what turns one rename into a thousand.
  *
@@ -45,32 +45,16 @@ export const IDENTITY = {
 } as const;
 
 /**
- * Prefixes this app used for browser storage before the current one.
- *
- * Renaming a localStorage key does not fail, it forgets: the theme resets, the
- * keyboard moves back to its default corner, and — because the auth token lives
- * here too — everyone signs out. So old keys are carried forward rather than
- * assumed absent.
- *
- * `cc-hub-` is here because the token key alone was spelled with the hyphen
- * while everything else used `cchub-`. Normalising it is the first thing this
- * mechanism does, which means a rename is not the first time it runs.
- */
-export const LEGACY_STORAGE_PREFIXES: readonly string[] =
-  raw.legacyStoragePrefixes;
-
-/**
  * Scratch paths under /tmp.
  *
  * `imagesDir` had three separate copies of its literal (the server's static
  * route, the upload handler and the file route) which only work as long as all
  * three agree — one edit away from uploads landing where nothing serves them.
  *
- * `browserLogFile` does not follow `tmpPrefix`: it has always been
- * `cc-hub-browser.log`, with the hyphen, and CLAUDE.md tells people to tail it
- * by that name. Normalising the spelling is a real change to something someone
- * has in their shell history, so it is recorded here as-is rather than quietly
- * corrected — a rename can decide to fix it deliberately.
+ * `browserLogFile` does not follow `tmpPrefix` but carries its own
+ * `browserLogName`: CLAUDE.md tells people to tail it by that name, and a
+ * spelling normalised here is a real change to something someone has in their
+ * shell history.
  */
 export const TMP_PATHS = {
   imagesDir: `/tmp/${IDENTITY.tmpPrefix}-images`,
@@ -95,7 +79,7 @@ export const SERVICE = {
   dropInDir: `${IDENTITY.serviceName}.service.d`,
 } as const;
 
-/** The release asset for a platform, e.g. `cchub-linux-x64`. */
+/** The release asset for a platform, e.g. `hrdle-linux-x64`. */
 export function assetName(platform: string, arch: string): string {
   return `${IDENTITY.assetPrefix}-${platform}-${arch}`;
 }
@@ -106,7 +90,7 @@ export function assetName(platform: string, arch: string): string {
  * `dataDirEnv` predates this and stays spelled out in identity.json: it is
  * documented and someone may have it exported, so it is a value a rename
  * decides about rather than one that follows automatically. Variables added
- * since compose from the binary name here — `CCHUB_STT_PROMPT` survived the
+ * since compose from the binary name here — `HRDLE_STT_PROMPT` survived the
  * rename by a day precisely because it was written out at the call site, and
  * `glasses/vite.config.ts` was already building `HRDLE_URL` this way.
  */
@@ -120,24 +104,13 @@ export function envVar(suffix: string): string {
  * Both the writer (`setup`, which puts it in the service env file) and the
  * reader (startup, and the auth middleware behind it) must use this one name.
  * They did not: setup wrote a bare `PASSWORD=` while the server read
- * `CCHUB_PASSWORD`, so a password configured through `setup -P` on Linux was
+ * `HRDLE_PASSWORD`, so a password configured through `setup -P` on Linux was
  * never seen and the server came up **unauthenticated** while reporting itself
  * as configured. Nothing fails when these disagree, which is why it lasted.
  */
 export const PASSWORD_ENV = envVar('PASSWORD');
 
-/**
- * Older spellings still accepted when reading the password, newest first.
- *
- * `CCHUB_PASSWORD` is what this app read before the rename and what anyone
- * following `.env.example` has exported. The bare `PASSWORD` that setup used to
- * write is deliberately NOT here: it is a name other things use, and picking it
- * up out of the ambient environment would switch auth on with a password the
- * user never chose. Re-running `setup` rewrites that file with the name above.
- */
-export const LEGACY_PASSWORD_ENVS: readonly string[] = ['CCHUB_PASSWORD'];
-
-/** The hook command hosts are told to run, e.g. `cchub notify`. */
+/** The hook command hosts are told to run, e.g. `hrdle notify`. */
 export const HOOK_COMMAND = `${IDENTITY.binaryName} notify`;
 
 /**

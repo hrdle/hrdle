@@ -15,7 +15,7 @@ import { notifyCommandFor } from '../../src/services/notify-command';
  *
  * What each one costs when it stops agreeing with the binary:
  *
- * - The systemd drop-in directory: `cchub debug enable` writes a unit override
+ * - The systemd drop-in directory: `hrdle debug enable` writes a unit override
  *   for a unit that no longer exists. systemd has nothing to complain about, so
  *   the inspector simply never turns on.
  * - The hook command: what gets written into the user's Claude/Codex config.
@@ -67,7 +67,7 @@ describe('hook detection pattern', () => {
   });
 
   test('does not match a binary that merely ends with our name', () => {
-    // `/usr/bin/notcchub notify` is somebody else's program.
+    // `/usr/bin/nothrdle notify` is somebody else's program.
     expect(HOOK_COMMAND_PATTERN.test(`not${IDENTITY.binaryName} notify`)).toBe(
       false,
     );
@@ -85,7 +85,7 @@ describe('hook detection pattern', () => {
  *
  * They check that `dropInDir` is `unitFile` plus `.d`, which stays true no
  * matter what any call site does — and a call site holding its own
- * `'cchub.service.d'` is exactly how these three got missed by the two rounds
+ * `'hrdle.service.d'` is exactly how these three got missed by the two rounds
  * that came before. This is what those rounds were lacking.
  *
  * Deliberately narrow. It looks for names that have to agree with something

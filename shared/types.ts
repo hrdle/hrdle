@@ -141,7 +141,7 @@ export function agentResumeCommand(agent: AgentProvider, sessionId?: string): st
   if (!sessionId) return base;
   // The command is typed into an interactive shell over the pane's control stream, so the
   // session id is single-quoted to guarantee it cannot break out of the
-  // argument — defense-in-depth on top of SessionIdSchema at the routes. #234
+  // argument — defense-in-depth on top of SessionIdSchema at the routes.
   const quoted = `'${sessionId.replace(/'/g, `'\\''`)}'`;
   return `${base} ${quoted}`;
 }
@@ -164,7 +164,7 @@ export interface SessionResponse {
   customTitle?: string;
   /**
    * Words this session's speech is made of, leading the vocabulary bias sent
-   * with its transcriptions (#166). Absent when it has none of its own.
+   * with its transcriptions. Absent when it has none of its own.
    */
   sttPrompt?: string;
 }
@@ -214,7 +214,7 @@ export const TabIdSchema = z.string().regex(/^[A-Za-z0-9]+:t\d+$/, 'Invalid tab 
 
 // Agent session id validation. Claude/Codex session ids are UUID-like; this
 // also bounds them to shell-safe characters because the id is typed into an
-// interactive shell via `claude -r <id>` / `codex resume <id>` (#234).
+// interactive shell via `claude -r <id>` / `codex resume <id>`.
 export const SessionIdSchema = z.string().regex(/^[A-Za-z0-9._-]+$/, 'Invalid session id');
 
 export interface PaneInfo {
@@ -237,7 +237,7 @@ export interface PaneInfo {
    *
    * Absent until they set one, so anything showing it needs a fallback — the
    * pane id is what a pane is called before it is called anything else. herdr
-   * owns this; cchub only relays it, so renaming from either side agrees.
+   * owns this; hrdle only relays it, so renaming from either side agrees.
    */
   label?: string;
   indicatorState?: IndicatorState;
@@ -312,7 +312,7 @@ export interface SessionMetrics {
 
 // Session names become herdr workspace labels. Keep them in the same
 // alphabet as SessionIdSchema so a label stays safe to use wherever a
-// session id appears (URLs, logs, RPC params) without escaping. #250
+// session id appears (URLs, logs, RPC params) without escaping.
 export const CreateSessionSchema = z.object({
   name: z
     .string()
@@ -405,7 +405,7 @@ export interface PeerDiscoverResponse {
 export const PeerCreateSchema = z.object({
   nickname: z.string().min(1).max(64),
   // Must be https. The backend additionally rejects loopback/link-local/
-  // private hosts at fetch time to block SSRF (Tailscale ranges stay allowed). #235
+  // private hosts at fetch time to block SSRF (Tailscale ranges stay allowed).
   url: z.url().refine(
     (u) => {
       try {
@@ -892,7 +892,7 @@ export interface UsageLimitsStatus {
 }
 
 /**
- * herdr binary-vs-server version skew (#393). Present only when cchub could
+ * herdr binary-vs-server version skew. Present only when hrdle could
  * read herdr's status; absent means "don't say anything" (herdr missing or an
  * unreadable status) so a format change never turns into a false warning.
  */
@@ -901,9 +901,9 @@ export interface HerdrUpdateStatus {
   binaryVersion?: string;
   /** Version of the herdr server process currently holding the panes. */
   serverVersion?: string;
-  /** True when the running server is older than the binary cchub spawns. */
+  /** True when the running server is older than the binary hrdle spawns. */
   restartNeeded: boolean;
-  /** True when herdr runs under systemd/launchd, so cchub can restart it. */
+  /** True when herdr runs under systemd/launchd, so hrdle can restart it. */
   canApply: boolean;
   /**
    * Newest stable release herdr publishes at `herdr.dev/latest.json`. Absent
@@ -912,7 +912,7 @@ export interface HerdrUpdateStatus {
    */
   latestVersion?: string;
   /**
-   * The published release is newer than the binary on disk (#259). Independent
+   * The published release is newer than the binary on disk. Independent
    * of `restartNeeded`: with binary and server on the same old version there is
    * no skew to see, and this is the only thing that says an update exists.
    */
@@ -920,7 +920,7 @@ export interface HerdrUpdateStatus {
 }
 
 /**
- * Whether cchub itself is current (#259). Reported beside herdr's so the
+ * Whether hrdle itself is current. Reported beside herdr's so the
  * dashboard answers "am I running the current thing?" for both halves of the
  * stack, rather than only warning once something is already inconsistent.
  */
@@ -1226,7 +1226,7 @@ export type ControlClientMessage =
   // offset=0 means live mode; the server will also push fresh viewports
   // unsolicited when new output arrives.
   | { type: 'request-viewport'; paneId: string; offset: number }
-  // Tab operations (herdr workspace > tab > pane). CC Hub renders one tab at a
+  // Tab operations (herdr workspace > tab > pane). Hrdle renders one tab at a
   // time; these switch/create/close the workspace's tabs. `tabId` is a herdr
   // tab id echoed back from `SessionResponse.tabs`.
   | { type: 'select-tab'; tabId: string }
@@ -1320,8 +1320,7 @@ export interface GlassesScreen {
   /** Which screen this is, for the mirror's status line. */
   mode: string;
   /**
-   * The session under the cursor / on screen, as structured data (#129
-   * follow-up). The header already shows a name, but analysis of a recording
+   * The session under the cursor / on screen, as structured data. The header already shows a name, but analysis of a recording
    * should not have to parse display text back apart. Absent on ehpks that
    * predate the field and on screens with no session (empty list, fatal).
    */
@@ -1331,7 +1330,7 @@ export interface GlassesScreen {
 }
 
 /**
- * One ring gesture on the device (#129), named after the controller's own
+ * One ring gesture on the device, named after the controller's own
  * RingAction. Published only while the screen mirror is live, and only ever
  * recorded — a mirror viewer needs the resulting frame, not the finger.
  */
@@ -1379,10 +1378,10 @@ export interface RecordedSttRequest {
 }
 
 /**
- * One relay item for the G2 glasses channel (#504): a single piece of
+ * One relay item for the G2 glasses channel: a single piece of
  * information the user needs to make a decision, not a summary. `waiting`
  * items are created by the blocked-transition tracker (source 'auto') or by
- * an agent via `cchub glasses` (source 'agent') and live until the blocked
+ * an agent via `hrdle glasses` (source 'agent') and live until the blocked
  * epoch ends or they are dismissed; `info` items are agent self-reports with
  * a TTL, one latest per session.
  */
@@ -1469,10 +1468,10 @@ export type MuxClientMessage =
   // `agentSessionId` names the pane's own agent session. Without it the server
   // can only resolve a workspace, and a workspace with two agent panes has two
   // conversations — it answered with whichever pane it happened to summarise
-  // the workspace by, which is not the one on screen (#80).
+  // the workspace by, which is not the one on screen.
   | { type: 'subscribe-conversation'; sessionId: string; agentSessionId?: string }
   | { type: 'unsubscribe-conversation'; sessionId: string; agentSessionId?: string }
-  // Glasses relay presence subscription (#504). No sessionId: it marks the
+  // Glasses relay presence subscription. No sessionId: it marks the
   // whole connection as "glasses present", which gates relay assembly/send.
   //
   // `onDevice` separates a wearer from a spectator. Both get the items — the
@@ -1498,16 +1497,16 @@ export type MuxClientMessage =
   | { type: 'subscribe-glasses-screen' }
   | { type: 'unsubscribe-glasses-screen' }
   // A ring gesture, published by the device alongside its screen frames
-  // (#129). Recording-only today: the replay player overlays them so demo
+  //. Recording-only today: the replay player overlays them so demo
   // footage shows the wearer driving, and a debugging trail shows whether the
-  // user was mid-interaction right before an app death (#45).
+  // user was mid-interaction right before an app death.
   | { type: 'glasses-input'; input: GlassesInput }
   | (ControlClientMessage & { sessionId: string });
 
 // Runtime validation for client→server /ws/mux frames. The unions above are
 // compile-time only; the WS handler receives untrusted JSON and interpolates
 // paneId/cols/rows into backend RPC parameters, so every frame is
-// validated here before dispatch (#231). Unknown keys are stripped (zod
+// validated here before dispatch. Unknown keys are stripped (zod
 // default), so forward-compatible clients are unaffected.
 const WsPaneDim = z.number().int().min(1).max(2000);
 const WsAmount = z.number().int().min(1).max(2000);
@@ -1625,7 +1624,7 @@ export type MuxServerMessage =
   | { type: 'conversation-unsubscribed'; sessionId: string; agentSessionId?: string }
   | { type: 'initial-conversation'; sessionId: string; agentSessionId?: string; messages: ConversationMessage[] }
   | { type: 'conversation-update'; sessionId: string; agentSessionId?: string; messages: ConversationMessage[] }
-  // Glasses relay (#504). Sent only to connections subscribed via
+  // Glasses relay. Sent only to connections subscribed via
   // `subscribe-glasses-relay` — never broadcast to ordinary mux clients.
   | { type: 'glasses-relay'; item: GlassesRelayItem } // upsert (create / dismiss reflection)
   | { type: 'glasses-relay-remove'; id: string } // exit-blocked / TTL expiry
@@ -1638,7 +1637,7 @@ export type MuxServerMessage =
   // when nothing is live, and again when the publisher disconnects, so a demo
   // audience sees "Disconnected" rather than a frozen screen.
   | { type: 'glasses-screen'; screen: GlassesScreen | null }
-  // The herdr server is being restarted by this host (#261). Every pane PTY is
+  // The herdr server is being restarted by this host. Every pane PTY is
   // re-created, so the terminal a client is showing goes stale with no frame to
   // announce it — the page just stops responding and reads as hung. `restored`
   // is the cue to re-subscribe and ask for a fresh viewport rather than waiting

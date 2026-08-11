@@ -3,7 +3,7 @@ import { runSend, type SendOptions } from '../send';
 import { IDENTITY } from '../../../../shared/identity';
 
 /**
- * #351: --base64 must not be combined with --submit / --newline. Those flags
+ * --base64 must not be combined with --submit / --newline. Those flags
  * wrap the payload in VT escapes, which would corrupt a literal base64 string
  * before the server decodes it. runSend should reject the combination before
  * touching the network.

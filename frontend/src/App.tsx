@@ -34,7 +34,6 @@ import type { TerminalRef } from "./components/Terminal";
 import { openClaudeAppSession } from "./utils/claude-app";
 import {
 	makeSessionKey,
-	normalizeSessionKey,
 	parseSessionKey,
 	sessionKeyOf,
 } from "./utils/sessionKey";
@@ -198,8 +197,7 @@ function ConfirmDeleteDialog({
 }
 
 // localStorage keys for session persistence. Values are composite
-// `peerId:id` keys (utils/sessionKey.ts); pre-#487 bare ids are normalized
-// to local keys on read.
+// `peerId:id` keys (utils/sessionKey.ts).
 const STORAGE_KEY_LAST_SESSION = storageKey("last-session-id");
 const STORAGE_KEY_OPEN_SESSIONS = storageKey("open-sessions");
 
@@ -212,8 +210,7 @@ function saveLastSessionKey(sessionKey: string | null) {
 }
 
 function getLastSessionKey(): string | null {
-	const saved = localStorage.getItem(STORAGE_KEY_LAST_SESSION);
-	return saved ? normalizeSessionKey(saved) : null;
+	return localStorage.getItem(STORAGE_KEY_LAST_SESSION);
 }
 
 function saveOpenSessions(sessions: OpenSession[]) {
@@ -228,9 +225,7 @@ function getSavedOpenSessionKeys(): string[] {
 		const saved = localStorage.getItem(STORAGE_KEY_OPEN_SESSIONS);
 		const parsed: unknown = saved ? JSON.parse(saved) : [];
 		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.filter((v): v is string => typeof v === "string")
-			.map(normalizeSessionKey);
+		return parsed.filter((v): v is string => typeof v === "string");
 	} catch {
 		return [];
 	}
@@ -321,7 +316,7 @@ export function App() {
 
 	const [openSessions, setOpenSessions] = useState<OpenSession[]>([]);
 	// Composite `peerId:id` key of the active session (utils/sessionKey.ts) —
-	// session ids alone collide across peers (#487).
+	// session ids alone collide across peers.
 	const [activeSessionKey, setActiveSessionKey] = useState<string | null>(null);
 	const [pendingNotificationTarget, setPendingNotificationTarget] =
 		useState<NotificationTarget | null>(null);
@@ -390,9 +385,7 @@ export function App() {
 			const parsed: unknown = saved ? JSON.parse(saved) : [];
 			if (!Array.isArray(parsed)) return new Set();
 			return new Set(
-				parsed
-					.filter((v): v is string => typeof v === "string")
-					.map(normalizeSessionKey),
+				parsed.filter((v): v is string => typeof v === "string"),
 			);
 		} catch {
 			return new Set();

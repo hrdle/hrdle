@@ -295,7 +295,7 @@ function sessionsUpdatedPayload(sessions: SessionResponse[]): string {
   const focus = computeClientFocus();
   lastFocusKey = focusKey(focus);
   // Every payload passes through here (periodic and pushed), so this is the
-  // one place the demo recording (#127) learns which session the user is
+  // one place the demo recording learns which session the user is
   // working in. The recorder dedups; unchanged focus costs nothing.
   recordGlassesFocus(focus);
   return JSON.stringify({ type: 'sessions-updated', sessions, ...(focus ? { focus } : {}) });
@@ -328,7 +328,7 @@ function startSessionsPush() {
   // the floor (metrics, recap, anything herdr doesn't emit), not the ceiling.
   startAgentStatusWatcher(() => {
     if (activeMuxConnections.size > 0) pushSessionsNow();
-    // Relay tracker rides the same event (#504): it diffs pane statuses and,
+    // Relay tracker rides the same event: it diffs pane statuses and,
     // while glasses are subscribed, turns blocked transitions into relay items.
     void trackGlassesRelay();
   });
@@ -421,7 +421,7 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
   // Validate the frame before any field reaches a herdr control-stream command.
   // Invalid/unknown frames (incl. paneId or cols/rows injection attempts) are
-  // dropped here. #231.
+  // dropped here.
   const parsed = MuxClientMessageSchema.safeParse(raw);
   if (!parsed.success) return;
   const msg = parsed.data as MuxClientMessage;
@@ -454,7 +454,7 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     return;
   }
 
-  // Glasses relay presence subscription (#504). Handled before the sessionId
+  // Glasses relay presence subscription. Handled before the sessionId
   // gate below, like ping: it marks the whole connection (no sessionId) as
   // "glasses present", which gates relay assembly/sending.
   if (msg.type === 'subscribe-glasses-relay') {
@@ -482,14 +482,14 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
   if (msg.type === 'glasses-screen') {
     lastGlassesScreen = msg.screen;
     glassesScreenPublisher = ws;
-    // Demo recording (#127) taps the stream here, before the viewer check:
+    // Demo recording taps the stream here, before the viewer check:
     // it must see every frame whether or not a mirror is open.
     recordGlassesScreen(msg.screen);
     broadcastGlassesScreen(msg.screen);
     return;
   }
 
-  // Ring gestures (#129). Recording-only: viewers of the live mirror need the
+  // Ring gestures. Recording-only: viewers of the live mirror need the
   // resulting frame, not the finger, so nothing is broadcast.
   if (msg.type === 'glasses-input') {
     recordGlassesInput(msg.input);
@@ -510,7 +510,7 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
   // Keepalive. Handle before the sessionId/subscription gate below: the client
   // pings with sessionId="" whenever no terminal is selected (dashboard, file
   // viewer, history). If those pings were dropped, the client never gets a
-  // pong, force-closes after the timeout, and reconnect-storms. #236
+  // pong, force-closes after the timeout, and reconnect-storms.
   if (msg.type === 'ping') {
     ws.data.lastPingAt = Date.now();
     ws.send(JSON.stringify({ type: 'pong', timestamp: msg.timestamp }));
@@ -650,7 +650,7 @@ async function handleSubscribe(ws: ServerWebSocket<MuxData>, sessionId: string) 
     // The client can disconnect while the awaits above are in flight. muxClose
     // has already run at that point and didn't see this subscription, so the
     // listeners and addClient() would leak (the grace period would never
-    // start and the pane control-stream subprocess would live forever). #346
+    // start and the pane control-stream subprocess would live forever).
     if (!activeMuxConnections.has(ws)) {
       console.log(`[mux] client disconnected during subscribe to ${sessionId}; rolling back`);
       for (const fn of cleanupFns) {
@@ -695,7 +695,7 @@ async function handleSubscribe(ws: ServerWebSocket<MuxData>, sessionId: string) 
     console.error(`[mux] Failed to subscribe to ${sessionId}:`, error);
     // Roll back whatever was set up before the failure. Without this the
     // client count stays over-counted, the grace period never starts, and
-    // the pane control-stream subprocess lives forever (#332).
+    // the pane control-stream subprocess lives forever.
     for (const fn of cleanupFns) {
       try { fn(); } catch { /* ignore */ }
     }
@@ -806,7 +806,7 @@ async function emitInitialViewports(
  *
  * A workspace is not a conversation: two agent panes in one workspace are two,
  * and keying the watcher by workspace alone meant the second subscription
- * silently tore down the first (#80).
+ * silently tore down the first.
  */
 function conversationKey(sessionId: string, agentSessionId?: string): string {
   return agentSessionId ? `${sessionId}\u0000${agentSessionId}` : sessionId;
@@ -859,7 +859,7 @@ async function handleSubscribeConversation(
 
   // The client can disconnect while watcher.start() is in flight. muxClose
   // has already run at that point and didn't see this watcher, so its
-  // FSWatcher would keep running forever. #346
+  // FSWatcher would keep running forever.
   if (!activeMuxConnections.has(ws)) {
     console.log(`[mux] client disconnected during subscribe-conversation to ${sessionId}; stopping watcher`);
     try { watcher.stop(); } catch { /* ignore */ }

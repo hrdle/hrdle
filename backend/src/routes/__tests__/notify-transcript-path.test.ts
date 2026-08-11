@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { isAllowedTranscriptPath } from '../notify';
 
 const claudeDir = join(homedir(), '.claude');
-const realFile = join(claudeDir, '.cchub-test-transcript.jsonl');
-const linkFile = join(claudeDir, '.cchub-test-escape-link.jsonl');
+const realFile = join(claudeDir, '.hrdle-test-transcript.jsonl');
+const linkFile = join(claudeDir, '.hrdle-test-escape-link.jsonl');
 const kimiDir = join(homedir(), '.kimi-code');
-const kimiFile = join(kimiDir, '.cchub-test-transcript.jsonl');
+const kimiFile = join(kimiDir, '.hrdle-test-transcript.jsonl');
 
 describe('isAllowedTranscriptPath', () => {
   beforeAll(async () => {

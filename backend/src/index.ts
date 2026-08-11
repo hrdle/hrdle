@@ -28,7 +28,7 @@ import {
   herdrSocketPath,
 } from './services/herdr-client';
 import { t } from './i18n';
-import { IDENTITY, LEGACY_PASSWORD_ENVS, PASSWORD_ENV, TMP_PATHS, envVar } from '../../shared/identity';
+import { IDENTITY, PASSWORD_ENV, TMP_PATHS, envVar } from '../../shared/identity';
 
 // Global error handlers to prevent silent crashes
 process.on('uncaughtException', (err) => {
@@ -165,7 +165,7 @@ app.get('/api/images/:filename', async (c) => {
 app.use('/api/logs/*', conditionalAuthMiddleware);
 app.use('/api/sessions/*', conditionalAuthMiddleware);
 app.use('/api/sessions', conditionalAuthMiddleware);
-// `/api/workspaces` is the canonical name (a CC Hub session IS a herdr
+// `/api/workspaces` is the canonical name (a Hrdle session IS a herdr
 // workspace); `/api/sessions` stays as an alias for CLI / peers / glasses.
 app.use('/api/workspaces/*', conditionalAuthMiddleware);
 app.use('/api/workspaces', conditionalAuthMiddleware);
@@ -175,8 +175,8 @@ app.use('/api/dashboard', conditionalAuthMiddleware);
 app.use('/api/peers', conditionalAuthMiddleware);
 app.use('/api/peers/*', conditionalAuthMiddleware);
 app.use('/api/herdr/*', conditionalAuthMiddleware);
-// `/api/glasses/relay*` stays OUTSIDE the auth glob (#504): local agents post
-// self-notes via `cchub glasses` from inside panes where no token exists —
+// `/api/glasses/relay*` stays OUTSIDE the auth glob: local agents post
+// self-notes via `hrdle glasses` from inside panes where no token exists —
 // unauthenticated local trust, same pattern as /api/notify. The STT and any
 // other glasses endpoints remain protected.
 // Adding a device to the push list is a browser asking for a copy of every
@@ -283,7 +283,7 @@ if (whichResult.exitCode !== 0) {
 
 // herdr backend: verify the binary exists, then make sure the headless
 // server is reachable — auto-start it if not (it daemon-izes per user and
-// owns all pane PTYs, so cchub restarts don't kill running agents).
+// owns all pane PTYs, so hrdle restarts don't kill running agents).
 const herdrPath = herdrBinaryPath();
 if (!herdrPath) {
   console.error(`${t('server.herdrNotFound')}`);
@@ -348,7 +348,7 @@ if (!herdrPong) {
 }
 console.log(`herdr ${herdrPong.version ?? '?'} (protocol ${herdrPong.protocol ?? '?'})`);
 
-// Settings written against a workspace name move onto its workspace id (#186).
+// Settings written against a workspace name move onto its workspace id.
 // Needs herdr, so it runs here rather than at import time, and it is not
 // awaited: nothing about serving depends on it.
 void migrateSessionIds();
@@ -436,7 +436,7 @@ if (needsCert) {
 //   3. macOS Keychain — populated by `setup`
 let resolvedPassword: string | undefined = args.password;
 let passwordSource: 'cli' | 'env' | 'keychain' | 'none' = args.password ? 'cli' : 'none';
-for (const name of [PASSWORD_ENV, ...LEGACY_PASSWORD_ENVS]) {
+for (const name of [PASSWORD_ENV]) {
   if (resolvedPassword) break;
   if (process.env[name]) {
     resolvedPassword = process.env[name];
@@ -478,7 +478,7 @@ const serverOptions = {
   // Allow large uploads (videos etc.) — 10GB
   maxRequestBodySize: 10 * 1024 * 1024 * 1024,
   /**
-   * Seconds a request may go without traffic before Bun closes it (#209).
+   * Seconds a request may go without traffic before Bun closes it.
    *
    * Bun's default is 10, and the `idleTimeout: 60` further down applies to the
    * `websocket` object, not to HTTP - so every HTTP request ran on the default.

@@ -82,11 +82,11 @@ export function useConversationStream({
 			}
 		};
 
-		window.addEventListener("cchub-conversation", handler);
+		window.addEventListener("hrdle-conversation", handler);
 		subscribeConversation(sessionId, agentSessionId, token);
 
 		return () => {
-			window.removeEventListener("cchub-conversation", handler);
+			window.removeEventListener("hrdle-conversation", handler);
 			unsubscribeConversation(sessionId, agentSessionId);
 		};
 	}, [sessionId, agentSessionId, enabled, token]);

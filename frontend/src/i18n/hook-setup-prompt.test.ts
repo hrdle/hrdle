@@ -6,8 +6,8 @@ import { IDENTITY } from "../../../shared/identity";
 /**
  * The hook setup prompt is handed to an agent, which then edits the user's
  * settings file from it. So the config it carries has to be the config this app
- * actually looks for: a stale example (#538 left one asking for PreToolUse and
- * UserPromptSubmit, dropped in #390) is a wrong edit made on our instruction.
+ * actually looks for: an example asking for hooks this app no longer reads is
+ * a wrong edit made on our instruction.
  */
 const PROMPTS = [
 	["ja", ja.onboarding.hookSetupPrompt],
@@ -45,9 +45,9 @@ describe("hook setup prompt", () => {
 		test(`${locale}: every command slot takes the resolved path`, () => {
 			const rendered = render(prompt);
 			expect(rendered).not.toContain("{{");
-			// A bare `cchub notify` left anywhere would be copied verbatim by the
-			// agent and die in the hook's non-interactive shell (#538).
-			expect(rendered).not.toMatch(/(?:^|[^/\w])cchub notify/);
+			// A bare `hrdle notify` left anywhere would be copied verbatim by the
+			// agent and die in the hook's non-interactive shell.
+			expect(rendered).not.toMatch(/(?:^|[^/\w])hrdle notify/);
 		});
 
 		test(`${locale}: the example asks for exactly the two hooks we read`, () => {

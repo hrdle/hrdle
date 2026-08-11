@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { buildServicePath } from '../setup';
 
 /**
- * #499: supervised systemd units launch via `zsh -lc` (login, non-interactive),
+ * supervised systemd units launch via `zsh -lc` (login, non-interactive),
  * which does NOT source `.zshrc`. Users add `~/.local/bin` / `~/bin` to PATH
  * there, so the server and its spawned hooks lose those dirs and fail with
  * `command not found`. buildServicePath() bakes a complete PATH for the unit,

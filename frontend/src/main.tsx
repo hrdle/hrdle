@@ -16,15 +16,15 @@ initRemoteLogger();
 
 // Log app version and device info for debugging
 console.log(
-	`[CC Hub] App loaded v${__APP_VERSION__} - ${new Date().toISOString()}`,
+	`[Hrdle] App loaded v${__APP_VERSION__} - ${new Date().toISOString()}`,
 );
-console.log(`[CC Hub] UA: ${navigator.userAgent}`);
+console.log(`[Hrdle] UA: ${navigator.userAgent}`);
 console.log(
-	`[CC Hub] Screen: ${screen.width}x${screen.height} DPR:${devicePixelRatio}`,
+	`[Hrdle] Screen: ${screen.width}x${screen.height} DPR:${devicePixelRatio}`,
 );
-console.log(`[CC Hub] Viewport: ${window.innerWidth}x${window.innerHeight}`);
+console.log(`[Hrdle] Viewport: ${window.innerWidth}x${window.innerHeight}`);
 console.log(
-	`[CC Hub] WebGL: ${(() => {
+	`[Hrdle] WebGL: ${(() => {
 		try {
 			const c = document.createElement("canvas");
 			return !!(c.getContext("webgl2") || c.getContext("webgl"));
@@ -34,7 +34,7 @@ console.log(
 	})()}`,
 );
 console.log(
-	`[CC Hub] SW: ${"serviceWorker" in navigator ? "supported" : "unsupported"}`,
+	`[Hrdle] SW: ${"serviceWorker" in navigator ? "supported" : "unsupported"}`,
 );
 
 // Handle visual viewport changes (soft keyboard)

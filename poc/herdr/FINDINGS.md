@@ -2,7 +2,7 @@
 
 Tested 2026-07-14 / herdr v0.7.3 (protocol 16) / Arch Linux
 
-## Conclusion (implemented — the same branch carries a provisional CCHUB_MUX=herdr backend)
+## Conclusion (implemented — herdr is the backend)
 
 **It works. Verified in dev against a real Claude Code session** (TUI drawing,
 the input box's cursor, a Japanese prompt round trip, the hook indicator, the

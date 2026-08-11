@@ -41,7 +41,7 @@ export class FileChangeTracker {
 
   /**
    * Convert a path to Claude Code project directory name
-   * e.g., /home/m0a/cchub -> -home-m0a-cchub
+   * e.g., /home/m0a/hrdle -> -home-m0a-hrdle
    */
   private pathToProjectName(path: string): string {
     return claudeProjectDirName(path);

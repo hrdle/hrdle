@@ -1,7 +1,7 @@
 import { isIP } from 'node:net';
 
 /**
- * Guards peer URLs against SSRF (#235). Peers are other CC Hub servers reached
+ * Guards peer URLs against SSRF. Peers are other Hrdle servers reached
  * over Tailscale, so legitimate hosts are *.ts.net or the Tailscale ranges
  * (CGNAT 100.64.0.0/10, ULA fd7a:115c:a1e0::/48) — those stay allowed. We
  * reject non-https schemes (kills file:/gopher:/javascript:/http:) and

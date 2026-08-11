@@ -1,7 +1,7 @@
 /**
  * HerdrService — workspace-level operations on the herdr backend.
  *
- * A CC Hub workspace is a herdr workspace. Its public id is the workspace
+ * A Hrdle workspace is a herdr workspace. Its public id is the workspace
  * label (falling back to workspace_id); the wire still calls this the
  * "session id" until the API rename lands. herdr's agent.list response is
  * authoritative for the agent provider and native session identity of each
@@ -99,7 +99,7 @@ export function herdrPaneCommand(leader: string, agentPane?: HerdrAgentPane): st
 }
 
 /**
- * A session's address: herdr's own workspace id (#186).
+ * A session's address: herdr's own workspace id.
  *
  * This used to be the workspace *label*, which is text a person edits. The
  * naming convention in CLAUDE.md has every agent rename its workspace at least
@@ -120,7 +120,7 @@ function workspaceDisplayName(ws: HerdrWorkspace): string {
 
 /**
  * Workspaces carrying a given label. Exported for the metadata migration,
- * which has to answer the same question about keys written before #186.
+ * which has to answer the same question about keys stored under a label.
  */
 export function workspacesLabelled(
   workspaces: HerdrWorkspace[],
@@ -181,7 +181,7 @@ export class HerdrService {
   /**
    * The workspace a session id names.
    *
-   * The id is a workspace id since #186, but a label is still accepted: it is
+   * The id is a workspace id, but a label is still accepted: it is
    * what a person types (`hrdle send local:dev:%1`), and it is what anything
    * holding an address from before the change still has - an ehpk on the
    * glasses cannot be migrated from this side.
@@ -450,7 +450,7 @@ export class HerdrService {
 
   /**
    * Move a session's workspace to `targetIndex` in herdr's workspace order.
-   * herdr IS the session order — there is no cchub-side order to keep in sync.
+   * herdr IS the session order — there is no hrdle-side order to keep in sync.
    *
    * herdr's `insert_index` means "insert before the workspace currently at
    * that index", evaluated against the list with the moved workspace still in
@@ -484,7 +484,7 @@ export class HerdrService {
   /**
    * Rename a session's workspace (its herdr label).
    *
-   * Since #186 this changes what the session is *called* and nothing about
+   * This changes what the session is *called* and nothing about
    * where it *is*: the id is the workspace id, so subscriptions, relay items,
    * stored settings and anything else holding an address keep working across
    * the rename. The id is returned anyway, unchanged, because the caller was

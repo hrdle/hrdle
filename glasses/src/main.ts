@@ -142,7 +142,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   function publishScreen(state: AppState): void {
     try {
       const { header, body, footer, notice, card, headerless } = screenText(state)
-      // The session under the cursor, as data: the recording (#127) groups by
+      // The session under the cursor, as data: the recording groups by
       // it, and the header string is for eyes, not for parsing back apart.
       const cursor = state.sessions[state.sessionIndex]
       const session =
@@ -250,7 +250,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     // wearer who has not set one up yet sat on this screen with no working
     // input of any kind: not a tap, not a swipe, and no way to close the app.
     // An Even Hub reviewer, who has no server at all, met exactly that and
-    // reported it as double-tap failing to bring up the exit dialog (#148).
+    // reported it as double-tap failing to bring up the exit dialog.
     //
     // A double-tap is the way out of every screen in this app; it has to be the
     // way out of the first one. Torn down as soon as the address arrives, so
@@ -582,7 +582,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     onRawEvent(raw) {
       trace(`event: ${raw}`)
     },
-    // Each gesture is also published for the recording (#129) before it acts,
+    // Each gesture is also published for the recording before it acts,
     // so a replayed gesture marker lands just ahead of the frame it caused.
     // publishInput never throws (send() swallows a dead socket), and the
     // simulator has no path here - its ring buttons are not the wearer.
@@ -741,7 +741,7 @@ async function main(): Promise<void> {
       .catch((err) => trace(`phone UI failed: ${err}`, 'error', (err as Error)?.stack))
   } else if (new URLSearchParams(location.search).has('player')) {
     // The recording replay player - its own page, so the transport controls
-    // sit under the screen instead of a side panel away (#127).
+    // sit under the screen instead of a side panel away.
     trace('player UI (browser)')
     startPlayerUI()
   } else {

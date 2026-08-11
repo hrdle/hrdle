@@ -4,7 +4,7 @@
 // once a server address has been stored. So the "not connected" screen had no
 // working input of any kind — not a tap, not a swipe, and no way to close the
 // app. An Even Hub reviewer, who has no server at all, met exactly that and
-// reported it as double-tap failing to bring up the exit dialog (#148).
+// reported it as double-tap failing to bring up the exit dialog.
 //
 // The screen is drawn by `buildSetupGuide`, and what it promises has to be
 // true.
@@ -25,7 +25,7 @@ describe('the setup guide', () => {
     containers.find((c) => c.containerName === name)?.content ?? ''
 
   test('says what to do about it', () => {
-    // #144: naming the failure without naming the fix reads as the app being
+    // naming the failure without naming the fix reads as the app being
     // broken, and whoever meets this screen is meeting the app for the first
     // time.
     expect(named('body')).toContain('not connected')

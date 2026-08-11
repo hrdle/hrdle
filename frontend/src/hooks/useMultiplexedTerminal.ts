@@ -12,7 +12,7 @@ interface UseMultiplexedTerminalOptions {
 	sessionInstanceId?: string;
 	token?: string | null;
 	/** When false, suppress the live terminal subscription (remote-control mode,
-	 * PC-only): CC Hub never opens a control stream, so the local herdr client
+	 * PC-only): Hrdle never opens a control stream, so the local herdr client
 	 * keeps ownership of the terminal. Other operations are unaffected. */
 	live?: boolean;
 	// Multi-server: the WS base URL ("wss://host:port") of the active peer.
@@ -41,7 +41,7 @@ interface UseMultiplexedTerminalOptions {
 interface UseMultiplexedTerminalReturn {
 	isConnected: boolean;
 	/**
-	 * This host is restarting herdr and every pane PTY with it (#261). The socket
+	 * This host is restarting herdr and every pane PTY with it. The socket
 	 * stays up throughout, so without this the UI has no way to tell that the
 	 * terminal it is showing has stopped being live.
 	 */
@@ -125,7 +125,7 @@ const PONG_TIMEOUT_MS = 25_000;
 //
 // Keyed by session *and* pane agent session: a workspace with two agent panes
 // has two conversations, and a single key per workspace let the second pane's
-// subscription tear down the first (#80).
+// subscription tear down the first.
 const CONV_KEY_SEP = "\u0000";
 
 function convKey(sessionId: string, agentSessionId?: string | null): string {
@@ -344,7 +344,7 @@ function ensureConnection(token?: string | null, wsBase?: string | null) {
 	// Track bytes per second for throughput display
 	let wsBytesThisSec = 0;
 	const bytesTimer = setInterval(() => {
-		window.__cchub_ws_bytes_per_sec = wsBytesThisSec;
+		window.__hrdle_ws_bytes_per_sec = wsBytesThisSec;
 		wsBytesThisSec = 0;
 	}, 1000);
 
@@ -405,7 +405,7 @@ function ensureConnection(token?: string | null, wsBase?: string | null) {
 				// these pushes to avoid double-updating the cache.
 				break;
 			// This host is restarting herdr, so every pane PTY is being re-created
-			// under us (#261). The socket survives, which is exactly the problem: no
+			// under us. The socket survives, which is exactly the problem: no
 			// frame ever arrives to say the terminal on screen is now a corpse, so
 			// the page reads as hung until someone reloads it.
 			case "herdr-restart": {
@@ -464,7 +464,7 @@ function ensureConnection(token?: string | null, wsBase?: string | null) {
 			case "initial-conversation":
 			case "conversation-update": {
 				window.dispatchEvent(
-					new CustomEvent("cchub-conversation", { detail: msg }),
+					new CustomEvent("hrdle-conversation", { detail: msg }),
 				);
 				break;
 			}
@@ -614,7 +614,7 @@ export function useMultiplexedTerminal(
 ): UseMultiplexedTerminalReturn {
 	const { sessionId, sessionInstanceId, token, peerWsBase } = options;
 	const [isConnected, setIsConnected] = useState(false);
-	/** True between this host's `herdr restarting` and `restored` broadcasts (#261). */
+	/** True between this host's `herdr restarting` and `restored` broadcasts. */
 	const [herdrRestarting, setHerdrRestarting] = useState(false);
 
 	const onPaneViewportRef = useRef(options.onPaneViewport);

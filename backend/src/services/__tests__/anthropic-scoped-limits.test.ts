@@ -86,7 +86,7 @@ describe('parseScopedLimits', () => {
     ]);
   });
 
-  // The overlays ride the cycle charts, so a limit on a cycle cchub doesn't
+  // The overlays ride the cycle charts, so a limit on a cycle hrdle doesn't
   // draw has no axis to sit on. Dropping it beats guessing a placement.
   test('drops limits belonging to a cycle that has no chart', () => {
     expect(

@@ -1,11 +1,11 @@
 /**
- * herdr version reporting and updating (#393, #259, #260).
+ * herdr version reporting and updating.
  *
  * Two different things can be out of date, and only one of them used to be
  * visible here:
  *
  * 1. **Skew** — `herdr update` only replaces the binary on disk; the running
- *    server keeps serving the old version until it is restarted. cchub spawns
+ *    server keeps serving the old version until it is restarted. hrdle spawns
  *    the *binary* (`herdr terminal session control`, see PaneController) to
  *    drive panes, so in between we run new CLI against an old server: control
  *    streams fail to attach and the symptom reads as "the terminal won't
@@ -13,11 +13,11 @@
  * 2. **A newer release existing at all** — with the binary and the server on
  *    the same old version there is no skew to see, and `herdr status --json`
  *    answers only the skew question. So for months the dashboard was silent
- *    while herdr moved on (#259). The version herdr publishes at
+ *    while herdr moved on. The version herdr publishes at
  *    `herdr.dev/latest.json` is the missing half.
  *
  * Applying is strictly a user action. Restarting herdr re-creates every pane
- * PTY and kills whatever is running in them (never the `cchub update --auto`
+ * PTY and kills whatever is running in them (never the `hrdle update --auto`
  * timer, never `--handoff`: a handed-off server escapes systemd/launchd
  * supervision and fights `Restart=always`).
  */
@@ -56,7 +56,7 @@ function asString(value: unknown): string | undefined {
  * the live server side by side plus herdr's own `restart_needed` verdict.
  *
  * Every field is treated as optional and unknown values are ignored: herdr's
- * output format is versioned independently of cchub, and a format change must
+ * output format is versioned independently of hrdle, and a format change must
  * degrade to "no skew detected" rather than nag the user with a false alarm.
  * Returns null when the output is unusable.
  */
@@ -75,7 +75,7 @@ export function parseHerdrStatus(raw: string): HerdrSkewReading | null {
   const update = (root.update ?? {}) as Record<string, unknown>;
   if (typeof server !== 'object' || server === null) return null;
 
-  // Only a *running* server can be stale. A stopped one is cchub's startup
+  // Only a *running* server can be stale. A stopped one is hrdle's startup
   // problem, not a version skew, and a missing/renamed field lands here too.
   if (server.running !== true) return null;
 
@@ -83,7 +83,7 @@ export function parseHerdrStatus(raw: string): HerdrSkewReading | null {
   const serverVersion = asString(server.version);
 
   // herdr's explicit verdicts win; the version compare is the fallback for
-  // builds that don't emit them. Any difference counts as skew — cchub can't
+  // builds that don't emit them. Any difference counts as skew — hrdle can't
   // tell a compatible bump from a breaking one, and the fix is identical.
   const restartNeeded =
     update.restart_needed === true ||
@@ -156,7 +156,7 @@ export type HerdrApplyMode = 'install' | 'restart';
  *
  * Null is the important answer: a restart re-creates every pane PTY and kills
  * whatever was running in them, so doing it when there is nothing to install is
- * pure damage. That is what the old apply did on every press (#260).
+ * pure damage. That is what the old apply did on every press.
  */
 export function planHerdrApply(status: HerdrUpdateStatus): HerdrApplyMode | null {
   if (status.updateAvailable) return 'install';
@@ -177,12 +177,12 @@ export interface HerdrApplyResult {
 }
 
 /**
- * Commands cchub runs on the user's behalf, in order; callers stop at the first
+ * Commands hrdle runs on the user's behalf, in order; callers stop at the first
  * non-zero exit. Returns null when the work cannot be done here: `systemctl
- * restart` is a no-op for a server cchub itself spawned, so we show manual
+ * restart` is a no-op for a server hrdle itself spawned, so we show manual
  * steps instead of a button that silently does nothing.
  *
- * **The server must be down before `herdr update` runs** (#260). It refuses to
+ * **The server must be down before `herdr update` runs**. It refuses to
  * replace the binary while any server answers its socket — and refuses by
  * printing `Herdr was not updated.` and **exiting 0**. The previous order here
  * (update, then restart) therefore could never install anything: it downloaded
@@ -407,7 +407,7 @@ export class HerdrUpdateService {
    * it) and confirm the version actually moved. Only ever called from the
    * authenticated endpoint behind an explicit user click.
    *
-   * `onPhase` reports the destructive window to connected clients (#261): every
+   * `onPhase` reports the destructive window to connected clients: every
    * pane PTY is re-created between `restarting` and `restored`, and a browser
    * that isn't told just shows a terminal that has stopped answering.
    */
@@ -417,8 +417,8 @@ export class HerdrUpdateService {
       return { ok: false, error: 'herdr status is unreadable; not touching the server', output: '', installed: false };
     }
 
-    // Nothing to do is not a reason to restart anything — that was the whole
-    // cost of #260. Say so and leave every pane alone.
+    // Nothing to do is not a reason to restart anything. Say so and leave
+    // every pane alone.
     const mode = planHerdrApply(before);
     if (!mode) {
       return {
@@ -474,7 +474,7 @@ export class HerdrUpdateService {
 
     // Exit codes are not evidence. `herdr update` prints "Herdr was not
     // updated." and exits 0 whenever a server was still answering, so the only
-    // proof an install happened is the version on disk having moved (#260).
+    // proof an install happened is the version on disk having moved.
     if (
       mode === 'install' &&
       !(before.binaryVersion && toVersion && compareVersions(toVersion, before.binaryVersion) > 0)

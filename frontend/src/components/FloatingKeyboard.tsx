@@ -40,7 +40,7 @@ const getPositionKey = (
 	orientation?: Orientation,
 ) => {
 	const orient = orientation ?? getOrientation();
-	return `cchub-floating-keyboard-position-${mode}-${orient}-v3`;
+	return storageKey(`floating-keyboard-position-${mode}-${orient}-v3`);
 };
 
 interface Position {
@@ -288,7 +288,7 @@ export const FloatingKeyboard = forwardRef<
 		// onSend can return false when the terminal is mid-reconnect or there is
 		// no active pane. Treat undefined as success (legacy callers). If the
 		// send didn't land, keep inputValue and skip addToHistory / clear so the
-		// user can retry instead of silently losing the message. #264
+		// user can retry instead of silently losing the message.
 		if (text) {
 			const textRes = text.includes("\n")
 				? onSend(bracketedPaste(text))

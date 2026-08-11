@@ -7,7 +7,7 @@ import type { Session, SessionResponse } from '../../../shared/types';
 const SESSIONS_DIR = 'sessions';
 
 // Serialise read-modify-write updates against the per-session JSON files so
-// concurrent updateSessionAccess calls can't drop each other's changes. #333
+// concurrent updateSessionAccess calls can't drop each other's changes.
 const withSessionsLock = createMutationLock();
 
 async function getSessionsDir(): Promise<string> {

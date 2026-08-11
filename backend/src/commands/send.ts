@@ -80,7 +80,7 @@ async function readStdin(): Promise<string> {
 
 async function resolvePeer(name: string, localPort: number): Promise<{ url: string; token?: string }> {
   if (name === 'local' || name === 'self') {
-    // cchub serves HTTPS on localhost (Tailscale cert). notify.ts uses the same pattern.
+    // hrdle serves HTTPS on localhost (Tailscale cert). notify.ts uses the same pattern.
     return { url: `https://localhost:${localPort}` };
   }
   const peers = await listPeers();
@@ -104,7 +104,7 @@ export async function runSend(options: SendOptions): Promise<void> {
   // markers, trailing CR). With --base64 the payload is meant to be a literal
   // base64 string the server decodes verbatim, so wrapping it would inject
   // non-base64 bytes and break decoding. Reject the combination up front
-  // rather than send a corrupt payload (#351).
+  // rather than send a corrupt payload.
   if (options.base64 && (options.submit || options.newline)) {
     throw new Error('--base64 cannot be combined with --submit / --newline');
   }

@@ -132,7 +132,7 @@ describe('POST /api/glasses/relay/:id/dismiss', () => {
   });
 });
 
-describe('auth placement (#504: relay is local-trust like /api/notify)', () => {
+describe('auth placement (relay is local-trust like /api/notify)', () => {
   const prevPassword = process.env[PASSWORD_ENV];
   beforeEach(() => {
     process.env[PASSWORD_ENV] = 'test-password';

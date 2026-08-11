@@ -47,6 +47,6 @@ echo "Run on each client (ssh-termux / CC Hub):"
 echo "  time (cat $OUT_DIR/bench-color.txt; echo __BENCH_END__)"
 echo
 echo "Frontend bench (DevTools console):"
-echo "  __cchub_bench.start()"
+echo "  __hrdle_bench.start()"
 echo "  // run the cat command in CC Hub"
 echo "  // report prints automatically when __BENCH_END__ is seen"

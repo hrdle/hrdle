@@ -9,7 +9,7 @@ export interface WsCallbacks {
   onTerminalOutput: (sessionId: string, paneId: string, text: string) => void
   onReady: () => void
   onError: (err: string) => void
-  // Glasses relay channel (#504). Only received while subscribed via
+  // Glasses relay channel. Only received while subscribed via
   // subscribeGlassesRelay().
   onRelaySnapshot?: (items: GlassesRelayItem[]) => void
   onRelayUpsert?: (item: GlassesRelayItem) => void
@@ -290,13 +290,13 @@ export class WsClient {
   /** Consecutive failed attempts. Reset by a socket that opens, so only an
    *  unbroken run of them counts towards giving up. */
   private failures = 0
-  // The server drops connections that go 60s without a ping (#236). Every
+  // The server drops connections that go 60s without a ping. Every
   // other client sends one; this one did not, so it was being cut and
   // reconnected on a 90s cycle for its whole life.
   private pingTimer: ReturnType<typeof setInterval> | null = null
   private subscribedSession: string | null = null
   // Glasses relay subscription is connection-scoped (no sessionId); re-sent on
-  // every (re)connect while this flag is set (#504).
+  // every (re)connect while this flag is set.
   private relaySubscribed = false
   private onDevice = true
   /** Which run of the app this is; re-sent on every reconnect so the server's
@@ -377,7 +377,7 @@ export class WsClient {
       this.stopPing()
       // The reconnected socket is a brand-new server session with no
       // subscriptions. Reset our local view so onReady's subscribe() sends
-      // a fresh 'subscribe' instead of the early-return dedup. #265
+      // a fresh 'subscribe' instead of the early-return dedup.
       this.subscribedSession = null
       this.scheduleReconnect()
     }
@@ -451,7 +451,7 @@ export class WsClient {
     }
   }
 
-  /** Mark this connection as "glasses present" (#504). The server gates relay
+  /** Mark this connection as "glasses present". The server gates relay
    *  assembly/sending on this subscription and answers with a snapshot of the
    *  current waiting/info items. Re-sent automatically on reconnect. */
   /** `onDevice` false = the browser simulator. It receives every relay item
@@ -479,7 +479,7 @@ export class WsClient {
     this.send({ type: 'glasses-screen', screen })
   }
 
-  /** Publish a ring gesture for the recording (#129). Device-only, like
+  /** Publish a ring gesture for the recording. Device-only, like
    *  publishScreen — a simulator click is not the wearer driving. */
   publishInput(kind: GlassesInputKind): void {
     this.send({ type: 'glasses-input', input: { kind, at: Date.now() } })

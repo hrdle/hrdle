@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { GrokSessionStore } from '../../src/services/grok';
 import { GrokUsageService } from '../../src/services/grok-usage';
 
-const TEST_DIR = join(tmpdir(), `cchub-grok-usage-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `hrdle-grok-usage-${Date.now()}`);
 const SESSIONS_DIR = join(TEST_DIR, 'sessions');
 const CWD = '/home/user/proj';
 const SESSION_ID = '019f0000-0000-7000-8000-000000000001';

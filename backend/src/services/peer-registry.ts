@@ -14,7 +14,7 @@ const PEERS_FILE = 'peers.json';
 // peers.json. routes/peers.ts fans out per-peer fetches with Promise.all and
 // each completion calls recordPeerSuccess / recordPeerFailure; without this
 // chain, interleaved load/save calls clobbered each other's lastSeenAt and
-// could even reset a freshly-issued wsToken to a stale value. #251
+// could even reset a freshly-issued wsToken to a stale value.
 let mutationQueue: Promise<unknown> = Promise.resolve();
 function withMutationLock<T>(fn: () => Promise<T>): Promise<T> {
   const next = mutationQueue.then(fn, fn);
@@ -77,7 +77,7 @@ async function load(): Promise<PeersStore> {
 async function save(store: PeersStore): Promise<void> {
   const filePath = await getFilePath();
   // Write to a sibling temp file and rename atomically so a crash mid-write
-  // can't truncate peers.json (which would lose every peer's wsToken). #251
+  // can't truncate peers.json (which would lose every peer's wsToken).
   const tempPath = `${filePath}.tmp.${process.pid}.${randomBytes(4).toString('hex')}`;
   try {
     // Holds wsToken, so restrict it to owner read/write. writeFile's mode only

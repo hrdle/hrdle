@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { notifyCommandFor } from '../notify-command';
-import { mergeCchubNotifyHooksJson } from '../codex-hook-config';
+import { mergeNotifyHooksJson } from '../codex-hook-config';
 import { parseHookJson } from '../hook-status';
 import { HOOK_COMMAND, IDENTITY } from '../../../../shared/identity';
 
 /**
- * #538: hooks run in a non-interactive shell, which never sources `.zshrc`.
+ * hooks run in a non-interactive shell, which never sources `.zshrc`.
  * A `~/bin` install that got its PATH entry there is invisible to the hook, so
  * a bare `hrdle notify` dies with `command not found` and notifications stop
  * without a word. What we write ourselves has to carry its own path.
@@ -33,12 +33,12 @@ describe('notifyCommandFor', () => {
 
 describe('an absolute command still reads as configured', () => {
   test('the hook we write is recognized as our own', () => {
-    const written = mergeCchubNotifyHooksJson(null, `${INSTALLED} notify`);
+    const written = mergeNotifyHooksJson(null, `${INSTALLED} notify`);
     expect(parseHookJson(written)).toEqual({ stop: true, askUserQuestion: true });
   });
 
   test('and writing again does not add a second copy', () => {
-    const once = mergeCchubNotifyHooksJson(null, `${INSTALLED} notify`);
-    expect(mergeCchubNotifyHooksJson(once, `${INSTALLED} notify`)).toBe(once);
+    const once = mergeNotifyHooksJson(null, `${INSTALLED} notify`);
+    expect(mergeNotifyHooksJson(once, `${INSTALLED} notify`)).toBe(once);
   });
 });

@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { envFileContent } from '../../src/commands/setup';
 import { isAuthRequired, getServerPassword } from '../../src/middleware/auth';
-import { IDENTITY, LEGACY_PASSWORD_ENVS, PASSWORD_ENV } from '../../../shared/identity';
+import { IDENTITY, PASSWORD_ENV } from '../../../shared/identity';
 
 /**
  * The env file `setup` writes and the variable startup reads have to be the
  * same name. They were not: setup wrote `PASSWORD=` while the server read
- * `CCHUB_PASSWORD`, so a password configured on Linux was never seen and the
+ * `HRDLE_PASSWORD`, so a password configured on Linux was never seen and the
  * server ran unauthenticated while reporting itself as configured. Neither side
  * fails on its own, so the agreement is asserted here instead.
  */
@@ -34,10 +34,9 @@ describe('service password environment variable', () => {
     }
   });
 
-  test('a bare PASSWORD from the ambient environment is not accepted', () => {
-    // Picking it up would switch auth on with a password the user never chose
-    // for this server. Old env files are corrected by re-running setup.
-    expect(LEGACY_PASSWORD_ENVS).not.toContain('PASSWORD');
-    expect(LEGACY_PASSWORD_ENVS).toContain('CCHUB_PASSWORD');
+  test('the password variable is namespaced, never a bare PASSWORD', () => {
+    // A bare name would switch auth on with a password the user never chose
+    // for this server, picked up out of the ambient environment.
+    expect(PASSWORD_ENV).toBe('HRDLE_PASSWORD');
   });
 });

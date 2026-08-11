@@ -3,7 +3,7 @@ import { resolveSessionTarget } from '../session-target';
 
 /**
  * Session resolution for the CLI commands an agent runs from inside its own
- * pane - `hrdle glasses` (#504) and `hrdle stt-prompt` (#210): cwd unique match
+ * pane - `hrdle glasses` and `hrdle stt-prompt`: cwd unique match
  * → /proc ancestor ↔ pane foreground pid (worktree defense) → --session
  * required.
  */

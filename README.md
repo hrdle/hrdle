@@ -17,8 +17,6 @@ over Tailscale, so the only thing it owes you is staying awake.
 *Hrdle = herdr + handle. A handle, held from the G2, for the thing that herds your
 sessions. The hurdle of getting started is in the name too.*
 
-> **Formerly CC Hub.** [`m0a/cc-hub`](https://github.com/m0a/cc-hub) is archived at v0.2.98 and development continues here. Existing installs keep working — that repository stays readable, so `cchub update` still resolves — and Hrdle installs alongside rather than over it (separate binary, service, port and herdr session).
-
 ## Demo
 
 ![Hrdle demo — the real terminal on a tablet, conversation view, and a voice reply from the G2 glasses landing in the terminal](docs/demo.gif)

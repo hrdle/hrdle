@@ -32,7 +32,7 @@ export function getDashboard(): Promise<DashboardResponse> {
   return fetchJson('/api/dashboard')
 }
 
-/** Days with screen-mirror recordings (#127), for the replay player. */
+/** Days with screen-mirror recordings, for the replay player. */
 export function getRecordingDays(): Promise<{ enabled: boolean; days: RecordingDaySummary[] }> {
   return fetchJson('/api/glasses/recording')
 }
@@ -67,7 +67,7 @@ export async function getConversation(
 
 /** Send raw 16-bit mono PCM to the server for Groq transcription. Returns the recognized text.
  *  `sessionId` names the workspace being spoken to, so the server can lead the
- *  vocabulary bias with that session's own words (#166). */
+ *  vocabulary bias with that session's own words. */
 export async function transcribe(
   pcm: Uint8Array,
   sampleRate = 16000,
@@ -88,7 +88,7 @@ export async function transcribe(
 }
 
 /** Send a free-text prompt to a session (bracketed paste + Enter server-side = submit).
- *  `paneId` targets a specific pane (glasses relay reply routing #504): in a
+ *  `paneId` targets a specific pane (glasses relay reply routing): in a
  *  multi-pane workspace the blocked pane is not necessarily the active one. */
 export async function sendPrompt(sessionId: string, text: string, paneId?: string): Promise<void> {
   const res = await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/prompt`, {
@@ -101,7 +101,7 @@ export async function sendPrompt(sessionId: string, text: string, paneId?: strin
 
 /** Send raw input bytes (arrow keys / Enter) to a specific pane. Unlike the WS
  *  `input` frame this needs no subscription — used for relay-item choice keys
- *  where the item carries the exact blocked paneId (#504). */
+ *  where the item carries the exact blocked paneId. */
 export async function sendPaneInput(sessionId: string, paneId: string, data: string): Promise<void> {
   const res = await fetch(`${baseUrl}/api/sessions/${encodeURIComponent(sessionId)}/panes/input`, {
     method: 'POST',
@@ -162,7 +162,7 @@ export async function dismissRelayItem(id: string): Promise<void> {
  * What the settings screen may see. The Groq key is write-only, so it is not here.
  *
  * Nor is the prompt that would be sent: this screen has no session, so it never
- * had one to show. Ask `getSttPreview()` for that (#255).
+ * had one to show. Ask `getSttPreview()` for that.
  */
 export interface GlassesSettingsView {
   hasApiKey: boolean
@@ -180,7 +180,7 @@ export interface GlassesSettingsView {
 }
 
 /**
- * What a transcription would carry, for a session and a language (#255).
+ * What a transcription would carry, for a session and a language.
  *
  * The same object the transcription itself resolves, so this is the answer to
  * "what is being sent right now" rather than a second guess at it.

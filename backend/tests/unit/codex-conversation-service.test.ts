@@ -14,7 +14,7 @@ function writeRollout(lines: object[]): void {
 
 describe('CodexConversationService', () => {
   beforeEach(() => {
-    scratch = mkdtempSync(join(tmpdir(), 'cchub-codex-conv-'));
+    scratch = mkdtempSync(join(tmpdir(), 'hrdle-codex-conv-'));
     rolloutPath = join(scratch, 'rollout.jsonl');
   });
 

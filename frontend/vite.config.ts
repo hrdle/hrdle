@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import os from 'os';
-import { IDENTITY, LEGACY_STORAGE_PREFIXES } from '../shared/identity';
+import { IDENTITY } from '../shared/identity';
 
 // The release version lives in the root package.json. Baking it into the bundle
 // keeps the frontend in step with the backend it talks to: every release changes
@@ -104,10 +104,7 @@ export default defineConfig({
       transformIndexHtml(html: string) {
         return html
           .replaceAll('%PRODUCT_NAME%', IDENTITY.productName)
-          .replaceAll(
-            '%STORAGE_PREFIXES%',
-            JSON.stringify([IDENTITY.storagePrefix, ...LEGACY_STORAGE_PREFIXES]),
-          );
+          .replaceAll('%STORAGE_PREFIX%', IDENTITY.storagePrefix);
       },
     },
     react(),

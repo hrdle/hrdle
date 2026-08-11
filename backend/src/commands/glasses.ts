@@ -1,6 +1,6 @@
 /**
  * hrdle glasses - POSTs a note written by the agent itself to the G2 glasses
- * relay channel (#504).
+ * relay channel.
  *
  *   hrdle glasses "Tests are green. Ship it?" --kind waiting --choices "ship,hold"
  *   hrdle glasses "Build finished" --kind info
@@ -13,7 +13,7 @@
 import { IDENTITY } from '../../../shared/identity';
 import { type ResolvedTarget, resolveOwnSession } from './session-target';
 
-// Derived from identity, same as notify.ts (#459). Hardcoding these would keep
+// Derived from identity, same as notify.ts. Hardcoding these would keep
 // posting to the old product's port after a rename, where the receiving side
 // only sees a session it cannot resolve.
 const PRODUCTION_PORT = IDENTITY.defaultPort;
@@ -70,7 +70,7 @@ export async function runGlasses(options: GlassesCliOptions): Promise<void> {
   if (target.paneId) body.paneId = target.paneId;
   if (options.choices && options.choices.length > 0) body.choices = options.choices;
 
-  // Silent failure, same as cchub notify: the CLI is called from agent Bash
+  // Silent failure, same as hrdle notify: the CLI is called from agent Bash
   // turns and must never block them. A 409 (active waiting already exists) is
   // also silent — the unanswered decision stays on the glasses, which is the
   // correct outcome.

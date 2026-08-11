@@ -5,8 +5,8 @@ import { resolveNotifyCommand } from './notify-command';
 import { HOOK_COMMAND } from '../../../shared/identity';
 
 /**
- * Hooks CC Hub still needs. Indicator transitions used to need PreToolUse and
- * UserPromptSubmit too; herdr reports agent status itself now (#390), so those
+ * Hooks Hrdle still needs. Indicator transitions used to need PreToolUse and
+ * UserPromptSubmit too; herdr reports agent status itself now, so those
  * are no longer expected — flagging their absence would be a false alarm.
  * What's left is what herdr can't give us: the notification text (Stop) and the
  * name of the tool a question came from (PostToolUse/AskUserQuestion).
@@ -33,7 +33,7 @@ type HookStatus = HookProviderStatus & {
   /**
    * The invocation a client should write into a hook config. Only this side
    * knows where the running binary lives, and a hook shell's PATH usually
-   * doesn't (#538).
+   * doesn't.
    */
   command: string;
 };
@@ -63,7 +63,7 @@ function matcherMatches(actual: string | undefined, expected: string): boolean {
   return actual === expected || actual.includes(expected);
 }
 
-function hasCchubNotify(entries: HookEntry[] | undefined, matcher?: string): boolean {
+function hasHrdleNotify(entries: HookEntry[] | undefined, matcher?: string): boolean {
   if (!Array.isArray(entries)) return false;
   for (const entry of entries) {
     if (matcher !== undefined && !matcherMatches(entry.matcher, matcher)) continue;
@@ -80,8 +80,8 @@ export function parseHookJson(content: string): HookEventStatus | null {
     const hooks = (settings.hooks || {}) as Record<string, HookEntry[]>;
 
     return {
-      stop: hasCchubNotify(hooks.Stop),
-      askUserQuestion: hasCchubNotify(hooks.PostToolUse, 'AskUserQuestion'),
+      stop: hasHrdleNotify(hooks.Stop),
+      askUserQuestion: hasHrdleNotify(hooks.PostToolUse, 'AskUserQuestion'),
     };
   } catch {
     return null;
@@ -110,7 +110,7 @@ export function parseHookToml(content: string): HookEventStatus | null {
     if (!line || line.startsWith('#')) continue;
 
     // Any section header ends the previous one. Sections we don't track
-    // (PreToolUse etc.) must clear currentEvent, or their `cchub notify` line
+    // (PreToolUse etc.) must clear currentEvent, or their `hrdle notify` line
     // would be credited to whichever hook was parsed before them.
     if (line.startsWith('[')) {
       const sectionMatch = line.match(/^\[\[hooks\.(Stop|PostToolUse)(?:\.hooks)?\]\]$/);

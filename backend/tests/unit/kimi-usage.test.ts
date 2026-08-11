@@ -7,7 +7,7 @@ import { KimiConfigService } from '../../src/services/kimi-config';
 import { KimiUsageService } from '../../src/services/kimi-usage';
 import { OpenRouterPricingService } from '../../src/services/openrouter';
 
-const TEST_DIR = join(tmpdir(), `cchub-kimi-usage-${Date.now()}`);
+const TEST_DIR = join(tmpdir(), `hrdle-kimi-usage-${Date.now()}`);
 const SESSIONS_DIR = join(TEST_DIR, 'sessions');
 const CONFIG_PATH = join(TEST_DIR, 'config.toml');
 

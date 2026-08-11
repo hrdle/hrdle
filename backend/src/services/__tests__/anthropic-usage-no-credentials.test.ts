@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { AnthropicUsageService } from '../anthropic-usage';
 
 /**
- * #352: with no credentials there is nothing to fetch, but the dashboard
+ * with no credentials there is nothing to fetch, but the dashboard
  * polls getUsageLimits every few seconds. Without a cooldown each call
  * re-reads the credentials file. Verify the token lookup is not repeated
  * within the cache TTL window.

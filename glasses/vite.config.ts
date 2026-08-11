@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
-import { IDENTITY, LEGACY_STORAGE_PREFIXES } from '../shared/identity'
+import { IDENTITY } from '../shared/identity'
 
 // Where the simulator proxies API and WS traffic during development. Both the
 // override variable and the fallback port come from identity (#459): spelled
@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => ({
     // from identity — the phone UI completes a port-less URL with it, so a
     // literal would keep pointing the device at the previous product (#459).
     __DEFAULT_PORT__: JSON.stringify(IDENTITY.defaultPort),
-    // The rest of the rename surface, for the same reason. The cchub → hrdle
+    // The rest of the rename surface, for the same reason. The hrdle → hrdle
     // switch found all of this spelled out inline: a product name in six
     // screens, an install command, two repository links, four storage keys.
     // None of it is a name anyone chose independently — it is all the same
@@ -69,7 +69,6 @@ export default defineConfig(({ mode }) => ({
     __BINARY_NAME__: JSON.stringify(IDENTITY.binaryName),
     __REPO__: JSON.stringify(IDENTITY.repo),
     __STORAGE_PREFIX__: JSON.stringify(IDENTITY.storagePrefix),
-    __LEGACY_STORAGE_PREFIXES__: JSON.stringify(LEGACY_STORAGE_PREFIXES),
   },
   // public/ holds the simulator's backdrop photo, which only the web build
   // wants: the G2 bundle has no browser simulator, and the ehpk is shipped to

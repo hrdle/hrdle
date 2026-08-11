@@ -25,12 +25,7 @@ import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
 import { sessionFetch } from "../services/peer-fetch";
 import { nukeClientCache } from "../utils/nuke-cache";
-import {
-	makeSessionKey,
-	migrateStoredPaneNode,
-	parseSessionKey,
-	type StoredPaneNode,
-} from "../utils/sessionKey";
+import { makeSessionKey, parseSessionKey } from "../utils/sessionKey";
 import { usePeers } from "../hooks/usePeers";
 import {
 	updateCachedSessionsByHookEvent,
@@ -53,24 +48,6 @@ import type { ControlModeConfig, TerminalRef } from "./Terminal";
 import { storageKey } from "../utils/app-storage";
 
 const DESKTOP_STATE_KEY = storageKey("desktop-state");
-// Pre-#487 storage: the peer the user last picked a session from. The pane
-// tree now stores composite `peerId:id` keys, so this only feeds the one-time
-// migration of a legacy saved tree and is removed afterwards.
-const LEGACY_SESSION_PEER_KEY = storageKey("desktop-session-peer");
-
-function readLegacySessionPeerIntent(): { id: string; peerId: string } | null {
-	try {
-		const raw = localStorage.getItem(LEGACY_SESSION_PEER_KEY);
-		if (!raw) return null;
-		const parsed = JSON.parse(raw);
-		if (parsed && typeof parsed.id === "string" && typeof parsed.peerId === "string")
-			return parsed;
-	} catch {
-		// ignore
-	}
-	return null;
-}
-
 interface OpenSession {
 	id: string;
 	name: string;
@@ -544,21 +521,14 @@ export function DesktopLayout({
 		}
 	}, [showKeyboard, isTablet]);
 
-	// Load/save desktop state. Persisted trees from before #487 store bare
-	// session ids — migrate them to composite keys once, using the legacy
-	// session-peer intent to keep a restored remote session on its peer.
+	// Load/save desktop state.
 	const [desktopState, setDesktopState] = useState<DesktopState>(() => {
 		try {
 			const saved = localStorage.getItem(DESKTOP_STATE_KEY);
 			if (saved) {
 				const parsed = JSON.parse(saved) as DesktopState;
 				if (parsed.root && parsed.activePane) {
-					const root = migrateStoredPaneNode(
-						parsed.root as unknown as StoredPaneNode,
-						readLegacySessionPeerIntent(),
-					) as unknown as PaneNode;
-					localStorage.removeItem(LEGACY_SESSION_PEER_KEY);
-					return { root, activePane: parsed.activePane };
+					return { root: parsed.root, activePane: parsed.activePane };
 				}
 			}
 		} catch {
@@ -627,7 +597,7 @@ export function DesktopLayout({
 	};
 
 	// The pane tree stores composite keys, so the owning peer comes straight
-	// out of the key — no intent / merged-list resolution (#487).
+	// out of the key — no intent / merged-list resolution.
 	const controlSessionKey = getControlSessionKey();
 	const controlTarget = controlSessionKey
 		? parseSessionKey(controlSessionKey)
@@ -663,7 +633,7 @@ export function DesktopLayout({
 
 	// Zoom state: when a pane is zoomed, show only that pane full-screen.
 	// Mirrors the server's zoomedPaneId, carried on every layout message — the
-	// server is the single source of truth (#479). zoomPane sends intent only;
+	// server is the single source of truth. zoomPane sends intent only;
 	// the state flips when the server's layout push confirms it, so a zoom made
 	// on another client (or restored on reconnect) renders here too.
 	const [zoomedPaneId, setZoomedPaneId] = useState<string | null>(null);
@@ -1038,7 +1008,7 @@ export function DesktopLayout({
 			return;
 		}
 		// The server sends the full tree even while zoomed; zoom rides alongside
-		// as zoomedPaneId and displayRoot applies it at render time (#479).
+		// as zoomedPaneId and displayRoot applies it at render time.
 		applyControlTree(controlPaneTree);
 	}, [controlPaneTree, applyControlTree]);
 
@@ -1195,7 +1165,7 @@ export function DesktopLayout({
 			: (paneId: string) => {
 					console.log(`[zoom] ${paneId} (current=${zoomedPaneId})`);
 					// Send explicit intent only; the zoom state flips when the server's
-					// layout push confirms it (#479), so all clients stay in sync.
+					// layout push confirms it, so all clients stay in sync.
 					controlTerminalRef.current.zoomPane(paneId, zoomedPaneId !== paneId);
 				},
 		isZoomed: zoomedPaneId !== null,
@@ -1633,7 +1603,7 @@ export function DesktopLayout({
 
 	// Compute the display root: when zoomed, show only the zoomed pane full-screen.
 	// The server keeps sending the full tree while zoomed; zoomedPaneId mirrors
-	// the server's zoom (#479) and overrides the rendered tree here.
+	// the server's zoom and overrides the rendered tree here.
 	const displayRoot = useMemo(() => {
 		if (zoomedPaneId) {
 			const zoomedPane = findPaneById(desktopState.root, zoomedPaneId);
@@ -1761,7 +1731,7 @@ export function DesktopLayout({
 									}`}
 								/>
 								<span className="text-[13px] font-medium text-white truncate max-w-[200px]">
-									{activeSession?.name || "CC Hub"}
+									{activeSession?.name || "Hrdle"}
 								</span>
 								<ChevronDown className="w-3 h-3 text-zinc-500" />
 							</button>
@@ -1846,7 +1816,7 @@ export function DesktopLayout({
 
 				{/* Every pane PTY is being re-created; the terminals below are showing
 				    the last frame of processes that no longer exist. Saying so is the
-				    difference between a wait and a hang (#261). */}
+				    difference between a wait and a hang. */}
 				{controlTerminal.herdrRestarting && (
 					<div className="shrink-0 px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/30 text-[11px] text-amber-200 flex items-center gap-2">
 						<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
