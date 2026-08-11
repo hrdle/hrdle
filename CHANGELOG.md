@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.93] - 2026-08-11
+
 ### Fixed
 - **The glasses still left the session being read for one nobody had touched.**
   A resumed subscribe stopped claiming the focus in 0.3.87, and a claim without
