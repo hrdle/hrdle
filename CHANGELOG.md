@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.93] - 2026-08-11
+
+### Fixed
+- **The glasses still left the session being read for one nobody had touched.**
+  A resumed subscribe stopped claiming the focus in 0.3.87, and a claim without
+  a heartbeat behind it stopped counting in 0.3.88 - but a page declares its own
+  device the moment its subscription is confirmed, one message behind that
+  subscribe, and on a socket that has no memory of the device it belongs to.
+  Every reconnect therefore read as someone picking the device up and re-claimed
+  what the subscribe had just declined. Measured on 2026-08-11 with both earlier
+  fixes running: nine claims from one desktop between 08:51 and 13:07, eight
+  from one phone between 11:52 and 12:10, in bursts a minute apart, each ending
+  in a heartbeat lapse and the next reconnect starting another
+  - A device's declared visibility is now remembered against its stable device
+    id, so hidden -> visible is told apart from a socket saying hello again
+  - And a connection that has not been claimed by a person - nobody opened a
+    session on it, nobody picked it up - no longer stands in the election at
+    all. Being the only screen awake used to be enough to win it, which is what
+    carried the wearer to a workspace finished days ago while the phone was in
+    a pocket. Nobody qualifying leaves the glasses holding what they were
+    showing, and one act on any screen brings that screen straight back
+
 ## [0.3.92] - 2026-08-11
 
 ### Added
