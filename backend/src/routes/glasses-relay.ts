@@ -28,7 +28,7 @@ glassesRelay.post('/', async (c) => {
     return c.json({ error: 'Invalid request body' }, 400);
   }
 
-  const { sessionId, kind, text, choices, paneId } = body;
+  const { sessionId, kind, text, choices, choiceDetails, paneId } = body;
 
   if (typeof sessionId !== 'string' || !SESSION_ID_RE.test(sessionId)) {
     return c.json({ error: 'sessionId is required and must match [A-Za-z0-9._-]' }, 400);
@@ -41,6 +41,20 @@ glassesRelay.post('/', async (c) => {
   }
   if (paneId !== undefined && (typeof paneId !== 'string' || !PANE_ID_RE.test(paneId))) {
     return c.json({ error: 'paneId must look like "%N"' }, 400);
+  }
+  let detailList: string[] | undefined;
+  if (choiceDetails !== undefined) {
+    // Index-aligned with `choices`, so a mismatched length is not a shorter
+    // list - it is every description against the wrong option.
+    if (
+      !Array.isArray(choices) ||
+      !Array.isArray(choiceDetails) ||
+      choiceDetails.length !== choices.length ||
+      choiceDetails.some((x) => typeof x !== 'string' || x.length > MAX_CHOICE_LEN)
+    ) {
+      return c.json({ error: 'choiceDetails must be strings, one per choice' }, 400);
+    }
+    detailList = choiceDetails as string[];
   }
   let choiceList: string[] | undefined;
   if (choices !== undefined) {
@@ -60,6 +74,7 @@ glassesRelay.post('/', async (c) => {
     text,
     paneId: paneId as string | undefined,
     choices: choiceList,
+    choiceDetails: detailList,
   });
   if (result.error) {
     return c.json({ error: result.error, item: result.item }, result.status as 409 | 429);

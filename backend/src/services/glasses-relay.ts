@@ -893,6 +893,13 @@ async function assembleWaitingPayload(
         text: clampDisplayWidth(normalizeRelayText(picker.question ?? fallback), MAX_TEXT_WIDTH) || fallback,
         choices: picker.options.map((o) => clamp(o.label)),
         choiceDetails: picker.options.map((o) => normalizeRelayText(o.detail)),
+        // A list with no keys of its own is answered by walking the pane's
+        // cursor, and both halves travel or neither does - an item carrying
+        // options and no `choiceInput` reads as a numbered one, and the glasses
+        // would type a digit where digits do nothing at all.
+        ...(picker.choiceInput === 'arrow' && picker.choiceSelected !== undefined
+          ? { choiceInput: 'arrow' as const, choiceSelected: picker.choiceSelected }
+          : {}),
       };
     }
     // Not the picker screen. A permission prompt is a different one - drawn
@@ -1086,6 +1093,8 @@ export function postAgentRelay(input: {
   text: string;
   paneId?: string;
   choices?: string[];
+  /** Index-aligned with `choices`; what each one says about itself. */
+  choiceDetails?: string[];
 }): { status: number; item?: GlassesRelayItem; error?: string } {
   if (!checkRateLimit(input.sessionId)) {
     return { status: 429, error: 'rate limited' };
@@ -1097,13 +1106,17 @@ export function postAgentRelay(input: {
     if (slot.waiting && !slot.waiting.dismissed) {
       return { status: 409, error: 'an active waiting item already exists', item: slot.waiting };
     }
-    const item = makeItem(input.sessionId, 'waiting', 'agent', input.text, input.paneId, input.choices);
+    const item = makeItem(input.sessionId, 'waiting', 'agent', input.text, input.paneId, input.choices, INFO_TTL_MS, {
+      choiceDetails: input.choiceDetails,
+    });
     slot.waiting = item;
     broadcastUpsert(item);
     return { status: 200, item };
   }
 
-  const item = makeItem(input.sessionId, 'info', 'agent', input.text, input.paneId, input.choices);
+  const item = makeItem(input.sessionId, 'info', 'agent', input.text, input.paneId, input.choices, INFO_TTL_MS, {
+    choiceDetails: input.choiceDetails,
+  });
   const replaced = slot.info;
   slot.info = item;
   broadcastUpsert(item);

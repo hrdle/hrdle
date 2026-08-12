@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Kimi's trust prompt can be answered from the glasses.** It numbers nothing
+  - `❯ Trust this folder` / `Don't trust`, each with a description under it -
+  so every reader before this one found no options and a wearer was shown the
+  question with no way to answer it. The rows are reachable all the same, by
+  walking kimi's own cursor and pressing Enter, which is the path OpenCode's
+  permission row has used since 0.3.64
+- kimi has a reader of its own now, covering both the shapes its record knows
+  nothing about: the trust prompt and the approval prompt. What is read is the
+  layout - a rule around it, the question on top, the options at a deeper indent
+  than the prose between - rather than the shape of any one row
+- `hrdle glasses` (and `POST /api/glasses/relay`) take `choiceDetails`, so an
+  agent posting its own question can say what each option means. Index-aligned
+  with `choices`; a mismatched length is refused rather than shifted
+
 ## [0.3.105] - 2026-08-12
 
 ### Fixed
