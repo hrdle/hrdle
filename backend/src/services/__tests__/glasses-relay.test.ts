@@ -1839,3 +1839,63 @@ describe('choiceDetails', () => {
     ]);
   });
 });
+
+// =============================================================================
+// A description sized to the space it will be drawn in
+// =============================================================================
+
+describe('how much of a description is sent', () => {
+  const LONG = 'これは説明文がかなり長い場合にどこまで表示されるかを確かめるための文章で、途中で切られるのかを見たいところです';
+
+  /** A pane offering `n` options, each with the same long description. */
+  function pane(n: number, box = ''): string {
+    const rows = ['どれにしますか?', ''];
+    for (let i = 1; i <= n; i++) {
+      rows.push(`${i === 1 ? '❯' : ' '} ${i}. ${box}案${String.fromCharCode(64 + i)}`);
+      rows.push(`     ${LONG}`);
+    }
+    return rows.join('\n');
+  }
+
+  async function detailsOf(paneText: string): Promise<string[] | undefined> {
+    const sock = await blockedClaudePane(paneText);
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    return item.choiceDetails as string[] | undefined;
+  }
+
+  test('fewer options leave more room, and get more of it', async () => {
+    // The rows cannot be given up - the cursor is a position in that list - so
+    // the description gets what is left after them. A flat width ignored that
+    // from both ends: three options wasted two of the four lines they had while
+    // five were cut by the app instead.
+    const three = await detailsOf(pane(3));
+    const five = await detailsOf(pane(5));
+    const six = await detailsOf(pane(6));
+    expect(displayWidth(three?.[0] ?? '')).toBeGreaterThan(displayWidth(five?.[0] ?? ''));
+    expect(displayWidth(five?.[0] ?? '')).toBeGreaterThan(displayWidth(six?.[0] ?? ''));
+  });
+
+  test('what is cut here says so', async () => {
+    // The point of cutting on this side. Text the app drops for want of a line
+    // ends by simply stopping, and a description that stops mid-thought while
+    // looking finished is the more expensive of the two mistakes.
+    const six = await detailsOf(pane(6));
+    expect(six?.[0]).toMatch(/…$/);
+  });
+
+  test('a list with no room for a description is sent without one', async () => {
+    // Seven rows and the rule leave nothing. Sending it anyway would be bytes
+    // for a line that cannot be drawn.
+    expect(await detailsOf(pane(7))).toBeUndefined();
+  });
+
+  test("the multi-select's send row is counted before it exists", async () => {
+    // The app draws one row more than there are options there, and it is the
+    // app that adds it - so the count has to be anticipated on this side or the
+    // description is sized one line too generously and the app drops the tail
+    // silently.
+    const plain = await detailsOf(pane(4));
+    const multi = await detailsOf(pane(4, '[ ] '));
+    expect(displayWidth(multi?.[0] ?? '')).toBeLessThan(displayWidth(plain?.[0] ?? ''));
+  });
+});

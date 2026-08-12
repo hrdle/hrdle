@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A choice's description is sized to the space it will be drawn in.** The
+  width was flat, and the picker's space is not: the option rows take one line
+  each and cannot be given up, so what is left over is whatever they leave.
+  Measured on the device - a three-option question wasted two of the four lines
+  it had, while a five-option one was cut by the app instead. It is computed
+  from the number of options now (and from the multi-select's send row, which
+  the app adds and the server has to anticipate), and a list with no room left
+  is sent without descriptions rather than with ones that cannot be drawn
+- Text cut for width says so. It was cut in two places - here, with an ellipsis,
+  and on the device by dropping whole lines, which ends a description
+  mid-thought while it still looks finished. The width sent is a little short of
+  the space so the visible cut is the one that happens
+
 ## [0.3.100] - 2026-08-12
 
 ### Fixed
