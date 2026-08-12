@@ -1399,9 +1399,32 @@ export interface GlassesRelayItem {
   kind: 'waiting' | 'info';
   /** display-width-clamped text (≈ one G2 page, 189 Japanese chars). */
   text: string;
-  /** Scraped or agent-declared choices; the glasses prefer these over a
-   *  terminal re-scrape. */
+  /**
+   * Scraped or agent-declared choices; the glasses prefer these over a
+   * terminal re-scrape.
+   *
+   * The **label alone** since 0.3.98. It used to be the label with the option's
+   * description glued on after a dash, and the picker draws one row per option
+   * and cuts it at the panel edge - so every row on the glasses ended in an
+   * ellipsis a few characters into the description, and no option could be read
+   * to the end on either screen. What a row loses that way is exactly the part
+   * that decides between the options.
+   */
   choices?: string[];
+  /**
+   * What each choice says about itself, index-aligned with `choices`.
+   *
+   * Sent separately because only the app knows how many of its eight lines are
+   * spare: three options leave five, and the picker had been drawing three cut
+   * rows into a screen that was more than half empty. It shows the highlighted
+   * option's description in that space now, so moving the ring reads the next
+   * one rather than revealing nothing.
+   *
+   * An entry is the empty string where its option had nothing under it, so the
+   * indices always line up with `choices`. An app older than this field ignores
+   * it and shows the labels alone, which is still the whole of every row.
+   */
+  choiceDetails?: string[];
   /**
    * How the pane takes an answer to `choices`.
    *

@@ -1029,6 +1029,7 @@ export class GlassesController {
               top.choices,
               { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id },
               this.inlineFromItem(top),
+              top.choiceDetails,
             )
             return
           }
@@ -1524,6 +1525,7 @@ export class GlassesController {
         item.choices,
         { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
         this.inlineFromItem(item),
+        item.choiceDetails,
       )
       void this.loadConversation().then(() => this.render())
       return
@@ -1567,7 +1569,12 @@ export class GlassesController {
    * had not chosen. Same labels means same question - the boxes are what
    * changed, and where the wearer had got to is still where they are.
    */
-  private enterChoice(options: string[], target: ReplyTarget, inline?: InlineChoices): void {
+  private enterChoice(
+    options: string[],
+    target: ReplyTarget,
+    inline?: InlineChoices,
+    details?: string[],
+  ): void {
     const keepCursor =
       this.state.mode === 'choice' &&
       this.choiceTarget?.sessionId === target.sessionId &&
@@ -1576,6 +1583,10 @@ export class GlassesController {
     this.choiceTarget = target
     this.choiceFollowUntil = 0
     this.state.choiceOptions = options
+    // Cleared when absent rather than left alone: a locally scraped picker
+    // carries none, and the previous question's descriptions under this one's
+    // options would be answering something nobody asked.
+    this.state.choiceDetails = details
     this.state.choiceMulti = looksMultiSelect(options)
     // Set here rather than left over from whatever ran last: two halves feed
     // this - a relay item that already carries the reading, and a terminal
@@ -1876,6 +1887,7 @@ export class GlassesController {
         item.choices as string[],
         { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
         this.inlineFromItem(item),
+        item.choiceDetails,
       )
       return
     }

@@ -244,8 +244,24 @@ export interface GlassesRelayItem {
   kind: 'waiting' | 'info'
   /** display-width-clamped text (≈ one G2 page). */
   text: string
-  /** Scraped or agent-declared choices; preferred over a terminal re-scrape. */
+  /** Scraped or agent-declared choices; preferred over a terminal re-scrape.
+   *  The label alone - the description travels in `choiceDetails`. */
   choices?: string[]
+  /**
+   * What each choice says about itself, index-aligned with `choices` and empty
+   * where an option had nothing under it.
+   *
+   * The label and its description used to arrive glued together, and
+   * `choiceBody` draws one row per option and cuts it at the panel edge - so
+   * every row ended in an ellipsis a few characters into the description, which
+   * is the part that decides between the options. Three options leave five of
+   * the panel's eight lines spare; the highlighted option's description goes
+   * there.
+   *
+   * Mirrored from `GlassesRelayItem` in `shared/types.ts`; glasses/src keeps no
+   * dependency on shared.
+   */
+  choiceDetails?: string[]
   /**
    * How the pane wants those choices answered.
    *

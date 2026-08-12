@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The choices reached the glasses but could not be read.** A picker row is one
+  line and the panel cuts what overruns it, and an option arrived with its
+  description glued to its label after a dash - so every row ended in an
+  ellipsis a few characters in, and the part that decides between the options
+  was the part that never arrived. Reported from the device on 2026-08-12: the
+  choices appear, but the information needed to choose does not
+  - The label and the description travel apart now (`choiceDetails`), and the
+    picker draws the highlighted option's description under the rows. Three
+    options take three of the panel's eight lines: it had been drawing three cut
+    rows into a screen more than half empty. Moving the ring reads the next one
+  - The overlay gains from the same split. A question with three options used to
+    show one of them, truncated; all three fit as labels
+  - An app older than the field shows the labels alone, which is at least whole
+
 ## [0.3.99] - 2026-08-12
 
 ### Fixed
