@@ -741,16 +741,12 @@ export function startDebugUI(): void {
     const ws = controller.ws
     const session = state.sessions[state.sessionIndex]
     const bufText = session ? ws.getTerminalText(session.id) : ''
-    const choices = session ? ws.getChoices(session.id) : []
-    // Side-by-side options are read from the pane's colours rather than its
-    // characters, so a prompt with them shows nothing under `Choices` and this
-    // window would report a picker that is about to work as empty.
-    const inline = choices.length === 0 && session ? ws.getInlineChoices(session.id) : undefined
-    const shown = inline
-      ? `${inline.options.join(', ')} (inline, on ${inline.options[inline.selected]})`
-      : choices.join(', ')
+    // No `Choices` here any more: this app does not read options off a pane, so
+    // a window reporting what it would have found would be reporting on a
+    // reader that no longer exists. What the picker will actually offer is on
+    // the relay line below, where it comes from.
     diag.textContent =
-      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch | Choices: [${shown}]` +
+      `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch` +
       (controller.isStopped() ? ' | stopped' : '')
     const top = state.relayWaiting[0]
     relay.textContent =

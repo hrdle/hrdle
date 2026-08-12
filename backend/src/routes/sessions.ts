@@ -27,7 +27,6 @@ import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
 import { detectPaneState, stripAnsi, type DetectedPaneState } from '../services/pane-state';
-import { readAgentQuestion } from '../services/agent-question';
 
 const herdrService = new HerdrService();
 
@@ -415,13 +414,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           isMultiWorkspace && p.agent === 'claude' && p.agentSessionId && p.path
             ? await claudeCodeService.getSessionById(p.agentSessionId, p.path)
             : null;
-        // Only while the pane is waiting: this opens the agent's transcript
-        // tail, and doing that for every pane on every 5s push would be paid
-        // constantly for an answer that is almost always "nothing".
-        const paneWaiting = paneIndicator === 'waiting_input';
-        const questionRead = paneWaiting
-          ? await readAgentQuestion(p.agent, p.agentSessionId)
-          : undefined;
         const pane: PaneInfo = {
           paneId: p.paneId,
           currentCommand: p.command,
@@ -436,8 +428,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           metrics: paneMetrics,
           recap: paneClaude?.lastRecap?.content,
           recapAt: paneClaude?.lastRecap?.timestamp,
-          pendingQuestion: questionRead?.known ? questionRead.question : undefined,
-          questionKnown: questionRead ? questionRead.known : undefined,
         };
         return pane;
       })) : undefined,

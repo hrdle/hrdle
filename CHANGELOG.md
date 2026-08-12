@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **One reader, not two.** The glasses app kept its own reading of the terminal
+  buffer, used whenever the server sent no options - and that second reading is
+  what actually served a wearer a `grep` listing and a paragraph of prose as
+  menus on 2026-08-12. Two readings of one screen is a thing only one of them
+  can be right about, and the one on the device could not be told which agent it
+  was reading or shown a fixture without a release
+  - It is gone, with the buffer it needed and the fields the server sent to feed
+    it. Where the server reads no options, the tap opens the microphone: a
+    question without its options can still be answered by speaking, and that is
+    the honest failure - the wrong options are answered, a missing picker is
+    only noticed
+  - The server no longer opens an agent's transcript once per waiting pane per
+    poll to fill those fields
+  - 613 lines and 4.7 KB of the bundle went with it
+
 ## [0.3.103] - 2026-08-12
 
 ### Changed

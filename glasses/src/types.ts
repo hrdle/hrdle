@@ -81,30 +81,7 @@ export interface Pane {
   recap?: string
   recapAt?: string
   metrics?: RowMetrics
-  /**
-   * The question this pane's agent recorded, when it is waiting on one.
-   *
-   * Preferred over anything read off the screen: it carries the descriptions
-   * the labels alone never did, and it cannot mistake a code listing for a
-   * menu because it never looks at one.
-   */
-  pendingQuestion?: {
-    question: string
-    options: Array<{ label: string; description?: string }>
-    multiSelect: boolean
-    /** Several questions in one call - the pane draws a tab each, and which
-     *  one is in front is not in the record. */
-    ambiguous: boolean
   }
-  /**
-   * Whether this pane's agent keeps a record that could be asked at all.
-   *
-   * `true` with no `pendingQuestion` is the agent saying it is asking nothing,
-   * which is what makes a menu found by colour refusable. `false` - codex,
-   * grok, opencode - leaves the screen as the only source, as before.
-   */
-  questionKnown?: boolean
-}
 
 /**
  * Thread-based agents — everything that is not Claude.
