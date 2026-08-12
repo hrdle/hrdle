@@ -21,11 +21,11 @@
 
 import type { AgentProvider } from '../../../../shared/types';
 import { readClaudePicker } from './claude';
-import type { PickerOption } from './claude';
+import type { PickerOption } from './shared';
 import { readGrokPicker } from './grok';
 import { readKimiPrompt } from './kimi';
 
-export type { PickerOption } from './claude';
+export type { PickerOption } from './shared';
 
 export interface PaneQuestion {
   /** The question as the pane wrapped it, rejoined; absent when only the

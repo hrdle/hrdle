@@ -20,6 +20,15 @@ import { extractInlineChoices } from '../../../shared/inline-choices';
 import type { AgentProvider, GlassesRelayItem } from '../../../shared/types';
 import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
 import { hasPaneReader, readPaneQuestion } from './pane-readers';
+import {
+  CJK_EDGE,
+  CURSOR,
+  dropSidePanel,
+  isFreeText,
+  joinWrapped,
+  MAX_DETAIL_CHARS,
+  stripCursor,
+} from './pane-readers/shared';
 import { HerdrService, type WorkspaceInfo } from './herdr';
 import { detectPaneState } from './pane-state';
 import { readPane, readPaneText, toHerdrPaneId } from './herdr-client';
@@ -312,29 +321,6 @@ function broadcastRemove(id: string): void {
 // Scrape assembly — "why is it waiting" from the pane itself
 // =============================================================================
 
-/**
- * The glyph an agent marks the current row with, in one place.
- *
- * Missing one is not a missing row, it is a WRONG row: the row that fails to
- * match is the one the pane is sitting on, so the list arrives one short and
- * every digit after it counts against a different option. Recorded twice.
- * Codex 0.146.0 on 2026-08-07 drew `› 1. Yes, continue` over `  2. No, quit`,
- * and the glasses were handed a single option reading `No, quit` - answered
- * with `1`, which is `Yes, continue`, on the one prompt where the wrong answer
- * grants project-local config, hooks and exec policies.
- *
- * Kimi Code 0.34.0 on 2026-08-12, measured against a live approval prompt:
- * `▶ 1. Approve once` / `2. Approve for this session` / `3. Reject` /
- * `4. Reject with feedback`. U+25B6 was not listed - U+25B8, a different
- * triangle, was - so `Approve once` vanished and every remaining row moved up
- * one. A wearer picking `Reject` would have sent `2` and approved for the
- * session.
- *
- * So the list is generous on purpose, and adding to it costs nothing: a glyph
- * that no agent uses matches no line, while one that is missing silently
- * rewrites an answer.
- */
-const CURSOR = '[❯›»❭❱⟩>*→‣▸▶▷►◆◇•·]';
 
 /**
  * One line of an option list, whoever drew it.
@@ -375,37 +361,7 @@ const NUMBERED_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(?:\\d+[.)]|\\[\\d+\\])\\
  */
 const CHECKBOX_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(\\[[ xX*✓✔]\\]\\s*\\S.*)`);
 
-/**
- * The rows that open a text field rather than answering.
- *
- * They used to be dropped, on the reasoning that the ring has no keyboard. It
- * has a microphone: the row a wearer wants when none of the options fit was the
- * one always taken away from them. They are marked now and travel with the
- * item, and picking one opens the pane's field and then dictation.
- * `Other` is kimi's, `Type your own answer` is opencode's (measured on a live
- * 1.18.16 question, 2026-08-12 - it draws one on every question it asks); the
- * other two are claude's.
- */
-const UNANSWERABLE = new Set(['Type something', 'Chat about this', 'Other', 'Type your own answer']);
 
-/**
- * Whether a captured row is one of those, once it is down to its label.
- *
- * Compared bare rather than literally, because the same row arrives in several
- * dresses: claude writes `Type something.` in a single-pick list and
- * `[ ] Type something` in a multi-select - no period, and a checkbox in front -
- * while kimi's `Other` becomes `[ ] Other:` the moment it is the row being
- * typed into. Matching the literal string caught the first and missed the rest,
- * so a picker carried rows whose only effect is to open a text field nobody
- * wearing the glasses can type into.
- */
-function isUnanswerable(option: string): boolean {
-  const bare = option
-    .replace(/^\[[ xX*✓✔]\]\s*/, '')
-    .trim()
-    .replace(/[.:：]$/, '');
-  return UNANSWERABLE.has(bare);
-}
 
 /**
  * The rule a pane frames its content with, on the left of every line.
@@ -450,7 +406,7 @@ export function stripLeftRule(line: string): string {
  * indentation is measured against where the *label* starts, not the line, so
  * the cursor glyph on the selected row does not change the answer.
  */
-const MAX_DETAIL_CHARS = 80;
+
 
 /** Where the label starts within an option line, for the indent comparison. */
 function labelColumn(line: string, label: string): number {
@@ -474,29 +430,6 @@ export interface ScrapedChoice {
   freeText?: boolean;
 }
 
-/**
- * A box the agent drew level with the options, to their right.
- *
- * Claude Code's AskUserQuestion puts a preview panel beside the list, so the
- * option and the panel's border share a row, and everything after the option's
- * own text belongs to neither the option nor the question:
- *
- * ```
- *  1. vaultに自分で保存（推奨）    ┌──────────────────────────┐
- *  2. チャットで直接教える         │ No preview available     │
- * ❯3. ルータ操作は中止             └──────────────────────────┘
- * ```
- *
- * Read whole, each label carried a wall of box-drawing to the glasses.
- * Recognised by the gap in front of it rather than by the characters alone: a
- * rule drawn tight against a word is part of the word, and two spaces before a
- * border is a column boundary.
- */
-const SIDE_PANEL = /\s{2,}[\u2500-\u257F+|].*$/u;
-
-function dropSidePanel(text: string): string {
-  return text.replace(SIDE_PANEL, '');
-}
 
 /** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options, each
  *  with the description line under it when the agent draws one. */
@@ -531,7 +464,7 @@ export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
   return rows.map((r) => ({
     label: r.label,
     detail: truncate(r.detail, MAX_DETAIL_CHARS),
-    ...(isUnanswerable(r.label) ? { freeText: true } : {}),
+    ...(isFreeText(r.label) ? { freeText: true } : {}),
   }));
 }
 
@@ -542,25 +475,6 @@ export function extractNumberedChoices(lines: string[]): string[] {
   return extractChoiceRows(lines).map((c) => (c.detail ? `${c.label} - ${c.detail}` : c.label));
 }
 
-/**
- * Rejoin a description the pane wrapped across two lines.
- *
- * A terminal breaks latin text at a space, which the break then consumes, so
- * the halves need one put back. It breaks Japanese wherever the column runs
- * out - mid-word, mid-phrase - and putting a space there invents one that was
- * never written: `スマホやG2から` came back as `スマホやG2か ら` on the first
- * capture of this working.
- *
- * Decided by the characters either side of the seam rather than by a language
- * setting: two non-ASCII characters meeting is a break the width forced.
- */
-function joinWrapped(head: string, tail: string): string {
-  if (!head) return tail;
-  if (!tail) return head;
-  const seam = /[\x20-\x7e]/;
-  const spaced = seam.test(head[head.length - 1]) || seam.test(tail[0]);
-  return spaced ? `${head} ${tail}` : `${head}${tail}`;
-}
 
 /** Cut to `max` characters, marking that something was cut. */
 function truncate(text: string, max: number): string {
@@ -582,22 +496,6 @@ export function extractQuestionLine(lines: string[], before = lines.length): str
   return findQuestion(lines, before).text;
 }
 
-/**
- * The marker an agent puts in front of a heading, dropped from a line read as
- * prose.
- *
- * The same glyphs mark the current option, which is why they are one list - but
- * on a question they are furniture. Kimi heads its approval prompt with
- * `▶ Write this file?`, and the wearer was shown the triangle.
- *
- * Only when a space follows: `>` opens a quoted line and `→` sits inside
- * sentences, and neither is a marker there.
- */
-const LEADING_CURSOR = new RegExp(`^\\s*${CURSOR}\\s+`);
-
-export function stripCursor(line: string): string {
-  return line.replace(LEADING_CURSOR, '');
-}
 
 /**
  * The question, and whether it was recognised or merely the last thing on
@@ -689,7 +587,7 @@ function paragraphEndingAt(clean: string[], end: number): string | undefined {
     out.unshift(clean[i]);
     if (out.length >= MAX_QUESTION_LINES) break;
   }
-  return out.reduce((a, b) => (cjkSeam(a) ? a + b : `${a} ${b}`));
+  return out.reduce(joinWrapped);
 }
 
 /**
@@ -717,20 +615,7 @@ function wrapTolerance(line: string): number {
   return CJK_EDGE.test(line) ? CJK_WRAP_TOLERANCE : LATIN_WRAP_TOLERANCE;
 }
 
-/**
- * A wrap made inside a run of CJK, where the two halves belong together with
- * nothing between them.
- *
- * Latin text is wrapped at a space and loses it to the trim, so its seam needs
- * one put back; CJK has no space to lose and is broken wherever the column
- * falls - often mid-word, which is how `ワークスペ` / `ース所有` arrives. Joining
- * both the same way is wrong for one of them whichever way is picked.
- */
-function cjkSeam(before: string): boolean {
-  return CJK_EDGE.test(before.slice(-1));
-}
 
-const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー、。「」『』（）]/u;
 
 /** However wrapped, a question that takes more than this is not being read off
  *  a pair of glasses anyway. */
