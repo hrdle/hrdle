@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Grok Build's picker can be answered from the glasses.** It agrees with
+  nobody about how to draw a row - `1 (○) そのまま残す`, no full stop and no
+  bracket, with the description to the *right* of the label rather than under
+  it - so the general rule matched not one line of it and a wearer got the
+  question with nothing to answer it with. It has a reader of its own now,
+  keyed on the frame grok draws around the prompt
+- **A choice can carry the key it answers to** (`choiceKeys`). Every other agent
+  numbers its rows, so the key is the position; grok writes its own, and its
+  free-text row answers to `z` - counting would have sent it a `4` it has no
+  option for. Absent, the position is still what goes
+  - Needs glasses v0.0.70
+
 ## [0.3.108] - 2026-08-12
 
 ### Fixed

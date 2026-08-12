@@ -324,3 +324,23 @@ describe('a free-text row', () => {
     expect(listening).toBe(false)
   })
 })
+
+describe('a row whose key is not its position', () => {
+  test('the key the server sent is the key that goes', async () => {
+    // Grok writes its own keys - `1 (○)` down to `z (○) Type your answer here`
+    // - so counting rows would send it a `4` it has no option for.
+    const { c, keys } = picker(['Keep it', 'Rewrite it', 'Type your answer here'])
+    c.state.choiceKeys = ['1', '2', 'z']
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+    expect(keys).toEqual(['z'])
+  })
+
+  test('without them the row still answers to its position', async () => {
+    const { c, keys } = picker(['Keep it', 'Rewrite it'])
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+    expect(keys).toEqual(['2'])
+  })
+})

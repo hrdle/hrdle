@@ -1379,6 +1379,15 @@ export interface GlassesRelayItem {
    */
   choiceFreeText?: number[];
   /**
+   * The key each choice answers to, index-aligned with `choices`.
+   *
+   * Absent means the row's own position, which is every agent that numbers
+   * `1.`, `2.`, `3.`. Grok Build writes the key itself - `1 (○) …` down to
+   * `z (○) Type your answer here` - so its free-text row answers to `z`, and a
+   * picker sending `index + 1` would send it a `4` it has no option for.
+   */
+  choiceKeys?: string[];
+  /**
    * What each choice says about itself, index-aligned with `choices`.
    *
    * Sent separately because only the app knows how many of its eight lines are

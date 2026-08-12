@@ -200,6 +200,9 @@ export interface AppState {
    * row a wearer wants when none of the options fit.
    */
   choiceFreeText?: number[]
+  /** The key each option answers to, when it is not its own position. Grok
+   *  writes its own, and one of them is a letter. */
+  choiceKeys?: string[]
   /**
    * The options are checkboxes rather than a single pick.
    *
