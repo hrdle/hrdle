@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Kimi's approval prompt lost the option the pane was sitting on, and every
+  digit after it moved up one.** Its cursor is U+25B6 and the glyph list had
+  U+25B8, a different triangle - so `▶ 1. Approve once` failed to match while
+  the three rows below it did. A wearer picking `Reject` off the glasses would
+  have sent `2`, which is `Approve for this session`: the file written and the
+  session approved, by someone who chose to refuse. Measured against a live
+  kimi 0.34.0 pane on 2026-08-12
+  - The glyphs are one list now, deliberately generous. A glyph no agent uses
+    matches no line; a missing one silently rewrites an answer, which is the
+    second time that has happened (codex's `›` on 2026-08-07)
+  - The same marker in front of a question is dropped from it, so the wearer is
+    asked `Write this file?` rather than `▶ Write this file?`
+
 ## [0.3.104] - 2026-08-12
 
 ### Changed

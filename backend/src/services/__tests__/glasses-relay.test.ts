@@ -18,6 +18,7 @@ import {
   postHookRelay,
   resetGlassesRelayForTest,
   resolveHookTarget,
+  stripCursor,
   stripLeftRule,
   subscribeGlassesRelay,
   trackGlassesRelay,
@@ -1978,5 +1979,63 @@ describe('a preview panel level with the list', () => {
     // declined to send the options and the glasses scraped the pane
     // themselves - and what they scraped was the box above.
     expect(detectPaneState(SIDE_BY_SIDE)).toBe('ask_user_question');
+  });
+});
+
+// =============================================================================
+// The glyph on the row the pane is sitting on
+// =============================================================================
+
+describe("kimi's approval prompt", () => {
+  /**
+   * Captured from a live kimi 0.34.0 pane on 2026-08-12, asking to write a
+   * file. Its cursor is U+25B6, and the row it marks is the one that has to
+   * survive: a list that loses it arrives one short, and every digit after it
+   * counts against a different option.
+   */
+  const KIMI_APPROVAL = [
+    '      1  added line',
+    '      2',
+    ' ────────────────────────────────────────────────────────────',
+    '   ▶ Write this file?',
+    '',
+    '   /tmp/scratch/agent-test/fixture.txt',
+    '      1  added line',
+    '      2  ',
+    '',
+    '   ▶ 1. Approve once',
+    '     2. Approve for this session',
+    '     3. Reject',
+    '     4. Reject with feedback',
+    '',
+    '   ↑/↓ select · 1/2/3/4 choose · ↵ confirm · ctrl+e preview',
+    ' ────────────────────────────────────────────────────────────',
+  ];
+
+  test('the row under the cursor is not the row that goes missing', () => {
+    // Without U+25B6 listed, `Approve once` vanished and the wearer's `Reject`
+    // would have sent `2` - approve for the session. The worst shape this file
+    // knows: an answer that looks like it worked.
+    expect(extractChoiceRows(KIMI_APPROVAL).map((c) => c.label)).toEqual([
+      'Approve once',
+      'Approve for this session',
+      'Reject',
+      'Reject with feedback',
+    ]);
+  });
+
+  test('the marker in front of the question is not part of it', () => {
+    expect(extractQuestionLine(KIMI_APPROVAL, optionBlockStart(KIMI_APPROVAL))).toBe('Write this file?');
+  });
+
+  test('a diff line numbered without a dot is not an option', () => {
+    // `1  added line` sits directly above the prompt and is numbered too.
+    expect(extractChoiceRows(KIMI_APPROVAL).map((c) => c.label)).not.toContain('added line');
+  });
+
+  test('a marker needs a space after it to be one', () => {
+    // `>` opens a quoted line and `→` sits inside sentences.
+    expect(stripCursor('>quoted, not a marker')).toBe('>quoted, not a marker');
+    expect(stripCursor('▶ a marker')).toBe('a marker');
   });
 });

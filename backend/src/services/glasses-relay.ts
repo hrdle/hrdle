@@ -313,6 +313,30 @@ function broadcastRemove(id: string): void {
 // =============================================================================
 
 /**
+ * The glyph an agent marks the current row with, in one place.
+ *
+ * Missing one is not a missing row, it is a WRONG row: the row that fails to
+ * match is the one the pane is sitting on, so the list arrives one short and
+ * every digit after it counts against a different option. Recorded twice.
+ * Codex 0.146.0 on 2026-08-07 drew `› 1. Yes, continue` over `  2. No, quit`,
+ * and the glasses were handed a single option reading `No, quit` - answered
+ * with `1`, which is `Yes, continue`, on the one prompt where the wrong answer
+ * grants project-local config, hooks and exec policies.
+ *
+ * Kimi Code 0.34.0 on 2026-08-12, measured against a live approval prompt:
+ * `▶ 1. Approve once` / `2. Approve for this session` / `3. Reject` /
+ * `4. Reject with feedback`. U+25B6 was not listed - U+25B8, a different
+ * triangle, was - so `Approve once` vanished and every remaining row moved up
+ * one. A wearer picking `Reject` would have sent `2` and approved for the
+ * session.
+ *
+ * So the list is generous on purpose, and adding to it costs nothing: a glyph
+ * that no agent uses matches no line, while one that is missing silently
+ * rewrites an answer.
+ */
+const CURSOR = '[❯›»❭❱⟩>*→‣▸▶▷►◆◇•·]';
+
+/**
  * One line of an option list, whoever drew it.
  *
  * Two numbering styles, because the agents do not agree: claude and codex
@@ -332,7 +356,7 @@ function broadcastRemove(id: string): void {
  * Kept in step with `extractChoices` in `glasses/src/ws-client.ts`, which is
  * the same reading done against a live terminal buffer.
  */
-const NUMBERED_OPTION = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
+const NUMBERED_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(?:\\d+[.)]|\\[\\d+\\])\\s*(.+)`);
 
 /**
  * A checkbox row that carries no number at all.
@@ -349,7 +373,7 @@ const NUMBERED_OPTION = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(?:\d+[.)]|\[\d+\
  * so they match the numbered form first and keep their box in the capture -
  * the box is what tells the app this is a multi-select at all.
  */
-const CHECKBOX_OPTION = /^\s*[❯›»❭❱⟩>*→‣▸]?\s*(\[[ xX*✓✔]\]\s*\S.*)/;
+const CHECKBOX_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(\\[[ xX*✓✔]\\]\\s*\\S.*)`);
 
 /**
  * The rows a wearer cannot answer, whatever they are numbered.
@@ -551,6 +575,23 @@ export function extractQuestionLine(lines: string[], before = lines.length): str
 }
 
 /**
+ * The marker an agent puts in front of a heading, dropped from a line read as
+ * prose.
+ *
+ * The same glyphs mark the current option, which is why they are one list - but
+ * on a question they are furniture. Kimi heads its approval prompt with
+ * `▶ Write this file?`, and the wearer was shown the triangle.
+ *
+ * Only when a space follows: `>` opens a quoted line and `→` sits inside
+ * sentences, and neither is a marker there.
+ */
+const LEADING_CURSOR = new RegExp(`^\\s*${CURSOR}\\s+`);
+
+export function stripCursor(line: string): string {
+  return line.replace(LEADING_CURSOR, '');
+}
+
+/**
  * The question, and whether it was recognised or merely the last thing on
  * screen.
  *
@@ -575,7 +616,7 @@ export function findQuestion(
 ): { text?: string; confident: boolean } {
   const clean = lines
     .slice(0, before)
-    .map((l) => stripLeftRule(l).trim())
+    .map((l) => stripCursor(stripLeftRule(l)).trim())
     .filter((l) => l.length > 0 && /[\p{L}\p{N}]/u.test(l));
 
   // A line that ends in a question mark is where the question ends. Where it
