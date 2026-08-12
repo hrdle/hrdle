@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.104] - 2026-08-12
+
 ### Changed
 - **One reader, not two.** The glasses app kept its own reading of the terminal
   buffer, used whenever the server sent no options - and that second reading is
