@@ -90,6 +90,7 @@ const UNANSWERABLE = new Set([
   'Type something',
   'Chat about this',
   'Other',
+  'Type your own answer',
   'Next',
   'Back',
   'Submit answers',

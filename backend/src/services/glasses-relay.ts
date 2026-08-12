@@ -381,9 +381,11 @@ const CHECKBOX_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(\\[[ xX*✓✔]\\]\\s*\\
  * Every one of these opens free-text entry, and the ring has no keyboard - on
  * the glasses that is the voice flow, reached another way. Leaving them in
  * puts rows in the picker whose Enter does nothing a wearer can see.
- * `Other` is kimi's; the other two are claude's.
+ * `Other` is kimi's, `Type your own answer` is opencode's (measured on a live
+ * 1.18.16 question, 2026-08-12 - it draws one on every question it asks); the
+ * other two are claude's.
  */
-const UNANSWERABLE = new Set(['Type something', 'Chat about this', 'Other']);
+const UNANSWERABLE = new Set(['Type something', 'Chat about this', 'Other', 'Type your own answer']);
 
 /**
  * Whether a captured row is one of those, once it is down to its label.
