@@ -1606,6 +1606,14 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
       header: z.string().max(500),
       body: z.string().max(4000),
       footer: z.string().max(500),
+      // The build that drew the frame. Listed here or it does not arrive: zod
+      // strips what a schema does not name, silently, so the app sent its
+      // version on every frame from the day the field was added and the server
+      // deleted every one of them before recording it. Measured on 2026-08-12,
+      // when a recording could not answer whether the app on a face had been
+      // updated - the question this field exists to answer.
+      app: z.string().max(40).optional(),
+      appCommit: z.string().max(60).optional(),
       notice: z.string().max(1000).optional(),
       card: z.boolean().optional(),
       headerless: z.boolean().optional(),

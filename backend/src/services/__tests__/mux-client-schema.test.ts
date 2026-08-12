@@ -4,11 +4,18 @@ import { MuxClientMessageSchema } from '../../../../shared/types';
 /**
  * Incoming /ws/mux control frames are validated by MuxClientMessageSchema and
  * SILENTLY DROPPED on failure (terminal-mux.ts). A field the schema doesn't
- * list is stripped (zod default). Two regressions this locks:
+ * list is stripped (zod default). Three regressions this locks, all the same
+ * shape - a sender doing its job and a schema quietly throwing the work away:
  *   - `pane-demands` must be a known variant, or per-client sizing reports
  *     never reach the server.
  *   - `zoom-pane.zoomed` must be in the schema, or the explicit zoom/unzoom
  *     intent is stripped and the server silently falls back to toggle.
+ *   - `glasses-screen.app` must be in it, or every recorded frame loses the
+ *     build that drew it - which is the one thing a recording is read days
+ *     later to establish.
+ *
+ * The pattern is worth naming, since it has now cost three: adding a field to
+ * the TypeScript interface is half the work, and the half that compiles.
  */
 describe('MuxClientMessageSchema — pane-demands', () => {
   test('accepts pane-demands and keeps the demands', () => {
@@ -119,5 +126,27 @@ describe('MuxClientMessageSchema — per-pane conversation subscription', () => 
     if (r.success && r.data.type === 'subscribe-conversation') {
       expect(r.data.agentSessionId).toBeUndefined();
     }
+  });
+});
+
+describe('the screen mirror carries the build that drew it', () => {
+  const frame = (over: Record<string, unknown> = {}) => ({
+    type: 'glasses-screen' as const,
+    screen: { header: 'h', body: 'b', footer: 'f', mode: 'conversation', at: 1, ...over },
+  });
+
+  test('the app version survives the parse', () => {
+    // It did not, for as long as the field existed. Zod strips what a schema
+    // does not name and says nothing about it, so the app sent its version on
+    // every frame and the server deleted every one of them before recording -
+    // which came out on 2026-08-12, when a recording could not answer whether
+    // the app on a face had been updated. That is the question the field is
+    // for.
+    const parsed = MuxClientMessageSchema.parse(frame({ app: '0.0.69', appCommit: 'c04ad69' }));
+    expect(parsed).toMatchObject({ screen: { app: '0.0.69', appCommit: 'c04ad69' } });
+  });
+
+  test('an older app that sends neither still parses', () => {
+    expect(MuxClientMessageSchema.parse(frame())).toMatchObject({ screen: { mode: 'conversation' } });
   });
 });
