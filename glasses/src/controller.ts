@@ -1031,6 +1031,7 @@ export class GlassesController {
               this.inlineFromItem(top),
               top.choiceDetails,
               top.choiceFreeText,
+              top.choiceKeys,
             )
             return
           }
@@ -1140,6 +1141,18 @@ export class GlassesController {
 
   // ── choice ──
 
+  /**
+   * The key the pane takes for this row.
+   *
+   * Its position, for every agent that numbers its rows `1.`, `2.`, `3.` - and
+   * whatever the server says otherwise. Grok writes the keys itself and its
+   * free-text row answers to `z`, so counting would have sent it a `4` it has
+   * no option for.
+   */
+  private choiceKeyFor(index: number): string {
+    return this.state.choiceKeys?.[index] ?? String(index + 1)
+  }
+
   private async onChoiceAction(action: RingAction): Promise<void> {
     const st = this.state
     const rows = choiceRows(st).length
@@ -1165,11 +1178,11 @@ export class GlassesController {
           // makes it true, and that is a tick of the clock away - long enough
           // for a toggle to look like a gesture that did nothing.
           this.toggleLocalChoice()
-          this.sendChoiceKey(String(st.choiceIndex + 1))
+          this.sendChoiceKey(this.choiceKeyFor(st.choiceIndex))
           return Promise.resolve()
         }
         if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
-        else this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
+        else this.sendChoiceKey(onChoiceSend(st) ? '\t' : this.choiceKeyFor(st.choiceIndex))
         // The row that opens a text field. Every agent draws one, and the ring
         // cannot type into it - which is why they used to be dropped before the
         // item was ever built. The glasses have a microphone: the key opens the
@@ -1538,6 +1551,7 @@ export class GlassesController {
         this.inlineFromItem(item),
         item.choiceDetails,
         item.choiceFreeText,
+        item.choiceKeys,
       )
       void this.loadConversation().then(() => this.render())
       return
@@ -1587,6 +1601,7 @@ export class GlassesController {
     inline?: InlineChoices,
     details?: string[],
     freeText?: number[],
+    keys?: string[],
   ): void {
     const keepCursor =
       this.state.mode === 'choice' &&
@@ -1601,6 +1616,7 @@ export class GlassesController {
     // options would be answering something nobody asked.
     this.state.choiceDetails = details
     this.state.choiceFreeText = freeText
+    this.state.choiceKeys = keys
     this.state.choiceMulti = looksMultiSelect(options)
     // Set here rather than left over from whatever ran last: two halves feed
     // this - a relay item that already carries the reading, and a terminal
@@ -1850,6 +1866,7 @@ export class GlassesController {
         this.inlineFromItem(item),
         item.choiceDetails,
         item.choiceFreeText,
+        item.choiceKeys,
       )
       return
     }

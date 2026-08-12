@@ -812,6 +812,8 @@ interface WaitingPayload {
   choiceDetails?: string[];
   /** Indices into `choices` whose row opens a text field. */
   choiceFreeText?: number[];
+  /** The key each choice answers to, when not its own position. */
+  choiceKeys?: string[];
   choiceInput?: GlassesRelayItem['choiceInput'];
   choiceSelected?: number;
 }
@@ -910,6 +912,7 @@ async function assembleWaitingPayload(
         choices: picker.options.map((o) => clamp(o.label)),
         choiceDetails: picker.options.map((o) => normalizeRelayText(o.detail)),
         choiceFreeText: indicesOf(picker.options),
+        choiceKeys: picker.choiceKeys,
         // A list with no keys of its own is answered by walking the pane's
         // cursor, and both halves travel or neither does - an item carrying
         // options and no `choiceInput` reads as a numbered one, and the glasses
@@ -1001,6 +1004,8 @@ function makeItem(
     choiceDetails?: string[];
     /** Indices into `choices`, before any filtering here. */
     choiceFreeText?: number[];
+    /** Index-aligned with `choices`, before any filtering here. */
+    choiceKeys?: string[];
   },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
@@ -1043,6 +1048,10 @@ function makeItem(
       .map((i) => rows.findIndex((r) => r.from === i))
       .filter((i) => i >= 0);
     if (freeText.length > 0) item.choiceFreeText = freeText;
+    // Re-indexed with the rows for the same reason: a key against the wrong
+    // option is an answer to a question nobody asked.
+    const keys = answering?.choiceKeys;
+    if (keys) item.choiceKeys = rows.map((r) => keys[r.from] ?? String(r.from + 1));
     // Sized against the surviving rows rather than the ones asked for: a
     // dropped option gives its line back to the description.
     //
@@ -1106,6 +1115,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
       choiceSelected: payload.choiceSelected,
       choiceDetails: payload.choiceDetails,
       choiceFreeText: payload.choiceFreeText,
+      choiceKeys: payload.choiceKeys,
     },
   );
 }

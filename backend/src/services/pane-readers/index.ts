@@ -22,6 +22,7 @@
 import type { AgentProvider } from '../../../../shared/types';
 import { readClaudePicker } from './claude';
 import type { PickerOption } from './claude';
+import { readGrokPicker } from './grok';
 import { readKimiPrompt } from './kimi';
 
 export type { PickerOption } from './claude';
@@ -42,6 +43,8 @@ export interface PaneQuestion {
    */
   choiceInput?: 'number' | 'arrow';
   choiceSelected?: number;
+  /** The key each option answers to, when it is not the option's position. */
+  choiceKeys?: string[];
 }
 
 /**
@@ -62,6 +65,7 @@ export interface PaneQuestion {
 const READERS: Partial<Record<AgentProvider, (lines: string[]) => PaneQuestion | undefined>> = {
   claude: readClaudePicker,
   kimi: readKimiPrompt,
+  grok: readGrokPicker,
 };
 
 export function readPaneQuestion(agent: AgentProvider | undefined, lines: string[]): PaneQuestion | undefined {

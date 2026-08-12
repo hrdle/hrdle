@@ -234,6 +234,12 @@ export interface GlassesRelayItem {
    */
   choiceFreeText?: number[]
   /**
+   * The key each choice answers to, index-aligned with `choices`. Absent means
+   * the row's own position, which is every agent that numbers its rows. Grok
+   * writes its own keys and one of them is a letter.
+   */
+  choiceKeys?: string[]
+  /**
    * What each choice says about itself, index-aligned with `choices` and empty
    * where an option had nothing under it.
    *
