@@ -274,6 +274,19 @@ describe('a multi-select on a real pane', () => {
     ]);
   });
 
+  test('the chip changes the moment a box is ticked, and is still a chip', () => {
+    // `☐` becomes `☒` on the first pick. Missing that glyph, the reader saw
+    // this picker until the wearer's first tap and not afterwards - and a
+    // re-read that finds nothing leaves the item already on the glasses, which
+    // is the one built before anything was ticked. So every box came back
+    // empty, every time, and the picker looked like it would not hold a
+    // selection at all.
+    const ticked = readClaudePicker(
+      MULTI_LIVE.map((l) => l.replace('☐ 機能選択', '☒ 機能選択').replace('2. [ ] 通知', '2. [✔] 通知')),
+    );
+    expect(ticked?.options[1].label).toBe('[✔] 通知');
+  });
+
   test('the button the list is finished with is not a description', () => {
     // `Submit` sits under the last row at a description's indent, so it read as
     // one: `Type something — Submit`.
