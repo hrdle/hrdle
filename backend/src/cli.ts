@@ -335,6 +335,14 @@ export function parseArgs(args: string[]): CliOptions {
           console.error(`Help: ${IDENTITY.binaryName} --help`);
           process.exit(1);
         }
+        // A bare word belonging to `stt-prompt` reaches here whenever a flag
+        // came between it and the command. Dropping it made the write a
+        // silent no-op that printed the current value instead - a write
+        // command that reports success by showing you the thing it did not
+        // change.
+        if (options.command === 'stt-prompt' && options.sttPromptText === undefined) {
+          options.sttPromptText = arg;
+        }
     }
     i++;
   }
