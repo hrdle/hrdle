@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.105] - 2026-08-12
+
 ### Fixed
 - **Kimi's approval prompt lost the option the pane was sitting on, and every
   digit after it moved up one.** Its cursor is U+25B6 and the glyph list had
