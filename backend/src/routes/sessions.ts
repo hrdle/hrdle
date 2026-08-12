@@ -21,8 +21,8 @@ import { OpenCodeService } from '../services/opencode';
 import { OpenCodeHistoryService } from '../services/opencode-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
-import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
-import { STT_PROMPT_MAX_CHARS } from '../services/stt-prompt';
+import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, addSessionSttTerms, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { STT_PROMPT_MAX_CHARS, seedWorkspaceVocabulary, sessionPromptTerms } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
@@ -557,6 +557,12 @@ sessions.post('/', async (c) => {
   try {
     const instanceId = await herdrService.createWorkspace(name);
 
+    // A new workspace takes a copy of the glossary and stops sharing: from
+    // here its vocabulary is one list it owns, and terms it will never say
+    // can be deleted. Best-effort - a workspace with no vocabulary of its own
+    // falls back to the shared glossary, so failing here costs nothing.
+    await seedWorkspaceVocabulary(instanceId ?? name).catch(() => {});
+
     // Start the selected agent if workingDir is specified
     if (parsed.success && parsed.data.workingDir) {
       await sendTextToSession(name, agentStartCommand(agent, parsed.data.workingDir));
@@ -992,6 +998,8 @@ sessions.put('/:id/title', async (c) => {
 // than what composition would take is a second, invisible limit.
 const UpdateSttPromptSchema = z.object({
   sttPrompt: z.string().max(STT_PROMPT_MAX_CHARS).nullable().optional(),
+  /** Add to what is there instead of replacing it. */
+  add: z.string().max(STT_PROMPT_MAX_CHARS).optional(),
   glossary: z.boolean().optional(),
 });
 
@@ -1015,6 +1023,20 @@ sessions.put('/:id/stt-prompt', async (c) => {
     }
     if (parsed.data.glossary !== undefined) {
       await setSessionSttGlossary(id, parsed.data.glossary);
+    }
+    if (parsed.data.add !== undefined) {
+      const result = await addSessionSttTerms(
+        id,
+        sessionPromptTerms(parsed.data.add),
+        STT_PROMPT_MAX_CHARS,
+      );
+      if (!result.ok) {
+        return c.json(
+          { error: 'too_long', wouldBe: result.wouldBe, max: STT_PROMPT_MAX_CHARS, sttPrompt: result.stored },
+          400,
+        );
+      }
+      return c.json({ success: true, sttPrompt: result.stored, added: result.added, duplicate: result.duplicate });
     }
     return c.json({ success: true, sttPrompt: parsed.data.sttPrompt });
   } catch (_error) {

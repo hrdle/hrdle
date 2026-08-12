@@ -402,7 +402,8 @@ hrdle peek local:dev:%1             # Snapshot a pane viewport (--lines <n>, def
 
 # Speech vocabulary for the session this runs in (session auto-resolved: cwd, then
 # /proc ancestry - same as `hrdle glasses`; --session <id> to name one)
-hrdle stt-prompt "音声認識、語彙バイアス"   # Set the words this session is about
+hrdle stt-prompt "音声認識、語彙バイアス"   # Add words this session is about
+hrdle stt-prompt --replace "音声認識"       # Replace the whole list
 hrdle stt-prompt                           # Print what is set, and what is
                                            # actually sent (model, language,
                                            # prompt, how it was composed)
@@ -503,9 +504,12 @@ out.
 Whisper's 224-token ceiling (190 characters) - and the session may take **no
 more than half of it**, so the glossary is there whatever else is set.
 
-**A workspace can decline the glossary** (`hrdle stt-prompt --no-glossary`,
-stored per workspace beside its theme), and then its own words take the whole
-190. The glossary is the words *this product* is made of, so a workspace about
+**A new workspace takes a copy of the glossary and stops sharing it.** From
+creation its vocabulary is one list it owns, so terms it will never say can be
+deleted - which a shared layer cannot offer. Workspaces that already existed
+keep taking the shared glossary at composition time; **one of them can decline
+it wholesale** (`hrdle stt-prompt --no-glossary`, stored beside its theme), and
+then its own words take the whole 190. The glossary is the words *this product* is made of, so a workspace about
 cooking or bookkeeping cannot spend the half held for it: measured on the
 health-and-cooking workspace, 18 of its own terms filled 90 of the 95 it was
 allowed while 96 characters went to nineteen development terms that are never
@@ -513,10 +517,17 @@ spoken there. The half-budget reservation exists to stop one group filling the
 line; a workspace sharing with nothing has no second group to protect, so the
 reservation lifts with the glossary.
 
-The shared glossary itself stays shared. It is curated from measured
-transcripts - terms enter and leave on evidence from the screen recording - and
-that loop only exists while there is one list. Copying it into every workspace
-would buy the same words at the price of never improving them again.
+A term added to the glossary on new evidence therefore reaches **new**
+workspaces only. That is the trade the copy is for: the curation loop is worth
+less than a workspace being able to prune, and a workspace that wants the
+current list can take it with `--replace`.
+
+**Writes add rather than replace** (`--replace` to swap the list). A vocabulary
+is a list that grows, and a caller that meant to add one word and replaced the
+list instead loses the rest with nothing in a transcription to show it. Nothing
+is truncated to fit either: an add that would overflow 190 characters writes
+nothing and says what it would have been, because a list cut down invisibly is
+the failure this area keeps producing.
 `HRDLE_STT_PROMPT=off` disables the bias entirely, and any other value replaces
 the whole line (for A/B testing; the variable name is composed by `envVar()`
 from `binaryName` in `identity.json`). A switch on the settings screen

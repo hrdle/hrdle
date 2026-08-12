@@ -174,6 +174,62 @@ export async function setSessionSttPrompt(
   });
 }
 
+/**
+ * Add terms to what this workspace already has.
+ *
+ * Adding rather than replacing is the default because a vocabulary is a list
+ * that grows: a caller that meant to add one word and replaced the list
+ * instead loses the rest silently, and there is nothing in a transcription to
+ * show it happened. Read-modify-write inside the lock, so two agents adding at
+ * once cannot drop each other's word.
+ *
+ * Nothing is truncated to fit. A list cut down invisibly is the failure this
+ * whole area keeps producing, so an overflow is reported and the caller
+ * decides what to drop.
+ */
+export async function addSessionSttTerms(
+  sessionId: string,
+  terms: string[],
+  maxChars: number,
+): Promise<
+  | { ok: true; added: string[]; duplicate: string[]; stored: string }
+  | { ok: false; reason: 'too-long'; wouldBe: number; stored: string }
+> {
+  return withMetadataLock(async () => {
+    const data = await load();
+    const existing = (data.sessions[sessionId]?.sttPrompt ?? '')
+      .split(/[、,\n]/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const seen = new Set(existing.map((t) => t.toLowerCase()));
+
+    const added: string[] = [];
+    const duplicate: string[] = [];
+    for (const raw of terms) {
+      const term = raw.trim();
+      if (!term) continue;
+      if (seen.has(term.toLowerCase())) {
+        duplicate.push(term);
+        continue;
+      }
+      seen.add(term.toLowerCase());
+      added.push(term);
+    }
+
+    const next = [...existing, ...added].join('、');
+    if (next.length > maxChars) {
+      return { ok: false, reason: 'too-long', wouldBe: next.length, stored: existing.join('、') };
+    }
+
+    if (added.length > 0) {
+      if (!data.sessions[sessionId]) data.sessions[sessionId] = {};
+      data.sessions[sessionId].sttPrompt = next;
+      await save(data);
+    }
+    return { ok: true, added, duplicate, stored: next };
+  });
+}
+
 /** Whether this workspace takes the shared glossary. */
 export async function setSessionSttGlossary(
   sessionId: string,

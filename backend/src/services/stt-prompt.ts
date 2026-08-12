@@ -1,4 +1,8 @@
-import { getAllSessionMetadata } from './session-metadata';
+import {
+  getAllSessionMetadata,
+  setSessionSttGlossary,
+  setSessionSttPrompt,
+} from './session-metadata';
 
 /**
  * Vocabulary bias for the glasses' speech-to-text.
@@ -236,6 +240,24 @@ export function sessionPromptTerms(prompt: string | undefined): string[] {
     .split(/[、,\n]/)
     .map((term) => term.trim())
     .filter(Boolean);
+}
+
+/**
+ * Give a new workspace its own copy of the glossary, and stop it sharing.
+ *
+ * Taken once, at creation, so that from then on a workspace's vocabulary is
+ * one list it owns: terms it will never say can be deleted, which is not
+ * something a shared layer can offer. The cost is that a term added to the
+ * glossary later reaches new workspaces only - which is the trade the copy
+ * is for.
+ *
+ * Workspaces that already existed are left alone. They keep taking the shared
+ * glossary at composition time, and `--no-glossary` is how one of them opts
+ * out wholesale.
+ */
+export async function seedWorkspaceVocabulary(sessionId: string): Promise<void> {
+  await setSessionSttPrompt(sessionId, GLOSSARY.join('、'));
+  await setSessionSttGlossary(sessionId, false);
 }
 
 /** This session's words and whether it takes the glossary. */
