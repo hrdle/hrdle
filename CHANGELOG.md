@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.98] - 2026-08-12
+
+### Changed
+- **A new workspace takes a copy of the glossary and stops sharing it.** From
+  creation its vocabulary is one list it owns, so terms it will never say can
+  be deleted - which a shared layer cannot offer. Workspaces that already exist
+  keep taking the shared glossary at composition time, and `--no-glossary` is
+  how one of them opts out wholesale. A term added to the glossary on new
+  evidence therefore reaches new workspaces only, which is the trade the copy
+  is for
+- **`hrdle stt-prompt` adds to the list instead of replacing it**
+  (`--replace` swaps it). A vocabulary is a list that grows, and with a seeded
+  copy the old behaviour turned one forgetful write into a workspace silently
+  losing every glossary term it had - nothing in a transcription shows it, the
+  words just stop being recognised. Adding happens inside the metadata lock, so
+  two agents adding at once cannot drop each other's word
+- An add that would pass 190 characters writes nothing and reports what it
+  would have been, rather than truncating to fit
+
 ## [0.3.97] - 2026-08-12
 
 ### Fixed
