@@ -1529,12 +1529,21 @@ function choiceBody(state: AppState): string {
  * the order they are read. The list is then longer than the panel, which is
  * what the window below is for - moving the ring scrolls it.
  */
+/** What sets a description in from the label above it: the width of the cursor
+ *  column, so it begins where the label's own text does. */
+const DETAIL_INDENT = '    '
+
 function choiceBlocks(state: AppState): string[][] {
   return choiceRows(state).map((opt, i) => {
     const label = choiceRowLine(state, opt, i)
     const text = state.choiceDetails?.[i]
     if (!text) return [label]
-    return [label, ...splitDisplayLines(stripUnrenderable(text)).map((l) => `    ${l}`)]
+    // Wrapped to what is left after the indent, not to the panel and then
+    // indented: the second is what the renderer sees as an overlong line, and
+    // it wraps it again - so a description arrives as full lines alternating
+    // with two-word ones, which reads as a fault rather than as prose.
+    const width = BODY_WIDTH - textWidth(DETAIL_INDENT)
+    return [label, ...splitLines(stripUnrenderable(text), width).map((l) => `${DETAIL_INDENT}${l}`)]
   })
 }
 
