@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **A pane's question is read the way that pane's agent draws it.** There was
+  one reader for all of them: find lines beginning with a number, take the
+  longest run, call it a menu. Nothing about a numbered line says whether it is
+  an option or a listing, so it could not tell them apart - and on 2026-08-12 it
+  offered a wearer two lines of a `grep` (`71` / `const INFO_TTL_MS =
+  5 * 60_000;`) and, an hour later, four options Claude had written out in prose
+  with nothing being asked
+  - Claude's picker draws its own frame - a chip per question above, `Enter to
+    select` below - and that frame is what is read now. Prose cannot forge it
+    and a listing has neither half. Three separate patches fall out of it: the
+    preview panel drawn beside the options, the rows that move between tabs, and
+    the full-width question mark are all answered by reading the frame instead
+    of the rows
+  - **An agent with no reader gets no options** rather than the general rule. A
+    guess offered to someone wearing the glasses costs more than a question
+    shown without its options: the guess is answered, the omission is only read.
+    kimi keeps its record and opencode its colour read; both are readers of
+    their own
+  - The blast radius is per agent now. Claude's preview panel arriving broke the
+    reading of every agent's options at once; it would now break Claude's
+- Permission prompts are unchanged, and still identified by their own wording
+  rather than by their shape - they are the most frequent thing a wearer answers
+
 ## [0.3.102] - 2026-08-12
 
 ### Fixed

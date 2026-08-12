@@ -19,9 +19,10 @@ import { randomUUID } from 'node:crypto';
 import { extractInlineChoices } from '../../../shared/inline-choices';
 import type { AgentProvider, GlassesRelayItem } from '../../../shared/types';
 import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
+import { hasPaneReader, readPaneQuestion } from './pane-readers';
 import { HerdrService, type WorkspaceInfo } from './herdr';
-import { readPane, readPaneText, toHerdrPaneId } from './herdr-client';
 import { detectPaneState } from './pane-state';
+import { readPane, readPaneText, toHerdrPaneId } from './herdr-client';
 
 // =============================================================================
 // Tunables / defenses (unauthenticated local endpoint — see routes)
@@ -380,34 +381,6 @@ function isUnanswerable(option: string): boolean {
 }
 
 /**
- * The rows a tabbed picker draws that belong to the picker rather than to any
- * one question.
- *
- * A call carrying several questions draws a tab each and moves between them
- * with rows of its own - `Next` while there are tabs left, then `Submit
- * answers` / `Cancel`. Read as options they take numbers the pane is not
- * offering, which is how a wearer once answered two questions of three and
- * skipped the rest.
- *
- * The record used to make this unnecessary by saying how many questions there
- * were. It cannot always be asked (see `drawingAPicker`), and these rows are
- * then the only sign left that a list has more in it than one question's
- * options.
- */
-const TAB_FURNITURE = /^(next|back|submit answers?|cancel)$/i;
-
-function looksTabbed(choices: string[]): boolean {
-  return choices.some((c) =>
-    TAB_FURNITURE.test(
-      c
-        .replace(/^\[[ xX*✓✔]\]\s*/, '')
-        .trim()
-        .replace(/[.。]$/, ''),
-    ),
-  );
-}
-
-/**
  * The rule a pane frames its content with, on the left of every line.
  *
  * opencode draws one - `┃` down the whole prompt - and it was enough on its own
@@ -667,7 +640,7 @@ function paragraphEndingAt(clean: string[], end: number): string | undefined {
     out.unshift(clean[i]);
     if (out.length >= MAX_QUESTION_LINES) break;
   }
-  return out.reduce((a, b) => (cjkSeam(a, b) ? a + b : `${a} ${b}`));
+  return out.reduce((a, b) => (cjkSeam(a) ? a + b : `${a} ${b}`));
 }
 
 /**
@@ -704,8 +677,8 @@ function wrapTolerance(line: string): number {
  * falls - often mid-word, which is how `ワークスペ` / `ース所有` arrives. Joining
  * both the same way is wrong for one of them whichever way is picked.
  */
-function cjkSeam(before: string, after: string): boolean {
-  return CJK_EDGE.test(before.slice(-1)) || CJK_EDGE.test(after.slice(0, 1));
+function cjkSeam(before: string): boolean {
+  return CJK_EDGE.test(before.slice(-1));
 }
 
 const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー、。「」『』（）]/u;
@@ -866,74 +839,56 @@ async function assembleWaitingPayload(
   }
   const clamp = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH);
   const permission = extractPermissionRequest(lines);
+
+  // An agent this side can read draws its question inside furniture of its own,
+  // and that reader is the whole answer for it - no general rule runs
+  // underneath. What the general rule found on a claude pane, twice on
+  // 2026-08-12, was the agent's own output: a `grep` listing and four options
+  // written out in a sentence, neither of which was a question.
+  if (hasPaneReader(pane?.agent)) {
+    const picker = readPaneQuestion(pane?.agent, lines);
+    if (picker) {
+      return {
+        text: clampDisplayWidth(normalizeRelayText(picker.question ?? fallback), MAX_TEXT_WIDTH) || fallback,
+        choices: picker.options.map((o) => clamp(o.label)),
+        choiceDetails: picker.options.map((o) => normalizeRelayText(o.detail)),
+      };
+    }
+    // Not the picker screen. A permission prompt is a different one - drawn
+    // without the picker's frame, carried by no record, and the most frequent
+    // thing a wearer answers - so the rows are read the general way there. It
+    // is identified by its own wording (`Do you want to proceed?`, `Permission
+    // required`), which is a good deal narrower than "some lines start with a
+    // number" and is what keeps that general read off every other screen.
+    if (permission || detectPaneState(lines) === 'permission_prompt') {
+      const asked = findQuestion(lines, optionBlockStart(lines));
+      const text = clampDisplayWidth(normalizeRelayText(permission ?? asked.text ?? fallback), MAX_TEXT_WIDTH);
+      const rows = extractChoiceRows(lines);
+      return rows.length > 0
+        ? {
+            text: text || fallback,
+            choices: rows.map((c) => clamp(c.label)),
+            choiceDetails: rows.map((c) => (c.detail ? normalizeRelayText(c.detail) : '')),
+          }
+        : { text: text || fallback };
+    }
+    // Blocked and asking nothing - which is where claude spends the gaps
+    // between turns, and is not worth a notification.
+    return undefined;
+  }
+
   const guess = findQuestion(lines, optionBlockStart(lines));
   const question = permission ?? guess.text;
   const text = clampDisplayWidth(normalizeRelayText(question ?? fallback), MAX_TEXT_WIDTH);
 
-  const paneState = detectPaneState(lines);
-
-  // A picker the record cannot see.
-  //
-  // "Claude said nothing is open" is only as good as when Claude writes it
-  // down, and from Claude Code 2.1.227 it writes the `AskUserQuestion` call
-  // only once the answer comes back. Measured on 2026-08-12: a pane sat on a
-  // three-option picker for ten minutes with nothing appended to its `.jsonl`
-  // since a minute *before* the question. So `known` with no questions no
-  // longer means "asking nothing" - it also covers "asking, and not saying so
-  // yet", and treating the two alike took the choices off every question the
-  // glasses were shown that day.
-  //
-  // The screen is the only witness left, and here it is a sound one: what the
-  // earlier fix distrusted was the screen's reading of a pane that was NOT
-  // drawing a picker. This is the pane saying it is.
-  const drawingAPicker = paneState === 'ask_user_question' && guess.confident;
-
-  // Claude with no open question is asking nothing - it says so itself. The
-  // only numbered thing such a pane legitimately shows is a permission
-  // prompt, which no record carries; anything else that parses as a menu is
-  // the agent's own output. On 2026-08-10 that was a code listing and the
-  // wearer's own queued message, served as a two-row picker reading `4` /
-  // `DANDORI_TOKEN: string`. Claude only: kimi's approval prompt is
-  // recordless too and its wording is not one `detectPaneState` recognises,
-  // so kimi keeps the scrape it has.
-  const askingNothing =
-    pane?.agent === 'claude' &&
-    record.known &&
-    !record.questions?.length &&
-    permission === undefined &&
-    paneState !== 'permission_prompt' &&
-    !drawingAPicker;
-
-  const numbered = askingNothing ? [] : extractChoiceRows(lines);
-  // The other half of what the record was doing: it knew how many questions
-  // the call carried, and several meant the rows on screen belong to a tabbed
-  // picker whose digits do not line up with them. Without it, the rows that
-  // move between tabs are the only sign - and they retire the whole list
-  // rather than just themselves, because a list that includes `Submit
-  // answers` has already miscounted the options above it.
-  if (numbered.length > 0 && !(drawingAPicker && looksTabbed(numbered.map((c) => c.label)))) {
+  const numbered = extractChoiceRows(lines);
+  if (numbered.length > 0) {
     return {
       text: text || fallback,
       choices: numbered.map((c) => clamp(c.label)),
       choiceDetails: numbered.map((c) => (c.detail ? normalizeRelayText(c.detail) : '')),
     };
   }
-  if (drawingAPicker) {
-    // The rows were untrustworthy, or there were none to read. The pane says
-    // it is asking, so the question goes; nothing answerable with a digit
-    // does, and the colour read below is not tried either - a picker whose
-    // own numbered rows could not be read is not a pane to go guessing at.
-    return { text: text || fallback };
-  }
-  if (askingNothing) {
-    // Same exit as a pane with nothing list-shaped on it, skipping the colour
-    // read below as well: that read is a guess about paint, and both times it
-    // guessed wrong it was on an agent that could have been asked and said
-    // "nothing" (see agent-question.ts). A question or permission line still
-    // makes a text-only item; otherwise nothing here is worth a notification.
-    return permission || guess.confident ? { text: text || fallback } : undefined;
-  }
-
   // Nothing a list-shaped reader recognises. The pane may still be offering a
   // row of options side by side, which only its colours can tell from the key
   // hints beside it - so the second read is the same pane again with its escape

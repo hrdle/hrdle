@@ -117,6 +117,29 @@ function mustItem(r: { item?: { id: string; expiresAt?: number } }): { id: strin
   return r.item;
 }
 
+
+/**
+ * A claude question as claude draws it: a rule, a chip per question, the
+ * question, the option rows, and the footer that ends every picker.
+ *
+ * The reader keys on that frame rather than on the rows, so a fixture without
+ * it is not a question - which is the point, and is why these fixtures grew a
+ * frame when the reader did. A pane of bare numbered lines is what the agent's
+ * own prose looks like.
+ */
+function claudePicker(question: string, rows: string[], chip = '移行範囲'): string {
+  return [
+    '────────────────────────────────────────────────────────',
+    ` ☐ ${chip} `,
+    '',
+    question,
+    '',
+    ...rows,
+    '',
+    'Enter to select · ↑/↓ to navigate · Esc to cancel',
+  ].join('\n');
+}
+
 const QUESTION_PANE = [
   'Some prior output',
   'Which approach should I take?',
@@ -124,6 +147,15 @@ const QUESTION_PANE = [
   '  2. Patch minimally',
   '  3. Leave as is',
 ].join('\n');
+
+/** The same question inside claude's own frame, which is what its reader
+ *  requires. QUESTION_PANE stays as it is for the agents read the general
+ *  way. */
+const CLAUDE_QUESTION_PANE = claudePicker('Which approach should I take?', [
+  '❯ 1. Rewrite it',
+  '  2. Patch minimally',
+  '  3. Leave as is',
+]);
 
 // =============================================================================
 // display-width clamp
@@ -1532,9 +1564,9 @@ const RECORDED_SINGLE = {
   ambiguous: true,
 };
 
-async function blockedClaudePane(paneText: string): Promise<FakeSocket> {
+async function blockedClaudePane(paneText: string, agent = 'claude'): Promise<FakeSocket> {
   const sock = new FakeSocket();
-  const pane = { paneId: '%0', agent: 'claude', agentSessionId: 'cc-uuid' };
+  const pane = { paneId: '%0', agent, agentSessionId: 'cc-uuid' };
   glassesRelayDeps.readPaneText = async () => paneText;
   glassesRelayDeps.listWorkspaces = async () => [ws('s1', [{ ...pane, agentStatus: 'working' }])];
   await subscribeGlassesRelay(sock);
@@ -1625,9 +1657,12 @@ describe('recorded questions beat the scrape', () => {
     expect(item.choices).toEqual(['Yes', 'No, and tell Claude what to do differently']);
   });
 
-  test('an agent with no record keeps the scrape (numbered menu)', async () => {
-    // readAgentQuestions default stub says known: false.
-    const sock = await blockedClaudePane(QUESTION_PANE);
+  test('an agent with no reader of its own keeps the general read', async () => {
+    // codex has neither a record this side can open nor a reader here, so the
+    // numbered rows on its pane are all there is to go on. Claude no longer
+    // reaches this path at all - it has a reader, and that reader is the whole
+    // answer for it.
+    const sock = await blockedClaudePane(QUESTION_PANE, 'codex');
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
     expect(item.choices).toEqual(['Rewrite it', 'Patch minimally', 'Leave as is']);
@@ -1673,7 +1708,8 @@ const RECORDLESS_PICKER = [
   'その上で、既存14ワークスペースの扱いだけ決めさせてく',
   'ださい。',
   '',
-  '☐ 移行範囲',
+  '────────────────────────────────────────────────────────',
+  ' ☐ 移行範囲 ',
   '',
   '種モデル（起動時に共通設定を取り込んで以降はワークスペ',
   'ース所有）に移行するとして、既存の14ワークスペースはど',
@@ -1683,7 +1719,10 @@ const RECORDLESS_PICKER = [
   '  2. 全ワークスペースに今書き込む',
   '  3. 種モデルはやめて現状維持',
   '  4. Type something.',
+  '────────────────────────────────────────────────────────',
   '  5. Chat about this',
+  '',
+  'Enter to select · ↑/↓ to navigate · Esc to cancel',
 ].join('\n');
 
 describe('a claude picker the record cannot see', () => {
@@ -1718,21 +1757,23 @@ describe('a claude picker the record cannot see', () => {
     // the options above it, which is how a wearer answered two of three.
     glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
     const sock = await blockedClaudePane(
-      [
-        '☐ 移行範囲   ☐ 適用時期',
-        '',
+      claudePicker(
         'どの範囲に適用しますか?',
-        '',
-        '❯ 1. 新規ワークスペースから',
-        '  2. 全ワークスペース',
-        '  3. Next',
-        '  4. Submit answers',
-        '  5. Cancel',
-      ].join('\n'),
+        [
+          '❯ 1. 新規ワークスペースから',
+          '  2. 全ワークスペース',
+          '  3. Next',
+          '  4. Submit answers',
+          '  5. Cancel',
+        ],
+        '移行範囲   ☐ 適用時期',
+      ),
     );
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
-    expect(item.choices).toBeUndefined();
+    // The rows that move between tabs go; the front tab's own options stay,
+    // holding their own numbers, which is what a digit answers.
+    expect(item.choices).toEqual(['新規ワークスペースから', '全ワークスペース']);
     expect(item.text).toBe('どの範囲に適用しますか?');
   });
 
@@ -1755,7 +1796,7 @@ describe('a claude picker the record cannot see', () => {
 
 describe('present', () => {
   test('a question asks for the screen unconditionally', async () => {
-    const sock = await blockedClaudePane(QUESTION_PANE);
+    const sock = await blockedClaudePane(CLAUDE_QUESTION_PANE);
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
     expect(item.present).toBe('takeover');
   });
@@ -1789,14 +1830,13 @@ describe('present', () => {
 describe('choiceDetails', () => {
   /** A pane drawing its options with a description under each, the way claude
    *  and kimi both do. */
-  const DESCRIBED_PANE = [
-    'どちらの方式にしますか?',
-    '',
+  const DESCRIBED_ROWS = [
     '❯ 1. 種モデルに移行',
     '     起動時に共通設定を取り込み、以降はワークスペースが持つ',
     '  2. 現状維持',
     '     共有グロサリーとワークスペース単位の辞退で足りるとする',
-  ].join('\n');
+  ];
+  const DESCRIBED_PANE = claudePicker('どちらの方式にしますか?', DESCRIBED_ROWS);
 
   test('the row is the label and the description travels beside it', async () => {
     // Glued together they were cut a few characters in: the picker gives an
@@ -1816,7 +1856,7 @@ describe('choiceDetails', () => {
     // Addressed by index, so a described option after an undescribed one must
     // not shift up into it.
     const sock = await blockedClaudePane(
-      ['どれにしますか?', '', '❯ 1. そのまま', '  2. 書き換える', '     14ワークスペースに今コピーする'].join('\n'),
+      claudePicker('どれにしますか?', ['❯ 1. そのまま', '  2. 書き換える', '     14ワークスペースに今コピーする']),
     );
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
@@ -1825,7 +1865,7 @@ describe('choiceDetails', () => {
   });
 
   test('a pane that describes nothing sends no details at all', async () => {
-    const sock = await blockedClaudePane(QUESTION_PANE);
+    const sock = await blockedClaudePane(CLAUDE_QUESTION_PANE);
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
     expect(item.choices).toEqual(['Rewrite it', 'Patch minimally', 'Leave as is']);
@@ -1835,7 +1875,7 @@ describe('choiceDetails', () => {
   test('one line can still carry both, for a caller that has only one', () => {
     // `extractNumberedChoices` is the joined reading, kept for callers with a
     // line to spend rather than a screen.
-    expect(extractNumberedChoices(DESCRIBED_PANE.split('\n'))).toEqual([
+    expect(extractNumberedChoices(DESCRIBED_ROWS)).toEqual([
       '種モデルに移行 - 起動時に共通設定を取り込み、以降はワークスペースが持つ',
       '現状維持 - 共有グロサリーとワークスペース単位の辞退で足りるとする',
     ]);
@@ -1851,12 +1891,12 @@ describe('how much of a description is sent', () => {
 
   /** A pane offering `n` options, each with the same long description. */
   function pane(n: number, box = ''): string {
-    const rows = ['どれにしますか?', ''];
+    const rows: string[] = [];
     for (let i = 1; i <= n; i++) {
       rows.push(`${i === 1 ? '❯' : ' '} ${i}. ${box}案${String.fromCharCode(64 + i)}`);
       rows.push(`     ${LONG}`);
     }
-    return rows.join('\n');
+    return claudePicker('どれにしますか?', rows);
   }
 
   async function detailsOf(paneText: string): Promise<string[] | undefined> {

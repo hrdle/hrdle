@@ -1,0 +1,201 @@
+// Reading claude's picker off the pane, and refusing everything else.
+//
+// The reader this replaces looked for a shape - a run of lines beginning `1.`,
+// `2.`, `3.` - and every agent's *output* has that shape too. Both fixtures
+// below were captured from live panes on 2026-08-12, one of each kind, within
+// an hour of each other. The second one reached a wearer's face.
+
+import { describe, expect, test } from 'bun:test';
+import { readClaudePicker } from '../claude';
+
+/**
+ * A question on screen. Captured from `/home/m0a/linux`'s pane: a preview panel
+ * shares rows with the options, an unanswerable row sits below the closing
+ * rule, and the question ends in a full-width mark.
+ */
+const PICKER = [
+  '  Ran 1 shell command ',
+  '● 保存済みの認証情報はありません。パスワードの渡し方を選んでください。',
+  '────────────────────────────────────────────────────────────────',
+  ' ☐ 認証情報 ',
+  '',
+  'ルータ管理画面（admin）のパスワードをどう渡しますか？',
+  '',
+  ' 1. vaultに自分で保存（推奨）    ┌─────────────────────────┐',
+  ' 2. チャットで直接教える         │ No preview available    │',
+  '❯ 3. ルータ操作は中止             └─────────────────────────┘',
+  '',
+  '                                  Notes: press n to add notes',
+  '',
+  '────────────────────────────────────────────────────────────────',
+  '  Chat about this',
+  '',
+  'Enter to select · ↑/↓ to navigate · n to add notes · Esc to cancel',
+];
+
+/**
+ * No question on screen. The same pane twenty minutes later: the agent has
+ * written its options out in prose, which is a thing agents do constantly, and
+ * the shape-matching reader served four of them as a menu.
+ */
+const PROSE = [
+  '  - スマホ: ロック中のまま。300秒のタイムアウトで待機終了',
+  '  - vault は空のまま、認証情報はどこにも保存されていません',
+  '',
+  '  どうしますか',
+  '',
+  '  1. スマホでもう一度 — 再度待機します。今度は手元にあるタイミングで',
+  '  2. vault方式 — ご自身の別ターミナルで実行（チャットに残りません）',
+  '  3. チャットで直接 — 手軽。後でルータのパスワードを変える前提なら',
+  '  4. 保留にして補足報告を先に書く —',
+  '',
+  '✻ Worked for 45s',
+  '',
+  '────────────────────────────────────────────────────────────────',
+  '❯',
+  '────────────────────────────────────────────────────────────────',
+  '  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents',
+];
+
+/** A `grep` scrolling past. Offered to a wearer on 2026-08-12 as a two-row
+ *  picker reading `71` / `const INFO_TTL_MS = 5 * 60_000;`. */
+const LISTING = [
+  '  35:const MAX_TEXT_WIDTH = 120;',
+  '  36:const MAX_CHOICES = 9;',
+  '',
+  '  71. const INFO_TTL_MS = 5 * 60_000;',
+  '  72. const HOOK_INFO_TTL_MS = 90_000;',
+  '',
+];
+
+describe('a question on screen', () => {
+  const picker = readClaudePicker(PICKER);
+
+  test('the options are the rows, without the panel beside them', () => {
+    expect(picker?.options.map((o) => o.label)).toEqual([
+      'vaultに自分で保存（推奨）',
+      'チャットで直接教える',
+      'ルータ操作は中止',
+    ]);
+  });
+
+  test('the question needs no question mark to be found', () => {
+    // Everything between the chip and the first option is the question - the
+    // frame said so. Searching for a mark instead is what made a full-width
+    // `？` read as no question at all.
+    expect(picker?.question).toBe('ルータ管理画面（admin）のパスワードをどう渡しますか？');
+  });
+
+  test('a row that opens a text field is not offered', () => {
+    // `Chat about this` sits below the closing rule and still inside the
+    // frame. The ring has no keyboard.
+    expect(picker?.options.map((o) => o.label)).not.toContain('Chat about this');
+  });
+
+  test('`Notes: press n to add notes` is not a description', () => {
+    expect(picker?.options.every((o) => !o.detail.includes('Notes'))).toBe(true);
+  });
+});
+
+describe('no question on screen', () => {
+  test("the agent's own prose is not a menu", () => {
+    expect(readClaudePicker(PROSE)).toBeUndefined();
+  });
+
+  test('a listing is not a menu', () => {
+    expect(readClaudePicker(LISTING)).toBeUndefined();
+  });
+
+  test('the footer alone is not enough', () => {
+    // Neither half of the frame stands on its own: this is the footer with no
+    // chip above it, which is what a pane looks like a moment after a question
+    // has been answered and scrolled.
+    expect(readClaudePicker([...PROSE, 'Enter to select · ↑/↓ to navigate'])).toBeUndefined();
+  });
+
+  test('a chip alone is not enough', () => {
+    expect(readClaudePicker([' ☐ 移行範囲 ', ' 1. A', ' 2. B'])).toBeUndefined();
+  });
+});
+
+describe('descriptions', () => {
+  const described = readClaudePicker([
+    '────────────────────────────',
+    ' ☐ 移行範囲 ',
+    '',
+    '種モデル（起動時に共通設定を取り込んで以降はワークスペ',
+    'ース所有）に移行するとして、既存の14ワークスペースはど',
+    'うしますか?',
+    '',
+    '❯ 1. 新規ワークスペースから適用（推奨）',
+    '     既存は今の共有グロサリー + ',
+    '     辞退可能のまま',
+    '  2. 全ワークスペースに今書き込む',
+    '     14ワークスペースに116文字ずつコピーする',
+    '  3. Type something.',
+    '',
+    'Enter to select · ↑/↓ to navigate · Esc to cancel',
+  ]);
+
+  test('the lines under a row belong to it, rejoined', () => {
+    expect(described?.options[0].detail).toBe('既存は今の共有グロサリー + 辞退可能のまま');
+  });
+
+  test('a wrap inside CJK is rejoined without a space', () => {
+    expect(described?.question).toBe(
+      '種モデル（起動時に共通設定を取り込んで以降はワークスペース所有）に移行するとして、既存の14ワークスペースはどうしますか?',
+    );
+  });
+
+  test('each row keeps its own', () => {
+    expect(described?.options.map((o) => o.detail)).toEqual([
+      '既存は今の共有グロサリー + 辞退可能のまま',
+      '14ワークスペースに116文字ずつコピーする',
+    ]);
+  });
+});
+
+describe('a call carrying several questions', () => {
+  // The pane draws a chip each and moves between them with rows of its own.
+  // Those rows were what a wearer answered two questions of three with; the
+  // front tab's options keep their own numbers once they are gone.
+  const tabbed = readClaudePicker([
+    '────────────────────────────',
+    ' ☑ 移行範囲   ☐ 適用時期 ',
+    '',
+    'いつ適用しますか?',
+    '',
+    '❯ 1. すぐ',
+    '  2. 次のリリースで',
+    '  3. Next',
+    '  4. Submit answers',
+    '',
+    'Enter to select · ↑/↓ to navigate · Esc to cancel',
+  ]);
+
+  test('the tab rows are not options', () => {
+    expect(tabbed?.options.map((o) => o.label)).toEqual(['すぐ', '次のリリースで']);
+  });
+});
+
+describe('a multi-select', () => {
+  const multi = readClaudePicker([
+    '────────────────────────────',
+    ' ☐ 対象 ',
+    '',
+    'どれを含めますか?',
+    '',
+    '❯ 1. [ ] りんご',
+    '  2. [ ] みかん',
+    '  3. [x] ぶどう',
+    '',
+    'Enter to select · ↑/↓ to navigate · Esc to cancel',
+  ]);
+
+  test('the box travels on the row', () => {
+    // It is what `looksMultiSelect` reads on the other side; without it the
+    // picker opens a multi-select as a single pick and closes after one digit.
+    expect(multi?.options.map((o) => o.label)).toEqual(['[ ] りんご', '[ ] みかん', '[x] ぶどう']);
+    expect(multi?.multiSelect).toBe(true);
+  });
+});
