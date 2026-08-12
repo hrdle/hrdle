@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.97] - 2026-08-12
+
 ### Fixed
 - **A question sat behind a two-line banner for ten minutes while its wearer
   read the very session asking it.** Three separate faults, all in the path a
