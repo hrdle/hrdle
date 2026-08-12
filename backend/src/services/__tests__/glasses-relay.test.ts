@@ -5,6 +5,7 @@ import {
   clampDisplayWidth,
   dismissRelayItem,
   displayWidth,
+  extractChoiceRows,
   extractNumberedChoices,
   extractPermissionRequest,
   extractQuestionLine,
@@ -23,6 +24,7 @@ import {
   unsubscribeGlassesRelay,
   type RelaySocket,
 } from '../glasses-relay';
+import { detectPaneState } from '../pane-state';
 
 // =============================================================================
 // Helpers
@@ -1897,5 +1899,44 @@ describe('how much of a description is sent', () => {
     const plain = await detailsOf(pane(4));
     const multi = await detailsOf(pane(4, '[ ] '));
     expect(displayWidth(multi?.[0] ?? '')).toBeLessThan(displayWidth(plain?.[0] ?? ''));
+  });
+});
+
+// =============================================================================
+// Furniture drawn beside the options
+// =============================================================================
+
+describe('a preview panel level with the list', () => {
+  /** Verbatim from a live Claude Code pane, 2026-08-12: the option list on the
+   *  left, a preview box on the right, sharing rows. */
+  const SIDE_BY_SIDE = [
+    'ルータ管理画面（admin）のパスワードをどう渡しますか？',
+    '',
+    ' 1. vaultに自分で保存（推奨）    ┌─────────────────────────┐',
+    ' 2. チャットで直接教える         │ No preview available    │',
+    '❯ 3. ルータ操作は中止             └─────────────────────────┘',
+  ];
+
+  test('the border is not part of the option', () => {
+    // Read whole, each label carried a wall of box-drawing to the glasses -
+    // where the panel then cut it, so the wearer saw the border and not the
+    // end of the option.
+    expect(extractChoiceRows(SIDE_BY_SIDE).map((c) => c.label)).toEqual([
+      'vaultに自分で保存（推奨）',
+      'チャットで直接教える',
+      'ルータ操作は中止',
+    ]);
+  });
+
+  test('a rule drawn tight against a word stays with it', () => {
+    // The gap is what marks a column boundary; the characters alone do not.
+    expect(extractChoiceRows(['どれ?', ' 1. A─B', ' 2. C']).map((c) => c.label)).toEqual(['A─B', 'C']);
+  });
+
+  test('the full-width question mark makes it a picker', () => {
+    // With only the ASCII mark listed this read as `unknown`, so the relay
+    // declined to send the options and the glasses scraped the pane
+    // themselves - and what they scraped was the box above.
+    expect(detectPaneState(SIDE_BY_SIDE)).toBe('ask_user_question');
   });
 });

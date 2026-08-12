@@ -287,9 +287,22 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
     const hookToolName = hookResult?.toolName;
     const herdrState = herdrStatusToIndicator(s.agentStatus);
     const indicatorState: IndicatorState = herdrState ?? hookState ?? 'completed';
-    // Use hook tool name for waiting state when jsonl doesn't have it yet
-    const effectiveWaitingToolName = (indicatorState === 'waiting_input' && hookToolName && !ccSession?.waitingToolName)
-      ? hookToolName : ccSession?.waitingToolName;
+    // Only while the pane is actually waiting, and herdr is what says so.
+    //
+    // The transcript-derived name is whatever tool the record stopped on, and a
+    // record mid-turn always stops on one - so `PendingTool` was reported for a
+    // session herdr called `working`, continuously. Everything downstream reads
+    // this field as "is it waiting" rather than as "what for": the glasses'
+    // `isSessionWaiting` did, so a tap on a busy session scraped its pane for
+    // options instead of opening the microphone, and offered a wearer two lines
+    // of a grep listing as a menu (`71` / `const INFO_TTL_MS = 5 * 60_000;`,
+    // measured on the device 2026-08-12).
+    //
+    // The hook still fills in the name when the transcript has not caught up,
+    // which is the case this was written for and the only one it covers now.
+    const effectiveWaitingToolName = indicatorState === 'waiting_input'
+      ? (ccSession?.waitingToolName ?? hookToolName)
+      : undefined;
 
     let durationMinutes: number | undefined;
     if (ccSession?.modified) {

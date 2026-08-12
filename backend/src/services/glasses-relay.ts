@@ -471,6 +471,30 @@ export interface ScrapedChoice {
   detail: string;
 }
 
+/**
+ * A box the agent drew level with the options, to their right.
+ *
+ * Claude Code's AskUserQuestion puts a preview panel beside the list, so the
+ * option and the panel's border share a row, and everything after the option's
+ * own text belongs to neither the option nor the question:
+ *
+ * ```
+ *  1. vaultに自分で保存（推奨）    ┌──────────────────────────┐
+ *  2. チャットで直接教える         │ No preview available     │
+ * ❯3. ルータ操作は中止             └──────────────────────────┘
+ * ```
+ *
+ * Read whole, each label carried a wall of box-drawing to the glasses.
+ * Recognised by the gap in front of it rather than by the characters alone: a
+ * rule drawn tight against a word is part of the word, and two spaces before a
+ * border is a column boundary.
+ */
+const SIDE_PANEL = /\s{2,}[\u2500-\u257F+|].*$/u;
+
+function dropSidePanel(text: string): string {
+  return text.replace(SIDE_PANEL, '');
+}
+
 /** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options, each
  *  with the description line under it when the agent draws one. */
 export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
@@ -480,7 +504,7 @@ export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
     const m = line.match(NUMBERED_OPTION) ?? line.match(CHECKBOX_OPTION);
     if (m) {
       if (rows.length >= MAX_CHOICES) break;
-      const label = m[1].trim();
+      const label = dropSidePanel(m[1]).trim();
       rows.push({ label, detail: '', column: labelColumn(line, label) });
       continue;
     }
@@ -496,7 +520,7 @@ export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
     // with the label above it, so "further in than the label" would miss every
     // one of them; the footer hints sit far to the left of it either way.
     if (indentOf(line) < last.column) continue;
-    last.detail = joinWrapped(last.detail, line.trim());
+    last.detail = joinWrapped(last.detail, dropSidePanel(line).trim());
   }
 
   // Filtered on the label alone: `Other` becomes unanswerable whatever

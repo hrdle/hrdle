@@ -43,7 +43,14 @@ export function detectPaneState(lines: string[]): DetectedPaneState {
 
   // AskUserQuestion — numbered choice list, distinguishable from permission
   // by lacking the Yes/No structure and usually having ≥3 options.
-  if (/^\s*❯?\s*[1-9][.)]\s+\S/m.test(joined) && /\?\s*$/m.test(joined)) {
+  //
+  // The full-width mark counts. A question written in Japanese ends in `？` as
+  // often as not, and with only the ASCII one listed this returned `unknown`
+  // for it - so the relay declined to send the pane's options, the glasses fell
+  // back to scraping the pane themselves, and what they scraped was the
+  // preview box drawn beside the list (measured on the device, 2026-08-12,
+  // against `ルータ管理画面（admin）のパスワードをどう渡しますか？`).
+  if (/^\s*❯?\s*[1-9][.)]\s+\S/m.test(joined) && /[?？]\s*$/m.test(joined)) {
     return 'ask_user_question';
   }
 
