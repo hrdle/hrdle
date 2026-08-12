@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The screen recording never carried the build that drew a frame.** The app
+  has sent its version on every frame since the field was added; the server's
+  own schema did not list it, and zod strips what a schema does not name -
+  silently - so every one of them was deleted before the frame was recorded.
+  Found on 2026-08-12, when a recording could not answer whether the app on a
+  face had been updated, which is the question the field exists for
+  - Third regression of this exact shape (`pane-demands`, `zoom-pane.zoomed`
+    were the others): a sender doing its job and a schema quietly throwing the
+    work away. Adding a field to the TypeScript interface is half the work, and
+    the half that compiles
+
 ## [0.3.107] - 2026-08-12
 
 ### Changed
