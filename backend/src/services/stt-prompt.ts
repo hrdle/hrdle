@@ -90,20 +90,30 @@ const GLOSSARY = [
  */
 const MAX_PROMPT_CHARS = 190;
 
+/** The cap on a stored session prompt: the whole line, since it may take it. */
+export const STT_PROMPT_MAX_CHARS = MAX_PROMPT_CHARS;
+
 /**
- * How much of it the session's own words may take.
+ * How much of it the session's own words may take **while the glossary is on**.
  *
- * Half is kept for the glossary no matter what else is set, because the failure
- * this file is named after was not "the wrong words were chosen" but "one group
- * filled the budget": thirteen workspace labels took 189 of 190 characters and
- * the glossary arrived one term deep. Labels are gone, but a session that is
- * told it may write 100 characters would do exactly the same thing, and the
- * words it would push out are the ones misheard every day in every session.
+ * Half is kept for the glossary, because the failure this file is named after
+ * was not "the wrong words were chosen" but "one group filled the budget":
+ * thirteen workspace labels took 189 of 190 characters and the glossary
+ * arrived one term deep. A session told it may write the whole line would do
+ * the same, and the words it would push out are the ones misheard every day.
+ *
+ * A workspace that has declined the glossary is not sharing with anything, so
+ * the reservation has nothing to protect and the whole line is its own.
  */
 export const SESSION_MAX_CHARS = Math.floor(MAX_PROMPT_CHARS / 2);
 
 /** Which group a term came from. */
 export type SttPromptGroupName = 'session' | 'glossary';
+
+/** The words this product's speech is made of, for callers that report them. */
+export function sharedGlossary(): readonly string[] {
+  return GLOSSARY;
+}
 
 /** What one group offered, and what became of it. */
 export interface SttPromptGroup {
@@ -126,6 +136,11 @@ export interface SttPromptComposition {
   groups: SttPromptGroup[];
   usedChars: number;
   maxChars: number;
+  /**
+   * Whether this workspace took the glossary. When it did not, the glossary
+   * group is present and empty, and the session had the whole line.
+   */
+  glossaryEnabled: boolean;
 }
 
 /**
@@ -162,8 +177,10 @@ export interface SttPromptComposition {
  */
 export function composeSttPrompt(
   sessionTerms: string[] = [],
-  glossary: string[] = GLOSSARY,
+  options: { glossaryEnabled?: boolean; glossary?: string[] } = {},
 ): SttPromptComposition {
+  const glossaryEnabled = options.glossaryEnabled ?? true;
+  const glossary = glossaryEnabled ? (options.glossary ?? [...GLOSSARY]) : [];
   const terms: string[] = [];
   const seen = new Set<string>();
   let length = 0;
@@ -193,11 +210,17 @@ export function composeSttPrompt(
   };
 
   const groups = [
-    take('session', sessionTerms, SESSION_MAX_CHARS),
+    take('session', sessionTerms, glossaryEnabled ? SESSION_MAX_CHARS : MAX_PROMPT_CHARS),
     take('glossary', glossary, MAX_PROMPT_CHARS),
   ];
 
-  return { prompt: terms.join('、'), groups, usedChars: length, maxChars: MAX_PROMPT_CHARS };
+  return {
+    prompt: terms.join('、'),
+    groups,
+    usedChars: length,
+    maxChars: MAX_PROMPT_CHARS,
+    glossaryEnabled,
+  };
 }
 
 /**
@@ -215,13 +238,19 @@ export function sessionPromptTerms(prompt: string | undefined): string[] {
     .filter(Boolean);
 }
 
-/** This session's words, or none when the session has no prompt of its own. */
-export async function sessionSttTerms(sessionId: string | undefined): Promise<string[]> {
-  if (!sessionId) return [];
+/** This session's words and whether it takes the glossary. */
+export async function sessionSttVocabulary(
+  sessionId: string | undefined,
+): Promise<{ terms: string[]; glossaryEnabled: boolean }> {
+  if (!sessionId) return { terms: [], glossaryEnabled: true };
   const metadata = await getAllSessionMetadata().catch(
     () => ({}) as Awaited<ReturnType<typeof getAllSessionMetadata>>,
   );
-  return sessionPromptTerms(metadata[sessionId]?.sttPrompt);
+  const meta = metadata[sessionId];
+  return {
+    terms: sessionPromptTerms(meta?.sttPrompt),
+    glossaryEnabled: meta?.sttGlossary !== 'off',
+  };
 }
 
 /**

@@ -407,6 +407,10 @@ hrdle stt-prompt                           # Print what is set, and what is
                                            # actually sent (model, language,
                                            # prompt, how it was composed)
 hrdle stt-prompt --clear                   # Back to the glossary alone
+hrdle stt-prompt --no-glossary             # This workspace speaks none of this
+                                           # product's words: drop the glossary
+                                           # and take the whole budget
+hrdle stt-prompt --glossary                # Take it again
 
 # Debugging (Bun inspector on the running service)
 hrdle debug status      # Show inspector state
@@ -498,6 +502,21 @@ out.
 **the speaking session's own words, then the glossary**, filled up to what fits
 Whisper's 224-token ceiling (190 characters) - and the session may take **no
 more than half of it**, so the glossary is there whatever else is set.
+
+**A workspace can decline the glossary** (`hrdle stt-prompt --no-glossary`,
+stored per workspace beside its theme), and then its own words take the whole
+190. The glossary is the words *this product* is made of, so a workspace about
+cooking or bookkeeping cannot spend the half held for it: measured on the
+health-and-cooking workspace, 18 of its own terms filled 90 of the 95 it was
+allowed while 96 characters went to nineteen development terms that are never
+spoken there. The half-budget reservation exists to stop one group filling the
+line; a workspace sharing with nothing has no second group to protect, so the
+reservation lifts with the glossary.
+
+The shared glossary itself stays shared. It is curated from measured
+transcripts - terms enter and leave on evidence from the screen recording - and
+that loop only exists while there is one list. Copying it into every workspace
+would buy the same words at the price of never improving them again.
 `HRDLE_STT_PROMPT=off` disables the bias entirely, and any other value replaces
 the whole line (for A/B testing; the variable name is composed by `envVar()`
 from `binaryName` in `identity.json`). A switch on the settings screen

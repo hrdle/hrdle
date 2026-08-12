@@ -50,6 +50,7 @@ interface CliOptions {
   session?: string;
   sttPromptText?: string;
   sttPromptClear?: boolean;
+  sttGlossary?: boolean;
 }
 
 function printHelp(): void {
@@ -72,7 +73,10 @@ ${t('cli.usage')}
   ${IDENTITY.binaryName} stt-prompt [words]  Words this session's speech is made of. They lead
                             the vocabulary sent with its transcriptions, ahead
                             of the shared glossary. No argument prints what is
-                            set; --clear removes it. [--session <id>]
+                            set; --clear removes it. A workspace that speaks
+                            none of this product's words takes --no-glossary
+                            and gets the whole budget for its own.
+                            [--session <id>] [--glossary|--no-glossary]
   ${IDENTITY.binaryName} send <target> [text]  Send input to a pane on a peer or local server
                               target: <peer>:<session>:<paneId>
                               (peer can be 'local', a peer id, or a nickname)
@@ -198,6 +202,12 @@ export function parseArgs(args: string[]): CliOptions {
       }
       case '--clear':
         options.sttPromptClear = true;
+        break;
+      case '--no-glossary':
+        options.sttGlossary = false;
+        break;
+      case '--glossary':
+        options.sttGlossary = true;
         break;
       case 'send': {
         options.command = 'send';
@@ -425,6 +435,7 @@ async function runSttPromptCommand(options: CliOptions): Promise<void> {
   // about.
   await runSttPrompt({
     text: options.sttPromptClear ? null : options.sttPromptText,
+    glossary: options.sttGlossary,
     session: options.session,
     port: options.port,
   });
