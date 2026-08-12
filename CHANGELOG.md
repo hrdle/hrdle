@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.99] - 2026-08-12
+
+### Fixed
+- **`hrdle stt-prompt` dropped its words when a flag came first.** The text was
+  only read immediately after the command, so `stt-prompt --replace "..."` and
+  `stt-prompt --session w2H "..."` printed the current value and exited 0
+  without writing - a write command reporting success by showing the thing it
+  had not changed. A bare word is now the command's text wherever it sits
+
 ## [0.3.98] - 2026-08-12
 
 ### Changed
