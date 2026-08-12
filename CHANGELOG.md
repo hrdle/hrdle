@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.107] - 2026-08-12
+
 ### Changed
 - **The row that opens a text field is answered by speaking.** Every agent draws
   one - claude's `Type something.`, kimi's `Other` and its `Reject with
