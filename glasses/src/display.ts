@@ -183,6 +183,16 @@ export interface AppState {
   choiceIndex: number
   choiceOptions: string[]
   /**
+   * What each option says about itself, index-aligned with `choiceOptions`.
+   *
+   * Drawn under the rows for whichever option the ring is resting on, rather
+   * than on the row: a row is one line and gets cut at the panel edge, so a
+   * description carried there was readable for about four characters. Absent
+   * for a locally scraped picker and for an older server, and then the rows are
+   * all there is - which is what the picker was until 0.0.67.
+   */
+  choiceDetails?: string[]
+  /**
    * The options are checkboxes rather than a single pick.
    *
    * Claude Code's multi-select answers to space-then-enter, and the ring had
@@ -1481,6 +1491,34 @@ export function onChoiceSend(state: AppState): boolean {
 }
 
 function choiceBody(state: AppState): string {
+  const rows = choiceRowLines(state)
+  return [...rows, ...choiceDetailLines(state, MAX_LINES - rows.length)].join('\n')
+}
+
+/**
+ * The description of the option the ring is resting on, in the lines the rows
+ * left over.
+ *
+ * There are usually plenty: three options take three of the panel's eight, and
+ * the picker had been drawing three cut rows into a screen more than half
+ * empty. The description used to arrive glued to its label and be cut with it,
+ * a few characters in - so a wearer could read what the options were called and
+ * nothing about what they meant, which is the part that decides between them.
+ *
+ * Under the rows rather than beside them: moving the ring is how the next one
+ * is read, and a block that changes in place makes that obvious in a way a
+ * column of truncations never did.
+ */
+function choiceDetailLines(state: AppState, spare: number): string[] {
+  // A rule and at least one line of text, or it is not worth the rule.
+  if (spare < 2) return []
+  const text = state.choiceDetails?.[state.choiceIndex]
+  if (!text) return []
+  const lines = splitDisplayLines(stripUnrenderable(text)).slice(0, spare - 1)
+  return lines.length > 0 ? [CARD_SEPARATOR, ...lines] : []
+}
+
+function choiceRowLines(state: AppState): string[] {
   return choiceRows(state).map((opt, i) => {
     const cursor = i === state.choiceIndex ? '>>>' : '   '
     // The rows come off a pane, so they carry whatever that agent chose to
@@ -1490,14 +1528,12 @@ function choiceBody(state: AppState): string {
     // panel as tofu, while the simulator draws them beautifully from a browser
     // font - the exact divergence the simulator exists to make visible.
     const row = `${cursor} ${stripUnrenderable(opt)}`
-    // One row, one line. An option now carries the description the agent drew
-    // under it (`案 A - 現行のトーンに一番近い`), and left to wrap, three of
-    // them overflow the picker's eight lines and push the last option off a
-    // screen the wearer is being asked to choose from. Cut rather than wrapped:
-    // the count of rows has to match the count of options, because the cursor
-    // is a position in that list.
+    // One row, one line. Cut rather than wrapped: the count of rows has to
+    // match the count of options, because the cursor is a position in that
+    // list. A row is the label alone now, so the cut is a long label's problem
+    // rather than every option's - the description is drawn below.
     return textWidth(row) > BODY_WIDTH ? ellipsize(row) : row
-  }).join('\n')
+  })
 }
 
 /**

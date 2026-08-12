@@ -34,7 +34,13 @@ const MAX_STORE_SESSIONS = 200;
  *  must share the page with the choice list and still be glanceable. */
 const MAX_TEXT_WIDTH = 120;
 const MAX_CHOICES = 9;
+/** A choice row is one line of the picker, and the panel cuts what overruns it.
+ *  The label alone, since the description travels beside it now. */
 const MAX_CHOICE_WIDTH = 52;
+/** The description of the highlighted choice, drawn in the lines the option
+ *  rows leave over: three of them at the panel's width, which is where a
+ *  reader stops taking a glance and starts reading. */
+const MAX_DETAIL_WIDTH = 72;
 const INFO_TTL_MS = 5 * 60_000;
 /**
  * Hook-sourced info items expire far sooner than agent self-notes.
@@ -430,9 +436,17 @@ function indentOf(line: string): number {
   return line.length - line.trimStart().length;
 }
 
+/** An option as the pane drew it: the row, and the lines under it that say
+ *  what it means. Kept apart all the way to the item, because the picker draws
+ *  them in different places. */
+export interface ScrapedChoice {
+  label: string;
+  detail: string;
+}
+
 /** Extract `1. Yes` / `❯ 2. No` / `→ [1] Yes` / `[ ] Yes` style options, each
  *  with the description line under it when the agent draws one. */
-export function extractNumberedChoices(lines: string[]): string[] {
+export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
   const rows: Array<{ label: string; detail: string; column: number }> = [];
   for (const raw of lines) {
     const line = stripLeftRule(raw);
@@ -462,7 +476,14 @@ export function extractNumberedChoices(lines: string[]): string[] {
   // description an agent hangs off it.
   return rows
     .filter((r) => !isUnanswerable(r.label))
-    .map((r) => (r.detail ? `${r.label} - ${truncate(r.detail, MAX_DETAIL_CHARS)}` : r.label));
+    .map((r) => ({ label: r.label, detail: truncate(r.detail, MAX_DETAIL_CHARS) }));
+}
+
+/** The same options with each description written after its label, which is
+ *  how a single line of text has to carry both. Kept for callers that have one
+ *  line to spend rather than a screen. */
+export function extractNumberedChoices(lines: string[]): string[] {
+  return extractChoiceRows(lines).map((c) => (c.detail ? `${c.label} - ${c.detail}` : c.label));
 }
 
 /**
@@ -708,6 +729,8 @@ export function extractPermissionRequest(lines: string[]): string | undefined {
 interface WaitingPayload {
   text: string;
   choices?: string[];
+  /** Index-aligned with `choices`, empty where an option had nothing to say. */
+  choiceDetails?: string[];
   choiceInput?: GlassesRelayItem['choiceInput'];
   choiceSelected?: number;
 }
@@ -744,14 +767,12 @@ export function matchOpenQuestion(questions: OpenQuestion[], paneText: string): 
 function recordedPayload(q: OpenQuestion): WaitingPayload {
   const box = q.multiSelect ? '[ ] ' : '';
   const choices = q.options.map((o) =>
-    clampDisplayWidth(
-      normalizeRelayText(
-        o.description ? `${box}${o.label} - ${truncate(o.description, MAX_DETAIL_CHARS)}` : `${box}${o.label}`,
-      ),
-      MAX_CHOICE_WIDTH,
-    ),
+    clampDisplayWidth(normalizeRelayText(`${box}${o.label}`), MAX_CHOICE_WIDTH),
   );
-  return { text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH), choices };
+  const choiceDetails = q.options.map((o) =>
+    o.description ? clampDisplayWidth(normalizeRelayText(o.description), MAX_DETAIL_WIDTH) : '',
+  );
+  return { text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH), choices, choiceDetails };
 }
 
 async function assembleWaitingPayload(
@@ -792,6 +813,7 @@ async function assembleWaitingPayload(
     return { text: clampDisplayWidth(normalizeRelayText(guess.text ?? fallback), MAX_TEXT_WIDTH) || fallback };
   }
   const clamp = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH);
+  const clampDetail = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_DETAIL_WIDTH);
   const permission = extractPermissionRequest(lines);
   const guess = findQuestion(lines, optionBlockStart(lines));
   const question = permission ?? guess.text;
@@ -831,15 +853,19 @@ async function assembleWaitingPayload(
     paneState !== 'permission_prompt' &&
     !drawingAPicker;
 
-  const numbered = askingNothing ? [] : extractNumberedChoices(lines);
+  const numbered = askingNothing ? [] : extractChoiceRows(lines);
   // The other half of what the record was doing: it knew how many questions
   // the call carried, and several meant the rows on screen belong to a tabbed
   // picker whose digits do not line up with them. Without it, the rows that
   // move between tabs are the only sign - and they retire the whole list
   // rather than just themselves, because a list that includes `Submit
   // answers` has already miscounted the options above it.
-  if (numbered.length > 0 && !(drawingAPicker && looksTabbed(numbered))) {
-    return { text: text || fallback, choices: numbered.map(clamp) };
+  if (numbered.length > 0 && !(drawingAPicker && looksTabbed(numbered.map((c) => c.label)))) {
+    return {
+      text: text || fallback,
+      choices: numbered.map((c) => clamp(c.label)),
+      choiceDetails: numbered.map((c) => (c.detail ? clampDetail(c.detail) : '')),
+    };
   }
   if (drawingAPicker) {
     // The rows were untrustworthy, or there were none to read. The pane says
@@ -896,7 +922,11 @@ function makeItem(
   paneId?: string,
   choices?: string[],
   ttlMs: number = INFO_TTL_MS,
-  answering?: { choiceInput?: GlassesRelayItem['choiceInput']; choiceSelected?: number },
+  answering?: {
+    choiceInput?: GlassesRelayItem['choiceInput'];
+    choiceSelected?: number;
+    choiceDetails?: string[];
+  },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
     id: randomUUID(),
@@ -917,11 +947,21 @@ function makeItem(
   };
   if (paneId) item.paneId = paneId;
   if (choices && choices.length > 0) {
-    const kept = choices
+    // Label and description are dropped together or not at all: the
+    // description is addressed by its option's index, so a row filtered out of
+    // one array and not the other puts every description after it against the
+    // wrong option - which reads as working, and is the failure mode this file
+    // spends most of its length avoiding.
+    const rows = choices
       .slice(0, MAX_CHOICES)
-      .map((c) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH))
-      .filter((c) => c.length > 0);
+      .map((c, i) => ({
+        label: clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH),
+        detail: clampDisplayWidth(normalizeRelayText(answering?.choiceDetails?.[i] ?? ''), MAX_DETAIL_WIDTH),
+      }))
+      .filter((r) => r.label.length > 0);
+    const kept = rows.map((r) => r.label);
     item.choices = kept;
+    if (rows.some((r) => r.detail.length > 0)) item.choiceDetails = rows.map((r) => r.detail);
 
     if (answering?.choiceInput === 'arrow') {
       // A numbered pane is answered by naming an option, so a list that lost a
@@ -945,6 +985,7 @@ function makeItem(
         item.choiceSelected = selected;
       } else {
         delete item.choices;
+        delete item.choiceDetails;
       }
     }
   }
@@ -969,7 +1010,11 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
     paneId,
     payload.choices,
     INFO_TTL_MS,
-    { choiceInput: payload.choiceInput, choiceSelected: payload.choiceSelected },
+    {
+      choiceInput: payload.choiceInput,
+      choiceSelected: payload.choiceSelected,
+      choiceDetails: payload.choiceDetails,
+    },
   );
 }
 
@@ -1235,8 +1280,13 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // and a new one is an interruption - which is the actual difference between
   // "the cursor moved" and "it is asking something else".
   if (next.text === item.text && sameChoices(item.choices, next.choices)) {
-    if (next.choiceSelected === item.choiceSelected) return;
+    const sameDetails = sameChoices(item.choiceDetails, next.choiceDetails);
+    if (next.choiceSelected === item.choiceSelected && sameDetails) return;
     item.choiceSelected = next.choiceSelected;
+    // Not a new decision - the same options, saying a little more or less about
+    // themselves as the pane redraws. Edited in place so the picker under the
+    // wearer's finger keeps its id and its cursor.
+    if (!sameDetails) item.choiceDetails = next.choiceDetails;
     broadcastUpsert(item);
     return;
   }

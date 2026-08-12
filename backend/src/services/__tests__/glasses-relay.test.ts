@@ -1552,9 +1552,13 @@ describe('recorded questions beat the scrape', () => {
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
     expect(item.text).toBe('作るものの位置づけは?');
-    expect(item.choices).toEqual([
-      '公開前提 - ストア配布し、発信ネタにする',
-      '自分専用 - 最短で実用に到達できる',
+    // The label is the row; the description is drawn under it, so they travel
+    // apart. Glued together they were cut a few characters in - the picker
+    // gives an option one line and the panel cuts what overruns it.
+    expect(item.choices).toEqual(['公開前提', '自分専用']);
+    expect(item.choiceDetails).toEqual([
+      'ストア配布し、発信ネタにする',
+      '最短で実用に到達できる',
     ]);
   });
 
@@ -1566,7 +1570,8 @@ describe('recorded questions beat the scrape', () => {
     const sock = await blockedClaudePane(QUESTION_PANE);
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
-    expect((item.choices as string[])[0]).toBe('[ ] 登壇プロンプター - 台本をレンズに1画面ずつ表示');
+    expect((item.choices as string[])[0]).toBe('[ ] 登壇プロンプター');
+    expect((item.choiceDetails as string[])[0]).toBe('台本をレンズに1画面ずつ表示');
   });
 
   test('several questions: the tab the pane paints is the one served', async () => {
@@ -1580,10 +1585,7 @@ describe('recorded questions beat the scrape', () => {
 
     const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
     expect(item.text).toBe('作るものの位置づけは?');
-    expect(item.choices).toEqual([
-      '公開前提 - ストア配布し、発信ネタにする',
-      '自分専用 - 最短で実用に到達できる',
-    ]);
+    expect(item.choices).toEqual(['公開前提', '自分専用']);
   });
 
   test('several questions and no tab named: the question goes without options', async () => {
@@ -1775,5 +1777,65 @@ describe('present', () => {
     const info = mustItem(postAgentRelay({ sessionId: 's1', kind: 'info', text: 'fyi' })) as Record<string, unknown>;
     expect(waiting.present).toBe('takeover');
     expect(info.present).toBe('takeover-if-elsewhere');
+  });
+});
+
+// =============================================================================
+// A choice's label and what it says about itself
+// =============================================================================
+
+describe('choiceDetails', () => {
+  /** A pane drawing its options with a description under each, the way claude
+   *  and kimi both do. */
+  const DESCRIBED_PANE = [
+    'どちらの方式にしますか?',
+    '',
+    '❯ 1. 種モデルに移行',
+    '     起動時に共通設定を取り込み、以降はワークスペースが持つ',
+    '  2. 現状維持',
+    '     共有グロサリーとワークスペース単位の辞退で足りるとする',
+  ].join('\n');
+
+  test('the row is the label and the description travels beside it', async () => {
+    // Glued together they were cut a few characters in: the picker gives an
+    // option one line and cuts what overruns the panel, so a wearer could read
+    // what the options were called and nothing about what they meant.
+    const sock = await blockedClaudePane(DESCRIBED_PANE);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toEqual(['種モデルに移行', '現状維持']);
+    expect(item.choiceDetails).toEqual([
+      '起動時に共通設定を取り込み、以降はワークスペースが持つ',
+      '共有グロサリーとワークスペース単位の辞退で足りるとする',
+    ]);
+  });
+
+  test('an option with nothing under it holds its place', async () => {
+    // Addressed by index, so a described option after an undescribed one must
+    // not shift up into it.
+    const sock = await blockedClaudePane(
+      ['どれにしますか?', '', '❯ 1. そのまま', '  2. 書き換える', '     14ワークスペースに今コピーする'].join('\n'),
+    );
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toEqual(['そのまま', '書き換える']);
+    expect(item.choiceDetails).toEqual(['', '14ワークスペースに今コピーする']);
+  });
+
+  test('a pane that describes nothing sends no details at all', async () => {
+    const sock = await blockedClaudePane(QUESTION_PANE);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toEqual(['Rewrite it', 'Patch minimally', 'Leave as is']);
+    expect(item.choiceDetails).toBeUndefined();
+  });
+
+  test('one line can still carry both, for a caller that has only one', () => {
+    // `extractNumberedChoices` is the joined reading, kept for callers with a
+    // line to spend rather than a screen.
+    expect(extractNumberedChoices(DESCRIBED_PANE.split('\n'))).toEqual([
+      '種モデルに移行 - 起動時に共通設定を取り込み、以降はワークスペースが持つ',
+      '現状維持 - 共有グロサリーとワークスペース単位の辞退で足りるとする',
+    ]);
   });
 });
