@@ -4,7 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.111] - 2026-08-12
+
 ### Fixed
+- **A multi-select keeps the boxes you tick.** The tab chip is `☐` while
+  nothing on the question is picked and `☒` once something is, and only the
+  first was recognised - so the picker was read until the first tap and not
+  afterwards. A read that finds nothing leaves the item already on the glasses,
+  which is the one built before anything was ticked, so every box came back
+  empty on every redraw. The keys were reaching the pane and the boxes were
+  ticking; what never arrived was the reading of them
 - **The text row of a multi-select opens the microphone.** It never had. The
   test for "this row takes text" sat after the multi-select branch had already
   returned, so on a multi-select a tap ticked a box and stopped there. Recorded
