@@ -37,10 +37,37 @@ const MAX_CHOICES = 9;
 /** A choice row is one line of the picker, and the panel cuts what overruns it.
  *  The label alone, since the description travels beside it now. */
 const MAX_CHOICE_WIDTH = 52;
-/** The description of the highlighted choice, drawn in the lines the option
- *  rows leave over: three of them at the panel's width, which is where a
- *  reader stops taking a glance and starts reading. */
-const MAX_DETAIL_WIDTH = 72;
+/**
+ * How much of a choice's description to send, given how many choices there are.
+ *
+ * The panel gives the picker eight lines and the option rows take one each -
+ * they cannot be given up, since the cursor is a position in that list - so
+ * what the description gets is whatever is left after them and the rule between.
+ * A flat width ignored that from both ends: at 72 columns a three-option
+ * question wasted two of the four lines it had, and a five-option one was cut
+ * by the app instead. Measured on the device, 2026-08-12.
+ *
+ * Sent a little short of the space rather than a little over, deliberately.
+ * Text cut here ends in an ellipsis the wearer can see; text cut by the app
+ * ends by simply stopping, and a description that stops mid-thought while
+ * looking finished is the more expensive of the two mistakes.
+ */
+const PANEL_LINES = 8;
+/** Display columns per panel line, understated - see above. The panel fits
+ *  about 24 full-width characters, which is 48 of these. */
+const COLUMNS_PER_LINE = 46;
+
+function detailWidthFor(optionRows: number): number {
+  const spare = PANEL_LINES - optionRows - 1; // the rule takes one
+  return spare > 0 ? spare * COLUMNS_PER_LINE : 0;
+}
+
+/** A checkbox on a row, the same test `looksMultiSelect` makes in the app. Kept
+ *  in step with it: what it decides here is only how many rows the picker will
+ *  draw, but it decides that for a screen this side never sees. */
+function looksChecked(option: string): boolean {
+  return /^\s*\[[ xX*✓✔]\]/.test(option);
+}
 const INFO_TTL_MS = 5 * 60_000;
 /**
  * Hook-sourced info items expire far sooner than agent self-notes.
@@ -769,9 +796,10 @@ function recordedPayload(q: OpenQuestion): WaitingPayload {
   const choices = q.options.map((o) =>
     clampDisplayWidth(normalizeRelayText(`${box}${o.label}`), MAX_CHOICE_WIDTH),
   );
-  const choiceDetails = q.options.map((o) =>
-    o.description ? clampDisplayWidth(normalizeRelayText(o.description), MAX_DETAIL_WIDTH) : '',
-  );
+  // Whole. How much of it fits is decided once, in `makeItem`, where the
+  // number of options is finally known - two payload builders each guessing at
+  // it separately is how the width came to be wrong in the first place.
+  const choiceDetails = q.options.map((o) => (o.description ? normalizeRelayText(o.description) : ''));
   return { text: clampDisplayWidth(normalizeRelayText(q.question), MAX_TEXT_WIDTH), choices, choiceDetails };
 }
 
@@ -813,7 +841,6 @@ async function assembleWaitingPayload(
     return { text: clampDisplayWidth(normalizeRelayText(guess.text ?? fallback), MAX_TEXT_WIDTH) || fallback };
   }
   const clamp = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH);
-  const clampDetail = (c: string) => clampDisplayWidth(normalizeRelayText(c), MAX_DETAIL_WIDTH);
   const permission = extractPermissionRequest(lines);
   const guess = findQuestion(lines, optionBlockStart(lines));
   const question = permission ?? guess.text;
@@ -864,7 +891,7 @@ async function assembleWaitingPayload(
     return {
       text: text || fallback,
       choices: numbered.map((c) => clamp(c.label)),
-      choiceDetails: numbered.map((c) => (c.detail ? clampDetail(c.detail) : '')),
+      choiceDetails: numbered.map((c) => (c.detail ? normalizeRelayText(c.detail) : '')),
     };
   }
   if (drawingAPicker) {
@@ -956,12 +983,21 @@ function makeItem(
       .slice(0, MAX_CHOICES)
       .map((c, i) => ({
         label: clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH),
-        detail: clampDisplayWidth(normalizeRelayText(answering?.choiceDetails?.[i] ?? ''), MAX_DETAIL_WIDTH),
+        detail: normalizeRelayText(answering?.choiceDetails?.[i] ?? ''),
       }))
       .filter((r) => r.label.length > 0);
     const kept = rows.map((r) => r.label);
     item.choices = kept;
-    if (rows.some((r) => r.detail.length > 0)) item.choiceDetails = rows.map((r) => r.detail);
+    // Sized against the surviving rows rather than the ones asked for: a
+    // dropped option gives its line back to the description.
+    //
+    // A multi-select draws one row more than it has options - the send row -
+    // and the app is what adds it, so the count has to be anticipated here.
+    // Read off the labels the same way the app reads it.
+    const optionRows = kept.length + (kept.some(looksChecked) ? 1 : 0);
+    const width = detailWidthFor(optionRows);
+    const details = width > 0 ? rows.map((r) => clampDisplayWidth(r.detail, width)) : [];
+    if (details.some((d) => d.length > 0)) item.choiceDetails = details;
 
     if (answering?.choiceInput === 'arrow') {
       // A numbered pane is answered by naming an option, so a list that lost a
