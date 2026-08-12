@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.113] - 2026-08-12
+
+### Fixed
+- **Send finishes a multi-select.** It always sent the right key - the pane
+  moved to the Submit tab and drew the answers back - but that screen is the
+  one screen of the picker with no footer, so it could not be read, and a read
+  that finds nothing leaves what is already on the glasses. The wearer pressed
+  Send, the pane moved on, and the panel went on showing the list from before
+  as though nothing had happened. `Ready to submit your answers?` with its two
+  rows is now a screen of its own
+
 ## [0.3.112] - 2026-08-12
 
 ### Fixed
