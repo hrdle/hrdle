@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.106] - 2026-08-12
+
 ### Added
 - **Kimi's trust prompt can be answered from the glasses.** It numbers nothing
   - `❯ Trust this folder` / `Don't trust`, each with a description under it -
