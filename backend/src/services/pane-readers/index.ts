@@ -22,6 +22,7 @@
 import type { AgentProvider } from '../../../../shared/types';
 import { readClaudePicker } from './claude';
 import type { PickerOption } from './claude';
+import { readKimiPrompt } from './kimi';
 
 export type { PickerOption } from './claude';
 
@@ -31,6 +32,16 @@ export interface PaneQuestion {
   question?: string;
   options: PickerOption[];
   multiSelect: boolean;
+  /**
+   * How the pane takes an answer, when it is not by the option's own number.
+   *
+   * `arrow` is a list with no keys of its own - kimi's trust prompt, OpenCode's
+   * permission row - answered by walking the pane's own cursor to the row and
+   * pressing Enter. The walk needs a starting point, which is `choiceSelected`,
+   * and an item carrying one without the other cannot be answered at all.
+   */
+  choiceInput?: 'number' | 'arrow';
+  choiceSelected?: number;
 }
 
 /**
@@ -39,14 +50,18 @@ export interface PaneQuestion {
  * Deliberately short. Adding one means writing a reader against a captured pane
  * and a test that holds that capture - not relaxing a pattern until it matches.
  *
- * The agents missing from it are not unsupported: `kimi` writes its question to
- * a record that `agent-question.ts` reads, and `opencode` draws its options
+ * The agents missing from it are not unsupported: `opencode` draws its options
  * side by side in colour, which `glasses-relay.ts` reads separately because it
  * needs the escape sequences this path has already had stripped. What they do
  * not get is a guess made from the shape of their output.
+ *
+ * kimi has both a reader and a record. The record (`agent-question.ts`) carries
+ * its `AskUserQuestion`; the reader carries the two prompts the record knows
+ * nothing about, its approval and its trust screens.
  */
 const READERS: Partial<Record<AgentProvider, (lines: string[]) => PaneQuestion | undefined>> = {
   claude: readClaudePicker,
+  kimi: readKimiPrompt,
 };
 
 export function readPaneQuestion(agent: AgentProvider | undefined, lines: string[]): PaneQuestion | undefined {
