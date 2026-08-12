@@ -56,6 +56,21 @@ export interface ClaudePicker {
   options: PickerOption[];
   /** Rows carry a checkbox: answering means space-then-enter, not one digit. */
   multiSelect: boolean;
+  /**
+   * Which option the pane's own cursor sits on, as an index into `options`.
+   *
+   * A digit answers a row without moving this - measured on Claude Code 2.1.228,
+   * `3` ticks the third box and leaves the cursor on the first - so for almost
+   * everything the two never need to agree and this goes unused.
+   *
+   * The exception is the row that takes text. On a multi-select `Type something`
+   * is not a checkbox that opens a field once submitted: it *is* the field, and
+   * it is filled by typing while the pane's cursor is on it. Ticking it with its
+   * digit and submitting was measured returning an empty answer - the question
+   * came back "answered" with nothing in it. So that row has to be reached the
+   * way a keyboard reaches it, and a walk needs a measured starting point.
+   */
+  choiceCursor?: number;
 }
 
 /**
@@ -124,6 +139,7 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
   const options: PickerOption[] = [];
   let firstOptionAt = -1;
   let labelColumn = 0;
+  let cursorAt = -1;
 
   for (let i = 0; i < block.length; i++) {
     const line = block[i];
@@ -138,7 +154,9 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
       // With the cursor blanked rather than stripped, so the marked row reports
       // the same column as the rows that have none - it is drawn at the left
       // edge and they are indented to clear it.
-      labelColumn = indentOf(blankCursor(line));
+      const blanked = blankCursor(line);
+      labelColumn = indentOf(blanked);
+      if (blanked !== line) cursorAt = options.length;
       options.push({ label, detail: '' });
       continue;
     }
@@ -165,19 +183,28 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
     last.detail = joinWrapped(last.detail, text);
   }
 
-  const answerable = options
-    .filter((o) => !isFurniture(o.label))
-    .map((o) => (isFreeText(o.label) ? { ...o, freeText: true } : o));
+  // Kept with the row it came from, so dropping furniture moves the cursor with
+  // it: the index has to point at the option the glasses will show, not at the
+  // position it held on the pane.
+  const kept = options
+    .map((o, at) => ({ option: o, at }))
+    .filter(({ option }) => !isFurniture(option.label));
+  const answerable = kept.map(({ option }) =>
+    isFreeText(option.label) ? { ...option, freeText: true } : option,
+  );
   if (answerable.length === 0) return undefined;
 
   for (const o of answerable) {
     o.detail = truncateDetail(o.detail);
   }
 
+  const choiceCursor = kept.findIndex(({ at }) => at === cursorAt);
+
   return {
     question: questionOf(block.slice(0, firstOptionAt < 0 ? block.length : firstOptionAt)),
     options: answerable,
     multiSelect: answerable.some((o) => /^\[[ xX*✓✔]\]/.test(o.label)),
+    ...(choiceCursor >= 0 ? { choiceCursor } : {}),
   };
 }
 

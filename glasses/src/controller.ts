@@ -27,7 +27,7 @@
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationBodyLines, isChecked, getTotalPagesAt, getMultiCountAt, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationBodyLines, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -224,6 +224,15 @@ interface ReplyTarget {
    *  the pane unblocked; agent self-notes have no blocked epoch, so they are
    *  dropped explicitly on a successful reply. */
   itemId?: string
+  /**
+   * The transcript is text for a field the pane already has open, not a prompt.
+   *
+   * A prompt is typed and entered and the question is over. This is one row of
+   * a multi-select being filled in: the words go in as they stand, the box
+   * ticks itself, and the picker is still up afterwards with the other options
+   * still tickable and the send row still to press.
+   */
+  fillsField?: boolean
 }
 
 /**
@@ -1032,6 +1041,7 @@ export class GlassesController {
               top.choiceDetails,
               top.choiceFreeText,
               top.choiceKeys,
+              top.choiceFieldRows,
             )
             return
           }
@@ -1170,6 +1180,24 @@ export class GlassesController {
         return Promise.resolve()
       }
       case 'tap':
+        // The row that takes text, before anything else looks at the row.
+        //
+        // It used to be tested last, after the multi-select branch below had
+        // already returned - so on a multi-select the microphone never opened.
+        // Recorded on 2026-08-12: a wearer tapped `Type something`, got a
+        // ticked box and no dictation, tapped `Chat about this` and got a
+        // screen that did not move at all. The second one had reached the pane
+        // and taken the question down with it; the panel just never followed.
+        //
+        // Every agent draws one of these rows and the ring cannot type into
+        // any of them - which is why they used to be dropped before the item
+        // was built at all. The glasses have a microphone, so this is the row
+        // a wearer wants when none of the options fit, and it has to behave
+        // the same way on both kinds of list.
+        if (!onChoiceSend(st) && this.state.choiceFreeText?.includes(st.choiceIndex)) {
+          await this.answerByVoice(st.choiceIndex)
+          return
+        }
         // What a tap does depends on the row, and the row says which. An option
         // is answered by its own number; the send row is the Tab that carries a
         // multi-select on to the next question.
@@ -1183,19 +1211,6 @@ export class GlassesController {
         }
         if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
         else this.sendChoiceKey(onChoiceSend(st) ? '\t' : this.choiceKeyFor(st.choiceIndex))
-        // The row that opens a text field. Every agent draws one, and the ring
-        // cannot type into it - which is why they used to be dropped before the
-        // item was ever built. The glasses have a microphone: the key opens the
-        // field and dictation fills it, so the row a wearer wants when none of
-        // the options fit is the one they can now reach fastest.
-        if (this.state.choiceFreeText?.includes(st.choiceIndex)) {
-          const target = this.choiceTarget
-          this.answeredItem(target?.itemId)
-          if (target) {
-            await this.startVoice(target)
-            return
-          }
-        }
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         this.echoAnswer(this.pickedText())
@@ -1222,6 +1237,40 @@ export class GlassesController {
         this.render()
         return Promise.resolve()
     }
+  }
+
+  /**
+   * Answer the row that takes text, by opening the microphone at it.
+   *
+   * Every such row is reached the same way from here - send the key it was
+   * given, then listen. What the key *is* differs, and deciding that is the
+   * server's job: a digit for the rows that open a prompt, the arrows that put
+   * the pane's cursor on the row for the ones that are a field. The app has no
+   * rule of its own about which, on purpose. A rule here costs an ehpk build
+   * and a store review every time an agent draws its picker differently, and
+   * two agents already do.
+   *
+   * The two differ afterwards, which the item says outright (`choiceFieldRows`)
+   * rather than leaving to be inferred from the shape of a label:
+   *
+   * - a prompt row is finished with. Its key takes the question down, the item
+   *   is answered, and the transcript is sent as a whole turn.
+   * - a field is one row of a list still being answered. The words go in where
+   *   they stand and the picker stays up.
+   */
+  private async answerByVoice(index: number): Promise<void> {
+    const target = this.choiceTarget
+    if (!target) return
+    // Sent even when empty: the server has a walk of no steps to express when
+    // the pane is already sitting on the row, and an empty key is how.
+    const key = this.choiceKeyFor(index)
+    if (key) this.sendChoiceKey(key)
+    if (this.state.choiceFieldRows?.includes(index)) {
+      await this.startVoice({ ...target, fillsField: true })
+      return
+    }
+    this.answeredItem(target.itemId)
+    await this.startVoice(target)
   }
 
   /**
@@ -1436,6 +1485,17 @@ export class GlassesController {
           this.demoReply(text)
           return
         }
+        // Typed where the pane's cursor stands, and nothing more: no Enter.
+        //
+        // A prompt is a whole turn - it is entered and the pane moves on. This
+        // is one row of a picker being filled in, and Enter there toggles the
+        // row rather than submitting it. So the words go in and the picker
+        // stays up, which is also what the wearer sees: the row now reads back
+        // what they said, and the send row is still theirs to press.
+        if (t.fillsField) {
+          this.fillChoiceField(text)
+          return
+        }
         await sendPrompt(t.sessionId, text, t.paneId)
       } catch (err) {
         this.log(
@@ -1449,6 +1509,36 @@ export class GlassesController {
     this.state.mode = 'conversation'
     this.render()
     void this.loadConversation().then(() => this.render())
+  }
+
+  /**
+   * Put the transcript into the picker row the pane is sitting on, and go back
+   * to the picker.
+   *
+   * Back to the picker rather than to the conversation, which is what every
+   * other voice send does: the question is not answered yet. The row now reads
+   * back what was said and its box has ticked itself, but the other options are
+   * still tickable and the send row still has to be pressed - and a wearer
+   * dropped into the conversation at this point would have no way back to any
+   * of it.
+   *
+   * The item is not marked answered here for the same reason.
+   */
+  private fillChoiceField(text: string): void {
+    // Down the same pipe as the keys, because it is the same pipe: text typed
+    // at a pane is input like an arrow is, and this is where the paneless
+    // session and the demo are already handled.
+    this.sendChoiceKey(text)
+    // Said locally rather than waited for: the relay's re-read is what makes it
+    // true, and until it lands the row would still read `Type something` - a
+    // wearer who has just watched their words transcribed, seeing the row they
+    // put them in unchanged.
+    const st = this.state
+    st.choiceOptions = st.choiceOptions.map((o, i) =>
+      i === st.choiceIndex && hasCheckbox(o) ? `[${CHECK_MARK}] ${text}` : o,
+    )
+    st.mode = 'choice'
+    this.render()
   }
 
   private async cancelVoice(): Promise<void> {
@@ -1552,6 +1642,7 @@ export class GlassesController {
         item.choiceDetails,
         item.choiceFreeText,
         item.choiceKeys,
+        item.choiceFieldRows,
       )
       void this.loadConversation().then(() => this.render())
       return
@@ -1602,6 +1693,7 @@ export class GlassesController {
     details?: string[],
     freeText?: number[],
     keys?: string[],
+    fieldRows?: number[],
   ): void {
     const keepCursor =
       this.state.mode === 'choice' &&
@@ -1617,6 +1709,10 @@ export class GlassesController {
     this.state.choiceDetails = details
     this.state.choiceFreeText = freeText
     this.state.choiceKeys = keys
+    // Cleared when absent for the same reason as the descriptions: a row marked
+    // a field on the last question is a row this one would type into rather
+    // than answer.
+    this.state.choiceFieldRows = fieldRows
     this.state.choiceMulti = looksMultiSelect(options)
     // Set here rather than left over from whatever ran last: two halves feed
     // this - a relay item that already carries the reading, and a terminal
@@ -1867,6 +1963,7 @@ export class GlassesController {
         item.choiceDetails,
         item.choiceFreeText,
         item.choiceKeys,
+        item.choiceFieldRows,
       )
       return
     }

@@ -45,6 +45,14 @@ export interface PaneQuestion {
   choiceSelected?: number;
   /** The key each option answers to, when it is not the option's position. */
   choiceKeys?: string[];
+  /**
+   * Where the pane's own cursor is, on a list that is answered by number anyway.
+   *
+   * Distinct from `choiceSelected`, which says the digits do nothing and the
+   * cursor is the only way in. This says the digits work - and that one row
+   * still needs the cursor, because it is a text field rather than a choice.
+   */
+  choiceCursor?: number;
 }
 
 /**

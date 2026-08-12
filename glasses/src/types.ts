@@ -276,6 +276,17 @@ export interface GlassesRelayItem {
    * panel, which is `AppState.choiceIndex` and is a different number.
    */
   choiceSelected?: number
+  /**
+   * The rows of `choiceFreeText` that are a field rather than a way to one.
+   *
+   * Both open the microphone. A field takes the words where it stands - no
+   * Enter, and the picker stays up, because the question is not answered yet.
+   * The rest send the transcript as a prompt and are done.
+   *
+   * Getting the pane's cursor onto the row is the row's `choiceKeys` entry,
+   * decided server-side: this app sends whatever it is handed.
+   */
+  choiceFieldRows?: number[]
   source: 'auto' | 'agent'
   /**
    * How much of the wearer's attention the server thinks this is worth.

@@ -279,4 +279,49 @@ describe('a multi-select on a real pane', () => {
     // one: `Type something — Submit`.
     expect(live?.options[4].detail).toBe('');
   });
+
+  test('the row the pane is sitting on travels', () => {
+    // The walk to `Type something` starts here. Measured rather than assumed:
+    // digits leave the cursor where it was, so after a wearer has ticked two
+    // boxes it is still on the row it opened on - and the app cannot know which
+    // that was without being told.
+    expect(live?.choiceCursor).toBe(0);
+  });
+});
+
+/**
+ * The same pane after the wearer has walked down to the text row.
+ *
+ * `Type something` is a field, not a checkbox that opens one: typing while the
+ * cursor is on it replaces the label and ticks the box in one go, and the
+ * footer gains `ctrl+g to edit in Vim` to say so. Ticking it by its digit and
+ * submitting was measured on Claude Code 2.1.228 returning an answer with
+ * nothing in it, which is the bug this index exists to fix.
+ */
+const MULTI_ON_TEXT_ROW = MULTI_LIVE.map((l) =>
+  l === '❯ 1. [ ] 認証機能'
+    ? '  1. [ ] 認証機能'
+    : l === '  5. [ ] Type something'
+      ? '❯ 5. [ ] Type something'
+      : l,
+);
+
+describe('a multi-select with the cursor on its text row', () => {
+  const live = readClaudePicker(MULTI_ON_TEXT_ROW);
+
+  test('the cursor is read where the pane drew it', () => {
+    expect(live?.choiceCursor).toBe(4);
+    expect(live?.options[4].label).toBe('[ ] Type something');
+  });
+});
+
+describe('a single-pick list', () => {
+  test('the cursor counts the rows the glasses will show, not the pane', () => {
+    // `Chat about this` is dropped as furniture on this pane, and every row
+    // after a dropped one shifts. Nothing is dropped *before* the cursor here,
+    // which is the case that would have gone unnoticed.
+    const picker = readClaudePicker(PICKER);
+    expect(picker?.choiceCursor).toBe(2);
+    expect(picker?.options[2].label).toBe('ルータ操作は中止');
+  });
 });

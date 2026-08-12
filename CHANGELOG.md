@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The text row of a multi-select opens the microphone.** It never had. The
+  test for "this row takes text" sat after the multi-select branch had already
+  returned, so on a multi-select a tap ticked a box and stopped there. Recorded
+  off the glasses on 2026-08-12: `Type something` tapped, ticked, tapped again,
+  unticked, and no dictation either time
+- **`Chat about this` is no longer a dead row.** Tapped, the panel did not move
+  at all - but the digit had reached the pane, which took the question down and
+  opened a prompt. The wearer was left looking at a picker for a question that
+  no longer existed, with the only way to say anything now off screen. Same
+  cause as above, and the worse half of it: the first failure wasted a tap, this
+  one lost the question
+- **`Type something` is filled rather than ticked.** On a multi-select it is not
+  a checkbox that opens a field once submitted - it *is* the field, and the pane
+  fills it from what is typed while its cursor is on that row. Its digit only
+  ticks the box, and submitting it that way was measured against Claude Code
+  2.1.228 returning an answer with nothing in it: the question came back
+  answered and empty. The app now walks the pane's cursor to the row and types
+  the transcript in where it stands, with no Enter after it - Enter on a picker
+  row toggles it - and stays on the picker afterwards, since the other boxes are
+  still tickable and the send row still has to be pressed
+  - The walk is worked out server-side and travels as that row's `choiceKeys`
+    entry, so the app sends what it is handed and holds no rule about which
+    rows are reached how. Which rows are a field travels the same way
+    (`choiceFieldRows`) rather than being inferred from the shape of a label
+  - Needs one glasses ehpk rebuild, and is meant to be the last for this: what
+    the app gained is three branches with no agent's name in them, and the next
+    picker that is drawn differently is a reader and a key, both on the server
+
 ## [0.3.110] - 2026-08-12
 
 ### Fixed
