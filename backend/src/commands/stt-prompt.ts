@@ -1,7 +1,8 @@
 /**
  * hrdle stt-prompt - the words this session's speech is made of.
  *
- *   hrdle stt-prompt "音声認識、Groq、ハルシネーション"   # set
+ *   hrdle stt-prompt "音声認識、Groq、ハルシネーション"   # add to what is there
+ *   hrdle stt-prompt --replace "音声認識、Groq"           # replace the list
  *   hrdle stt-prompt                                      # show what is set,
  *                                                         # and what is sent
  *   hrdle stt-prompt --clear                              # back to the glossary alone
@@ -30,8 +31,16 @@ const PRODUCTION_PORT = IDENTITY.defaultPort;
 const DEV_PORT = IDENTITY.devPort;
 
 export interface SttPromptCliOptions {
-  /** Words to set. Absent means "show"; `null` means "clear". */
+  /** Words to write. Absent means "show"; `null` means "clear". */
   text?: string | null;
+  /**
+   * Replace the list instead of adding to it.
+   *
+   * Adding is the default because a vocabulary grows, and a caller that meant
+   * to add one word and replaced the list instead loses the rest with nothing
+   * in a transcription to show it.
+   */
+  replace?: boolean;
   /** Whether this workspace takes the shared glossary. Absent leaves it alone. */
   glossary?: boolean;
   session?: string;
@@ -56,6 +65,47 @@ async function putSttPrompt(
       },
     );
     if (res.ok) return { ok: true };
+    if (res.status === 404) return { ok: false, error: `No session ${sessionId}` };
+    if (res.status === 401) return { ok: false, error: 'Not authorized (the server has a password set)' };
+    return { ok: false, error: `Server returned ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'request failed' };
+  }
+}
+
+/** Add terms to the list this workspace already has. */
+async function addSttTerms(
+  port: number,
+  sessionId: string,
+  add: string,
+): Promise<
+  | { ok: true; added: string[]; duplicate: string[]; stored: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const res = await fetch(
+      `https://localhost:${port}/api/sessions/${encodeURIComponent(sessionId)}/stt-prompt`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ add }),
+      },
+    );
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (res.ok) {
+      return {
+        ok: true,
+        added: (body.added as string[]) ?? [],
+        duplicate: (body.duplicate as string[]) ?? [],
+        stored: (body.sttPrompt as string) ?? '',
+      };
+    }
+    if (body.error === 'too_long') {
+      return {
+        ok: false,
+        error: `Would be ${body.wouldBe} chars, max ${body.max}. Nothing was written - drop a term first (--replace with the list you want).\nNow: ${body.sttPrompt}`,
+      };
+    }
     if (res.status === 404) return { ok: false, error: `No session ${sessionId}` };
     if (res.status === 401) return { ok: false, error: 'Not authorized (the server has a password set)' };
     return { ok: false, error: `Server returned ${res.status}` };
@@ -190,10 +240,28 @@ export async function runSttPrompt(options: SttPromptCliOptions): Promise<void> 
     process.exit(1);
   }
 
-  const result = await putSttPrompt(port, sessionId, { sttPrompt: text || null });
+  if (text === null || options.replace) {
+    const result = await putSttPrompt(port, sessionId, { sttPrompt: text || null });
+    if (!result.ok) {
+      console.error(result.error);
+      process.exit(1);
+    }
+    console.log(text ? `stt-prompt for ${sessionId}: ${text}` : `stt-prompt for ${sessionId} cleared`);
+    return;
+  }
+
+  const result = await addSttTerms(port, sessionId, text);
   if (!result.ok) {
     console.error(result.error);
     process.exit(1);
   }
-  console.log(text ? `stt-prompt for ${sessionId}: ${text}` : `stt-prompt for ${sessionId} cleared`);
+  if (result.added.length === 0) {
+    console.log(`nothing added - already there: ${result.duplicate.join('、')}`);
+  } else {
+    console.log(`added to ${sessionId}: ${result.added.join('、')}`);
+    if (result.duplicate.length > 0) {
+      console.log(`already there: ${result.duplicate.join('、')}`);
+    }
+  }
+  console.log(`now: ${result.stored}`);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { composeSttPrompt, sessionPromptTerms } from '../stt-prompt';
+import { composeSttPrompt, sessionPromptTerms, sharedGlossary } from '../stt-prompt';
 
 /** The line alone, for the cases that are only about what it says. */
 function line(session: string[] = [], glossary?: string[]): string {
@@ -168,5 +168,32 @@ describe('a workspace can decline the shared glossary', () => {
       reason: 'budget',
     });
     expect(composition.usedChars).toBeLessThanOrEqual(190);
+  });
+});
+
+/**
+ * A new workspace takes a copy of the glossary instead of sharing it, so that
+ * its vocabulary is one list it owns from the start - terms it will never say
+ * can be deleted, which a shared layer cannot offer.
+ */
+describe('seedWorkspaceVocabulary', () => {
+  test('the seeded copy is the glossary, and it fits the line', () => {
+    const seeded = sharedGlossary().join('、');
+    const composition = composeSttPrompt(sessionPromptTerms(seeded), {
+      glossaryEnabled: false,
+    });
+    expect(composition.groups[0].skipped).toEqual([]);
+    expect(composition.prompt).toBe(seeded);
+    expect(composition.usedChars).toBeLessThan(composition.maxChars);
+  });
+
+  test('a seeded workspace has room left for words of its own', () => {
+    const seeded = sharedGlossary().join('、');
+    const composition = composeSttPrompt(
+      [...sessionPromptTerms(seeded), '確定申告', 'ぬか床'],
+      { glossaryEnabled: false },
+    );
+    expect(composition.groups[0].taken).toContain('確定申告');
+    expect(composition.groups[0].taken).toContain('ぬか床');
   });
 });
