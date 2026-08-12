@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A question sat behind a two-line banner for ten minutes while its wearer
+  read the very session asking it.** Three separate faults, all in the path a
+  decision takes to the glasses. Measured on 2026-08-12 against a live blocked
+  pane; the screen recording counts what it cost - 426 questions presented on
+  08-10, three on 08-11, none at all on 08-12
+  - **Which items take the screen is the server's decision now, not the app's.**
+    The app decided it from its own mode, and decided it backwards: a new
+    question interrupted only the session list, while a completion notice
+    interrupted the conversation too. So the thing needing an answer interrupted
+    less than the thing reporting one. Every past correction to that rule cost
+    an ehpk build and a store review, which is why the wrong one stayed shipped;
+    it travels on the item as `present` now, and the app is left with the single
+    judgement only it can make - never to take the panel from someone
+    mid-utterance or mid-pick
+  - **Claude Code 2.1.227 stopped writing `AskUserQuestion` to the transcript
+    until the answer comes back**, so the record hrdle reads for the options
+    said nothing was being asked. Since 0.3.88 that answer was trusted to mean
+    the pane's numbered rows were the agent's own output, and the choices were
+    dropped - measured: a picker on screen for ten minutes with nothing appended
+    to the `.jsonl` since a minute before the question. A pane the screen says
+    is drawing a picker keeps its options. The tabbed-picker rows the record
+    used to rule out (`Next`, `Submit answers`, `Cancel`) now rule themselves
+    out: a list carrying one has miscounted the options above it
+  - **The question was the row the wrap ended on.** A wearer was asked
+    `うしますか?` - the tail four characters of a question wrapped over three
+    rows. The wrap width was assumed to be 60 columns and the pane's own width
+    was what had been in mind; claude's picker draws inside a box and wraps at
+    54, so the join never fired. It is measured from the lines themselves, and
+    a CJK seam is rejoined without the space a Latin one needs
+
 ## [0.3.96] - 2026-08-12
 
 ### Added

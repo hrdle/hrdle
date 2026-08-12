@@ -100,46 +100,58 @@ describe('the next question of a multi-step ask', () => {
   })
 })
 
+// Declining to follow means declining the PICKER. The question is still shown -
+// as an overlay, which is what any new question does - and the wearer taps into
+// the choices from there. The difference is whose gesture the next one is: a
+// followed picker takes the ring straight onto the options of a question that
+// arrived while the wearer was already answering its predecessor.
 describe('what it declines to follow', () => {
   test('another pane of the same workspace', () => {
     const c = justAnswered()
     inner(c).onRelayUpsert(waiting({ paneId: '%1' }))
-    expect(c.state.mode).toBe('conversation')
+    expect(c.state.mode).toBe('overlay')
   })
 
   test('another workspace', () => {
     const c = justAnswered()
     inner(c).onRelayUpsert(waiting({ sessionId: 's2' }))
-    expect(c.state.mode).toBe('conversation')
+    expect(c.state.mode).toBe('overlay')
   })
 
   test('the same item restated', () => {
+    // Already in the queue, so it is not news: nothing is presented and the
+    // screen stays where it was. The server restates an item on every redraw
+    // that moved the pane's own cursor, which is often.
     const c = justAnswered()
-    inner(c).onRelayUpsert(waiting({ id: 'q1' }))
+    inner(c).onRelayUpsert(waiting({ id: 'q3' }))
+    c.state.mode = 'conversation'
+    inner(c).onRelayUpsert(waiting({ id: 'q3' }))
     expect(c.state.mode).toBe('conversation')
   })
 
   test('an item with nothing to pick', () => {
     const c = justAnswered()
     inner(c).onRelayUpsert(waiting({ choices: undefined }))
-    expect(c.state.mode).toBe('conversation')
+    expect(c.state.mode).toBe('overlay')
   })
 
   test('a question that arrives long after the answer', () => {
-    // Past the window it is a new decision, and gets a notice like any other.
+    // Past the window it is a new decision, and gets an overlay like any other.
     const c = justAnswered()
     inner(c).choiceFollowUntil = Date.now() - 1
     inner(c).onRelayUpsert(waiting())
-    expect(c.state.mode).toBe('conversation')
+    expect(c.state.mode).toBe('overlay')
   })
 
   test('a picker the wearer closed', () => {
     // Double-tap out of the picker answers nothing, so nothing follows: a
-    // screen that reopened itself would be the app overruling the gesture.
+    // picker that reopened itself would be the app overruling the gesture.
+    // A different question arriving afterwards is still shown - closing one
+    // decision is not an instruction about the next.
     const c = inPicker()
     c.doubleTap()
     inner(c).onRelayUpsert(waiting())
-    expect(c.state.mode).toBe('conversation')
+    expect(c.state.mode).toBe('overlay')
   })
 
   test('anything at all, in the demo', () => {

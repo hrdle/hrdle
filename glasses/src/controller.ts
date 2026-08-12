@@ -1480,20 +1480,31 @@ export class GlassesController {
   }
 
   /**
-   * Whether a notification may take the screen.
+   * Whether an item may take the screen.
    *
-   * Reading is interruptible — the overlay returns to the exact place it left,
-   * and eight seconds later it does so by itself. Choosing an option and
-   * dictating a prompt are not: the panel IS the input there, and replacing it
-   * mid-gesture would lose what the wearer was in the middle of saying.
+   * The server says how much attention the item is worth (`present`); this
+   * says only what the server cannot see. Reading is interruptible — the
+   * overlay returns to the exact place it left, and eight seconds later it
+   * does so by itself. Choosing an option and dictating a prompt are not: the
+   * panel IS the input there, and replacing it mid-gesture would lose what the
+   * wearer was in the middle of saying.
+   *
+   * Deliberately the whole of this side's policy. Every past change to *which*
+   * items interrupt cost an ehpk build and a store review, which is why the
+   * wrong answer stayed shipped; the field is where those changes go now.
    */
-  private canInterruptForNotice(item: GlassesRelayItem): boolean {
-    if (this.state.mode === 'session_list') return true
-    if (this.state.mode !== 'conversation') return false
-    // Not about what is already on screen. "This conversation is done" thrown over
-    // the conversation itself tells the reader nothing they cannot see, and an
-    // agent working in bursts would raise it again every turn.
-    return item.sessionId !== this.currentSession()?.id
+  private canTakeOverFor(item: GlassesRelayItem): boolean {
+    const present = item.present ?? (item.kind === 'waiting' ? 'takeover' : 'takeover-if-elsewhere')
+    if (present === 'banner') return false
+    // Mid-utterance / mid-pick: the wearer is using the panel, not reading it.
+    if (this.state.mode !== 'session_list' && this.state.mode !== 'conversation') return false
+    if (present === 'takeover-if-elsewhere' && this.state.mode === 'conversation') {
+      // Not about what is already on screen. "This conversation is done" thrown
+      // over the conversation itself tells the reader nothing they cannot see,
+      // and an agent working in bursts would raise it again every turn.
+      return item.sessionId !== this.currentSession()?.id
+    }
+    return true
   }
 
   /** Jump to a relay item's session: subscribe + open its conversation, and
@@ -1843,10 +1854,12 @@ export class GlassesController {
   private onRelaySnapshot(items: GlassesRelayItem[]): void {
     this.queue.applySnapshot(items)
     this.syncRelay()
-    // (Re)connected: with waiting items pending and the user idling in the
-    // session list, present the overlay immediately (proactive overlay).
-    if (this.state.mode === 'session_list' && this.queue.topWaiting()) {
-      this.enterOverlay()
+    // (Re)connected with a decision already pending: present it, under the same
+    // rule a fresh one arrives by. A reconnect is not a reason to show the
+    // wearer less than they would have been shown a moment earlier.
+    const top = this.queue.topWaiting()
+    if (top && this.canTakeOverFor(top)) {
+      this.enterOverlay(top.id)
       return
     }
     this.render()
@@ -1866,17 +1879,12 @@ export class GlassesController {
       )
       return
     }
-    // A brand-new waiting item interrupts the session list; in the other
-    // modes the banner / header badge surfaces it without yanking the view.
-    if (isNew && item.kind === 'waiting' && this.state.mode === 'session_list') {
-      this.enterOverlay(item.id)
-      return
-    }
     // A notification is only a notification if it is seen, so it takes the
-    // screen the same way — and then hands it back without being asked.
-    if (isNew && item.kind === 'info' && this.canInterruptForNotice(item)) {
+    // screen — and, being one, hands it back without being asked. A question
+    // stays until it is answered or put off.
+    if (isNew && this.canTakeOverFor(item)) {
       this.enterOverlay(item.id)
-      this.scheduleNoticeDismiss(item.id)
+      if (item.kind === 'info') this.scheduleNoticeDismiss(item.id)
       return
     }
     this.render()
