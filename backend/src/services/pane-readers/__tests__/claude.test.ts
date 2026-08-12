@@ -205,3 +205,78 @@ describe('a multi-select', () => {
     expect(multi?.multiSelect).toBe(true);
   });
 });
+
+/**
+ * A multi-select as Claude Code 2.1.228 actually draws one, captured live on
+ * 2026-08-12. The fixture above was written by hand and passed throughout,
+ * which is why this went unnoticed: a multi-select adds a `✔ Submit` tab, and a
+ * strip with two tabs carries the keys that move between them. Every
+ * multi-select there has ever been read as "not this screen", so nothing
+ * reached the glasses - not the options, not even the question.
+ */
+const MULTI_LIVE = [
+  '❯ AskUserQuestion ツールで、multiSelect: true の質問を1つ出してください。選択肢は4つ',
+  '────────────────────────────────────────────────────────',
+  '←  ☐ 機能選択  ✔ Submit  →',
+  '',
+  '有効にする機能をすべて選んでください',
+  '',
+  '❯ 1. [ ] 認証機能',
+  '  メールとパスワードによるログインとセッション管理を実装します。',
+  '  2. [ ] 通知',
+  '  メールとアプリ内通知の両方に対応します。',
+  '  3. [ ] ダークモード',
+  '  OSの設定に追従する配色切り替えを追加します。',
+  '  4. [ ] 多言語対応',
+  '  日本語と英語の切り替えに対応します。',
+  '  5. [ ] Type something',
+  '     Submit',
+  '────────────────────────────────────────────────────────',
+  '  6. Chat about this',
+  '',
+  'Enter to select · ↑/↓ to navigate · Esc to cancel',
+];
+
+describe('a multi-select on a real pane', () => {
+  const live = readClaudePicker(MULTI_LIVE);
+
+  test('the tab strip is read as the chip it is', () => {
+    expect(live).toBeDefined();
+    expect(live?.multiSelect).toBe(true);
+  });
+
+  test('every row is offered, the text-entry ones marked', () => {
+    expect(live?.options.map((o) => o.label)).toEqual([
+      '[ ] 認証機能',
+      '[ ] 通知',
+      '[ ] ダークモード',
+      '[ ] 多言語対応',
+      '[ ] Type something',
+      'Chat about this',
+    ]);
+    expect(live?.options.filter((o) => o.freeText).length).toBe(2);
+  });
+
+  test('the question is what sits between the strip and the rows', () => {
+    expect(live?.question).toBe('有効にする機能をすべて選んでください');
+  });
+
+  test('every row keeps what it says about itself', () => {
+    // A single-pick list indents its descriptions past the label text; this one
+    // puts them at the row's own left edge, under the checkbox. Read as
+    // "strictly further right than the label", only the first row - the one the
+    // cursor sits on, drawn without the indent the others need - kept its own.
+    expect(live?.options.slice(0, 4).map((o) => o.detail)).toEqual([
+      'メールとパスワードによるログインとセッション管理を実装します。',
+      'メールとアプリ内通知の両方に対応します。',
+      'OSの設定に追従する配色切り替えを追加します。',
+      '日本語と英語の切り替えに対応します。',
+    ]);
+  });
+
+  test('the button the list is finished with is not a description', () => {
+    // `Submit` sits under the last row at a description's indent, so it read as
+    // one: `Type something — Submit`.
+    expect(live?.options[4].detail).toBe('');
+  });
+});

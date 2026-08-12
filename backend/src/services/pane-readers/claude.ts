@@ -1,6 +1,6 @@
-import type { PaneQuestion } from './index';
 import type { PickerOption } from './shared';
 import {
+  blankCursor,
   CURSOR,
   dropSidePanel,
   isFreeText,
@@ -73,8 +73,21 @@ const FOOTER = /enter to select/i;
  * Present for a single question too - a call with one question draws one chip -
  * so it is a reliable opening bracket. A permission prompt has none, which is
  * correct: that is a different screen and `extractPermissionRequest` owns it.
+ *
+ * The leading arrow is not optional decoration. A multi-select adds a `✔ Submit`
+ * tab beside the question's own, and a strip with two tabs is drawn with the
+ * keys that move between them:
+ *
+ * ```
+ * ←  ☐ 機能選択  ✔ Submit  →
+ * ```
+ *
+ * Anchored at the glyph alone, that line is not a chip, the block has no
+ * opening bracket, and the reader answers "not this screen" for every
+ * multi-select there has ever been - so no options reached the glasses and no
+ * item was raised at all. Measured against Claude Code 2.1.228.
  */
-const CHIP = /^\s*[☐☑✅✓✔]\s*\S/;
+const CHIP = /^\s*(?:[←→]\s+)?[☐☑✅✓✔]\s*\S/;
 
 /** An option row: `1.` / `2)` / `[1]`, with the cursor glyph claude marks the
  *  current row with. Bounded by the frame, so it does not have to be careful. */
@@ -122,23 +135,34 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
       const label = dropSidePanel(raw).trim();
       if (!label) continue;
       if (firstOptionAt < 0) firstOptionAt = i;
-      labelColumn = line.length - line.trimStart().length;
+      // With the cursor blanked rather than stripped, so the marked row reports
+      // the same column as the rows that have none - it is drawn at the left
+      // edge and they are indented to clear it.
+      labelColumn = indentOf(blankCursor(line));
       options.push({ label, detail: '' });
       continue;
     }
-    // Under an option and indented past it: the description claude draws for
-    // the row above. Anything to the left of the label is the frame's own
+    // Under an option and no further left than it: the description claude draws
+    // for the row above. Anything to the left of the label is the frame's own
     // furniture (`Notes: press n to add notes` sits far to the right, but a
     // blank line ends the run before it can be reached).
+    //
+    // Level with the label counts. A single-pick list indents its descriptions
+    // past the label text, but a multi-select puts them at the row's own left
+    // edge, under the checkbox - so "strictly further right" dropped the
+    // description of every row but the first.
     const last = options[options.length - 1];
     if (!last || firstOptionAt < 0) continue;
     if (!line.trim()) {
       labelColumn = Number.POSITIVE_INFINITY;
       continue;
     }
-    if (line.length - line.trimStart().length <= labelColumn) continue;
+    if (indentOf(line) < labelColumn) continue;
     const text = dropSidePanel(line).trim();
-    if (text) last.detail = joinWrapped(last.detail, text);
+    // The button a multi-select is finished with sits under the last row, at the
+    // indent a description has, and reads as one: `Type something — Submit`.
+    if (!text || isFurniture(text)) continue;
+    last.detail = joinWrapped(last.detail, text);
   }
 
   const answerable = options
@@ -155,6 +179,10 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
     options: answerable,
     multiSelect: answerable.some((o) => /^\[[ xX*✓✔]\]/.test(o.label)),
   };
+}
+
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
 }
 
 /**

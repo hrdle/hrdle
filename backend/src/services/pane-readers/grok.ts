@@ -29,7 +29,7 @@
  */
 
 import type { PaneQuestion } from './index';
-import { isFreeText, joinWrapped, type PickerOption, truncateDetail } from './shared';
+import { isFreeText, type PickerOption, truncateDetail } from './shared';
 
 /** The rule grok frames its prompt with, down the left of every line. */
 const LEFT_RULE = /^\s*┃\s?/;
