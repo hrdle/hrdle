@@ -2039,3 +2039,57 @@ describe("kimi's approval prompt", () => {
     expect(stripCursor('▶ a marker')).toBe('a marker');
   });
 });
+
+// =============================================================================
+// OpenCode asks questions too
+// =============================================================================
+
+describe('an opencode question', () => {
+  /**
+   * Captured from a live opencode 1.18.16 pane on 2026-08-12. It has no reader
+   * of its own, so the general read is what answers here - and it answers well:
+   * the rows are numbered, the descriptions sit under them, and the whole thing
+   * is framed with the rule this file learned to strip in 0.3.63.
+   */
+  const OPENCODE_QUESTION = [
+    '  ┃',
+    '     Decisions to make about',
+    '     → Asked 1 question',
+    '  ┃',
+    '  ┃  fixture.txt をどう扱いますか?',
+    '  ┃',
+    '  ┃  1. このままテストに使う',
+    '  ┃     現在の3行構成をそのままfixtureとして利用する',
+    '  ┃  2. さらに行を追加する',
+    '  ┃     必要に応じて行数を増やしてからテストに使う',
+    '  ┃  3. テスト用に別ファイルを新規作成',
+    '  ┃     fixture.txt はそのまま残し、テスト専用ファイルを別途作る',
+    '  ┃  4. Type your own answer',
+    '  ┃',
+    '  ┃  ↑↓ select  enter submit  esc dismiss',
+  ];
+
+  test('the rows and their descriptions are read', () => {
+    const rows = extractChoiceRows(OPENCODE_QUESTION);
+    expect(rows.map((c) => c.label)).toEqual([
+      'このままテストに使う',
+      'さらに行を追加する',
+      'テスト用に別ファイルを新規作成',
+    ]);
+    expect(rows[0].detail).toBe('現在の3行構成をそのままfixtureとして利用する');
+  });
+
+  test('its text-entry row is not offered', () => {
+    // `Type your own answer` is opencode's wording for the row the ring cannot
+    // answer - claude writes `Type something.` and kimi `Other`. It draws one
+    // on every question it asks, so missing it put an unanswerable row in every
+    // picker opencode ever produced.
+    expect(extractChoiceRows(OPENCODE_QUESTION).map((c) => c.label)).not.toContain('Type your own answer');
+  });
+
+  test('the question is read across the rule it is framed with', () => {
+    expect(extractQuestionLine(OPENCODE_QUESTION, optionBlockStart(OPENCODE_QUESTION))).toBe(
+      'fixture.txt をどう扱いますか?',
+    );
+  });
+});

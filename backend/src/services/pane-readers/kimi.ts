@@ -55,7 +55,7 @@ const CURSOR = /^(\s*)([❯▶›→▸])\s+/;
 const NUMBER = /^(\d+)[.)]\s+/;
 
 /** Rows a wearer cannot answer from the ring. */
-const UNANSWERABLE = new Set(['Other', 'Type something', 'Reject with feedback']);
+const UNANSWERABLE = new Set(['Other', 'Type something', 'Type your own answer', 'Reject with feedback']);
 
 export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
   const hint = lastIndex(lines, (l) => HINT.test(l));

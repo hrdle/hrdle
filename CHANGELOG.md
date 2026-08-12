@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **OpenCode's `Type your own answer` was offered as an option.** It draws one
+  on every question it asks, and the ring has no keyboard - so every picker
+  OpenCode ever produced carried a row whose Enter does nothing a wearer can
+  see. It joins claude's `Type something.` and kimi's `Other`, which were
+  already refused. Measured against a live 1.18.16 question on 2026-08-12
+  - OpenCode does ask questions, which is worth writing down: it has no
+    `AskUserQuestion` tool, so nothing here expected one, and its picker had
+    never been captured. The general read handles the rest of it correctly -
+    numbered rows, descriptions under them, the whole framed with the left rule
+
 ## [0.3.106] - 2026-08-12
 
 ### Added
