@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Junk options on the glasses, twice over.** Both reported from the device on
+  2026-08-12, and both were this side telling the app something untrue
+  - **A busy session was reported as waiting.** `waitingToolName` is read off
+    the transcript, where a record mid-turn always stops on some tool, so
+    `PendingTool` was reported continuously for a session herdr called
+    `working`. Everything downstream reads that field as "is it waiting", so a
+    tap on a busy session scraped its pane for options instead of opening the
+    microphone - and offered two lines of a grep listing as a menu (`71` /
+    `const INFO_TTL_MS = 5 * 60_000;`). It is reported only while herdr says the
+    pane is blocked
+  - **A question ending in a full-width `？` was not recognised as one.** Only
+    the ASCII mark was listed, so a Japanese question read as `unknown`, the
+    relay declined to send its options, and the glasses fell back to scraping
+    the pane themselves
+  - **A preview box drawn beside the options is no longer read as part of
+    them.** Claude Code's picker puts a panel to the right of the list, sharing
+    rows, so each label carried a wall of box-drawing. Cut at the column
+    boundary - two spaces before a border - so a rule drawn tight against a word
+    stays with it
+
 ## [0.3.101] - 2026-08-12
 
 ### Fixed
