@@ -1033,21 +1033,18 @@ export class GlassesController {
             )
             return
           }
-          const scraped = await this.scrapeChoices(top.sessionId)
-          if (scraped.length > 0) {
-            this.enterChoice(
-              scraped,
-              { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id },
-              this.scrapedInline,
-            )
-            return
-          }
+          // No options on the item means the server could not read any, and it
+          // is the only party that reads. There used to be a second reading
+          // here, of the terminal buffer, and it is what actually served the
+          // junk: a `grep` listing and a paragraph of prose, both offered as
+          // menus on 2026-08-12. Speaking the answer is the honest fallback.
           await this.startVoice({ sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
           return
         }
-        // No relay items — legacy indicator flow (scrape, else voice). Reading
-        // one pane, the reply belongs to that pane: sending it to the
-        // workspace would land wherever herdr happens to have focus.
+        // No relay item: nothing is known to be waiting on this pane, so the
+        // tap opens the microphone. Reading one pane, the reply belongs to that
+        // pane: sending it to the workspace would land wherever herdr happens
+        // to have focus.
         //
         // Resolved against the open workspace rather than read raw: the cursor
         // keeps `selectedPaneId` from wherever it last stood, and several paths
@@ -1058,12 +1055,12 @@ export class GlassesController {
         // Undefined here means "this workspace's active pane", which is the
         // right fallback and the one the server already implements.
         const paneId = this.currentPane()?.paneId
-        if (cur && isSessionWaiting(cur)) {
-          const scraped = await this.scrapeChoices(cur.id, this.currentPane())
-          if (scraped.length > 0) {
-            this.enterChoice(scraped, { sessionId: cur.id, paneId }, this.scrapedInline)
-            return
-          }
+        // The demo has no server behind it, so its picker is scripted here
+        // rather than arriving as a relay item. It is the multi-select, which
+        // is the picker with the most to show.
+        if (this.demo && cur && isSessionWaiting(cur)) {
+          this.enterChoice(demoChoices(), { sessionId: cur.id, paneId })
+          return
         }
         if (cur) await this.startVoice({ sessionId: cur.id, paneId })
         return
@@ -1661,59 +1658,6 @@ export class GlassesController {
   }
 
   /** Terminal scrape — fallback when the active waiting item has no choices. */
-  private async scrapeChoices(sessionId: string, pane?: Pane): Promise<string[]> {
-    // The demo's waiting session is holding a multi-select: the picker with
-    // the most to show, and the one that was broken until today.
-    if (this.demo) return demoChoices()
-
-    // What the agent recorded beats anything read off the screen: the options
-    // as it wrote them, with the descriptions the screen never carried. A call
-    // holding several questions gets NO options rather than scraped ones - the
-    // pane draws a tab each and answers whichever is in front, which the
-    // record cannot say; and the scrape read that used to fill the gap served
-    // the tabbed TUI's own furniture as answers (the description block, the
-    // `Next` row, finally `Submit answers` / `Cancel`). The server's
-    // relay item carries the front tab's options when the pane text names it,
-    // so this local path declining is not the wearer losing the question.
-    const recorded = pane?.pendingQuestion
-    if (recorded) {
-      this.scrapedInline = undefined
-      if (recorded.ambiguous) return []
-      // A multi-select's rows carry the checkbox the pane draws on theirs -
-      // the box is what `looksMultiSelect` reads, and without it the picker
-      // opened a multi-select as a single pick and closed after one digit.
-      const box = recorded.multiSelect ? '[ ] ' : ''
-      return recorded.options.map((o) =>
-        o.description ? `${box}${o.label} - ${o.description}` : `${box}${o.label}`,
-      )
-    }
-
-    await this.ws.requestContentAndWait(sessionId)
-    this.scrapedInline = undefined
-    const numbered = this.ws.getChoices(sessionId)
-    if (numbered.length > 0) return numbered
-
-    // Only when the numbered and checkbox reads found nothing: a prompt that
-    // has both would otherwise be answered the harder way.
-    //
-    // And only for an agent that keeps no record of its questions. This read
-    // is a guess about paint - one item coloured unlike its neighbours - and
-    // where the agent can be asked directly and says it is asking nothing, the
-    // guess has nothing left to be right about. Both times it was wrong it was
-    // here: a kimi question's tab bar offered as that question's answer, and a
-    // Claude pane that was not asking anything offering a line number and a
-    // line of code from a `Read` result. A numbered list is still read for
-    // every agent, because a permission prompt is numbered and is in no
-    // record at all.
-    if (pane?.questionKnown === true) return []
-    const inline = this.ws.getInlineChoices(sessionId)
-    if (!inline) return []
-    this.scrapedInline = inline
-    return inline.options
-  }
-
-  /** What the last local scrape found, waiting to be handed to enterChoice. */
-  private scrapedInline?: InlineChoices
 
   /**
    * Where the pane's own cursor sits on the row now open in the picker.

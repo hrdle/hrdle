@@ -5,7 +5,6 @@ import {
   paintedChars,
   moveTo,
 } from '../../../shared/inline-choices'
-import { extractChoices } from '../ws-client'
 import {
   CLAUDE_QUESTION_TAB_BAR,
   OPENCODE_FOOTER_ROW,
@@ -17,7 +16,7 @@ import {
 
 /**
  * OpenCode draws its permission prompt as one horizontal row with no numbering
- * and no checkboxes, so neither shape `extractChoices` knows can see it. The
+ * and no checkboxes, so neither shape the text reader knows can see it. The
  * row directly beneath is the key hints, which as text is the same shape - the
  * two are told apart by their paint, and by nothing else.
  */
@@ -268,15 +267,6 @@ describe('moveTo', () => {
 })
 
 describe('alongside the existing readers', () => {
-  /**
-   * The reason this module exists: the numbered and checkbox readers see
-   * nothing in an OpenCode prompt, which is what left a wearer with a waiting
-   * notification and no way to answer it.
-   */
-  test('the numbered reader still finds nothing here', () => {
-    const pane = [OPENCODE_PERMISSION_ROW, OPENCODE_FOOTER_ROW].join('\n')
-    expect(extractChoices(pane)).toEqual([])
-  })
 })
 
 describe("kimi's question tab bar", () => {

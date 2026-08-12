@@ -17,95 +17,24 @@ import { describe, expect, test } from 'bun:test'
 import { GlassesController, sameLabels } from '../controller.ts'
 import type { GlassesPlatform } from '../controller.ts'
 import { isChecked, looksMultiSelect } from '../display.ts'
-import { extractChoices } from '../ws-client.ts'
 
 // ── the panes themselves ──────────────────────────────────────────────────
 
-/** Claude Code, `multiSelect: true`. Numbered *and* boxed, with a free-text
- *  row that drops its full stop the moment it grows a checkbox. */
-const CLAUDE_MULTI = [
-  '←  ☒ Color  ☐ Fruits  ☐ Speed  ✔ Submit  →',
-  '',
-  'Which fruits do you like?',
-  '',
-  '❯ 1. [ ] Apple',
-  '  Crisp and sweet-tart.',
-  '  2. [ ] Banana',
-  '  Soft and sweet.',
-  '  3. [✔] Cherry',
-  '  Small and tangy-sweet.',
-  '  4. [ ] Type something',
-  '     Next',
-  '',
-  '  5. Chat about this',
-  '',
-  'Enter to select · Tab/Arrow keys to navigate · Esc to cancel',
-].join('\n')
 
-/** Kimi Code, the same question. Not a digit anywhere on the screen — even
- *  though the hint line says `1-4` still works as a key. */
-const KIMI_MULTI = [
-  '  question',
-  '',
-  '  (✓) Color   Fruits   (○) Speed   Submit',
-  '',
-  '  ? Which fruits do you like?',
-  '',
-  '   [ ] Apple',
-  '   [✓] Banana',
-  '   [ ] Cherry',
-  '   [ ] Other',
-  '',
-  '   ↑↓ select  1-4 / ↵ toggle  ←/→/tab switch  esc cancel',
-].join('\n')
 
-/** Kimi Code, single pick. Numbered, cursor drawn with U+2192. */
-const KIMI_SINGLE = [
-  '  ? How fast should it go?',
-  '',
-  '   → [1] Fast',
-  '     [2] Slow',
-  '     [3] Other',
-  '',
-  '   ↑↓ select  1-3 / ↵ choose  ←/→/tab switch  esc cancel',
-].join('\n')
 
 // ── reading them ─────────────────────────────────────────────────────────
 
-describe('reading a real multi-select', () => {
-  test("Claude's numbered checkboxes keep their boxes", () => {
-    expect(extractChoices(CLAUDE_MULTI)).toEqual(['[ ] Apple', '[ ] Banana', '[✔] Cherry'])
-  })
+// The reading moved to the server, which is the only party that reads a pane
+// now (`backend/src/services/pane-readers/`). This app used to keep a second
+// implementation of it, and that one is what served a wearer a `grep` listing
+// and a paragraph of prose as menus on 2026-08-12 - two readings of one screen
+// disagreeing is a thing only one of them can be right about.
+//
+// The fixtures went with it, to the tests of the reader that now owns them.
+// What stays here is what this side still decides about rows it is handed.
 
-  test("Kimi's unnumbered checkboxes are read at all", () => {
-    // The whole question was invisible before: no digits, so the numeric run
-    // that recognises every other option list had nothing to count, and the
-    // panel sat on the previous question while the pane had moved on.
-    expect(extractChoices(KIMI_MULTI)).toEqual(['[ ] Apple', '[✓] Banana', '[ ] Cherry'])
-  })
-
-  test('a numbered list is still read as one', () => {
-    expect(extractChoices(KIMI_SINGLE)).toEqual(['Fast', 'Slow'])
-  })
-
-  test('the rows a wearer cannot answer are gone from both', () => {
-    // `Type something.` in a single pick, `[ ] Type something` in a
-    // multi-select — no full stop, and a checkbox in front. Matching the
-    // literal string caught the first and missed the second.
-    for (const pane of [CLAUDE_MULTI, KIMI_MULTI, KIMI_SINGLE]) {
-      const joined = extractChoices(pane).join('|')
-      expect(joined).not.toContain('Type something')
-      expect(joined).not.toContain('Chat about this')
-      expect(joined).not.toContain('Other')
-    }
-  })
-
-  test('both are recognised as multi-selects, and the single pick is not', () => {
-    expect(looksMultiSelect(extractChoices(CLAUDE_MULTI))).toBe(true)
-    expect(looksMultiSelect(extractChoices(KIMI_MULTI))).toBe(true)
-    expect(looksMultiSelect(extractChoices(KIMI_SINGLE))).toBe(false)
-  })
-
+describe('what this side makes of the rows it is given', () => {
   test('a ticked box is read as ticked, whichever check mark drew it', () => {
     // Claude Code writes U+2714 and Kimi writes U+2713. Only the lighter one
     // was listed, so every box Claude ticked read back empty: the send row
@@ -115,20 +44,9 @@ describe('reading a real multi-select', () => {
     expect(isChecked('[ ] Apple')).toBe(false)
   })
 
-  test("kimi's Other row is dropped even while it is being typed into", () => {
-    // It grows a colon when it becomes the active text field, which is exactly
-    // when leaving it in the picker does the most harm.
-    expect(extractChoices(['   [ ] Apple', '   [✓] Banana', '   [ ] Other:'].join('\n'))).toEqual([
-      '[ ] Apple',
-      '[✓] Banana',
-    ])
-  })
-
-  test('prose is still declined', () => {
-    // The checkbox path is another way into the picker, so it has to refuse
-    // what the numbered one refuses.
-    expect(extractChoices('a paragraph\nand another\nand a third')).toEqual([])
-    expect(extractChoices('[ ] the only box on screen')).toEqual([])
+  test('a multi-select is recognised from its boxes', () => {
+    expect(looksMultiSelect(['[ ] Apple', '[✓] Banana'])).toBe(true)
+    expect(looksMultiSelect(['Fast', 'Slow'])).toBe(false)
   })
 })
 
