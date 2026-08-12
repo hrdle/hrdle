@@ -197,8 +197,10 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
   const kept = options
     .map((o, at) => ({ option: o, at }))
     .filter(({ option }) => !isFurniture(option.label));
-  const answerable = kept.map(({ option }) =>
-    isFreeText(option.label) ? { ...option, freeText: true } : option,
+  const answerable = kept.map(({ option }, i) =>
+    isFreeText(option.label, { last: i === kept.length - 1 })
+      ? { ...option, freeText: true }
+      : option,
   );
   if (answerable.length === 0) return undefined;
 

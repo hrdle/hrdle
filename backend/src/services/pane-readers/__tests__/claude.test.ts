@@ -237,6 +237,40 @@ const MULTI_LIVE = [
   'Enter to select · ↑/↓ to navigate · Esc to cancel',
 ];
 
+describe('a row named after the picker\'s own', () => {
+  // `Chat about this` is drawn at the foot of every question, so the wording is
+  // claude's - but it is ordinary enough for an agent to write, and one did:
+  // a question about this very behaviour listed it third. Tapped, the wearer
+  // got the microphone instead of the box ticking.
+  const named = readClaudePicker([
+    '────────────────────────────',
+    ' ☐ 確認項目 ',
+    '',
+    '確認したい挙動をすべて選んでください',
+    '',
+    '❯ 1. [ ] 音声入力',
+    '  2. [ ] Chat about this',
+    '  3. [ ] Type something',
+    '────────────────────────────',
+    '  4. Chat about this',
+    '',
+    'Enter to select · ↑/↓ to navigate · Esc to cancel',
+  ]);
+
+  test('it answers like any other option where an agent wrote it', () => {
+    expect(named?.options[1]).toMatchObject({ label: '[ ] Chat about this' });
+    expect(named?.options[1].freeText).toBeUndefined();
+  });
+
+  test('the picker\'s own, at the foot of the list, still opens the microphone', () => {
+    expect(named?.options.at(-1)).toMatchObject({ label: 'Chat about this', freeText: true });
+  });
+
+  test('a row that means it wherever it is drawn keeps meaning it', () => {
+    expect(named?.options[2]).toMatchObject({ label: '[ ] Type something', freeText: true });
+  });
+});
+
 describe('a multi-select on a real pane', () => {
   const live = readClaudePicker(MULTI_LIVE);
 

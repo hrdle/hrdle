@@ -69,11 +69,26 @@ export function blankCursor(line: string): string {
  */
 const FREE_TEXT_LABELS = new Set([
   'Type something', // claude
-  'Chat about this', // claude
   'Other', // kimi
   'Reject with feedback', // kimi - refusing with a reason is a thing to say
   'Type your answer here', // grok
   'Type your own answer', // opencode
+]);
+
+/**
+ * The same, but only where the picker puts its own.
+ *
+ * `Chat about this` is claude's, drawn below the closing rule at the foot of
+ * every question - so a row saying it anywhere else is a row an agent wrote,
+ * and the wording is ordinary enough to be written. Measured: a question about
+ * this very behaviour listed `Chat about this` as its third option, and the
+ * wearer's tap opened the microphone instead of ticking the box.
+ *
+ * The position is the whole of the difference, which is why the label alone
+ * cannot carry it.
+ */
+const TRAILING_FREE_TEXT_LABELS = new Set([
+  'Chat about this', // claude
 ]);
 
 /**
@@ -108,8 +123,18 @@ export function bareLabel(label: string): string {
     .replace(/[.:：]$/, '');
 }
 
-export function isFreeText(label: string): boolean {
-  return FREE_TEXT_LABELS.has(bareLabel(label));
+/**
+ * Whether picking this row opens a field rather than answering.
+ *
+ * `at` is where the row sits in the list. A reader that does not pass it gets
+ * the labels that mean the same wherever they are drawn, and none of the ones
+ * that only mean it at the foot of the picker - which is the right answer for
+ * an agent that draws no such row at all.
+ */
+export function isFreeText(label: string, at?: { last: boolean }): boolean {
+  const bare = bareLabel(label);
+  if (TRAILING_FREE_TEXT_LABELS.has(bare)) return at?.last === true;
+  return FREE_TEXT_LABELS.has(bare);
 }
 
 export function isFurniture(label: string): boolean {

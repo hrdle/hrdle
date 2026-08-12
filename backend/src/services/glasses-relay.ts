@@ -460,12 +460,14 @@ export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
     last.detail = joinWrapped(last.detail, dropSidePanel(line).trim());
   }
 
-  // Marked on the label alone: `Other` is the text row whatever description an
-  // agent hangs off it.
-  return rows.map((r) => ({
+  // Mostly marked on the label alone - `Other` is the text row whatever
+  // description an agent hangs off it - but a couple only mean it at the foot
+  // of the list, where the picker draws its own rather than where an agent
+  // wrote one.
+  return rows.map((r, i) => ({
     label: r.label,
     detail: truncate(r.detail, MAX_DETAIL_CHARS),
-    ...(isFreeText(r.label) ? { freeText: true } : {}),
+    ...(isFreeText(r.label, { last: i === rows.length - 1 }) ? { freeText: true } : {}),
   }));
 }
 
