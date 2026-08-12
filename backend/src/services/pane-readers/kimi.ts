@@ -54,8 +54,11 @@ const CURSOR = /^(\s*)([❯▶›→▸])\s+/;
 /** A numbered row, once the cursor is off it: `1. Approve once`. */
 const NUMBER = /^(\d+)[.)]\s+/;
 
-/** Rows a wearer cannot answer from the ring. */
-const UNANSWERABLE = new Set(['Other', 'Type something', 'Type your own answer', 'Reject with feedback']);
+/** Rows that open a text field. Kept and marked: the ring cannot type into one
+ *  but the microphone can, and it is the row a wearer wants when none of the
+ *  options fit. Kimi's `Reject with feedback` is one of these - refusing with a
+ *  reason is a thing to say, not a thing to pick. */
+const FREE_TEXT = new Set(['Other', 'Type something', 'Type your own answer', 'Reject with feedback']);
 
 export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
   const hint = lastIndex(lines, (l) => HINT.test(l));
@@ -124,7 +127,9 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
     paragraphStart = false;
   }
 
-  const kept = rows.filter((r) => !UNANSWERABLE.has(r.option.label));
+  const kept = rows.map((r) =>
+    FREE_TEXT.has(r.option.label) ? { ...r, option: { ...r.option, freeText: true } } : r,
+  );
   if (kept.length === 0) return undefined;
 
   const numbered = kept.every((r) => r.numbered);
@@ -134,10 +139,9 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
     question: questionOf(block, questionAt),
     options: kept.map((r) => r.option),
     multiSelect: false,
-    // Numbered rows answer to their own digit, and a row dropped from the list
-    // costs nothing there. An unnumbered one is answered by counting steps from
-    // where the pane's cursor is, so the count has to be exact - and if the
-    // cursor was on a row that went, it cannot be.
+    // Numbered rows answer to their own digit. An unnumbered one is answered by
+    // counting steps from where the pane's cursor is, so the count has to be
+    // exact - which it is, no row being dropped from the list any more.
     ...(numbered
       ? { choiceInput: 'number' as const }
       : selected >= 0 && kept.length === rows.length

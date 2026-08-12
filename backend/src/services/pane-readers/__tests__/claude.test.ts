@@ -86,9 +86,10 @@ describe('a question on screen', () => {
     expect(picker?.question).toBe('ルータ管理画面（admin）のパスワードをどう渡しますか？');
   });
 
-  test('a row that opens a text field is not offered', () => {
-    // `Chat about this` sits below the closing rule and still inside the
-    // frame. The ring has no keyboard.
+  test('an unnumbered row below the rule is not an option', () => {
+    // This pane draws `Chat about this` with no number of its own, and a row
+    // with no key is not one a digit can reach. Claude numbers it on other
+    // questions, and there it is offered - see the text-entry row below.
     expect(picker?.options.map((o) => o.label)).not.toContain('Chat about this');
   });
 
@@ -151,7 +152,12 @@ describe('descriptions', () => {
     expect(described?.options.map((o) => o.detail)).toEqual([
       '既存は今の共有グロサリー + 辞退可能のまま',
       '14ワークスペースに116文字ずつコピーする',
+      '',
     ]);
+  });
+
+  test('the text-entry row comes last and is marked', () => {
+    expect(described?.options.at(-1)).toMatchObject({ label: 'Type something.', freeText: true });
   });
 });
 

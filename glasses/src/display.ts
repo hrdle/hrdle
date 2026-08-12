@@ -193,6 +193,14 @@ export interface AppState {
    */
   choiceDetails?: string[]
   /**
+   * Indices into `choiceOptions` whose row opens a text field.
+   *
+   * Picking one sends its key and then starts dictation. Marked rather than
+   * dropped: the ring cannot type, but the glasses can listen, and this is the
+   * row a wearer wants when none of the options fit.
+   */
+  choiceFreeText?: number[]
+  /**
    * The options are checkboxes rather than a single pick.
    *
    * Claude Code's multi-select answers to space-then-enter, and the ring had

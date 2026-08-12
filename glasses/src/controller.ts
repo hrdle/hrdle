@@ -1030,6 +1030,7 @@ export class GlassesController {
               { sessionId: top.sessionId, paneId: top.paneId, itemId: top.id },
               this.inlineFromItem(top),
               top.choiceDetails,
+              top.choiceFreeText,
             )
             return
           }
@@ -1139,7 +1140,7 @@ export class GlassesController {
 
   // ── choice ──
 
-  private onChoiceAction(action: RingAction): Promise<void> {
+  private async onChoiceAction(action: RingAction): Promise<void> {
     const st = this.state
     const rows = choiceRows(st).length
     switch (action) {
@@ -1169,6 +1170,19 @@ export class GlassesController {
         }
         if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
         else this.sendChoiceKey(onChoiceSend(st) ? '\t' : String(st.choiceIndex + 1))
+        // The row that opens a text field. Every agent draws one, and the ring
+        // cannot type into it - which is why they used to be dropped before the
+        // item was ever built. The glasses have a microphone: the key opens the
+        // field and dictation fills it, so the row a wearer wants when none of
+        // the options fit is the one they can now reach fastest.
+        if (this.state.choiceFreeText?.includes(st.choiceIndex)) {
+          const target = this.choiceTarget
+          this.answeredItem(target?.itemId)
+          if (target) {
+            await this.startVoice(target)
+            return
+          }
+        }
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         this.echoAnswer(this.pickedText())
@@ -1523,6 +1537,7 @@ export class GlassesController {
         { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
         this.inlineFromItem(item),
         item.choiceDetails,
+        item.choiceFreeText,
       )
       void this.loadConversation().then(() => this.render())
       return
@@ -1571,6 +1586,7 @@ export class GlassesController {
     target: ReplyTarget,
     inline?: InlineChoices,
     details?: string[],
+    freeText?: number[],
   ): void {
     const keepCursor =
       this.state.mode === 'choice' &&
@@ -1584,6 +1600,7 @@ export class GlassesController {
     // carries none, and the previous question's descriptions under this one's
     // options would be answering something nobody asked.
     this.state.choiceDetails = details
+    this.state.choiceFreeText = freeText
     this.state.choiceMulti = looksMultiSelect(options)
     // Set here rather than left over from whatever ran last: two halves feed
     // this - a relay item that already carries the reading, and a terminal
@@ -1832,6 +1849,7 @@ export class GlassesController {
         { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
         this.inlineFromItem(item),
         item.choiceDetails,
+        item.choiceFreeText,
       )
       return
     }

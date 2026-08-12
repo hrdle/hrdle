@@ -225,6 +225,15 @@ export interface GlassesRelayItem {
    *  The label alone - the description travels in `choiceDetails`. */
   choices?: string[]
   /**
+   * Indices into `choices` whose row opens a text field.
+   *
+   * Picking one sends its key and then starts dictation: the ring has no
+   * keyboard, which is why these rows used to be dropped, but the glasses have
+   * a microphone and this is the row a wearer wants when none of the options
+   * fit.
+   */
+  choiceFreeText?: number[]
+  /**
    * What each choice says about itself, index-aligned with `choices` and empty
    * where an option had nothing under it.
    *

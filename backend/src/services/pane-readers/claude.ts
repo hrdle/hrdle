@@ -41,6 +41,8 @@
 export interface PickerOption {
   label: string;
   detail: string;
+  /** The row opens a text field. Answered by dictation rather than dropped. */
+  freeText?: boolean;
 }
 
 export interface ClaudePicker {
@@ -77,34 +79,34 @@ const OPTION = /^\s*[❯>]?\s*(?:\d+[.)]|\[\d+\])\s*(.+)/;
 const BOXED = /^\s*[❯>]?\s*(?:\d+[.)]\s*)?(\[[ xX*✓✔]\])\s*(\S.*)/;
 
 /**
- * Rows a wearer must not be offered.
+ * The rows that belong to the picker rather than to the question.
  *
- * The first three open a text field, and the ring has no keyboard - a row whose
- * Enter does nothing visible. The rest belong to the picker rather than to the
- * question: a call carrying several questions draws a tab each and moves
- * between them with rows of its own, and those were what a wearer answered two
- * questions of three with. Filtering them leaves the front tab's own options
- * holding their own numbers, which is what a digit answers.
+ * A call carrying several questions draws a tab each and moves between them
+ * with rows of its own, and those were what a wearer answered two questions of
+ * three with. Dropping them leaves the front tab's own options holding their
+ * own numbers, which is what a digit answers.
+ *
+ * The text-entry rows are NOT here. They open a field, which the ring cannot
+ * type into and the microphone can - see `FREE_TEXT`.
  */
-const UNANSWERABLE = new Set([
-  'Type something',
-  'Chat about this',
-  'Other',
-  'Type your own answer',
-  'Next',
-  'Back',
-  'Submit answers',
-  'Submit answer',
-  'Cancel',
-]);
+const FURNITURE = new Set(['Next', 'Back', 'Submit answers', 'Submit answer', 'Cancel']);
 
-function isUnanswerable(label: string): boolean {
-  return UNANSWERABLE.has(
-    label
-      .replace(/^\[[ xX*✓✔]\]\s*/, '')
-      .trim()
-      .replace(/[.:：]$/, ''),
-  );
+/** The rows that open a text field: kept, and marked. */
+const FREE_TEXT = new Set(['Type something', 'Chat about this', 'Other', 'Type your own answer']);
+
+function bareLabel(label: string): string {
+  return label
+    .replace(/^\[[ xX*✓✔]\]\s*/, '')
+    .trim()
+    .replace(/[.:：]$/, '');
+}
+
+function isFurniture(label: string): boolean {
+  return FURNITURE.has(bareLabel(label));
+}
+
+function isFreeText(label: string): boolean {
+  return FREE_TEXT.has(bareLabel(label));
 }
 
 /**
@@ -173,7 +175,9 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
     if (text) last.detail = join(last.detail, text);
   }
 
-  const answerable = options.filter((o) => !isUnanswerable(o.label));
+  const answerable = options
+    .filter((o) => !isFurniture(o.label))
+    .map((o) => (isFreeText(o.label) ? { ...o, freeText: true } : o));
   if (answerable.length === 0) return undefined;
 
   for (const o of answerable) {

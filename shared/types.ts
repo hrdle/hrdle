@@ -1368,6 +1368,17 @@ export interface GlassesRelayItem {
    */
   choices?: string[];
   /**
+   * Indices into `choices` whose row opens a text field rather than answering.
+   *
+   * Every agent draws one - claude's `Type something.`, kimi's `Other`,
+   * opencode's `Type your own answer` - and all of them used to be dropped
+   * before the item was built, on the reasoning that the ring has no keyboard.
+   * It has a microphone. The row a wearer most wants when none of the options
+   * fit is the one that was always taken away, so it travels now, and picking
+   * it opens the pane's field and then dictation.
+   */
+  choiceFreeText?: number[];
+  /**
    * What each choice says about itself, index-aligned with `choices`.
    *
    * Sent separately because only the app knows how many of its eight lines are

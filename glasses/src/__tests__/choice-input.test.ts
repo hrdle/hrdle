@@ -283,3 +283,44 @@ describe('telling one question from the same one re-read', () => {
     expect(sameLabels(FRUITS, ['[ ] Apple', '[ ] Banana'])).toBe(false)
   })
 })
+
+// ── the row that opens a text field ──────────────────────────────────────
+
+/**
+ * Every agent draws one - claude's `Type something.`, kimi's `Other` and its
+ * `Reject with feedback`, opencode's `Type your own answer` - and all of them
+ * used to be dropped before the item was built, because the ring has no
+ * keyboard.
+ *
+ * The glasses have a microphone. The row a wearer wants when none of the
+ * options fit was the one always taken away from them; picking it now sends the
+ * key that opens the pane's field and goes straight to dictation.
+ */
+describe('a free-text row', () => {
+  test('sends its key and then starts listening', async () => {
+    const { c, keys } = picker(['Rewrite it', 'Type something.'])
+    c.state.choiceFreeText = [1]
+    let listening: unknown = null
+    ;(c as unknown as { startVoice(t: unknown): Promise<void> }).startVoice = async (t) => {
+      listening = t
+    }
+    await inner(c).handle('swipeDown')
+    await inner(c).handle('tap')
+
+    expect(keys).toEqual(['2'])
+    expect(listening).toMatchObject({ sessionId: 's1', paneId: '%0' })
+  })
+
+  test('an ordinary row still just answers', async () => {
+    const { c, keys } = picker(['Rewrite it', 'Type something.'])
+    c.state.choiceFreeText = [1]
+    let listening = false
+    ;(c as unknown as { startVoice(t: unknown): Promise<void> }).startVoice = async () => {
+      listening = true
+    }
+    await inner(c).handle('tap')
+
+    expect(keys).toEqual(['1'])
+    expect(listening).toBe(false)
+  })
+})

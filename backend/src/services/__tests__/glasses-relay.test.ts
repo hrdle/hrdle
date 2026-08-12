@@ -223,6 +223,8 @@ describe('scrape extraction', () => {
     expect(choices).toEqual([
       'モジュールごとに1ファイル - 各モジュールに対応するテストファイルを個別に作成します',
       '全部で1ファイル - すべてのテストを1つのファイルにまとめます',
+      // Kept since 0.3.107: the ring cannot type into it, the microphone can.
+      'Other',
     ]);
   });
 
@@ -278,18 +280,27 @@ describe('scrape extraction', () => {
     ).toEqual(['Submit', 'Cancel']);
   });
 
-  test('extractNumberedChoices drops the rows the ring cannot answer', () => {
-    // All three open free-text entry, which the ring has no keyboard for.
-    // `Other` is kimi's; the other two are claude's.
+  test('extractNumberedChoices keeps the rows that open a text field', () => {
+    // They used to be dropped, because the ring has no keyboard. The glasses
+    // have a microphone: picking one sends its key and starts dictation, which
+    // is how a wearer answers a question none of whose options fit.
     expect(
-      extractNumberedChoices([
+      extractChoiceRows([
         '❯ 1. Rewrite it',
         '  2. Patch minimally',
         '  3. Type something.',
         '  4. Chat about this',
-      ]),
-    ).toEqual(['Rewrite it', 'Patch minimally']);
-    expect(extractNumberedChoices(['   → [1] Keep it', '     [2] Other'])).toEqual(['Keep it']);
+      ]).map((c) => [c.label, c.freeText ?? false]),
+    ).toEqual([
+      ['Rewrite it', false],
+      ['Patch minimally', false],
+      ['Type something.', true],
+      ['Chat about this', true],
+    ]);
+    expect(extractChoiceRows(['   → [1] Keep it', '     [2] Other']).map((c) => c.freeText ?? false)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   test("extractNumberedChoices reads claude's multi-select, boxes and all", () => {
@@ -313,7 +324,7 @@ describe('scrape extraction', () => {
         '',
         '  5. Chat about this',
       ]),
-    ).toEqual(['[ ] Apple', '[ ] Banana', '[✔] Cherry']);
+    ).toEqual(['[ ] Apple', '[ ] Banana', '[✔] Cherry', '[ ] Type something - Next', 'Chat about this']);
   });
 
   test("extractNumberedChoices reads kimi's unnumbered multi-select", () => {
@@ -338,17 +349,20 @@ describe('scrape extraction', () => {
         '',
         '   ↑↓ select  1-4 / ↵ toggle  ←/→/tab switch  esc cancel',
       ]),
-    ).toEqual(['[ ] Apple', '[✓] Banana', '[ ] Cherry']);
+    ).toEqual(['[ ] Apple', '[✓] Banana', '[ ] Cherry', '[ ] Other']);
   });
 
-  test('extractNumberedChoices drops a free-text row whatever punctuation it wears', () => {
+  test('a free-text row is marked whatever punctuation it wears', () => {
     // `Type something.` in a single pick, `[ ] Type something` in a
     // multi-select, and kimi's `Other:` once it is the field being typed into.
     // Compared literally, only the first was caught.
-    expect(extractNumberedChoices(['1. [ ] Keep it', '2. [ ] Type something'])).toEqual([
-      '[ ] Keep it',
+    expect(
+      extractChoiceRows(['1. [ ] Keep it', '2. [ ] Type something']).map((c) => c.freeText ?? false),
+    ).toEqual([false, true]);
+    expect(extractChoiceRows(['   [ ] Keep it', '   [ ] Other:']).map((c) => c.freeText ?? false)).toEqual([
+      false,
+      true,
     ]);
-    expect(extractNumberedChoices(['   [ ] Keep it', '   [ ] Other:'])).toEqual(['[ ] Keep it']);
   });
 
   test('extractQuestionLine prefers the last ?-terminated line', () => {
@@ -1736,7 +1750,11 @@ describe('a claude picker the record cannot see', () => {
       '新規ワークスペースから適用（推奨）',
       '全ワークスペースに今書き込む',
       '種モデルはやめて現状維持',
+      // The two rows that open a text field travel too, and say which they are.
+      'Type something.',
+      'Chat about this',
     ]);
+    expect(item.choiceFreeText).toEqual([3, 4]);
   });
 
   test('the question is the whole of it, not the row the wrap ended on', async () => {
@@ -2075,16 +2093,20 @@ describe('an opencode question', () => {
       'このままテストに使う',
       'さらに行を追加する',
       'テスト用に別ファイルを新規作成',
+      'Type your own answer',
     ]);
     expect(rows[0].detail).toBe('現在の3行構成をそのままfixtureとして利用する');
   });
 
-  test('its text-entry row is not offered', () => {
-    // `Type your own answer` is opencode's wording for the row the ring cannot
-    // answer - claude writes `Type something.` and kimi `Other`. It draws one
-    // on every question it asks, so missing it put an unanswerable row in every
-    // picker opencode ever produced.
-    expect(extractChoiceRows(OPENCODE_QUESTION).map((c) => c.label)).not.toContain('Type your own answer');
+  test('its text-entry row is offered, and marked as one', () => {
+    // `Type your own answer` is opencode's wording; claude writes `Type
+    // something.` and kimi `Other`. All three used to be dropped, because the
+    // ring cannot type into a field. The glasses can listen: picking it sends
+    // the key and starts dictation, which is the fastest way to answer a
+    // question none of whose options fit.
+    const rows = extractChoiceRows(OPENCODE_QUESTION);
+    expect(rows.map((c) => c.label)).toContain('Type your own answer');
+    expect(rows.find((c) => c.label === 'Type your own answer')?.freeText).toBe(true);
   });
 
   test('the question is read across the rule it is framed with', () => {
