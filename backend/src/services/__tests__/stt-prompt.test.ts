@@ -3,7 +3,7 @@ import { composeSttPrompt, sessionPromptTerms } from '../stt-prompt';
 
 /** The line alone, for the cases that are only about what it says. */
 function line(session: string[] = [], glossary?: string[]): string {
-  return composeSttPrompt(session, glossary).prompt;
+  return composeSttPrompt(session, glossary ? { glossary } : {}).prompt;
 }
 
 /**
@@ -86,7 +86,7 @@ describe('composeSttPrompt', () => {
  */
 describe('composeSttPrompt reports how it got there', () => {
   test('each group says which of its terms made it in', () => {
-    const composition = composeSttPrompt(['音声認識'], ['パネル']);
+    const composition = composeSttPrompt(['音声認識'], { glossary: ['パネル'] });
     expect(composition.groups.map((g) => g.name)).toEqual(['session', 'glossary']);
     expect(composition.groups[0].taken).toEqual(['音声認識']);
     expect(composition.groups[1].taken).toEqual(['パネル']);
@@ -96,14 +96,14 @@ describe('composeSttPrompt reports how it got there', () => {
 
   test('a term cut by the budget is named, with the budget as the reason', () => {
     const long = 'あ'.repeat(94);
-    const composition = composeSttPrompt([long, '確定申告'], []);
+    const composition = composeSttPrompt([long, '確定申告'], { glossary: [] });
     expect(composition.groups[0].taken).toEqual([long]);
     // 94 + 1 + 4 is past the 95 the session may take.
     expect(composition.groups[0].skipped).toEqual([{ term: '確定申告', reason: 'budget' }]);
   });
 
   test('a term the session already said is named as a duplicate, not as dropped', () => {
-    const composition = composeSttPrompt(['パネル'], ['パネル', 'リリース']);
+    const composition = composeSttPrompt(['パネル'], { glossary: ['パネル', 'リリース'] });
     expect(composition.groups[1].skipped).toEqual([{ term: 'パネル', reason: 'duplicate' }]);
     expect(composition.groups[1].taken).toContain('リリース');
   });
@@ -121,5 +121,52 @@ describe('sessionPromptTerms', () => {
   test('is empty for a session that has none', () => {
     expect(sessionPromptTerms(undefined)).toEqual([]);
     expect(sessionPromptTerms('  、 ,')).toEqual([]);
+  });
+});
+
+/**
+ * A workspace whose subject is not this product says none of the glossary's
+ * words, and the half of the line reserved for them cannot be spent. Declining
+ * the glossary is what gives that budget back.
+ */
+describe('a workspace can decline the shared glossary', () => {
+  const cooking = [
+    '全粒粉', 'ベーグル', 'ラタトゥイユ', '強力粉', '干し椎茸', 'ささみ', 'オクラ',
+    'ズッキーニ', 'ひじき', 'さば水煮缶', '作り置き', '鶏むね', '木綿豆腐',
+    '落とし焼き', '塩昆布', '玉ねぎ', '買い物リスト', '炊き込みご飯',
+  ];
+
+  // 18 terms is 90 of the 95 the session may take while the glossary is on, so
+  // a sixth-character term does not fit. That is the reported symptom: half
+  // the line is held for words this workspace cannot say, and it is full.
+  const oneMore = [...cooking, '切り干し大根'];
+
+  test('with it on, the next term is cut and the glossary takes the rest', () => {
+    const composition = composeSttPrompt(oneMore, { glossary: ['リリース', 'コミット'] });
+    expect(composition.glossaryEnabled).toBe(true);
+    expect(composition.groups[0].skipped).toEqual([{ term: '切り干し大根', reason: 'budget' }]);
+    expect(composition.groups[1].taken).toEqual(['リリース', 'コミット']);
+  });
+
+  test('with it off, the same term fits and no glossary term is offered', () => {
+    const composition = composeSttPrompt(oneMore, {
+      glossaryEnabled: false,
+      glossary: ['リリース', 'コミット'],
+    });
+    expect(composition.glossaryEnabled).toBe(false);
+    expect(composition.groups[0].taken).toEqual(oneMore);
+    expect(composition.groups[1].taken).toEqual([]);
+    expect(composition.groups[1].skipped).toEqual([]);
+  });
+
+  test('declining does not lift the cap on the line itself', () => {
+    const composition = composeSttPrompt(['あ'.repeat(200), '味噌'], {
+      glossaryEnabled: false,
+    });
+    expect(composition.groups[0].skipped[0]).toEqual({
+      term: 'あ'.repeat(200),
+      reason: 'budget',
+    });
+    expect(composition.usedChars).toBeLessThanOrEqual(190);
   });
 });

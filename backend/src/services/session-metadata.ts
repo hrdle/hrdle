@@ -27,6 +27,15 @@ interface SessionMeta {
    * named and it dies with the workspace.
    */
   sttPrompt?: string;
+  /**
+   * `'off'` when this workspace declines the shared glossary.
+   *
+   * The glossary is the words this product is made of, and a workspace whose
+   * subject is not this product never says one of them: it pays half the
+   * prompt for vocabulary that cannot be spoken there. Declining it hands the
+   * whole budget to the words above.
+   */
+  sttGlossary?: 'off';
 }
 
 export interface LastKnownSession {
@@ -71,7 +80,7 @@ async function load(): Promise<MetadataStore> {
 async function save(data: MetadataStore): Promise<void> {
   const filePath = await getFilePath();
   for (const [id, meta] of Object.entries(data.sessions)) {
-    if (!meta.theme && !meta.title && !meta.sttPrompt) {
+    if (!meta.theme && !meta.title && !meta.sttPrompt && !meta.sttGlossary) {
       delete data.sessions[id];
     }
   }
@@ -161,6 +170,20 @@ export async function setSessionSttPrompt(
     } else {
       data.sessions[sessionId].sttPrompt = prompt.trim();
     }
+    await save(data);
+  });
+}
+
+/** Whether this workspace takes the shared glossary. */
+export async function setSessionSttGlossary(
+  sessionId: string,
+  enabled: boolean,
+): Promise<void> {
+  await withMetadataLock(async () => {
+    const data = await load();
+    if (!data.sessions[sessionId]) data.sessions[sessionId] = {};
+    if (enabled) delete data.sessions[sessionId].sttGlossary;
+    else data.sessions[sessionId].sttGlossary = 'off';
     await save(data);
   });
 }

@@ -5,9 +5,15 @@
  *   hrdle stt-prompt                                      # show what is set,
  *                                                         # and what is sent
  *   hrdle stt-prompt --clear                              # back to the glossary alone
+ *   hrdle stt-prompt --no-glossary                        # this workspace does not
+ *                                                         # speak this product's words
+ *   hrdle stt-prompt --glossary                           # take it again
  *
  * These lead the vocabulary prompt sent with this session's transcriptions,
- * ahead of the shared glossary. The command exists so the *agent* can set them:
+ * ahead of the shared glossary - or are the whole of it, with the whole
+ * budget, in a workspace that has declined the glossary. A workspace about
+ * cooking or bookkeeping never says `リリース`, and paying half the line for
+ * words that cannot be spoken there is the reason declining exists. The command exists so the *agent* can set them:
  * workspace labels used to supply this half of the vocabulary and were a poor
  * source (see `services/stt-prompt.ts`), while the agent in a session knows
  * what is about to be said next, which no label does.
@@ -26,17 +32,19 @@ const DEV_PORT = IDENTITY.devPort;
 export interface SttPromptCliOptions {
   /** Words to set. Absent means "show"; `null` means "clear". */
   text?: string | null;
+  /** Whether this workspace takes the shared glossary. Absent leaves it alone. */
+  glossary?: boolean;
   session?: string;
   port: number;
 }
 
 /** The cap the route enforces; said here so the CLI can explain it first. */
-const MAX_CHARS = 100;
+const MAX_CHARS = 190;
 
 async function putSttPrompt(
   port: number,
   sessionId: string,
-  sttPrompt: string | null,
+  body: { sttPrompt?: string | null; glossary?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const res = await fetch(
@@ -44,7 +52,7 @@ async function putSttPrompt(
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sttPrompt }),
+        body: JSON.stringify(body),
       },
     );
     if (res.ok) return { ok: true };
@@ -77,6 +85,7 @@ async function printSttRequest(port: number, sessionId: string): Promise<void> {
       groups: Array<{ name: string; taken: string[] }>;
       usedChars: number;
       maxChars: number;
+      glossaryEnabled: boolean;
     } | null;
   }
 
@@ -111,6 +120,9 @@ async function printSttRequest(port: number, sessionId: string): Promise<void> {
       .map((group) => `${group.name} ${group.taken.length}`)
       .join(', ');
     console.log(`            ${composition.usedChars}/${composition.maxChars} chars - ${groups}`);
+    if (!composition.glossaryEnabled) {
+      console.log('            glossary declined - the whole line is this workspace\'s');
+    }
   }
 }
 
@@ -139,6 +151,23 @@ export async function runSttPrompt(options: SttPromptCliOptions): Promise<void> 
   // Show: what this session has now, read from the list already fetched, and
   // then what is actually sent with it - which is the question these words are
   // usually being read to answer.
+  if (options.glossary !== undefined) {
+    const result = await putSttPrompt(port, sessionId, { glossary: options.glossary });
+    if (!result.ok) {
+      console.error(result.error);
+      process.exit(1);
+    }
+    console.log(
+      options.glossary
+        ? `${sessionId} takes the shared glossary`
+        : `${sessionId} declines the shared glossary - its own words get the whole budget`,
+    );
+    if (options.text === undefined) {
+      await printSttRequest(port, sessionId);
+      return;
+    }
+  }
+
   if (options.text === undefined) {
     // `(none)` only when the list was read and this session is not in it. With
     // no list - an explicit --session against a server that could not tell us
@@ -156,12 +185,12 @@ export async function runSttPrompt(options: SttPromptCliOptions): Promise<void> 
   const text = options.text === null ? null : options.text.trim();
   if (text !== null && text.length > MAX_CHARS) {
     console.error(
-      `Too long (${text.length} chars, max ${MAX_CHARS}). These words lead the prompt, and it is capped - a long list only pushes out the glossary behind it. Name what this session is about, not everything it might say.`,
+      `Too long (${text.length} chars, max ${MAX_CHARS}). Name what this session is about, not everything it might say - and note that with the glossary on, only the first ${MAX_CHARS / 2} characters can be taken.`,
     );
     process.exit(1);
   }
 
-  const result = await putSttPrompt(port, sessionId, text || null);
+  const result = await putSttPrompt(port, sessionId, { sttPrompt: text || null });
   if (!result.ok) {
     console.error(result.error);
     process.exit(1);

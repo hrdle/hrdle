@@ -28,7 +28,7 @@ import {
   resolveSttLang,
   resolveSttModel,
 } from './glasses-settings';
-import { type SttPromptComposition, composeSttPrompt, sessionSttTerms } from './stt-prompt';
+import { type SttPromptComposition, composeSttPrompt, sessionSttVocabulary } from './stt-prompt';
 
 /** Where the prompt came from, when there is one. */
 export type SttPromptSource = 'composed' | 'env' | 'off';
@@ -71,7 +71,8 @@ export interface SttRequest {
  *   `HRDLE_STT_PROMPT` set to anything else replaces the line outright, which
  *   is how a hand-written prompt is compared against a composed one without a
  *   rebuild; otherwise it is composed from this session's words and the
- *   glossary
+ *   glossary - or from its words alone, with the whole budget, when the
+ *   workspace has declined the glossary
  *
  * The env var replaces and the switch disables, and nothing a screen can save
  * does either. That asymmetry is deliberate: the one field reachable from the device
@@ -100,7 +101,10 @@ export async function resolveSttRequest(
       prompt = fromEnv;
       promptSource = 'env';
     } else {
-      promptComposition = composeSttPrompt(await sessionSttTerms(sessionId ?? undefined));
+      const vocabulary = await sessionSttVocabulary(sessionId ?? undefined);
+      promptComposition = composeSttPrompt(vocabulary.terms, {
+        glossaryEnabled: vocabulary.glossaryEnabled,
+      });
       // An empty composition still reads as `composed`: nothing was withheld,
       // there was simply nothing to say. The glossary makes that unlikely, but
       // a caller reading this should see the composition and not a bare `off`.

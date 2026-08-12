@@ -21,7 +21,8 @@ import { OpenCodeService } from '../services/opencode';
 import { OpenCodeHistoryService } from '../services/opencode-history';
 import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
-import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
+import { STT_PROMPT_MAX_CHARS } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
@@ -986,8 +987,12 @@ sessions.put('/:id/title', async (c) => {
 // composition now hard-limits the contributed groups to half its budget
 // and a field that accepts twice what can be used is a field that silently
 // drops the rest.
+// The cap is the whole prompt line, not half of it: a workspace that has
+// declined the glossary has the whole budget, and a stored value cut shorter
+// than what composition would take is a second, invisible limit.
 const UpdateSttPromptSchema = z.object({
-  sttPrompt: z.string().max(100).nullable(),
+  sttPrompt: z.string().max(STT_PROMPT_MAX_CHARS).nullable().optional(),
+  glossary: z.boolean().optional(),
 });
 
 sessions.put('/:id/stt-prompt', async (c) => {
@@ -1005,7 +1010,12 @@ sessions.put('/:id/stt-prompt', async (c) => {
   }
 
   try {
-    await setSessionSttPrompt(id, parsed.data.sttPrompt);
+    if (parsed.data.sttPrompt !== undefined) {
+      await setSessionSttPrompt(id, parsed.data.sttPrompt);
+    }
+    if (parsed.data.glossary !== undefined) {
+      await setSessionSttGlossary(id, parsed.data.glossary);
+    }
     return c.json({ success: true, sttPrompt: parsed.data.sttPrompt });
   } catch (_error) {
     return c.json({ error: 'Failed to update STT prompt' }, 500);

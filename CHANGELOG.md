@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.96] - 2026-08-12
+
+### Added
+- **A workspace can decline the shared glossary.** The glossary is the words
+  this product is made of, and the composer holds half the 190-character prompt
+  for it so that one group cannot fill the line. A workspace whose subject is
+  not this product cannot spend that half: measured on the health-and-cooking
+  workspace, its own 18 terms filled 90 of the 95 it was allowed - five
+  characters short of adding another - while 96 characters went to nineteen
+  development terms never spoken there
+  - `hrdle stt-prompt --no-glossary` stores the decision against the workspace,
+    beside its theme, and the session's words then take the whole 190.
+    `--glossary` takes it back
+  - The glossary stays shared. It is curated from measured transcripts, and
+    that loop only exists while there is one list
+
+### Fixed
+- The stored session prompt was capped at 100 characters, below what
+  composition would take from it and invisible from the preview. It is the
+  whole line now
+
 ## [0.3.95] - 2026-08-12
 
 ### Fixed
