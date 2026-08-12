@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.112] - 2026-08-12
+
+### Fixed
+- **An option named after the picker's own text row answers like an option.**
+  `Chat about this` is claude's, drawn below the closing rule at the foot of
+  every question, but the wording is ordinary enough for an agent to write -
+  and one did, third in a list. Tapped, it opened the microphone instead of
+  ticking the box. Where a row sits is what separates the two, so it is now
+  part of the test; a label that means the same wherever it is drawn
+  (`Type something`, `Other`) still does
+
 ## [0.3.111] - 2026-08-12
 
 ### Fixed
