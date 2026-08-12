@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.114] - 2026-08-12
+
+### Changed
+- **A choice's description is drawn under its own label, and the list
+  scrolls.** The picker drew the whole list and then one description beneath
+  it, for the row the ring was resting on - so with five options, four of the
+  panel's eight lines had gone to labels and a description arrived as a line
+  and a half. At six the arithmetic said there was no room at all and the
+  server dropped every description before sending it: six labels, and no
+  reason to prefer any of them. Label, description, label, description now,
+  with the panel a window onto that list - the option under the ring gets the
+  panel to itself however long the list is, and its label is never scrolled
+  off above its own description
+  - How much of a description is worth sending is therefore about reading one
+    off glasses rather than about how many options there happen to be
+  - Needs glasses v0.0.72 for the layout. The server half helps on its own:
+    without it the descriptions are not sent at all
+
 ## [0.3.113] - 2026-08-12
 
 ### Fixed
