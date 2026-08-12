@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.110] - 2026-08-12
+
+### Fixed
+- **A multi-select question reaches the glasses.** None ever had. A
+  multi-select adds a `Submit` tab beside the question's own, and a strip with
+  two tabs is drawn with the keys that move between them
+  (`←  ☐ 機能選択  ✔ Submit  →`) - which the chip pattern, anchored at the
+  glyph, did not recognise as the opening bracket of the picker. A claude pane
+  that cannot be read raises nothing at all, so the wearer got no options, no
+  question and no notice that anything was being asked
+- **Every row of a multi-select keeps its description.** They sit at the row's
+  own left edge, under the checkbox, rather than indented past the label the
+  way a single-pick list draws them, so only the cursor's row kept its own
+- The `Submit` button under the last row is no longer read as that row's
+  description (`Type something — Submit`)
+
 ## [0.3.109] - 2026-08-12
 
 ### Changed
