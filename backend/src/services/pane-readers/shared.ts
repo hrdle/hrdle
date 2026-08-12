@@ -84,7 +84,14 @@ const FREE_TEXT_LABELS = new Set([
  * three with. Dropping them leaves each question's own options holding their
  * own keys.
  */
-const FURNITURE_LABELS = new Set(['Next', 'Back', 'Submit answers', 'Submit answer', 'Cancel']);
+const FURNITURE_LABELS = new Set([
+  'Next',
+  'Back',
+  'Submit',
+  'Submit answers',
+  'Submit answer',
+  'Cancel',
+]);
 
 /**
  * A label down to the words in it.
