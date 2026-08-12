@@ -119,6 +119,9 @@ const OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(?:\\d+[.)]|\\[\\d+\\])\\s*(.+)`);
 /** A checkbox row of a multi-select, which claude numbers as well as boxes. */
 const BOXED = new RegExp(`^\\s*${CURSOR}?\\s*(?:\\d+[.)]\\s*)?(\\[[ xX*✓✔]\\])\\s*(\\S.*)`);
 
+/** The row the pane is sitting on. */
+const CURSOR_ROW = new RegExp(`^\\s*${CURSOR}\\s`);
+
 
 
 
@@ -131,6 +134,38 @@ const BOXED = new RegExp(`^\\s*${CURSOR}?\\s*(?:\\d+[.)]\\s*)?(\\[[ xX*✓✔]\\
 const MAX_QUESTION_LINES = 4;
 
 /**
+ * The screen the Submit tab of a multi-select opens.
+ *
+ * It is the one screen of the picker with **no footer** - it draws the answers
+ * back, asks this, and offers two rows:
+ *
+ * ```
+ * ←  ☒ 次の作業  ✔ Submit  →
+ *
+ * Review your answers
+ *
+ *  ● 次に進めたい作業をすべて選んでください
+ *    → コード修正, テスト追加, ...
+ *
+ * Ready to submit your answers?
+ *
+ * ❯ 1. Submit answers
+ *   2. Cancel
+ * ```
+ *
+ * So the frame the rest of this file reads is not there, and the reader
+ * answered "not this screen". Nothing then reached the glasses, which kept the
+ * picker from before the Send - the wearer pressed Send, the pane moved on, and
+ * the glasses showed the same list as though nothing had happened. Measured on
+ * the device, 2026-08-12.
+ *
+ * Its rows are `Submit answers` and `Cancel`, which are furniture everywhere
+ * else. Here they are the whole question, which is why this is read on its own
+ * rather than by relaxing that filter.
+ */
+const REVIEW = /^\s*Ready to submit your answers\?/i;
+
+/**
  * The picker on this pane, if one is on it.
  *
  * `undefined` means "not this screen" and is the answer for every pane that is
@@ -138,6 +173,8 @@ const MAX_QUESTION_LINES = 4;
  * and is the answer the reader this replaces would not give.
  */
 export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
+  const review = lastIndex(lines, (l) => REVIEW.test(l));
+  if (review >= 0) return readReview(lines, review);
   const footer = lastIndex(lines, (l) => FOOTER.test(l));
   if (footer < 0) return undefined;
   const chip = lastIndex(lines.slice(0, footer), (l) => CHIP.test(l));
@@ -220,6 +257,31 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
 
 function indentOf(line: string): number {
   return line.length - line.trimStart().length;
+}
+
+/**
+ * The review screen's own two rows, and which one the pane is sitting on.
+ *
+ * Everything above the question is what the wearer just picked, drawn back to
+ * them - worth nothing on a panel that holds eight lines and has to hold the
+ * rows that finish the answer.
+ */
+function readReview(lines: string[], at: number): ClaudePicker | undefined {
+  const options: PickerOption[] = [];
+  let choiceCursor = -1;
+  for (let i = at + 1; i < lines.length; i++) {
+    const m = lines[i].match(OPTION);
+    if (!m) continue;
+    if (CURSOR_ROW.test(lines[i])) choiceCursor = options.length;
+    options.push({ label: dropSidePanel(m[1]).trim(), detail: '' });
+  }
+  if (options.length === 0) return undefined;
+  return {
+    question: 'Ready to submit your answers?',
+    options,
+    multiSelect: false,
+    ...(choiceCursor >= 0 ? { choiceCursor } : {}),
+  };
 }
 
 /**
