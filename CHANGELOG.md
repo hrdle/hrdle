@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.103] - 2026-08-12
+
 ### Changed
 - **A pane's question is read the way that pane's agent draws it.** There was
   one reader for all of them: find lines beginning with a number, take the
