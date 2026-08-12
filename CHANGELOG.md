@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.101] - 2026-08-12
+
 ### Fixed
 - **A choice's description is sized to the space it will be drawn in.** The
   width was flat, and the picker's space is not: the option rows take one line
