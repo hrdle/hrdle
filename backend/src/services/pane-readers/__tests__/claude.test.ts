@@ -271,6 +271,52 @@ describe('a row named after the picker\'s own', () => {
   });
 });
 
+/**
+ * The screen Send opens on a multi-select, captured live on 2026-08-12 right
+ * after a wearer pressed it. The pane moved here and the glasses kept showing
+ * the list from before, so Send looked like it had done nothing at all.
+ */
+const REVIEW_PANE = [
+  '──────────────────────────────────────────────────────────',
+  '←  ☒ 次の作業  ✔ Submit  →',
+  '',
+  'Review your answers',
+  '',
+  ' ● 次に進めたい作業をすべて選んでください',
+  '   → コード修正, テスト追加,',
+  '   私のメッセージ適当に書き込んでいるのでよろしくお願いします',
+  '',
+  'Ready to submit your answers?',
+  '',
+  '❯ 1. Submit answers',
+  '  2. Cancel',
+  '',
+];
+
+describe('the screen Send opens', () => {
+  const review = readClaudePicker(REVIEW_PANE);
+
+  test('it is read though the picker draws no footer on it', () => {
+    expect(review?.options.map((o) => o.label)).toEqual(['Submit answers', 'Cancel']);
+  });
+
+  test('rows that are furniture everywhere else are the answer here', () => {
+    // Filtered as furniture, both rows go and the reader returns nothing - and
+    // a read that returns nothing leaves the list from before the Send on the
+    // glasses. Hence a screen of its own rather than a relaxed filter.
+    expect(review?.options.length).toBe(2);
+  });
+
+  test('the row the pane is sitting on travels with it', () => {
+    expect(review?.choiceCursor).toBe(0);
+  });
+
+  test('what was picked is not read back onto the panel', () => {
+    // Eight lines, and the two rows that finish the answer have to fit on them.
+    expect(review?.question).toBe('Ready to submit your answers?');
+  });
+});
+
 describe('a multi-select on a real pane', () => {
   const live = readClaudePicker(MULTI_LIVE);
 
