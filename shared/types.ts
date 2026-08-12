@@ -1427,6 +1427,32 @@ export interface GlassesRelayItem {
    */
   choiceSelected?: number;
   source: 'auto' | 'agent';
+  /**
+   * How much of the wearer's attention this is worth — decided here, obeyed
+   * there.
+   *
+   * The app used to decide it, from its own mode: a new `waiting` item took
+   * the screen only from the session list, while an `info` item took it from
+   * the conversation too. So the thing that needs an answer interrupted less
+   * than the thing that only reports one, and on 2026-08-12 a question sat
+   * behind a two-line banner for ten minutes while its wearer read the very
+   * session that was asking.
+   *
+   * Fixing that in the app costs an ehpk build and a store review, which is
+   * the reason it stayed wrong. The rule is data now: everything about *which*
+   * items deserve the screen is computed server-side and travels on the item,
+   * and the app is left with the one part only it can know — not to snatch the
+   * panel out from under someone mid-utterance or mid-pick.
+   *
+   * - `takeover` — present it now, whatever is on screen
+   * - `takeover-if-elsewhere` — present it unless the wearer already has that
+   *   session open (a completion notice thrown over the conversation it
+   *   describes says nothing the reader cannot see)
+   * - `banner` — the strip and the list carry it; do not interrupt
+   *
+   * Absent means an app older than this field, which keeps its own rule.
+   */
+  present?: 'takeover' | 'takeover-if-elsewhere' | 'banner';
   /** Dismissed ("later / on PC") items stay in the store so the same blocked
    *  epoch is not re-synthesized on reconnect, but are excluded from
    *  snapshots. */

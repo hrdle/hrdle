@@ -1194,6 +1194,64 @@ describe('finding the question without a question mark', () => {
     // that worked before this stops working.
     expect(extractQuestionLine(['noise', 'Continue?', 'more noise'])).toBe('Continue?');
   });
+
+  test('a question wrapped over rows is put back together', () => {
+    // English wraps at a space and loses it to the trim, so the seam needs one
+    // put back.
+    const wrapped = [
+      'Trusting the directory allows project-local config, hooks and exec',
+      'policies to load. Do you want to trust it?',
+    ];
+    expect(extractQuestionLine(wrapped)).toBe(
+      'Trusting the directory allows project-local config, hooks and exec policies to load. Do you want to trust it?',
+    );
+  });
+
+  test('a wrap inside CJK is rejoined without a space', () => {
+    expect(
+      extractQuestionLine([
+        '種モデルに移行するとして、既存の14ワークスペースはど',
+        'うしますか?',
+      ]),
+    ).toBe('種モデルに移行するとして、既存の14ワークスペースはどうしますか?');
+  });
+
+  test('one long line elsewhere does not raise the bar over the question', () => {
+    // The wrap width is measured from the paragraph's own neighbourhood. Taken
+    // over the whole pane, the listing below would be the column and neither
+    // row of the question would reach it.
+    const pane = [
+      'const somethingVeryLongIndeed = await measureTheWidestLineInThisWholePaneOkay(argument, another)',
+      '',
+      'Should the migration run against every workspace, or only the ones',
+      'created from here on?',
+      '❯ 1. Every workspace',
+      '  2. New ones only',
+    ];
+    expect(extractQuestionLine(pane, optionBlockStart(pane))).toBe(
+      'Should the migration run against every workspace, or only the ones created from here on?',
+    );
+  });
+
+  test('a Latin paragraph joins across rows of uneven width', () => {
+    // A space-wrapped row stops wherever the next word began, so its rows are
+    // not the even column a CJK paragraph's are. Codex's trust prompt is the
+    // one that reached a wearer as `injection. Trusting the directory allows
+    // project-local config, hooks, and exec policies to load.` - the tail of a
+    // sentence whose beginning said what was being decided.
+    const wrapped = [
+      'Trusting this directory may expose you to prompt injection and other',
+      'risks, including data exfiltration by an untrusted repository. Do you',
+      'want to trust it?',
+    ];
+    expect(extractQuestionLine(wrapped)).toBe(wrapped.join(' '));
+  });
+
+  test('a menu of short rows is not read as one wrapped paragraph', () => {
+    // Nothing here was wrapped - each row ended where its author stopped - so
+    // measuring the widest of them must not make every row a continuation.
+    expect(extractQuestionLine(['Apple', 'Banana', 'Cherry?'])).toBe('Cherry?');
+  });
 });
 
 // =============================================================================
@@ -1589,5 +1647,133 @@ describe('matchOpenQuestion', () => {
     expect(matchOpenQuestion(questions, 'nothing relevant')).toBeUndefined();
     // Both questions appear (the second contains the first): ambiguous.
     expect(matchOpenQuestion(questions, 'Deploy now? Really?')).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// A picker the record cannot see
+// =============================================================================
+
+/**
+ * Claude Code stopped writing `AskUserQuestion` to the transcript until the
+ * answer comes back (2.1.227, measured 2026-08-12). So "the record says nothing
+ * is open" now covers two different panes: one asking nothing, and one asking
+ * and not saying so yet. Treating them alike took the options off every
+ * question the glasses were shown that day.
+ *
+ * The pane itself is the only witness left, and `detectPaneState` is what asks
+ * it. Verbatim from the incident, at the width claude's picker draws in an
+ * 80-column pane: the question wraps at 54 and every row of it reached that.
+ */
+const RECORDLESS_PICKER = [
+  'その上で、既存14ワークスペースの扱いだけ決めさせてく',
+  'ださい。',
+  '',
+  '☐ 移行範囲',
+  '',
+  '種モデル（起動時に共通設定を取り込んで以降はワークスペ',
+  'ース所有）に移行するとして、既存の14ワークスペースはど',
+  'うしますか?',
+  '',
+  '❯ 1. 新規ワークスペースから適用（推奨）',
+  '  2. 全ワークスペースに今書き込む',
+  '  3. 種モデルはやめて現状維持',
+  '  4. Type something.',
+  '  5. Chat about this',
+].join('\n');
+
+describe('a claude picker the record cannot see', () => {
+  test('the options come off the screen when the record is silent', async () => {
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(RECORDLESS_PICKER);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toEqual([
+      '新規ワークスペースから適用（推奨）',
+      '全ワークスペースに今書き込む',
+      '種モデルはやめて現状維持',
+    ]);
+  });
+
+  test('the question is the whole of it, not the row the wrap ended on', async () => {
+    // `うしますか?` is what a wearer was actually asked: the tail four
+    // characters of a question wrapped over three rows.
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(RECORDLESS_PICKER);
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.text).toBe(
+      '種モデル（起動時に共通設定を取り込んで以降はワークスペース所有）に移行するとして、既存の14ワークスペースはどうしますか?',
+    );
+  });
+
+  test('a tabbed picker sends the question and no options', async () => {
+    // The other half of what the record was doing: it knew how many questions
+    // the call carried. Without it, the rows that move between tabs are the
+    // only sign - and a list containing `Submit answers` has already miscounted
+    // the options above it, which is how a wearer answered two of three.
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(
+      [
+        '☐ 移行範囲   ☐ 適用時期',
+        '',
+        'どの範囲に適用しますか?',
+        '',
+        '❯ 1. 新規ワークスペースから',
+        '  2. 全ワークスペース',
+        '  3. Next',
+        '  4. Submit answers',
+        '  5. Cancel',
+      ].join('\n'),
+    );
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.choices).toBeUndefined();
+    expect(item.text).toBe('どの範囲に適用しますか?');
+  });
+
+  test('a pane not drawing a picker is still refused', async () => {
+    // The guard the earlier fix put here stands: `known` with no questions and
+    // nothing picker-shaped on screen means the numbered rows are the agent's
+    // own output.
+    glassesRelayDeps.readAgentQuestions = async () => ({ known: true, questions: undefined });
+    const sock = await blockedClaudePane(OUTPUT_PANE);
+
+    for (const m of sock.ofType('glasses-relay')) {
+      expect((m.item as Record<string, unknown>).choices).toBeUndefined();
+    }
+  });
+});
+
+// =============================================================================
+// How much attention an item is worth
+// =============================================================================
+
+describe('present', () => {
+  test('a question asks for the screen unconditionally', async () => {
+    const sock = await blockedClaudePane(QUESTION_PANE);
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.present).toBe('takeover');
+  });
+
+  test('a notice yields to the session it is about', () => {
+    const sock = new FakeSocket();
+    subscribeGlassesRelay(sock);
+    postHookRelay({ sessionId: 's1', text: 'Response complete' });
+
+    const item = sock.ofType('glasses-relay')[0].item as Record<string, unknown>;
+    expect(item.present).toBe('takeover-if-elsewhere');
+  });
+
+  test("an agent's own note travels with one too", () => {
+    // Every item carries the field: the app obeys it and keeps no rule of its
+    // own, so an item that forgot it would be the one nobody is shown.
+    const waiting = mustItem(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'ok?' })) as Record<
+      string,
+      unknown
+    >;
+    const info = mustItem(postAgentRelay({ sessionId: 's1', kind: 'info', text: 'fyi' })) as Record<string, unknown>;
+    expect(waiting.present).toBe('takeover');
+    expect(info.present).toBe('takeover-if-elsewhere');
   });
 });

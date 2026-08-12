@@ -347,6 +347,34 @@ function isUnanswerable(option: string): boolean {
 }
 
 /**
+ * The rows a tabbed picker draws that belong to the picker rather than to any
+ * one question.
+ *
+ * A call carrying several questions draws a tab each and moves between them
+ * with rows of its own - `Next` while there are tabs left, then `Submit
+ * answers` / `Cancel`. Read as options they take numbers the pane is not
+ * offering, which is how a wearer once answered two questions of three and
+ * skipped the rest.
+ *
+ * The record used to make this unnecessary by saying how many questions there
+ * were. It cannot always be asked (see `drawingAPicker`), and these rows are
+ * then the only sign left that a list has more in it than one question's
+ * options.
+ */
+const TAB_FURNITURE = /^(next|back|submit answers?|cancel)$/i;
+
+function looksTabbed(choices: string[]): boolean {
+  return choices.some((c) =>
+    TAB_FURNITURE.test(
+      c
+        .replace(/^\[[ xX*✓✔]\]\s*/, '')
+        .trim()
+        .replace(/[.。]$/, ''),
+    ),
+  );
+}
+
+/**
  * The rule a pane frames its content with, on the left of every line.
  *
  * opencode draws one - `┃` down the whole prompt - and it was enough on its own
@@ -505,10 +533,19 @@ export function findQuestion(
     .map((l) => stripLeftRule(l).trim())
     .filter((l) => l.length > 0 && /[\p{L}\p{N}]/u.test(l));
 
-  // A line that ends in a question mark is the question, and one line of it is
-  // the whole of it - an agent that could fit the question on a line did.
+  // A line that ends in a question mark is where the question ends. Where it
+  // *starts* is further up whenever the pane was too narrow to hold it, and
+  // taking the last line alone said so out loud: a wearer was asked
+  // `うしますか?` on 2026-08-12 - the tail four characters of a question about
+  // fourteen workspaces, wrapped over three rows at 54 columns. Read backwards
+  // from the mark, the same way the fallback reads backwards from the bottom.
   for (let i = clean.length - 1; i >= 0; i--) {
-    if (/[?？]\s*$/.test(clean[i]) || /do you want to/i.test(clean[i])) {
+    if (/[?？]\s*$/.test(clean[i])) {
+      return { text: paragraphEndingAt(clean, i), confident: true };
+    }
+    // The permission prompt's own line, which opens a sentence rather than
+    // closing one - so it is the start of what to read, not the end of it.
+    if (/do you want to/i.test(clean[i])) {
       return { text: clean[i], confident: true };
     }
   }
@@ -525,23 +562,82 @@ export function findQuestion(
 /** The run of lines at the end of `clean`, joined - one paragraph as the pane
  *  laid it out, up to the blank line that separates it from what came before. */
 function tailParagraph(clean: string[]): string | undefined {
-  if (clean.length === 0) return undefined;
-  // `clean` has already dropped blanks, so the paragraph break has to be found
-  // another way: a line the pane wrapped continues the one above it, and a line
-  // it started fresh does not. Length is the only signal left, and the honest
-  // version of it is that a short line ends a paragraph.
-  const out: string[] = [clean[clean.length - 1]];
-  for (let i = clean.length - 2; i >= 0; i--) {
-    if (displayWidth(clean[i]) < WRAP_FLOOR) break;
+  return paragraphEndingAt(clean, clean.length - 1);
+}
+
+/**
+ * The paragraph whose last line is `end`, joined back into one.
+ *
+ * `clean` has already dropped blanks, so the paragraph break has to be found
+ * another way: a line the pane wrapped continues the one above it, and a line
+ * it started fresh does not. Length is the only signal left, and the honest
+ * version of it is that a short line ends a paragraph.
+ */
+function paragraphEndingAt(clean: string[], end: number): string | undefined {
+  if (end < 0 || end >= clean.length) return undefined;
+  const out: string[] = [clean[end]];
+  // The line directly above is where the wrap column is read off - it is the
+  // one that certainly belongs to this paragraph and was certainly cut by the
+  // column rather than by its author. Every line further up has to match that
+  // width to join, which is what keeps an unrelated long line above the
+  // paragraph out of it.
+  let column = 0;
+  for (let i = end - 1; i >= 0; i--) {
+    const w = displayWidth(clean[i]);
+    if (column === 0) {
+      // Nothing this short was wrapped: the author stopped there. Also what
+      // stops a menu of short rows being read as one long paragraph.
+      if (w < MIN_WRAP_WIDTH) break;
+      column = w;
+    } else if (Math.abs(w - column) > wrapTolerance(clean[i])) {
+      break;
+    }
     out.unshift(clean[i]);
     if (out.length >= MAX_QUESTION_LINES) break;
   }
-  return out.join(' ');
+  return out.reduce((a, b) => (cjkSeam(a, b) ? a + b : `${a} ${b}`));
 }
 
-/** A line at least this wide was probably wrapped rather than ended. Below it,
- *  the author chose to stop. */
-const WRAP_FLOOR = 60;
+/**
+ * Where the wrap column is, and how exactly a line has to hit it.
+ *
+ * The column used to be assumed - a flat 60 - and it was the pane's own width
+ * that had been in mind. A question is drawn inside the picker's box, indented
+ * and ruled, so the wrap falls well short of the pane: claude's picker in an
+ * 80-column pane wraps at 54. Every line of the question reached that and none
+ * of them reached 60, so the join never fired and a wearer was asked
+ * `うしますか?` - the tail four characters of the sentence.
+ *
+ * How near a line has to come depends on what it is written in. A CJK row is
+ * broken wherever the column falls and stops a character short of it at worst;
+ * a Latin one is broken at a space, so it stops wherever the next word began -
+ * up to a long word short of the column. One tolerance for both is wrong for
+ * one of them: at 2 an English paragraph stops joining, and at 15 a CJK
+ * paragraph starts swallowing the line above it.
+ */
+const MIN_WRAP_WIDTH = 40;
+const CJK_WRAP_TOLERANCE = 2;
+const LATIN_WRAP_TOLERANCE = 15;
+
+function wrapTolerance(line: string): number {
+  return CJK_EDGE.test(line) ? CJK_WRAP_TOLERANCE : LATIN_WRAP_TOLERANCE;
+}
+
+/**
+ * A wrap made inside a run of CJK, where the two halves belong together with
+ * nothing between them.
+ *
+ * Latin text is wrapped at a space and loses it to the trim, so its seam needs
+ * one put back; CJK has no space to lose and is broken wherever the column
+ * falls - often mid-word, which is how `ワークスペ` / `ース所有` arrives. Joining
+ * both the same way is wrong for one of them whichever way is picked.
+ */
+function cjkSeam(before: string, after: string): boolean {
+  return CJK_EDGE.test(before.slice(-1)) || CJK_EDGE.test(after.slice(0, 1));
+}
+
+const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー、。「」『』（）]/u;
+
 /** However wrapped, a question that takes more than this is not being read off
  *  a pair of glasses anyway. */
 const MAX_QUESTION_LINES = 3;
@@ -701,6 +797,24 @@ async function assembleWaitingPayload(
   const question = permission ?? guess.text;
   const text = clampDisplayWidth(normalizeRelayText(question ?? fallback), MAX_TEXT_WIDTH);
 
+  const paneState = detectPaneState(lines);
+
+  // A picker the record cannot see.
+  //
+  // "Claude said nothing is open" is only as good as when Claude writes it
+  // down, and from Claude Code 2.1.227 it writes the `AskUserQuestion` call
+  // only once the answer comes back. Measured on 2026-08-12: a pane sat on a
+  // three-option picker for ten minutes with nothing appended to its `.jsonl`
+  // since a minute *before* the question. So `known` with no questions no
+  // longer means "asking nothing" - it also covers "asking, and not saying so
+  // yet", and treating the two alike took the choices off every question the
+  // glasses were shown that day.
+  //
+  // The screen is the only witness left, and here it is a sound one: what the
+  // earlier fix distrusted was the screen's reading of a pane that was NOT
+  // drawing a picker. This is the pane saying it is.
+  const drawingAPicker = paneState === 'ask_user_question' && guess.confident;
+
   // Claude with no open question is asking nothing - it says so itself. The
   // only numbered thing such a pane legitimately shows is a permission
   // prompt, which no record carries; anything else that parses as a menu is
@@ -714,11 +828,25 @@ async function assembleWaitingPayload(
     record.known &&
     !record.questions?.length &&
     permission === undefined &&
-    detectPaneState(lines) !== 'permission_prompt';
+    paneState !== 'permission_prompt' &&
+    !drawingAPicker;
 
   const numbered = askingNothing ? [] : extractNumberedChoices(lines);
-  if (numbered.length > 0) {
+  // The other half of what the record was doing: it knew how many questions
+  // the call carried, and several meant the rows on screen belong to a tabbed
+  // picker whose digits do not line up with them. Without it, the rows that
+  // move between tabs are the only sign - and they retire the whole list
+  // rather than just themselves, because a list that includes `Submit
+  // answers` has already miscounted the options above it.
+  if (numbered.length > 0 && !(drawingAPicker && looksTabbed(numbered))) {
     return { text: text || fallback, choices: numbered.map(clamp) };
+  }
+  if (drawingAPicker) {
+    // The rows were untrustworthy, or there were none to read. The pane says
+    // it is asking, so the question goes; nothing answerable with a digit
+    // does, and the colour read below is not tried either - a picker whose
+    // own numbered rows could not be read is not a pane to go guessing at.
+    return { text: text || fallback };
   }
   if (askingNothing) {
     // Same exit as a pane with nothing list-shaped on it, skipping the colour
@@ -776,6 +904,15 @@ function makeItem(
     kind,
     source,
     text: clampDisplayWidth(normalizeRelayText(text), MAX_TEXT_WIDTH) || '(empty)',
+    // Set here rather than at each call site so every item carries one: the
+    // app obeys this field and has no rule of its own to fall back on, and an
+    // item that forgot it would be the one nobody is shown.
+    //
+    // A question takes the screen unconditionally — including from the
+    // conversation of the very session asking, which is where it is least
+    // visible: that view has the transcript, not the options. A notice yields
+    // to the session it is about, since the reader can already see it.
+    present: kind === 'waiting' ? 'takeover' : 'takeover-if-elsewhere',
     createdAt: Date.now(),
   };
   if (paneId) item.paneId = paneId;

@@ -269,6 +269,23 @@ export interface GlassesRelayItem {
    */
   choiceSelected?: number
   source: 'auto' | 'agent'
+  /**
+   * How much of the wearer's attention the server thinks this is worth.
+   *
+   * - `takeover` — present it now, whatever is on screen
+   * - `takeover-if-elsewhere` — unless that session is already open
+   * - `banner` — the strip and the list carry it; do not interrupt
+   *
+   * This app used to decide it from its own mode, and decided it backwards:
+   * a question interrupted less than the notice that a turn had finished. The
+   * rule lives on the server now, because every correction to it cost a build
+   * and a store review here. Absent means an older server, and the fallback
+   * `canTakeOverFor` applies is this file's last say in the matter.
+   *
+   * Mirrored from `GlassesRelayItem` in `shared/types.ts`; glasses/src keeps no
+   * dependency on shared.
+   */
+  present?: 'takeover' | 'takeover-if-elsewhere' | 'banner'
   /** Dismissed ("later / on PC") — the server reflects these as upserts; the
    *  queue drops them and snapshots never include them. */
   dismissed?: boolean
