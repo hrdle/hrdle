@@ -1512,49 +1512,61 @@ export function onChoiceSend(state: AppState): boolean {
 }
 
 function choiceBody(state: AppState): string {
-  const rows = choiceRowLines(state)
-  return [...rows, ...choiceDetailLines(state, MAX_LINES - rows.length)].join('\n')
+  return choiceWindow(choiceBlocks(state), state.choiceIndex, MAX_LINES).join('\n')
 }
 
 /**
- * The description of the option the ring is resting on, in the lines the rows
- * left over.
+ * Each option as its label followed by what it says about itself.
  *
- * There are usually plenty: three options take three of the panel's eight, and
- * the picker had been drawing three cut rows into a screen more than half
- * empty. The description used to arrive glued to its label and be cut with it,
- * a few characters in - so a wearer could read what the options were called and
- * nothing about what they meant, which is the part that decides between them.
+ * The description used to be drawn once, below the whole list, for the row the
+ * ring was resting on - which read as a caption to a list rather than as part
+ * of an option, and left the reading of it to whatever lines the rows had not
+ * taken. With five options and four of the panel's eight lines gone to labels,
+ * a description arrived as its first line and a half. Reported off the device:
+ * "ディスクリプションの表示内容が全部見えてなかった".
  *
- * Under the rows rather than beside them: moving the ring is how the next one
- * is read, and a block that changes in place makes that obvious in a way a
- * column of truncations never did.
+ * Interleaved, an option is one thing: what it is called and what it means, in
+ * the order they are read. The list is then longer than the panel, which is
+ * what the window below is for - moving the ring scrolls it.
  */
-function choiceDetailLines(state: AppState, spare: number): string[] {
-  // A rule and at least one line of text, or it is not worth the rule.
-  if (spare < 2) return []
-  const text = state.choiceDetails?.[state.choiceIndex]
-  if (!text) return []
-  const lines = splitDisplayLines(stripUnrenderable(text)).slice(0, spare - 1)
-  return lines.length > 0 ? [CARD_SEPARATOR, ...lines] : []
+function choiceBlocks(state: AppState): string[][] {
+  return choiceRows(state).map((opt, i) => {
+    const label = choiceRowLine(state, opt, i)
+    const text = state.choiceDetails?.[i]
+    if (!text) return [label]
+    return [label, ...splitDisplayLines(stripUnrenderable(text)).map((l) => `    ${l}`)]
+  })
 }
 
-function choiceRowLines(state: AppState): string[] {
-  return choiceRows(state).map((opt, i) => {
-    const cursor = i === state.choiceIndex ? '>>>' : '   '
-    // The rows come off a pane, so they carry whatever that agent chose to
-    // draw with. A tick is the character this most depends on and the one the
-    // firmware is least likely to have: claude writes U+2714 and kimi U+2713,
-    // and neither has a glyph. Unsubstituted, the wearer's own ticks reach the
-    // panel as tofu, while the simulator draws them beautifully from a browser
-    // font - the exact divergence the simulator exists to make visible.
-    const row = `${cursor} ${stripUnrenderable(opt)}`
-    // One row, one line. Cut rather than wrapped: the count of rows has to
-    // match the count of options, because the cursor is a position in that
-    // list. A row is the label alone now, so the cut is a long label's problem
-    // rather than every option's - the description is drawn below.
-    return textWidth(row) > BODY_WIDTH ? ellipsize(row) : row
-  })
+/**
+ * The `lines` lines of the list that hold the option the ring is on.
+ *
+ * Its label is never scrolled off: a description with nothing above it saying
+ * which option it belongs to is worse than one that is cut. Otherwise the
+ * window sits as far down as it needs to for the block to finish on screen.
+ */
+export function choiceWindow(blocks: string[][], at: number, lines: number): string[] {
+  const flat = blocks.flat()
+  if (flat.length <= lines) return flat
+  const from = blocks.slice(0, at).reduce((n, b) => n + b.length, 0)
+  const to = from + (blocks[at]?.length ?? 0)
+  const start = Math.max(0, Math.min(from, to - lines))
+  return flat.slice(start, start + lines)
+}
+
+function choiceRowLine(state: AppState, opt: string, i: number): string {
+  const cursor = i === state.choiceIndex ? '>>>' : '   '
+  // The rows come off a pane, so they carry whatever that agent chose to
+  // draw with. A tick is the character this most depends on and the one the
+  // firmware is least likely to have: claude writes U+2714 and kimi U+2713,
+  // and neither has a glyph. Unsubstituted, the wearer's own ticks reach the
+  // panel as tofu, while the simulator draws them beautifully from a browser
+  // font - the exact divergence the simulator exists to make visible.
+  const row = `${cursor} ${stripUnrenderable(opt)}`
+  // One row, one line. Cut rather than wrapped: a label is what the cursor is
+  // pointing at, and a label spilling onto a second line reads as a
+  // description. The description is the lines under it.
+  return textWidth(row) > BODY_WIDTH ? ellipsize(row) : row
 }
 
 /**
