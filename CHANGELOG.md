@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.100] - 2026-08-12
+
 ### Fixed
 - **The choices reached the glasses but could not be read.** A picker row is one
   line and the panel cuts what overruns it, and an option arrived with its
