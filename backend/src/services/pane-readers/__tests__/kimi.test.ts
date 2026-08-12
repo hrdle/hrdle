@@ -100,16 +100,18 @@ describe('the approval prompt', () => {
       'Approve once',
       'Approve for this session',
       'Reject',
+      'Reject with feedback',
     ]);
   });
 
-  test('`Reject with feedback` opens a text field, so it is not offered', () => {
-    expect(p?.options.map((o) => o.label)).not.toContain('Reject with feedback');
+  test('`Reject with feedback` is offered, marked as the row that needs saying', () => {
+    // Refusing with a reason is a thing to say rather than a thing to pick, and
+    // saying it is what the glasses are best at. Picking it sends the digit and
+    // starts dictation.
+    expect(p?.options.at(-1)).toMatchObject({ label: 'Reject with feedback', freeText: true });
   });
 
   test('numbered rows answer to their own digit', () => {
-    // And a row dropped from the list costs nothing there, which is why the
-    // unanswerable one can go at all.
     expect(p?.choiceInput).toBe('number');
     expect(p?.choiceSelected).toBeUndefined();
   });

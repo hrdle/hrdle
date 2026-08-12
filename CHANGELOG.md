@@ -4,16 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Fixed
-- **OpenCode's `Type your own answer` was offered as an option.** It draws one
-  on every question it asks, and the ring has no keyboard - so every picker
-  OpenCode ever produced carried a row whose Enter does nothing a wearer can
-  see. It joins claude's `Type something.` and kimi's `Other`, which were
-  already refused. Measured against a live 1.18.16 question on 2026-08-12
-  - OpenCode does ask questions, which is worth writing down: it has no
-    `AskUserQuestion` tool, so nothing here expected one, and its picker had
-    never been captured. The general read handles the rest of it correctly -
-    numbered rows, descriptions under them, the whole framed with the left rule
+### Changed
+- **The row that opens a text field is answered by speaking.** Every agent draws
+  one - claude's `Type something.`, kimi's `Other` and its `Reject with
+  feedback`, opencode's `Type your own answer` - and every one of them was
+  dropped before the item was built, on the reasoning that the ring has no
+  keyboard. The glasses have a microphone. The row a wearer wants when none of
+  the options fit was the one always taken away from them
+  - They travel with the item now, marked (`choiceFreeText`). Picking one sends
+    the key that opens the pane's own field and goes straight to dictation -
+    fewer gestures than any other way of saying something to a pane
+  - Needs glasses v0.0.69
+- OpenCode asks questions, which is worth writing down: it has no
+  `AskUserQuestion` tool, so nothing here expected one, and its picker had never
+  been captured. The general read handles it correctly - numbered rows, their
+  descriptions under them, the whole framed with the left rule
 
 ## [0.3.106] - 2026-08-12
 

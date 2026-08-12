@@ -376,11 +376,12 @@ const NUMBERED_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(?:\\d+[.)]|\\[\\d+\\])\\
 const CHECKBOX_OPTION = new RegExp(`^\\s*${CURSOR}?\\s*(\\[[ xX*✓✔]\\]\\s*\\S.*)`);
 
 /**
- * The rows a wearer cannot answer, whatever they are numbered.
+ * The rows that open a text field rather than answering.
  *
- * Every one of these opens free-text entry, and the ring has no keyboard - on
- * the glasses that is the voice flow, reached another way. Leaving them in
- * puts rows in the picker whose Enter does nothing a wearer can see.
+ * They used to be dropped, on the reasoning that the ring has no keyboard. It
+ * has a microphone: the row a wearer wants when none of the options fit was the
+ * one always taken away from them. They are marked now and travel with the
+ * item, and picking one opens the pane's field and then dictation.
  * `Other` is kimi's, `Type your own answer` is opencode's (measured on a live
  * 1.18.16 question, 2026-08-12 - it draws one on every question it asks); the
  * other two are claude's.
@@ -468,6 +469,9 @@ function indentOf(line: string): number {
 export interface ScrapedChoice {
   label: string;
   detail: string;
+  /** The row opens a text field rather than answering. Kept, not dropped: the
+   *  glasses answer it by dictation. */
+  freeText?: boolean;
 }
 
 /**
@@ -522,11 +526,13 @@ export function extractChoiceRows(lines: string[]): ScrapedChoice[] {
     last.detail = joinWrapped(last.detail, dropSidePanel(line).trim());
   }
 
-  // Filtered on the label alone: `Other` becomes unanswerable whatever
-  // description an agent hangs off it.
-  return rows
-    .filter((r) => !isUnanswerable(r.label))
-    .map((r) => ({ label: r.label, detail: truncate(r.detail, MAX_DETAIL_CHARS) }));
+  // Marked on the label alone: `Other` is the text row whatever description an
+  // agent hangs off it.
+  return rows.map((r) => ({
+    label: r.label,
+    detail: truncate(r.detail, MAX_DETAIL_CHARS),
+    ...(isUnanswerable(r.label) ? { freeText: true } : {}),
+  }));
 }
 
 /** The same options with each description written after its label, which is
@@ -793,11 +799,19 @@ export function extractPermissionRequest(lines: string[]): string | undefined {
   return undefined;
 }
 
+/** Which of these rows open a text field, by index. */
+function indicesOf(rows: Array<{ freeText?: boolean }>): number[] | undefined {
+  const out = rows.flatMap((r, i) => (r.freeText ? [i] : []));
+  return out.length > 0 ? out : undefined;
+}
+
 interface WaitingPayload {
   text: string;
   choices?: string[];
   /** Index-aligned with `choices`, empty where an option had nothing to say. */
   choiceDetails?: string[];
+  /** Indices into `choices` whose row opens a text field. */
+  choiceFreeText?: number[];
   choiceInput?: GlassesRelayItem['choiceInput'];
   choiceSelected?: number;
 }
@@ -895,6 +909,7 @@ async function assembleWaitingPayload(
         text: clampDisplayWidth(normalizeRelayText(picker.question ?? fallback), MAX_TEXT_WIDTH) || fallback,
         choices: picker.options.map((o) => clamp(o.label)),
         choiceDetails: picker.options.map((o) => normalizeRelayText(o.detail)),
+        choiceFreeText: indicesOf(picker.options),
         // A list with no keys of its own is answered by walking the pane's
         // cursor, and both halves travel or neither does - an item carrying
         // options and no `choiceInput` reads as a numbered one, and the glasses
@@ -919,6 +934,7 @@ async function assembleWaitingPayload(
             text: text || fallback,
             choices: rows.map((c) => clamp(c.label)),
             choiceDetails: rows.map((c) => (c.detail ? normalizeRelayText(c.detail) : '')),
+            choiceFreeText: indicesOf(rows),
           }
         : { text: text || fallback };
     }
@@ -937,6 +953,7 @@ async function assembleWaitingPayload(
       text: text || fallback,
       choices: numbered.map((c) => clamp(c.label)),
       choiceDetails: numbered.map((c) => (c.detail ? normalizeRelayText(c.detail) : '')),
+      choiceFreeText: indicesOf(numbered),
     };
   }
   // Nothing a list-shaped reader recognises. The pane may still be offering a
@@ -982,6 +999,8 @@ function makeItem(
     choiceInput?: GlassesRelayItem['choiceInput'];
     choiceSelected?: number;
     choiceDetails?: string[];
+    /** Indices into `choices`, before any filtering here. */
+    choiceFreeText?: number[];
   },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
@@ -1013,10 +1032,17 @@ function makeItem(
       .map((c, i) => ({
         label: clampDisplayWidth(normalizeRelayText(c), MAX_CHOICE_WIDTH),
         detail: normalizeRelayText(answering?.choiceDetails?.[i] ?? ''),
+        from: i,
       }))
       .filter((r) => r.label.length > 0);
     const kept = rows.map((r) => r.label);
     item.choices = kept;
+    // Re-derived against the surviving rows: an index into the list as it was
+    // asked for would point at a different option once one is gone.
+    const freeText = (answering?.choiceFreeText ?? [])
+      .map((i) => rows.findIndex((r) => r.from === i))
+      .filter((i) => i >= 0);
+    if (freeText.length > 0) item.choiceFreeText = freeText;
     // Sized against the surviving rows rather than the ones asked for: a
     // dropped option gives its line back to the description.
     //
@@ -1079,6 +1105,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
       choiceInput: payload.choiceInput,
       choiceSelected: payload.choiceSelected,
       choiceDetails: payload.choiceDetails,
+      choiceFreeText: payload.choiceFreeText,
     },
   );
 }
