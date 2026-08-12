@@ -203,6 +203,9 @@ export interface AppState {
   /** The key each option answers to, when it is not its own position. Grok
    *  writes its own, and one of them is a letter. */
   choiceKeys?: string[]
+  /** Which of `choiceFreeText` are a field the transcript is typed into where
+   *  it stands, rather than a row that opens a prompt to send one to. */
+  choiceFieldRows?: number[]
   /**
    * The options are checkboxes rather than a single pick.
    *
@@ -1344,7 +1347,14 @@ export const CHECK_MARK = '\u2714'
 /** Whether a scraped option set is a multi-select. One checkbox is enough:
  *  a single-pick list has none at all. */
 export function looksMultiSelect(options: string[]): boolean {
-  return options.some((o) => /^\s*\[[ xX*\u2713\u2714]\]/.test(o))
+  return options.some(hasCheckbox)
+}
+
+/** Whether a row carries a box of its own. On a multi-select this separates the
+ *  rows the pane ticks from the ones it does not - `Chat about this` sits below
+ *  the closing rule with no box, and is answered like a single pick. */
+export function hasCheckbox(option: string): boolean {
+  return /^\s*\[[ xX*\u2713\u2714]\]/.test(option)
 }
 
 /** Reply target shown in the choice header — the session the Enter actually

@@ -20,6 +20,7 @@ import { extractInlineChoices } from '../../../shared/inline-choices';
 import type { AgentProvider, GlassesRelayItem } from '../../../shared/types';
 import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
 import { hasPaneReader, readPaneQuestion } from './pane-readers';
+import type { PaneQuestion } from './pane-readers';
 import {
   CJK_EDGE,
   CURSOR,
@@ -690,6 +691,57 @@ function indicesOf(rows: Array<{ freeText?: boolean }>): number[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
+/** A row that carries a box of its own, which on a multi-select is the pane's
+ *  to tick - and, where it also takes text, is the field itself. */
+const BOXED_ROW = /^\s*\[[ xX*✓✔]\]/;
+
+/**
+ * The rows that are a text field rather than a way to one.
+ *
+ * Only a multi-select has any. `[ ] Type something` is filled by typing while
+ * the pane's cursor is on it, ticking the box in the same stroke; its digit
+ * only ticks the box, and submitting it that way was measured on Claude Code
+ * 2.1.228 returning an answer with nothing in it. `Chat about this` sits below
+ * the closing rule with no box and is a choice like any other.
+ */
+export function fieldRowsOf(picker: PaneQuestion): number[] | undefined {
+  if (!picker.multiSelect) return undefined;
+  const out = picker.options.flatMap((o, i) =>
+    o.freeText && BOXED_ROW.test(o.label) ? [i] : [],
+  );
+  return out.length > 0 ? out : undefined;
+}
+
+/**
+ * The keys each row answers to, with the walk to a field worked out here.
+ *
+ * Deliberately not left to the app. Sending a key is all the glasses do with a
+ * row, and everything about *which* key belongs on this side, where an agent
+ * that redraws its picker can be followed by editing a reader - the app costs
+ * an ehpk build and a store review to change, which is the reason more than one
+ * thing in this file used to be wrong for a while.
+ *
+ * A field is reached by walking the pane's own cursor to it, from where the
+ * reader measured that cursor. Sparse on purpose: every row this leaves unset
+ * is answered by its own number, which is every row on every other list.
+ *
+ * The walk does not wrap. Overshooting a field does not pick the wrong option -
+ * it types the wearer's words into it.
+ */
+export function choiceKeysOf(picker: PaneQuestion, fieldRows: number[] | undefined): string[] | undefined {
+  if (!fieldRows) return picker.choiceKeys;
+  const keys = [...(picker.choiceKeys ?? [])];
+  const from = picker.choiceCursor ?? 0;
+  for (const row of fieldRows) {
+    const steps = row - from;
+    // An empty walk is the pane already sitting on the row, and travels as the
+    // empty string: a row with no key at all would fall back to its digit,
+    // which is the key this exists to keep off a field.
+    keys[row] = (steps >= 0 ? '\x1b[B' : '\x1b[A').repeat(Math.abs(steps));
+  }
+  return keys;
+}
+
 interface WaitingPayload {
   text: string;
   choices?: string[];
@@ -701,6 +753,8 @@ interface WaitingPayload {
   choiceKeys?: string[];
   choiceInput?: GlassesRelayItem['choiceInput'];
   choiceSelected?: number;
+  /** Which of `choiceFreeText` are a field typed into where it stands. */
+  choiceFieldRows?: number[];
 }
 
 /**
@@ -792,12 +846,14 @@ async function assembleWaitingPayload(
   if (hasPaneReader(pane?.agent)) {
     const picker = readPaneQuestion(pane?.agent, lines);
     if (picker) {
+      const fieldRows = fieldRowsOf(picker);
       return {
         text: clampDisplayWidth(normalizeRelayText(picker.question ?? fallback), MAX_TEXT_WIDTH) || fallback,
         choices: picker.options.map((o) => clamp(o.label)),
         choiceDetails: picker.options.map((o) => normalizeRelayText(o.detail)),
         choiceFreeText: indicesOf(picker.options),
-        choiceKeys: picker.choiceKeys,
+        choiceKeys: choiceKeysOf(picker, fieldRows),
+        choiceFieldRows: fieldRows,
         // A list with no keys of its own is answered by walking the pane's
         // cursor, and both halves travel or neither does - an item carrying
         // options and no `choiceInput` reads as a numbered one, and the glasses
@@ -891,6 +947,8 @@ function makeItem(
     choiceFreeText?: number[];
     /** Index-aligned with `choices`, before any filtering here. */
     choiceKeys?: string[];
+    /** Indices into `choices`, before any filtering here. */
+    choiceFieldRows?: number[];
   },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
@@ -937,6 +995,14 @@ function makeItem(
     // option is an answer to a question nobody asked.
     const keys = answering?.choiceKeys;
     if (keys) item.choiceKeys = rows.map((r) => keys[r.from] ?? String(r.from + 1));
+    // Re-indexed with the rows for the third time. A row dropped here takes its
+    // own marking with it rather than passing it to whatever moved up into its
+    // place - which would be the app typing a wearer's words into an option
+    // they had picked to answer with.
+    const fields = (answering?.choiceFieldRows ?? [])
+      .map((i) => rows.findIndex((r) => r.from === i))
+      .filter((i) => i >= 0);
+    if (fields.length > 0) item.choiceFieldRows = fields;
     // Sized against the surviving rows rather than the ones asked for: a
     // dropped option gives its line back to the description.
     //
@@ -1001,6 +1067,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
       choiceDetails: payload.choiceDetails,
       choiceFreeText: payload.choiceFreeText,
       choiceKeys: payload.choiceKeys,
+      choiceFieldRows: payload.choiceFieldRows,
     },
   );
 }

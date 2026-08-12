@@ -1425,6 +1425,28 @@ export interface GlassesRelayItem {
    * choices.
    */
   choiceSelected?: number;
+  /**
+   * The subset of `choiceFreeText` whose row is a field rather than a way to
+   * one.
+   *
+   * Both open the microphone; they differ in where the words then go. A row
+   * like `Chat about this` takes the question down and leaves a prompt open, so
+   * the transcript is sent as a prompt and the picker is finished with. A field
+   * is one row of a list that is still being answered: the words are typed in
+   * where they stand, without an Enter - Enter on a picker row toggles it - and
+   * the picker stays up, because the other options are still tickable and the
+   * send row still has to be pressed.
+   *
+   * Claude's multi-select draws `[ ] Type something` as one. Ticking it by its
+   * digit and submitting was measured on Claude Code 2.1.228 returning an
+   * answer with nothing in it: the question came back answered and empty.
+   *
+   * How the pane's cursor gets to the row is not the app's business and is not
+   * here - it is the row's `choiceKeys` entry, which is arrow keys rather than
+   * a digit for exactly these rows. Keeping the walk server-side is what lets
+   * the next agent that draws a field differently be handled without an ehpk.
+   */
+  choiceFieldRows?: number[];
   source: 'auto' | 'agent';
   /**
    * How much of the wearer's attention this is worth — decided here, obeyed

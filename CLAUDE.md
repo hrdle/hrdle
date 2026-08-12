@@ -945,6 +945,26 @@ A change confined to the server (`backend/`) needs no ehpk rebuild - STT and
 relay behavior live there. Building and uploading to EVEN Hub is the
 `/glasses-upload` skill.
 
+### Put the behavior on the server, not in the app
+
+An app change costs a build and a store review, so **anything that could differ
+between agents, or change when one of them redraws something, belongs on the
+server and travels on the item**. The app is left with the parts only it can
+know - what is on its screen, what the wearer just did, whether someone is
+mid-utterance.
+
+This has been paid for more than once. `present` moved the "does this deserve
+the screen" rule out of the app after a question sat behind a banner for ten
+minutes. `choiceKeys` moved "which key answers this row" out after grok turned
+out to write its own, and now carries the arrow walk that reaches claude's
+multi-select text field. `choiceFieldRows` says which rows are a field rather
+than letting the app infer it from a label's shape.
+
+When a fix seems to need app logic, look for the version of it that is a field
+on `GlassesRelayItem` and a reader on this side. Reach for an ehpk rebuild only
+for what is genuinely about the screen or the gesture - and when one is
+unavoidable, spend it on making the *next* one unnecessary.
+
 ## Linting
 
 Uses [Biome](https://biomejs.dev/) for linting. Configuration in `biome.json` at project root.
