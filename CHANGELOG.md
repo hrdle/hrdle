@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.95] - 2026-08-12
+
+### Fixed
+- **A laptop nobody had touched still took the glasses to a workspace finished
+  five days earlier.** 0.3.93 told a person picking a device up apart from a
+  socket reconnecting by remembering, per device, what that device last said
+  about itself - and it kept that memory in the server process, so a restart
+  emptied it and every client reconnecting after a deploy looked brand new
+  again. Measured on 2026-08-12: ten minutes after the 0.3.94 restart, w4H
+  again, the twelfth such switch in two days
+  - The page is the only party that knows whether it was opened or merely
+    reconnected, so it now says which. A declaration from a page someone just
+    opened claims the focus; the same page saying hello again on a new socket
+    claims nothing, and neither does a client too old to say which it is - a tab
+    open since before this shipped being precisely the one at fault
+  - Picking a device up still claims, watched on the live connection rather than
+    inferred from one that ended
+  - Every claim is now logged with the message that minted it. Three fixes in,
+    the screen recording could say a laptop had taken the glasses but never by
+    which path, and the two paths are one message apart
+
 ## [0.3.94] - 2026-08-11
 
 ### Changed
