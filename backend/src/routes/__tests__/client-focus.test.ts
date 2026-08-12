@@ -157,49 +157,50 @@ describe('a reconnect is not a person', () => {
   /**
    * A page declares itself the moment its subscription is confirmed, so this
    * message arrives one behind the resumed subscribe above - on a socket with
-   * no memory of the device it belongs to. Every reconnect therefore read as
+   * no past to compare against. Every reconnect therefore read as
    * hidden -> visible and re-claimed what the subscribe had just declined.
-   * Measured on 2026-08-11 with the heartbeat fix running: nine claims from one
-   * desktop and eight from one phone, none of them touched.
    */
   test('a page re-declaring itself on a new socket does not claim', () => {
     const data: { visible?: boolean; focusAt?: number } = {};
-    applyClientInfoFocus(data, { visible: true }, { visible: true }, 999);
+    applyClientInfoFocus(data, { visible: true }, 999);
     expect(data.focusAt).toBeUndefined();
   });
 
-  test('a device nobody has seen before claims when it appears', () => {
+  /**
+   * v0.3.93 told the two apart with a per-device memory on the server, and a
+   * server restart emptied it - so every client reconnecting after a deploy
+   * looked brand new. Ten minutes after the 0.3.94 restart, on 2026-08-12, a
+   * laptop nobody had touched took the wearer to a workspace finished five days
+   * earlier. Only the page knows it was opened; it now says so.
+   */
+  test('a page someone just opened claims', () => {
     const data: { visible?: boolean; focusAt?: number } = {};
-    applyClientInfoFocus(data, { visible: true }, undefined, 999);
+    applyClientInfoFocus(data, { visible: true, fresh: true }, 999);
     expect(data.focusAt).toBe(999);
   });
 
-  /** Putting a device down and picking it back up is a person, either side of
-   *  a reconnect: the memory is what tells the two apart. */
-  test('picking a device up claims it', () => {
-    const onTheSameSocket = { visible: false, focusAt: 100 };
-    applyClientInfoFocus(onTheSameSocket, { visible: true }, { visible: false }, 999);
-    expect(onTheSameSocket.focusAt).toBe(999);
-
-    const afterAReconnect: { visible?: boolean; focusAt?: number } = {};
-    applyClientInfoFocus(afterAReconnect, { visible: true }, { visible: false }, 999);
-    expect(afterAReconnect.focusAt).toBe(999);
+  /** A tab open since before `fresh` shipped is the very tab this is about. */
+  test('a client too old to say either way does not claim', () => {
+    const data: { visible?: boolean; focusAt?: number } = {};
+    applyClientInfoFocus(data, { visible: true }, 999);
+    expect(data.focusAt).toBeUndefined();
   });
 
-  test('going hidden claims nothing and is remembered as such', () => {
+  /** Putting a device down and picking it back up is a person - and it happens
+   *  on a live connection, so it needs nothing remembered to be seen. */
+  test('picking a device up claims it', () => {
+    const data = { visible: false, focusAt: 100 };
+    applyClientInfoFocus(data, { visible: true }, 999);
+    expect(data.focusAt).toBe(999);
+  });
+
+  test('going hidden claims nothing', () => {
     const data = { visible: true, focusAt: 100 };
-    applyClientInfoFocus(data, { visible: false }, { visible: true }, 999);
+    applyClientInfoFocus(data, { visible: false }, 999);
     expect(data).toEqual({ visible: false, focusAt: 100 });
   });
 });
 
-/**
- * The last hole the two fixes above left open. A machine that is merely awake
- * is not a person, and while it was the only one connected it won the election
- * unopposed: the recording for 2026-08-11 is a laptop taking the wearer to w4H
- * - a workspace finished days earlier - nine times between 08:51 and 13:07,
- * every one of them in a window where no other screen was declaring itself.
- */
 describe('an election needs someone to have done something', () => {
   test('a reconnected client with no claim of its own is not followed', () => {
     const reconnected = client({ focusAt: undefined });
@@ -215,7 +216,7 @@ describe('an election needs someone to have done something', () => {
       visible: undefined,
       focusAt: undefined,
     };
-    applyClientInfoFocus(laptop, { visible: true }, { visible: true }, NOW);
+    applyClientInfoFocus(laptop, { visible: true }, NOW);
     expect(pickClientFocus([client(laptop)], NOW)).toBeUndefined();
   });
 
@@ -226,7 +227,7 @@ describe('an election needs someone to have done something', () => {
       visible: undefined,
       focusAt: undefined,
     };
-    applyClientInfoFocus(laptop, { visible: true }, { visible: true }, NOW);
+    applyClientInfoFocus(laptop, { visible: true }, NOW);
     applySubscribeFocus(laptop, { sessionId: 'w4H' }, NOW);
     expect(pickClientFocus([client(laptop)], NOW)?.sessionId).toBe('w4H');
   });

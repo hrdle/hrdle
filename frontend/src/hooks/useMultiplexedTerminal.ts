@@ -205,12 +205,23 @@ function sendSessionMessage(msg: Record<string, unknown>) {
 // which client owns the glasses focus.
 let lastDeviceType: "mobile" | "tablet" | "desktop" | null = null;
 
+// False until this page has declared itself once. The declaration is sent again
+// on every reconnect (`onConnect` -> `sendClientInfo`), and the server cannot
+// tell the two apart from the socket alone - a new socket has no past. Only the
+// page knows it was opened rather than merely reconnected, so it says so.
+let clientInfoDeclared = false;
+
 function sendClientInfoNow() {
 	if (!lastDeviceType) return;
+	const fresh = !clientInfoDeclared;
+	clientInfoDeclared = true;
 	sendSessionMessage({
 		type: "client-info",
 		deviceType: lastDeviceType,
 		visible: typeof document !== "undefined" && !document.hidden,
+		// Someone opened this page. A reconnect of a page already open is not a
+		// person and claims nothing.
+		fresh,
 		// A browser being driven rather than watched. The glasses follow the
 		// screen someone is holding, and an agent taking a screenshot is not
 		// that - it used to claim the focus and carry a wearer off mid-read.

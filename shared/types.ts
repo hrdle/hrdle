@@ -1199,7 +1199,12 @@ export type ControlClientMessage =
    * UI is opened headlessly all day to take screenshots - each one claimed the
    * focus and carried a wearer off mid-conversation.
    */
-  | { type: 'client-info'; deviceType: 'mobile' | 'tablet' | 'desktop'; visible?: boolean; automated?: boolean }
+  // `fresh` marks the first declaration of a page load, as opposed to the same
+  // page saying hello again on a new socket. Someone opened this; a reconnect
+  // is nobody. Absent from clients too old to send it, which is read as "not
+  // fresh": a tab open since before this shipped is exactly the one that must
+  // not claim.
+  | { type: 'client-info'; deviceType: 'mobile' | 'tablet' | 'desktop'; visible?: boolean; automated?: boolean; fresh?: boolean }
   // Per-client sizing (see `PaneDemand`): the sizes at which THIS client is
   // currently rendering each pane it displays. Keyed by tmux-style `%N`. The
   // server reconciles one PTY size per pane across all clients' demands. A
@@ -1525,6 +1530,7 @@ const controlClientMessageOptions = [
     deviceType: z.enum(['mobile', 'tablet', 'desktop']),
     visible: z.boolean().optional(),
     automated: z.boolean().optional(),
+    fresh: z.boolean().optional(),
   }),
   z.object({ type: z.literal('adjust-pane'), paneId: PaneIdSchema, direction: z.enum(['L', 'R', 'U', 'D']), amount: WsAmount }),
   z.object({
