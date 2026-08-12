@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.102] - 2026-08-12
+
 ### Fixed
 - **Junk options on the glasses, twice over.** Both reported from the device on
   2026-08-12, and both were this side telling the app something untrue
