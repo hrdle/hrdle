@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.109] - 2026-08-12
+
 ### Changed
 - **What every pane reader needs is in one place** (`pane-readers/shared.ts`).
   Each agent's frame stays its own - that is the design - but the things a
