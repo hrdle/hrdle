@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **What every pane reader needs is in one place** (`pane-readers/shared.ts`).
+  Each agent's frame stays its own - that is the design - but the things a
+  reader has to *know* were being learned separately: four copies of "which row
+  opens a text field", three of how a terminal breaks a line, two lists of the
+  glyph a cursor is drawn with. opencode's wording had to be added to three of
+  the four the day it was found, and the fourth was caught by a failing test
+  rather than by anyone remembering it was there
+
 ### Added
 - **Grok Build's picker can be answered from the glasses.** It agrees with
   nobody about how to draw a row - `1 (○) そのまま残す`, no full stop and no

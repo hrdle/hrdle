@@ -38,27 +38,19 @@
  * those sit further left.
  */
 
-import type { PaneQuestion, PickerOption } from './index';
-
-/** The rule kimi frames a prompt with. */
-const RULE = /^\s*[─-╿]{8,}\s*$/u;
+import type { PaneQuestion } from './index';
+import { blankCursor, CURSOR, isFreeText, joinWrapped, lastIndex, type PickerOption, RULE } from './shared';
 
 /** The line that says how the prompt is answered. Both shapes draw one, and it
  *  is the surest sign that a prompt is what is on screen at all. */
 const HINT = /[↑↓].*(select|navigate|choose)/i;
 
-/** The glyph on the row the pane is sitting on. Kept in step with the list in
- *  `glasses-relay.ts` - kimi has used two of them. */
-const CURSOR = /^(\s*)([❯▶›→▸])\s+/;
+/** The glyph on the row the pane is sitting on - kimi has used two of them,
+ *  which is why the list is shared rather than restated here. */
+const CURSOR_ROW = new RegExp(`^\\s*${CURSOR}\\s+`);
 
 /** A numbered row, once the cursor is off it: `1. Approve once`. */
 const NUMBER = /^(\d+)[.)]\s+/;
-
-/** Rows that open a text field. Kept and marked: the ring cannot type into one
- *  but the microphone can, and it is the row a wearer wants when none of the
- *  options fit. Kimi's `Reject with feedback` is one of these - refusing with a
- *  reason is a thing to say, not a thing to pick. */
-const FREE_TEXT = new Set(['Other', 'Type something', 'Type your own answer', 'Reject with feedback']);
 
 export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
   const hint = lastIndex(lines, (l) => HINT.test(l));
@@ -87,7 +79,7 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
   // The row the pane is sitting on, and with it the column every option's text
   // starts at. The LAST cursor in the block, for the same reason: the marker on
   // the question is not a cursor, and it comes first.
-  const cursorAt = lastIndex(block, (l) => CURSOR.test(l));
+  const cursorAt = lastIndex(block, (l) => CURSOR_ROW.test(l));
   if (cursorAt <= questionAt) return undefined;
   const column = labelColumnOf(block[cursorAt]);
 
@@ -103,7 +95,7 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
       paragraphStart = true;
       continue;
     }
-    const bare = stripCursor(line);
+    const bare = blankCursor(line);
     const indent = bare.length - bare.trimStart().length;
     const numbered = NUMBER.test(bare.trim());
     // A numbered row carries its own answer and is an option wherever it sits -
@@ -123,12 +115,12 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
     const last = rows[rows.length - 1];
     // A description follows its option with no blank line between, so anything
     // reached without one belongs to the row above.
-    if (last && !paragraphStart) last.option.detail = join(last.option.detail, line.trim());
+    if (last && !paragraphStart) last.option.detail = joinWrapped(last.option.detail, line.trim());
     paragraphStart = false;
   }
 
   const kept = rows.map((r) =>
-    FREE_TEXT.has(r.option.label) ? { ...r, option: { ...r.option, freeText: true } } : r,
+    isFreeText(r.option.label) ? { ...r, option: { ...r.option, freeText: true } } : r,
   );
   if (kept.length === 0) return undefined;
 
@@ -158,30 +150,13 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
  */
 function questionOf(block: string[], at: number): string | undefined {
   const line = block[at];
-  return line ? stripCursor(line).trim() : undefined;
+  return line ? blankCursor(line).trim() : undefined;
 }
 
-/** Where an option's own text begins, with the cursor and its space removed. */
+/** Where an option's own text begins, with the cursor blanked out so a marked
+ *  row lines up with the rows that have none. */
 function labelColumnOf(line: string): number {
-  const bare = stripCursor(line);
+  const bare = blankCursor(line);
   return bare.length - bare.trimStart().length;
 }
 
-/** The line with its cursor replaced by spaces, so columns still line up with
- *  the rows that have none. */
-function stripCursor(line: string): string {
-  const m = line.match(CURSOR);
-  return m ? ' '.repeat(m[0].length) + line.slice(m[0].length) : line;
-}
-
-function join(head: string, tail: string): string {
-  if (!head) return tail;
-  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]$/u.test(head) ? head + tail : `${head} ${tail}`;
-}
-
-function lastIndex(lines: string[], match: (l: string) => boolean): number {
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (match(lines[i])) return i;
-  }
-  return -1;
-}

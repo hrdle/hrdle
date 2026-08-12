@@ -28,7 +28,8 @@
  * the choices for that reason.
  */
 
-import type { PaneQuestion, PickerOption } from './index';
+import type { PaneQuestion } from './index';
+import { isFreeText, joinWrapped, type PickerOption, truncateDetail } from './shared';
 
 /** The rule grok frames its prompt with, down the left of every line. */
 const LEFT_RULE = /^\s*┃\s?/;
@@ -51,14 +52,6 @@ const SCROLLBAR = /[█▉▊▋▌▍▎▏]+\s*$/;
 
 /** Two spaces or more: a column boundary rather than a word gap. */
 const LABEL_GAP = /\s{2,}/;
-
-/** The row that opens a text field. Kept and marked - the glasses answer it by
- *  dictation - and it is the row whose key is never a digit. */
-const FREE_TEXT = /^type your answer here$/i;
-
-/** However long the pane makes it, a description longer than this is not read
- *  off a pair of glasses. */
-const MAX_DETAIL_CHARS = 120;
 
 export function readGrokPicker(lines: string[]): PaneQuestion | undefined {
   // Only the framed lines are the prompt. Everything else on the pane is the
@@ -88,8 +81,8 @@ export function readGrokPicker(lines: string[]): PaneQuestion | undefined {
     const detail = rest.join(' ').trim();
     options.push({
       label: label.trim(),
-      detail: detail.length > MAX_DETAIL_CHARS ? `${detail.slice(0, MAX_DETAIL_CHARS - 1)}…` : detail,
-      ...(FREE_TEXT.test(label.trim()) ? { freeText: true } : {}),
+      detail: truncateDetail(detail),
+      ...(isFreeText(label.trim()) ? { freeText: true } : {}),
     });
     keys.push(m[1]);
   }

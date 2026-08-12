@@ -18,7 +18,6 @@ import {
   postHookRelay,
   resetGlassesRelayForTest,
   resolveHookTarget,
-  stripCursor,
   stripLeftRule,
   subscribeGlassesRelay,
   trackGlassesRelay,
@@ -26,6 +25,7 @@ import {
   type RelaySocket,
 } from '../glasses-relay';
 import { detectPaneState } from '../pane-state';
+import { stripCursor } from '../pane-readers/shared';
 
 // =============================================================================
 // Helpers
@@ -264,12 +264,14 @@ describe('scrape extraction', () => {
   });
 
   test('extractNumberedChoices cuts a description that runs long', () => {
+    // At `MAX_DETAIL_CHARS`, which every reader now shares - the item clamps
+    // it again to the lines the panel will actually give it.
     const [only] = extractNumberedChoices([
       '  [1] Yes',
-      `      ${'x'.repeat(200)}`,
+      `      ${'x'.repeat(300)}`,
       '  [2] No',
     ]);
-    expect(only.length).toBeLessThan(100);
+    expect(only.length).toBeLessThan(140);
     expect(only.startsWith('Yes - xxx')).toBe(true);
     expect(only.endsWith('…')).toBe(true);
   });
