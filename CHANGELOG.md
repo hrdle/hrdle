@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.108] - 2026-08-12
+
 ### Fixed
 - **The screen recording never carried the build that drew a frame.** The app
   has sent its version on every frame since the field was added; the server's
