@@ -1926,40 +1926,34 @@ describe('how much of a description is sent', () => {
     return item.choiceDetails as string[] | undefined;
   }
 
-  test('fewer options leave more room, and get more of it', async () => {
-    // The rows cannot be given up - the cursor is a position in that list - so
-    // the description gets what is left after them. A flat width ignored that
-    // from both ends: three options wasted two of the four lines they had while
-    // five were cut by the app instead.
+  test('a long list carries its descriptions like a short one', async () => {
+    // Sized from the number of options, seven rows and a rule left nothing and
+    // the descriptions were dropped here, before being sent - so a wearer got
+    // seven labels and no reason to prefer any of them. The picker interleaves
+    // and scrolls now, so the option under the ring has the panel to itself
+    // whatever the list's length.
     const three = await detailsOf(pane(3));
-    const five = await detailsOf(pane(5));
-    const six = await detailsOf(pane(6));
-    expect(displayWidth(three?.[0] ?? '')).toBeGreaterThan(displayWidth(five?.[0] ?? ''));
-    expect(displayWidth(five?.[0] ?? '')).toBeGreaterThan(displayWidth(six?.[0] ?? ''));
+    const seven = await detailsOf(pane(7));
+    expect(seven?.[0]).toBeTruthy();
+    expect(displayWidth(seven?.[0] ?? '')).toBe(displayWidth(three?.[0] ?? ''));
   });
 
   test('what is cut here says so', async () => {
     // The point of cutting on this side. Text the app drops for want of a line
     // ends by simply stopping, and a description that stops mid-thought while
     // looking finished is the more expensive of the two mistakes.
-    const six = await detailsOf(pane(6));
-    expect(six?.[0]).toMatch(/…$/);
+    const rows = ['❯ 1. 案A', `     ${LONG.repeat(4)}`];
+    const details = await detailsOf(claudePicker('どれにしますか?', rows));
+    expect(details?.[0]).toMatch(/…$/);
   });
 
-  test('a list with no room for a description is sent without one', async () => {
-    // Seven rows and the rule leave nothing. Sending it anyway would be bytes
-    // for a line that cannot be drawn.
-    expect(await detailsOf(pane(7))).toBeUndefined();
-  });
-
-  test("the multi-select's send row is counted before it exists", async () => {
-    // The app draws one row more than there are options there, and it is the
-    // app that adds it - so the count has to be anticipated on this side or the
-    // description is sized one line too generously and the app drops the tail
-    // silently.
+  test('a multi-select is allowed the same as a single pick', async () => {
+    // The send row used to be subtracted here, because the app drew it after
+    // the whole list. It is one row among the option rows now, and the ring
+    // reaches it by scrolling to it.
     const plain = await detailsOf(pane(4));
     const multi = await detailsOf(pane(4, '[ ] '));
-    expect(displayWidth(multi?.[0] ?? '')).toBeLessThan(displayWidth(plain?.[0] ?? ''));
+    expect(displayWidth(multi?.[0] ?? '')).toBe(displayWidth(plain?.[0] ?? ''));
   });
 });
 

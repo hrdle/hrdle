@@ -49,14 +49,20 @@ const MAX_CHOICES = 9;
  *  The label alone, since the description travels beside it now. */
 const MAX_CHOICE_WIDTH = 52;
 /**
- * How much of a choice's description to send, given how many choices there are.
+ * How much of a choice's description to send.
  *
- * The panel gives the picker eight lines and the option rows take one each -
- * they cannot be given up, since the cursor is a position in that list - so
- * what the description gets is whatever is left after them and the rule between.
- * A flat width ignored that from both ends: at 72 columns a three-option
- * question wasted two of the four lines it had, and a five-option one was cut
- * by the app instead. Measured on the device, 2026-08-12.
+ * It used to be worked out from the number of options: the picker drew the
+ * whole list and then one description under it, so what a description could
+ * have was the panel's eight lines less a row for each option. Six options and
+ * a Send row leave nothing, and the arithmetic said so - the descriptions were
+ * dropped here, before they were sent, and the wearer of a six-option question
+ * saw six labels and no reason to prefer any of them. Reported off the device
+ * on 2026-08-12: "ディスクリプションの表示内容が全部見えてなかった".
+ *
+ * The picker interleaves them now - label, description, label, description -
+ * and scrolls, so the option under the ring gets the panel to itself whatever
+ * the list's length. What a description is worth is therefore a property of
+ * reading one off glasses rather than of how many there happen to be.
  *
  * Sent a little short of the space rather than a little over, deliberately.
  * Text cut here ends in an ellipsis the wearer can see; text cut by the app
@@ -67,18 +73,14 @@ const PANEL_LINES = 8;
 /** Display columns per panel line, understated - see above. The panel fits
  *  about 24 full-width characters, which is 48 of these. */
 const COLUMNS_PER_LINE = 46;
+/** Its own label sits above it, and the row after it has to be reachable
+ *  without the description having to be scrolled through first. */
+const DETAIL_LINES = PANEL_LINES - 2;
 
-function detailWidthFor(optionRows: number): number {
-  const spare = PANEL_LINES - optionRows - 1; // the rule takes one
-  return spare > 0 ? spare * COLUMNS_PER_LINE : 0;
+function detailWidthFor(_optionRows: number): number {
+  return DETAIL_LINES * COLUMNS_PER_LINE;
 }
 
-/** A checkbox on a row, the same test `looksMultiSelect` makes in the app. Kept
- *  in step with it: what it decides here is only how many rows the picker will
- *  draw, but it decides that for a screen this side never sees. */
-function looksChecked(option: string): boolean {
-  return /^\s*\[[ xX*✓✔]\]/.test(option);
-}
 const INFO_TTL_MS = 5 * 60_000;
 /**
  * Hook-sourced info items expire far sooner than agent self-notes.
@@ -1005,14 +1007,7 @@ function makeItem(
       .map((i) => rows.findIndex((r) => r.from === i))
       .filter((i) => i >= 0);
     if (fields.length > 0) item.choiceFieldRows = fields;
-    // Sized against the surviving rows rather than the ones asked for: a
-    // dropped option gives its line back to the description.
-    //
-    // A multi-select draws one row more than it has options - the send row -
-    // and the app is what adds it, so the count has to be anticipated here.
-    // Read off the labels the same way the app reads it.
-    const optionRows = kept.length + (kept.some(looksChecked) ? 1 : 0);
-    const width = detailWidthFor(optionRows);
+    const width = detailWidthFor(kept.length);
     const details = width > 0 ? rows.map((r) => clampDisplayWidth(r.detail, width)) : [];
     if (details.some((d) => d.length > 0)) item.choiceDetails = details;
 
