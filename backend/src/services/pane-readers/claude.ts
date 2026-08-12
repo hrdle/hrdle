@@ -83,7 +83,8 @@ export interface ClaudePicker {
 const FOOTER = /enter to select/i;
 
 /**
- * A tab chip: one per question in the call, `☐` unanswered and `☑` answered.
+ * A tab chip: one per question in the call, `☐` while nothing on it is picked
+ * and `☒` once something is.
  *
  * Present for a single question too - a call with one question draws one chip -
  * so it is a reliable opening bracket. A permission prompt has none, which is
@@ -101,8 +102,15 @@ const FOOTER = /enter to select/i;
  * opening bracket, and the reader answers "not this screen" for every
  * multi-select there has ever been - so no options reached the glasses and no
  * item was raised at all. Measured against Claude Code 2.1.228.
+ *
+ * `☒` is not decoration either, and its absence had the same effect one tick
+ * later: the chip changes the moment anything on the question is picked, so the
+ * reader saw the picker until the wearer's first tap and not afterwards. A
+ * re-read that finds nothing leaves the item it already has, which is the one
+ * built before any box was ticked - so every box came back empty, forever, and
+ * the picker looked like it was refusing to hold a selection.
  */
-const CHIP = /^\s*(?:[←→]\s+)?[☐☑✅✓✔]\s*\S/;
+const CHIP = /^\s*(?:[←→]\s+)?[☐☒☑✅✓✔]\s*\S/;
 
 /** An option row: `1.` / `2)` / `[1]`, with the cursor glyph claude marks the
  *  current row with. Bounded by the frame, so it does not have to be careful. */
