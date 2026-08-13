@@ -19,7 +19,16 @@ import {
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	lazy,
+	memo,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -28,6 +37,7 @@ import type {
 	ToolResultInfo,
 	ToolUseInfo,
 } from "../../../shared/types";
+import { prepareMath } from "../utils/math-content";
 import { TMP_PATHS } from "../../../shared/identity";
 import { agentBadge } from "../utils/agentDisplay";
 import { storageKey } from "../utils/app-storage";
@@ -308,12 +318,31 @@ const markdownComponents = {
 	),
 };
 
+const MathMarkdown = lazy(() => import("./MathMarkdown"));
+
 function Markdown({ content }: { content: string }) {
+	const { source, hasMath } = useMemo(
+		() => prepareMath(processImageReferences(content)),
+		[content],
+	);
+
+	// Also the fallback: until the chunk is here the message reads as the agent
+	// typed it, which beats a blank where a paragraph was.
+	const plain = (
+		<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+			{source}
+		</ReactMarkdown>
+	);
+
 	return (
 		<div className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-			<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-				{processImageReferences(content)}
-			</ReactMarkdown>
+			{hasMath ? (
+				<Suspense fallback={plain}>
+					<MathMarkdown content={source} components={markdownComponents} />
+				</Suspense>
+			) : (
+				plain
+			)}
 		</div>
 	);
 }

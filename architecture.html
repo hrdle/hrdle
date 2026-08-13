@@ -121,14 +121,15 @@
   <div id="loading" class="loading">Loading architecture.json...</div>
   <script type="application/json" id="arch-data">{
   "name": "Hrdle",
-  "version": "0.3.119",
+  "version": "0.3.120",
   "generated": "2026-08-13",
-  "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones",
+  "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi, OpenCode). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones, plus a companion app for the EVEN G2 glasses",
   "stack": {
     "backend": "Bun runtime + Hono",
     "frontend": "React 19 + Vite + Tailwind v4 + xterm.js",
     "shared": "Zod v4 schemas in shared/types.ts",
-    "transport": "Multiplexed WebSocket /ws/mux + the herdr socket API (NDJSON RPC) + per-pane control streams. The terminal is drawn server-side: PaneViewport frames composed from pane.read (herdr holds the history, up to 1000 lines)"
+    "transport": "Multiplexed WebSocket /ws/mux + the herdr socket API (NDJSON RPC) + per-pane control streams. The terminal is drawn server-side: PaneViewport frames composed from pane.read (herdr holds the history, up to 1000 lines)",
+    "glasses": "EvenHub SDK app (glasses/, built to out.ehpk) plus a browser simulator served at /glasses"
   },
   "workspaces": [
     {
@@ -140,6 +141,10 @@
       "desc": "React SPA. Three layouts: tablet, mobile and desktop"
     },
     {
+      "name": "shared",
+      "desc": "Types and Zod schemas (types.ts) plus identity.json readers, imported by every other workspace"
+    },
+    {
       "name": "glasses",
       "desc": "The EVEN G2 glasses app (EvenHub SDK -> out.ehpk). Its types are duplicated by hand, so a WS protocol change has to be followed here"
     }
@@ -147,20 +152,21 @@
   "diagram": [
     " Clients",
     "   |- Browser (React SPA) ------ tablet / mobile / desktop",
-    "   |- G2 Glasses (EvenHub) ----- REST + /ws/mux",
+    "   |- G2 Glasses (EvenHub) ----- REST + /ws/mux (relay, screen mirror, STT)",
+    "   |- Web Push ---------------- OS notification with no tab awake",
     "   '- hrdle send / peek -------- CLI (REST)",
     "            |",
     "            |  HTTPS / WSS (Tailscale certs)",
     "            v",
-    "    +------------------+  NDJSON/ctrl  +-------+  PTY   +---------------------+",
-    "    | Hono API server  | <-----------> | herdr | <----> | Claude Code / Codex |",
-    "   |   (Bun, :5923)   |  control mode +------+        |       (panes)       |",
-    "   +--------+---------+                               +---------------------+",
+    "   +------------------+  NDJSON/ctrl  +-------+  PTY   +----------------------------+",
+    "   | Hono API server  | <-----------> | herdr | <----> | Claude / Codex / Grok /    |",
+    "   |   (Bun, :5924)   |  control mode +-------+        | Kimi / OpenCode  (panes)   |",
+    "   +--------+---------+                                +----------------------------+",
     "            |",
     "            |  /api/peers (JWT proxy login, SSRF guard)",
     "            v",
     "   +------------------+",
-    "   | Peer Hrdle x N   |  Tailscale tailnet (auto-discovery)",
+    "   | Peer Hrdle x N   |  Tailscale tailnet (auto-discovery, /whoami on port+1)",
     "   +------------------+"
   ],
   "backend": {
@@ -174,10 +180,11 @@
       {
         "name": "HerdrControlSession",
         "file": "backend/src/services/herdr-control.ts",
-        "summary": "One instance per session (= one herdr workspace). Owns the split tree, tracks focus, spawns lazy controllers (WS subscribe or first input only; read-only REST stays pure RPC), tracks the cursor and alt-screen state by scanning frames, and gives a client a 30s grace period. captureViewportHerdr composes the viewport (the visible slice, then recent, capped at 1000 lines). A pane with no runtime yet returns no scroll, which is a normal transient state right after a restore rather than a reason to refuse: it falls back to the client's rows and continues the subscribe, because refusing deadlocks against herdr's resume (which waits for a client size) and the session never opens (#407)",
+        "summary": "One instance per session (= one herdr workspace). Owns the split tree, tracks focus, spawns lazy controllers (WS subscribe or first input only; read-only REST stays pure RPC), tracks the cursor and alt-screen state by scanning frames, and gives a client a 30s grace period. Renders a single tab: a herdr workspace is workspace > tab > pane, so it filters to the active tab, follows tab.* events and never merges tabs into one flat chain; selectTab / createTab / closeTab drive the tab set. captureViewportHerdr composes the viewport (the visible slice, then recent, capped at herdr's 1000-line read limit). A pane with no runtime yet returns no scroll, which is a normal transient state right after a restore rather than a reason to refuse: it falls back to the client's rows and continues the subscribe, because refusing deadlocks against herdr's resume (which waits for a client size) and the session never opens",
         "deps": [
           "HerdrClient",
-          "HerdrLayout"
+          "HerdrLayout",
+          "PaneSizing"
         ]
       },
       {
@@ -197,9 +204,18 @@
       {
         "name": "HerdrService",
         "file": "backend/src/services/herdr.ts",
-        "summary": "Maps session-level operations onto herdr workspaces: listing (agent detection from pane.process_info, native session ids from agent.list, agent_status: idle/working/blocked/done), create and kill, and previews",
+        "summary": "Maps session-level operations onto herdr workspaces: listing (agent detection from pane.process_info, native session ids from agent.list, agent_status idle/working/blocked/done), create and kill, previews, and moveSession. A session's id is herdr's workspace_id (w5Q), not its label - a label is text a person edits and the naming convention rewrites twice per task, so addressing by it moves a session's address mid-conversation. A label is still accepted, but an ambiguous one resolves to nothing rather than to whichever workspace sorts first. herdr's workspace order is the display order, so a reorder is a workspace.move and nothing is stored on this side",
         "deps": [
           "HerdrClient"
+        ]
+      },
+      {
+        "name": "SessionIdMigration",
+        "file": "backend/src/services/session-id-migration.ts",
+        "summary": "Moves settings written against a workspace *name* onto its workspace id, once at startup. Deliberately conservative: a key moves only when exactly one live workspace carries that name and the destination has no settings of its own, because a wrong guess paints a session in a colour chosen for a different one",
+        "deps": [
+          "HerdrClient",
+          "SessionMetadataService"
         ]
       },
       {
@@ -217,9 +233,30 @@
         "deps": []
       },
       {
+        "name": "PaneSizing",
+        "file": "backend/src/services/pane-sizing.ts",
+        "summary": "Reconciles many clients' reported render sizes into one PTY size per pane. A pane has exactly one PTY, so the smallest requested extent wins per dimension (tmux's policy; the larger client sees unused margin) and a pane no client reports keeps its last size. Pure policy - it holds no state and talks to nothing",
+        "deps": []
+      },
+      {
+        "name": "PaneReaders",
+        "file": "backend/src/services/pane-readers/",
+        "summary": "What a pane is asking, read the way that pane's agent draws it. Dispatched on PaneInfo.agent, and an agent with no reader gets no options rather than a general rule - a guess offered to someone wearing the glasses is answered, while an omission is only read. One shape-matching reader for all of them offered a grep hit and a line of prose as answers. The blast radius is per agent: a TUI that changes breaks its own reader and no one else's",
+        "deps": []
+      },
+      {
+        "name": "AgentQuestion",
+        "file": "backend/src/services/agent-question.ts",
+        "summary": "The question an agent is waiting on, read from the agent's own record rather than from the screen it drew: Claude's transcript carries the AskUserQuestion call with its options and descriptions, kimi writes its own down. Scraping pixels for \"the row painted differently\" offered a wearer a line of source code as the answer to a question nobody asked",
+        "deps": [
+          "ClaudeCodeService",
+          "KimiService"
+        ]
+      },
+      {
         "name": "ClaudeCodeService",
         "file": "backend/src/services/claude-code.ts",
-        "summary": "Watches Claude Code session state through the .jsonl files under ~/.claude/projects. Layered caches (TTY 10s, session data 30s, path resolution 3s, each capped at 1000 entries). Parses the JSONL to detect a permission prompt, tool use and the waiting-for-input state",
+        "summary": "Watches Claude Code session state through the .jsonl files under ~/.claude/projects. Layered caches (TTY 10s, session data 30s, path resolution 3s, each capped at 1000 entries). Parses the JSONL to detect a permission prompt, tool use and the waiting-for-input state. An active session is matched only by herdr's native agent session id",
         "deps": []
       },
       {
@@ -231,7 +268,7 @@
       {
         "name": "SessionMetadataService",
         "file": "backend/src/services/session-metadata.ts",
-        "summary": "Persists a session's theme, title and display order in herdr-session-metadata.json, with herdr-last-known-sessions.json kept separately for recovery after a restart (the file names keep it apart from the tmux-era store)",
+        "summary": "Persists a session's theme, its STT vocabulary and the last known sessions for recovery after a reboot. Deliberately not the session order or the title - both live in herdr (order = workspace order, title = workspace label), so nothing here can disagree with what herdr shows",
         "deps": []
       },
       {
@@ -297,6 +334,12 @@
         ]
       },
       {
+        "name": "AgentProviders",
+        "file": "backend/src/services/agent-providers.ts",
+        "summary": "The common AgentThreadService / AgentHistoryProvider interfaces for thread-based agents (Codex, Grok, Kimi, OpenCode). Claude stays on its own path (jsonl metadata + WebSocket stream); routes iterate provider maps instead of hardcoding an agent, so adding one is a single AGENT_PROVIDERS entry in shared/types.ts plus an implementation of each interface",
+        "deps": []
+      },
+      {
         "name": "CodexService",
         "file": "backend/src/services/codex.ts",
         "summary": "Reads an active thread's metadata (title, tokens_used, git_branch, cwd) from Codex's SQLite threads table (state_5.sqlite), cached 5s by cwd. Token usage is extracted from the tail of the rollout file (up to 4MB)",
@@ -323,6 +366,155 @@
         "deps": []
       },
       {
+        "name": "CodexHookConfig",
+        "file": "backend/src/services/codex-hook-config.ts",
+        "summary": "Migrates a notify hook configured in Codex's config.toml into ~/.codex/hooks.json, because Codex warns when the same hook is configured in both. The command it writes is the resolved absolute path from NotifyCommand",
+        "deps": [
+          "NotifyCommand"
+        ]
+      },
+      {
+        "name": "GrokService",
+        "file": "backend/src/services/grok.ts",
+        "summary": "Grok Build (xAI) integration. Scans ~/.grok/sessions/<URL-encoded cwd>/<uuid>/ - summary.json for metadata, prompt_history.jsonl for first prompts, updates.jsonl turn_completed records for token usage - and resolves the latest thread per working directory",
+        "deps": []
+      },
+      {
+        "name": "GrokHistoryService",
+        "file": "backend/src/services/grok-history.ts",
+        "summary": "Grok session history and conversation reader: parses chat_history.jsonl (user records with prompt_index, assistant tool_calls, tool_result) into Claude-shaped conversation turns",
+        "deps": [
+          "GrokService"
+        ]
+      },
+      {
+        "name": "GrokUsageService",
+        "file": "backend/src/services/grok-usage.ts",
+        "summary": "Aggregates Grok token consumption (24h and 7d windows, per model, plan badge) from turn_completed records for the dashboard's Grok tab. xAI exposes no rate-limit windows locally, so totals are all it can show",
+        "deps": [
+          "GrokService"
+        ]
+      },
+      {
+        "name": "KimiService",
+        "file": "backend/src/services/kimi.ts",
+        "summary": "Kimi Code integration. Scans ~/.kimi-code/sessions/wd_<name>_<hash>/session_<uuid>/ - state.json for metadata, agents/main/wire.jsonl for the first prompt, usage.record token usage and the last text part used as the recap substitute on workspace cards - and resolves exact threads by native session id",
+        "deps": []
+      },
+      {
+        "name": "KimiHistoryService",
+        "file": "backend/src/services/kimi-history.ts",
+        "summary": "Kimi session history and conversation reader: parses wire.jsonl (turn.prompt, content.part text, tool.call, tool.result) into Claude-shaped conversation turns",
+        "deps": [
+          "KimiService"
+        ]
+      },
+      {
+        "name": "KimiUsageService",
+        "file": "backend/src/services/kimi-usage.ts",
+        "summary": "Aggregates Kimi token consumption (24h and 7d windows, per model) from usage.record records across every agent wire (agents/main plus sub-agents). Kimi exposes no rate-limit windows or plan data locally, so totals are all it can show. Prices each window and model in USD when the model resolves to OpenRouter; cost is omitted, never zeroed, for a model it cannot price",
+        "deps": [
+          "KimiService",
+          "KimiConfigService",
+          "OpenRouterPricingService / OpenRouterAccountService",
+          "KimiUsageStore"
+        ]
+      },
+      {
+        "name": "KimiUsageStore",
+        "file": "backend/src/services/kimi-usage-store.ts",
+        "summary": "Completed days of Kimi spend written down so the chart is not stuck at seven. The aggregation can only see as far back as wire.jsonl's rolling cutoff, but a finished local day never changes, so it is computed once inside the aggregation that was going to run anyway and never recomputed. A day is priced at the list price in force when it was rolled up, which is closer to what was billed than re-pricing history at today's rates",
+        "deps": []
+      },
+      {
+        "name": "KimiConfigService",
+        "file": "backend/src/services/kimi-config.ts",
+        "summary": "Parses ~/.kimi-code/config.toml (via Bun.TOML) to map a usage.record model alias (k3) to its provider-side id (moonshotai/kimi-k3) and to supply the OpenRouter API key. Only OpenRouter-backed aliases are priceable",
+        "deps": []
+      },
+      {
+        "name": "OpenCodeService",
+        "file": "backend/src/services/opencode.ts",
+        "summary": "OpenCode (sst/opencode) integration, and the only provider that reads a database instead of files: 1.18 keeps sessions, messages and parts as rows in ~/.local/share/opencode/opencode.db (WAL), opened readonly per query. Two traps in that store: the project table's `global` row is a catch-all whose worktree mutates as other directories are visited, so session.directory is the only stable cwd; and session_input.prompt is never written at all in 1.18.13, so the first user text part is used instead. Subagent sessions carry a parent_id and are excluded - they are turns of their parent",
+        "deps": []
+      },
+      {
+        "name": "OpenCodeHistoryService",
+        "file": "backend/src/services/opencode-history.ts",
+        "summary": "OpenCode session history and conversation reader. A tool part holds the call and its result in one row (state.input / state.output), which the parser splits back across an assistant/user turn boundary because that is the shape ConversationViewer pairs by toolUseId; reasoning, step-start and step-finish parts are dropped",
+        "deps": [
+          "OpenCodeService"
+        ]
+      },
+      {
+        "name": "OpenCodeUsageService",
+        "file": "backend/src/services/opencode-usage.ts",
+        "summary": "Aggregates OpenCode token consumption (24h and 7d windows, per model) from assistant message rows. Like Grok and Kimi it has no rate-limit windows to show, but unlike them the cost is not an estimate: OpenCode computes and stores a per-turn cost, so the figure is its own. Absent (never zeroed) when no turn in the window carried one; a genuine 0 is what free models report",
+        "deps": [
+          "OpenCodeService"
+        ]
+      },
+      {
+        "name": "OpenRouterPricingService / OpenRouterAccountService",
+        "file": "backend/src/services/openrouter.ts",
+        "summary": "Pay-as-you-go cost reporting. List prices from the public /api/v1/models (no auth, 24h cache) drive the estimated per-window costs, while /api/v1/key and /api/v1/credits (keyed, 60s cache, 5min failure backoff) report OpenRouter's billed daily, weekly and monthly spend and the credit balance. Estimates use rolling windows and OpenRouter's are calendar windows, so the two never match exactly",
+        "deps": [
+          "KimiConfigService"
+        ]
+      },
+      {
+        "name": "GroqSttUsageService",
+        "file": "backend/src/services/groq-stt-usage.ts",
+        "summary": "Groq speech-to-text consumption by the glasses, recorded rather than aggregated: Groq has no usage endpoint and reports remaining quota only in x-ratelimit-* headers on a transcription response, so a request not written down as it happened is unrecoverable. The route records on the way past (before the status is acted on - a 429 still spends quota - and without awaiting it). Requests (capped per day) and audio seconds (capped per hour, and what the API is priced on) are tracked separately because the two ceilings empty on different clocks. Cost is an estimate at the list price per hour of audio, never a billed figure",
+        "deps": []
+      },
+      {
+        "name": "SttRequestResolver",
+        "file": "backend/src/services/stt-request.ts",
+        "summary": "The one place that decides what a transcription carries: resolveSttRequest({ sessionId, lang }) returns the model, the language, the vocabulary prompt, each value's source and how the prompt was composed. The route calls it once for /stt and serves it verbatim from /stt-preview, so the settings screen, the simulator and the terminal all read the object the transcription itself uses. The Groq key is deliberately not in the return value, because it is write-only",
+        "deps": [
+          "SttPrompt",
+          "GlassesSettingsService",
+          "SessionMetadataService"
+        ]
+      },
+      {
+        "name": "SttPrompt",
+        "file": "backend/src/services/stt-prompt.ts",
+        "summary": "Composes the vocabulary-biasing prompt: the speaking session's own words first, then the glossary, filled up to what fits Whisper's 224-token ceiling (190 characters), with the session taking no more than half so the glossary survives whatever else is set. A new workspace takes a copy of the glossary and stops sharing it, so it can prune terms it will never say; a pre-existing workspace can decline the glossary wholesale, and then its own words take the whole budget",
+        "deps": [
+          "SessionMetadataService"
+        ]
+      },
+      {
+        "name": "SttCorrections",
+        "file": "backend/src/services/stt-corrections.ts",
+        "summary": "Deterministic repairs applied to a transcript before it reaches the wearer, for the two things the prompt provably cannot fix. Spelling: a prompt is context, not an instruction about how to write the answer - `herdr` sat in the glossary for eight days and came back as katakana ten times and as itself never once - so spelling is a lookup here and those terms no longer spend prompt budget. Hallucination: Whisper fills silence with a stock sign-off, matched as the whole transcript only, since as a substring the same words are ordinary speech",
+        "deps": []
+      },
+      {
+        "name": "GlassesRelayService",
+        "file": "backend/src/services/glasses-relay.ts",
+        "summary": "The \"tell the wearer only what they need to decide\" channel. Three jobs: a store (one waiting item per pane, one info item per session; waiting items live for a blocked epoch, info items carry a TTL), a tracker that turns per-pane herdr agent_status transitions into waiting items, and delivery of glasses-relay / -remove / -snapshot to subscribed mux connections. Assembly and sending happen only while a glasses client is subscribed - the presence gate - and status tracking rides on the sessions pipeline events, so it costs nothing extra",
+        "deps": [
+          "HerdrService",
+          "PaneReaders",
+          "AgentQuestion"
+        ]
+      },
+      {
+        "name": "GlassesSettingsService",
+        "file": "backend/src/services/glasses-settings.ts",
+        "summary": "The voice-input settings the glasses app's own screens edit (Groq key, language, model, bias switch), stored 0600 in <dataDir>/glasses-settings.json since it can hold a key. These were server-environment-only, which is right for a value set once at install time and wrong for the two that are per-use. The key stays write-only: it can be set and cleared through the API, and what callers see is only whether one is set and where it came from",
+        "deps": []
+      },
+      {
+        "name": "GlassesScreenRecorder",
+        "file": "backend/src/services/glasses-screen-recorder.ts",
+        "summary": "Appends every glasses-screen frame - text state, not pixels - to one JSONL per day under the data directory, plus an stt line carrying the model, language, prompt and its source for each transcription. That line is the whole of the measurement: the audio is not stored, so a model or a prompt can only be judged by reading transcripts back. Opt-in via HRDLE_GLASSES_RECORD, because it captures this user's own prompts and notification text",
+        "deps": []
+      },
+      {
         "name": "ConversationWatcher",
         "file": "backend/src/services/conversation-watcher.ts",
         "summary": "Watches the Claude Code / Codex JSONL with fs.watch plus a 150ms debounce and notifies WebSocket subscribers of new turns only. Tracks mtime to avoid redundant parsing",
@@ -338,6 +530,24 @@
         "deps": []
       },
       {
+        "name": "NotifyCommand",
+        "file": "backend/src/services/notify-command.ts",
+        "summary": "Resolves the absolute path to write into a hook configuration. A hook runs in a non-interactive shell, so a PATH set from .zshrc is not read and the bare name fails with command not found",
+        "deps": []
+      },
+      {
+        "name": "PushService",
+        "file": "backend/src/services/push.ts",
+        "summary": "Web Push, so a notification does not depend on a browser tab being awake. On Android the tab is frozen when the screen goes off and the server cuts it as a zombie sixty seconds later, so most hook events were broadcast to nobody. No account anywhere: VAPID keys are generated here and registered with nobody, the browser picks its own push service, and this only POSTs outbound to whatever endpoint the subscription names",
+        "deps": []
+      },
+      {
+        "name": "HrdleUpdateService",
+        "file": "backend/src/services/hrdle-update.ts",
+        "summary": "Whether a newer release of hrdle itself exists, surfaced on the dashboard beside herdr's. The self-updater always knew, but only in a terminal nobody has open. 6h TTL with a failure backoff, because unauthenticated GitHub allows 60 requests an hour for the whole host and a freely retrying failure would take `hrdle update` down with it. Reporting only - installing stays with `hrdle update`",
+        "deps": []
+      },
+      {
         "name": "AuthService",
         "file": "backend/src/services/auth.ts",
         "summary": "Server-password authentication, and issuing and verifying JWT session tokens",
@@ -346,7 +556,7 @@
       {
         "name": "PeerRegistry",
         "file": "backend/src/services/peer-registry.ts",
-        "summary": "Persists peers.json through an atomic rename plus a module-level mutation lock (serializing load-mutate-save). Manages wsToken, lastSeenAt and error records, round-robin color palette assignment, and cross-peer session order",
+        "summary": "Persists peers.json through an atomic rename plus a module-level mutation lock (serializing load-mutate-save). Manages wsToken, lastSeenAt and error records, and round-robin color palette assignment",
         "deps": []
       },
       {
@@ -361,7 +571,7 @@
       {
         "name": "PeerDiscovery",
         "file": "backend/src/services/peer-discovery.ts",
-        "summary": "Lists the tailnet's online peers through `tailscale status --json` and probes each :5923/health in parallel with a 3s timeout. A peer running the app comes back as a DiscoveredPeer with its version",
+        "summary": "Lists the tailnet's online peers through `tailscale status --json` and probes each peer's /health in parallel with a 3s timeout. The probe port comes from IDENTITY.defaultPort - a literal there stops matching the moment the identity changes and the failure is silent, leaving a tailnet full of installs discovering nothing. A peer running the app comes back as a DiscoveredPeer with its version",
         "deps": [
           "PeerRegistry"
         ]
@@ -370,6 +580,12 @@
         "name": "PeerUrl",
         "file": "backend/src/services/peer-url.ts",
         "summary": "SSRF guard for peer URLs (#235). Rejects anything that is not https, plus loopback, link-local, RFC1918 and cloud metadata (169.254.169.254), and allows only Tailscale hosts (*.ts.net, CGNAT 100.64.0.0/10, ULA fd7a:115c:a1e0::/48)",
+        "deps": []
+      },
+      {
+        "name": "Discovery",
+        "file": "backend/src/services/discovery.ts",
+        "summary": "One plaintext endpoint, GET /whoami on port + 1, answering with the server's Tailscale FQDN, product name and version and nothing else, so a phone can be told `91.210.90` instead of a 43-character URL. Plaintext is the requirement, not a shortcut: the certificate is issued for the FQDN, so reaching the machine by IP fails TLS and fetch has no way past a certificate error. One unverified request buys the name; everything after it is ordinary verified HTTPS, and a tailnet caller's packets are inside WireGuard regardless. Only callers on a private or CGNAT address get an answer",
         "deps": []
       }
     ],
@@ -380,6 +596,13 @@
         "group": "System",
         "description": "Health check. Returns status and version. Unauthenticated (peer discovery uses it)",
         "file": "backend/src/index.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/whoami",
+        "group": "System",
+        "description": "Plaintext identity on port + 1: the Tailscale FQDN, product name and version. Exists so a phone can be given a short address instead of a full HTTPS URL; answers only callers on a private or CGNAT address",
+        "file": "backend/src/services/discovery.ts"
       },
       {
         "method": "GET",
@@ -399,7 +622,7 @@
         "method": "WS",
         "path": "/ws/mux",
         "group": "System",
-        "description": "The multiplexed terminal WebSocket: viewport delivery, input, layout control and the conversation stream. The token query supports Bearer auth from a peer",
+        "description": "The multiplexed WebSocket: viewport delivery, input, layout and tab control, the conversation stream, the glasses relay and the glasses screen mirror. The token query supports Bearer auth from a peer",
         "file": "backend/src/routes/terminal-mux.ts"
       },
       {
@@ -434,14 +657,14 @@
         "method": "GET",
         "path": "/api/sessions",
         "group": "Sessions",
-        "description": "Every session (with Claude Code state and pane info)",
+        "description": "Every session (with agent state and pane info). Also mounted at /api/workspaces, which is the name the UI uses",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions",
         "group": "Sessions",
-        "description": "Creates a session. Accepts agent (claude/codex), name, workingDir and initialPrompt",
+        "description": "Creates a session. Accepts agent (claude/codex/grok/kimi/opencode), name, workingDir and initialPrompt",
         "file": "backend/src/routes/sessions.ts"
       },
       {
@@ -462,7 +685,7 @@
         "method": "POST",
         "path": "/api/sessions/:id/resume",
         "group": "Sessions",
-        "description": "Resumes the agent inside a session (claude -r / codex resume)",
+        "description": "Resumes the agent inside a session (the provider's resumeCommand)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
@@ -476,14 +699,21 @@
         "method": "PUT",
         "path": "/api/sessions/:id/title",
         "group": "Sessions",
-        "description": "Sets a session's custom title",
+        "description": "Renames the session's herdr workspace. The label is the name and part of how a session is addressed, so the response carries the new id",
         "file": "backend/src/routes/sessions.ts"
       },
       {
         "method": "PUT",
-        "path": "/api/sessions/order",
+        "path": "/api/sessions/:id/stt-prompt",
         "group": "Sessions",
-        "description": "Saves the session display order",
+        "description": "Sets the words this session's speech is made of (leads its STT vocabulary bias)",
+        "file": "backend/src/routes/sessions.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/sessions/:id/move",
+        "group": "Sessions",
+        "description": "Moves a session to { index } in the display order. Written straight through to herdr's workspace order - nothing about order is stored on this side",
         "file": "backend/src/routes/sessions.ts"
       },
       {
@@ -509,13 +739,6 @@
       },
       {
         "method": "POST",
-        "path": "/api/sessions/:id/panes/respawn",
-        "group": "Sessions",
-        "description": "Respawns a dead pane",
-        "file": "backend/src/routes/sessions.ts"
-      },
-      {
-        "method": "POST",
         "path": "/api/sessions/:id/panes/input",
         "group": "Sessions",
         "description": "Sends input to a pane over REST (used by `send` and by peers). With wait=true it returns a viewport snapshot taken after the send",
@@ -530,9 +753,30 @@
       },
       {
         "method": "POST",
+        "path": "/api/sessions/:id/tabs/select",
+        "group": "Sessions",
+        "description": "Switches the workspace's active tab ({ tabId })",
+        "file": "backend/src/routes/sessions.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/sessions/:id/tabs/create",
+        "group": "Sessions",
+        "description": "Creates a tab and switches to it",
+        "file": "backend/src/routes/sessions.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/sessions/:id/tabs/close",
+        "group": "Sessions",
+        "description": "Closes a tab and every pane in it ({ tabId })",
+        "file": "backend/src/routes/sessions.ts"
+      },
+      {
+        "method": "POST",
         "path": "/api/sessions/:id/prompt",
         "group": "Sessions",
-        "description": "Sends prompt text to the active pane",
+        "description": "Sends prompt text to the session's agent",
         "file": "backend/src/routes/sessions.ts"
       },
       {
@@ -546,7 +790,7 @@
         "method": "GET",
         "path": "/api/sessions/history/projects",
         "group": "Session History",
-        "description": "The project list (Claude Code and Codex merged)",
+        "description": "The project list (Claude Code, Codex, Grok, Kimi and OpenCode merged)",
         "file": "backend/src/routes/sessions.ts"
       },
       {
@@ -574,7 +818,7 @@
         "method": "GET",
         "path": "/api/sessions/history/:sessionId/conversation",
         "group": "Session History",
-        "description": "A session's conversation. Supports the agent=codex, projectDirName and last queries",
+        "description": "A session's conversation. The agent query picks the provider (codex / grok / kimi / opencode); projectDirName and last are also supported",
         "file": "backend/src/routes/sessions.ts"
       },
       {
@@ -733,20 +977,6 @@
       },
       {
         "method": "GET",
-        "path": "/api/peers/session-order",
-        "group": "Peers",
-        "description": "The cross-peer session display order",
-        "file": "backend/src/routes/peers.ts"
-      },
-      {
-        "method": "PUT",
-        "path": "/api/peers/session-order",
-        "group": "Peers",
-        "description": "Saves the cross-peer session display order",
-        "file": "backend/src/routes/peers.ts"
-      },
-      {
-        "method": "GET",
         "path": "/api/peers/sessions",
         "group": "Peers",
         "description": "Merges and returns the active sessions of every peer (with per-peer errors alongside)",
@@ -819,8 +1049,15 @@
         "method": "GET",
         "path": "/api/dashboard",
         "group": "Dashboard",
-        "description": "Dashboard data (usage limits, statistics, cost estimates, system metrics, usage history, connected clients)",
+        "description": "Dashboard data: Anthropic usage limits, Codex / Grok / Kimi / OpenCode consumption, Groq STT spend, OpenRouter billed spend, statistics, cost estimates, system metrics, usage history, connected clients, and the herdr / hrdle update status. Slow parts are cached, and a payload served past its freshness window comes back with stale set",
         "file": "backend/src/routes/dashboard.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/herdr/apply-update",
+        "group": "Dashboard",
+        "description": "Applies a pending herdr update (herdr update plus a supervised restart). User-initiated only - it restarts every pane PTY, so the auto-update timer never calls it",
+        "file": "backend/src/routes/herdr.ts"
       },
       {
         "method": "POST",
@@ -833,15 +1070,106 @@
         "method": "POST",
         "path": "/api/notify",
         "group": "Notify",
-        "description": "Receives Claude Code / Codex hook events and broadcasts them over the WebSocket. Unauthenticated (local hooks call it)",
+        "description": "Receives hook events from Claude Code, Codex, Grok and Kimi and broadcasts them over the WebSocket. Grok's camelCase stdin shape is normalized to Claude's. While the glasses are subscribed it also creates a relay info item, and hook-event then carries deliveredToGlasses so the browser does not notify twice. Unauthenticated (local hooks call it)",
         "file": "backend/src/routes/notify.ts"
       },
       {
         "method": "GET",
         "path": "/api/notify/hook-status",
         "group": "Notify",
-        "description": "Checks whether the notify command is registered in the Claude / Codex hook configuration. Returns the list of missing events",
+        "description": "Checks whether the notify command is registered in the agents' hook configuration. Returns the list of missing events",
         "file": "backend/src/routes/notify.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/glasses/stt",
+        "group": "Glasses",
+        "description": "Transcribes glasses audio through Groq. The request is resolved once by SttRequestResolver and packed into the FormData; the route decides nothing. Consumption is recorded on the way past, before the status is acted on, because a 429 still spends quota",
+        "file": "backend/src/routes/glasses.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/glasses/stt-preview",
+        "group": "Glasses",
+        "description": "What a transcription from that session would carry: model, language, prompt, each value's source and how the prompt was composed. The same object /stt resolves; never the API key",
+        "file": "backend/src/routes/glasses.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/glasses/settings",
+        "group": "Glasses",
+        "description": "The stored voice-input settings, never what would be sent (it has no session, so it never could). The Groq key comes back only as whether one is set and where it came from",
+        "file": "backend/src/routes/glasses.ts"
+      },
+      {
+        "method": "PUT",
+        "path": "/api/glasses/settings",
+        "group": "Glasses",
+        "description": "Updates the voice-input settings (key write-only). A screen cannot switch the vocabulary bias back on when the environment variable turned it off, and says so",
+        "file": "backend/src/routes/glasses.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/glasses/recording",
+        "group": "Glasses",
+        "description": "The days of glasses screen recording available for replay",
+        "file": "backend/src/routes/glasses.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/glasses/recording/:day",
+        "group": "Glasses",
+        "description": "One day's recorded frames and stt lines, for the replay player at /glasses?player",
+        "file": "backend/src/routes/glasses.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/glasses/relay",
+        "group": "Glasses",
+        "description": "An agent's own note to the wearer (`hrdle glasses`), as a relay info item with a TTL",
+        "file": "backend/src/routes/glasses-relay.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/glasses/relay/:id/dismiss",
+        "group": "Glasses",
+        "description": "Flags a relay item as dismissed by the wearer",
+        "file": "backend/src/routes/glasses-relay.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/push/key",
+        "group": "Push",
+        "description": "The VAPID public key a browser needs to subscribe",
+        "file": "backend/src/routes/push.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/push/subscriptions",
+        "group": "Push",
+        "description": "The registered push subscriptions",
+        "file": "backend/src/routes/push.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/push/subscribe",
+        "group": "Push",
+        "description": "Registers a Web Push subscription for this browser",
+        "file": "backend/src/routes/push.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/push/renew",
+        "group": "Push",
+        "description": "Refreshes an existing subscription the browser has re-issued",
+        "file": "backend/src/routes/push.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/push/unsubscribe",
+        "group": "Push",
+        "description": "Removes a push subscription",
+        "file": "backend/src/routes/push.ts"
       },
       {
         "method": "POST",
@@ -874,7 +1202,8 @@
         "summary": "The root component. Switches layout on a mobile / tablet / desktop device check, and ties together auth, session management, the file viewer and the chat view",
         "hooks": [
           "useAuth",
-          "useSessions"
+          "useWorkspaces",
+          "useServiceWorkerUpdate"
         ],
         "parents": []
       },
@@ -885,8 +1214,9 @@
         "hooks": [
           "useMultiplexedTerminal",
           "usePeerConnection",
-          "useSessions",
-          "usePeers"
+          "useWorkspaces",
+          "usePeers",
+          "useRemoteControlMode"
         ],
         "parents": [
           "App"
@@ -916,7 +1246,7 @@
       {
         "name": "Terminal",
         "file": "frontend/src/components/Terminal.tsx",
-        "summary": "The xterm.js terminal (WebGL, scrollback:0). Each viewport frame is converted into a VT sequence and applied with term.write(). Size comes from the layout (setExactSize), plus font adjustment and text selection",
+        "summary": "The xterm.js terminal (WebGL, scrollback:0). Each viewport frame is converted into a VT sequence and applied with term.write(). Size comes from the layout (setExactSize), plus font adjustment, text selection and the URL chip - a pane's own copy key cannot reach the browser clipboard, so URLs visible in the viewport are rejoined across the rows they wrapped over and offered as a copy/open control",
         "hooks": [
           "useSelectionMode"
         ],
@@ -937,10 +1267,11 @@
         ]
       },
       {
-        "name": "SessionList",
-        "file": "frontend/src/components/SessionList.tsx",
-        "summary": "The session list (Active / History / Dashboard tabs): pane operations, pinch zoom, and the History V1/V2 split",
+        "name": "WorkspaceList",
+        "file": "frontend/src/components/WorkspaceList.tsx",
+        "summary": "The workspace list (Active / History / Dashboard tabs): pane operations, drag-to-reorder, pinch zoom, the create-session modal (name, directory, agent, machine) and the History V1/V2 split. Starting work from a phone rather than only watching it is what this screen is for",
         "hooks": [
+          "useWorkspaces",
           "useHistoryV2Flag",
           "useSessionHistory"
         ],
@@ -963,7 +1294,7 @@
         "summary": "Session history V1 (grouped by project). The legacy implementation, kept until V2 settles",
         "hooks": [],
         "parents": [
-          "SessionList"
+          "WorkspaceList"
         ]
       },
       {
@@ -975,7 +1306,7 @@
           "useHistoryActions"
         ],
         "parents": [
-          "SessionList"
+          "WorkspaceList"
         ]
       },
       {
@@ -1026,35 +1357,25 @@
       {
         "name": "ConversationViewer",
         "file": "frontend/src/components/ConversationViewer.tsx",
-        "summary": "Markdown-rendered conversation display (images included), with scroll restoration and auto-scroll",
+        "summary": "The transcript, read-only, laid out after the Claude app: the user's turns as bubbles on the right, the agent's as a full-width column, on a warm neutral surface of its own (--color-conv-*) rather than the session's terminal colour. A tool call and its result render as one collapsed card - the transcript stores them a message apart, so buildRows pairs them by toolUseId and drops the result-only message, which otherwise appears as a \"System\" speaker saying the output of something two screens up. Code is highlighted through highlight.js but re-coloured against the conversation palette, because every shipped theme is a different room's lighting",
         "hooks": [
           "useScrollRatio"
         ],
         "parents": [
           "ChatView",
-          "SessionList"
+          "WorkspaceList"
         ]
       },
       {
         "name": "ChatView",
         "file": "frontend/src/components/chat/ChatView.tsx",
-        "summary": "A conversation-style view of the current session, replacing the terminal area when Chat mode is selected",
+        "summary": "A conversation-style view of the current session, replacing the terminal area when Chat mode is selected. Read-only, and it does not raise the soft keyboard: two places to type into one pane make it ambiguous which one is listening, and it is never the one on screen",
         "hooks": [
-          "useAgentConversation",
-          "useInputEcho"
+          "useAgentConversation"
         ],
         "parents": [
           "DesktopLayout",
           "TerminalPage"
-        ]
-      },
-      {
-        "name": "ChatComposer",
-        "file": "frontend/src/components/chat/ChatComposer.tsx",
-        "summary": "The multi-line message composer for ChatView",
-        "hooks": [],
-        "parents": [
-          "ChatView"
         ]
       },
       {
@@ -1199,10 +1520,11 @@
           "useDashboard",
           "usePeers",
           "useTheme",
-          "useUiScale"
+          "useUiScale",
+          "useIsLightMode"
         ],
         "parents": [
-          "SessionList",
+          "WorkspaceList",
           "DashboardPanel"
         ]
       },
@@ -1213,6 +1535,15 @@
         "hooks": [],
         "parents": [
           "DesktopLayout"
+        ]
+      },
+      {
+        "name": "Card",
+        "file": "frontend/src/components/dashboard/Card.tsx",
+        "summary": "The dashboard's one box. Every widget used to draw its own, which put two borders and 28px of padding around a chart 80px tall in a panel where space was the scarce thing, and let heading styles drift between widgets at the same level. Widgets render content; this renders the box",
+        "hooks": [],
+        "parents": [
+          "Dashboard"
         ]
       },
       {
@@ -1255,6 +1586,24 @@
         "name": "UsageChart",
         "file": "frontend/src/components/dashboard/UsageChart.tsx",
         "summary": "A line chart of usage history (with real-time snapshots)",
+        "hooks": [],
+        "parents": [
+          "Dashboard"
+        ]
+      },
+      {
+        "name": "GroqSttUsageCard",
+        "file": "frontend/src/components/dashboard/GroqSttUsageCard.tsx",
+        "summary": "Groq speech-to-text spend by the glasses: requests against the daily cap and audio seconds against the hourly one, shown separately because the two ceilings empty on different clocks",
+        "hooks": [],
+        "parents": [
+          "Dashboard"
+        ]
+      },
+      {
+        "name": "KimiDailyCostChart",
+        "file": "frontend/src/components/dashboard/KimiDailyCostChart.tsx",
+        "summary": "Daily Kimi spend priced in USD, drawn from the rolled-up completed days rather than the seven the aggregation can still see",
         "hooks": [],
         "parents": [
           "Dashboard"
@@ -1312,6 +1661,26 @@
         ]
       },
       {
+        "name": "ServerUnreachable",
+        "file": "frontend/src/components/ServerUnreachable.tsx",
+        "summary": "What to say when the server does not answer. Served over Tailscale, so from a phone the common cause is by far the VPN being off on that device - and the screen this replaced said nothing at all, an empty session list that reads like \"no sessions exist\". Named advice only where the address supports it",
+        "hooks": [],
+        "parents": [
+          "App"
+        ]
+      },
+      {
+        "name": "UpdatePrompt",
+        "file": "frontend/src/components/UpdatePrompt.tsx",
+        "summary": "The bottom sheet shown when a new release has been precached, asking before the page reloads. Mounted next to <App /> so every layout gets it from one place",
+        "hooks": [
+          "useServiceWorkerUpdate"
+        ],
+        "parents": [
+          "App"
+        ]
+      },
+      {
         "name": "Onboarding",
         "file": "frontend/src/components/Onboarding.tsx",
         "summary": "A spotlight-style walkthrough for first-time users (steps per device)",
@@ -1329,9 +1698,9 @@
         "summary": "A shared singleton WebSocket to /ws/mux: auto-reconnect, keepalive pings, per-session subscription, base64 I/O and viewport dispatch. Returns the operations (sendInput, resize, splitPane, requestViewport and the rest). A peerWsBase connects it to a remote peer instead"
       },
       {
-        "name": "useSessions",
-        "file": "frontend/src/hooks/useSessions.ts",
-        "summary": "State for the active sessions. Aggregates several peers through usePeerSessionsWatcher over a shared module-level cache. Provides createSession, deleteSession and updateSessionTheme"
+        "name": "useWorkspaces",
+        "file": "frontend/src/hooks/useWorkspaces.ts",
+        "summary": "State for the active workspaces. Aggregates several peers through usePeerSessionsWatcher over a shared module-level cache. Provides createSession, deleteSession, moveSession and updateSessionTheme"
       },
       {
         "name": "useSessionHistory",
@@ -1389,6 +1758,21 @@
         "summary": "Dark and light theme switching (localStorage)"
       },
       {
+        "name": "useIsLightMode",
+        "file": "frontend/src/hooks/useIsLightMode.ts",
+        "summary": "Tracks the data-theme attribute the theme toggle stamps on <html>. SVG charts pick their grid and background colours in JS rather than CSS, so they need the theme as a value"
+      },
+      {
+        "name": "useRemoteControlMode",
+        "file": "frontend/src/hooks/useRemoteControlMode.ts",
+        "summary": "The opt-in, PC-only mode that lets a local herdr client own the terminal instead of this page. Off unless localStorage says exactly \"true\""
+      },
+      {
+        "name": "useServiceWorkerUpdate",
+        "file": "frontend/src/hooks/useServiceWorkerUpdate.ts",
+        "summary": "Registers the service worker at module scope (before React mounts, so a worker already waiting from a previous visit is reported immediately) and re-checks sw.js every 30 minutes - a tablet left on one page for hours would otherwise miss a release until the next manual reload"
+      },
+      {
         "name": "useUiScale",
         "file": "frontend/src/hooks/useUiScale.ts",
         "summary": "Persists the UI scale factor and applies it to the CSS variable (localStorage)"
@@ -1409,24 +1793,19 @@
         "summary": "The touch-selection state machine behind SelectionOverlay (start and end cells, drag handles, copying to the clipboard)"
       },
       {
-        "name": "useInputEcho",
-        "file": "frontend/src/hooks/useInputEcho.ts",
-        "summary": "Echoes what is typed into the InputBar back into the conversation or chat view while the terminal is hidden. Arrows, Ctrl and other special keys are shown as symbols"
-      },
-      {
         "name": "useConversationStream",
         "file": "frontend/src/hooks/useConversationStream.ts",
-        "summary": "Subscribes to the /ws/mux conversation stream (subscribe-conversation) and exposes the incremental conversation-update messages"
+        "summary": "Subscribes to the /ws/mux conversation stream (subscribe-conversation) and exposes the incremental conversation-update messages. The subscription carries the pane's agentSessionId, not just the workspace id: a workspace with two agent panes holds two conversations, and resolving by directory alone answers with whichever transcript was written last - a different agent from the one on screen"
       },
       {
         "name": "useAgentConversation",
         "file": "frontend/src/hooks/useAgentConversation.ts",
-        "summary": "A unified hook that picks the conversation source by the active session's agent: Claude over the WebSocket stream, Codex by polling"
+        "summary": "A unified hook that picks the conversation source from the shared AGENT_PROVIDERS registry: Claude streams over the WebSocket, every thread agent polls over HTTP"
       },
       {
-        "name": "useCodexConversation",
-        "file": "frontend/src/hooks/useCodexConversation.ts",
-        "summary": "The polling loader for a Codex conversation (every 5s, transcript plus token usage)"
+        "name": "useThreadConversation",
+        "file": "frontend/src/hooks/useThreadConversation.ts",
+        "summary": "The polling conversation loader for thread-based agents (codex / grok / kimi / opencode): transcript plus token usage, keyed by the agent's own thread id"
       },
       {
         "name": "usePeers",
@@ -1462,13 +1841,19 @@
   },
   "websocket": {
     "endpoint": "/ws/mux",
-    "description": "One multiplexed WebSocket. The client subscribes per session, and the terminal is delivered as PaneViewport frames (offset-based, server-side scrollback). Besides answering request-viewport, a live subscriber (offset=0) also receives unsolicited pushes when a herdr frame arrives. Every client frame is validated with zod (#231)",
+    "description": "One multiplexed WebSocket. The client subscribes per session, and the terminal is delivered as PaneViewport frames (offset-based, server-side scrollback). Besides answering request-viewport, a live subscriber (offset=0) also receives unsolicited pushes when a herdr frame arrives. The same socket carries the conversation stream, the glasses relay and the glasses screen mirror. Every client frame is validated with zod",
     "client_messages": {
       "mux_level": [
         "subscribe",
         "unsubscribe",
         "subscribe-conversation",
-        "unsubscribe-conversation"
+        "unsubscribe-conversation",
+        "subscribe-glasses-relay",
+        "unsubscribe-glasses-relay",
+        "subscribe-glasses-screen",
+        "unsubscribe-glasses-screen",
+        "glasses-screen",
+        "glasses-input"
       ],
       "per_session": [
         "input",
@@ -1480,8 +1865,12 @@
         "adjust-pane",
         "equalize-panes",
         "zoom-pane",
-        "respawn-pane",
+        "set-split-ratios",
+        "pane-demands",
         "request-viewport",
+        "select-tab",
+        "create-tab",
+        "close-tab",
         "ping",
         "client-info"
       ]
@@ -1494,15 +1883,21 @@
         "conversation-subscribed",
         "conversation-unsubscribed",
         "initial-conversation",
-        "conversation-update"
+        "conversation-update",
+        "glasses-relay",
+        "glasses-relay-remove",
+        "glasses-relay-snapshot",
+        "glasses-superseded",
+        "glasses-screen",
+        "herdr-restart"
       ],
       "per_session": [
         "layout",
         "viewport",
         "ready",
         "pong",
+        "session-exited",
         "error",
-        "pane-dead",
         "hook-event"
       ]
     },
@@ -1510,21 +1905,26 @@
     "intervals": {
       "sessions-updated push": "5s",
       "keepalive ping (client)": "10s",
-      "zombie connection detection": "60s"
+      "zombie connection detection": "60s",
+      "glasses relay info TTL (hook-derived)": "90s"
     }
   },
   "types": [
     {
       "name": "SessionResponse",
-      "fields": "id, name, createdAt, lastAccessedAt, state, currentPath, agent, theme, customTitle"
+      "fields": "id (herdr's workspace_id), name, createdAt, lastAccessedAt, state, currentPath, agent, theme"
     },
     {
       "name": "ExtendedSessionResponse",
-      "fields": "extends SessionResponse + indicatorState, ccSessionId, agentSessionId, currentCommand, ccSummary, ccFirstPrompt, ccRecap, waitingToolName, panes, messageCount, gitBranch, durationMinutes, metrics, peerId"
+      "fields": "extends SessionResponse + indicatorState, ccSessionId, bridgeSessionId, agentSessionId, currentCommand, ccSummary, ccFirstPrompt, ccRecap, ccRecapAt, ccRecapKind, waitingToolName, panes, tabs, activeTabId, messageCount, gitBranch, durationMinutes, firstMessageId, metrics, peerId, peerNickname, peerColor"
     },
     {
       "name": "PaneInfo",
       "fields": "paneId, currentCommand, currentPath, agentName, agentColor, isActive, indicatorState, pid"
+    },
+    {
+      "name": "TabInfo",
+      "fields": "A workspace's tabs. Carried on ExtendedSessionResponse only when there is more than one - a single-tab workspace renders no tab list, and `panes` reflects the active tab"
     },
     {
       "name": "TmuxLayoutNode",
@@ -1543,20 +1943,44 @@
       "fields": "altScreen (whether this is an alternate screen, as vim or htop use)"
     },
     {
+      "name": "PaneDemand",
+      "fields": "One client's reported render size for one pane. A pane has one PTY, so the smallest requested extent per dimension wins"
+    },
+    {
       "name": "ControlClientMessage",
-      "fields": "input | resize | split | close-pane | resize-pane | select-pane | adjust-pane | equalize-panes | zoom-pane | respawn-pane | request-viewport | ping | client-info"
+      "fields": "input | resize | split | close-pane | resize-pane | select-pane | adjust-pane | equalize-panes | zoom-pane | set-split-ratios | pane-demands | request-viewport | select-tab | create-tab | close-tab | ping | client-info"
     },
     {
       "name": "ControlServerMessage",
-      "fields": "layout | viewport | ready | pong | error | pane-dead | hook-event"
+      "fields": "layout | viewport | ready | pong | session-exited | error | hook-event (hook-event carries deliveredToGlasses)"
     },
     {
       "name": "MuxClientMessage",
-      "fields": "subscribe | unsubscribe | subscribe-conversation | unsubscribe-conversation | (ControlClientMessage + sessionId)"
+      "fields": "subscribe | unsubscribe | subscribe-conversation | unsubscribe-conversation | subscribe-glasses-relay | unsubscribe-glasses-relay | subscribe-glasses-screen | unsubscribe-glasses-screen | glasses-screen | glasses-input | (ControlClientMessage + sessionId)"
     },
     {
       "name": "MuxServerMessage",
-      "fields": "subscribed | unsubscribed | sessions-updated | conversation-* | initial-conversation | (ControlServerMessage + sessionId)"
+      "fields": "subscribed | unsubscribed | sessions-updated | conversation-* | initial-conversation | glasses-relay | glasses-relay-remove | glasses-relay-snapshot | glasses-superseded | glasses-screen | herdr-restart | (ControlServerMessage + sessionId)"
+    },
+    {
+      "name": "ClientFocus",
+      "fields": "Which session a client is looking at, ridden along on sessions-updated"
+    },
+    {
+      "name": "GlassesRelayItem",
+      "fields": "What the G2 is asked to show: kind ('waiting' | 'info'), source ('auto' | 'agent'), the session and pane, the question and its choices, choiceKeys / choiceFieldRows (which key answers which row, decided on the server so a redraw by an agent does not cost an app release), present (does this deserve the screen), TTL"
+    },
+    {
+      "name": "GlassesScreen",
+      "fields": "The three container strings the G2 just drew, published for the screen mirror and the recorder. Text state, not pixels"
+    },
+    {
+      "name": "GlassesInput",
+      "fields": "A gesture or ring event from the wearer, sent back over the mux socket"
+    },
+    {
+      "name": "RecordedSttRequest",
+      "fields": "What produced one transcription - model, language, the prompt as sent and where it came from, the session, the audio length, the text - written into the screen recording just before the [confirm] frame"
     },
     {
       "name": "Peer",
@@ -1572,7 +1996,7 @@
     },
     {
       "name": "HistorySession",
-      "fields": "sessionId, projectPath, projectName, firstPrompt (an old name; it actually holds the last user message), lastPrompt, recap, recapAt, modified, messageCount, gitBranch, agent, peerId"
+      "fields": "sessionId, projectPath, projectName, firstPrompt (an old name; it actually holds the last user message), lastPrompt, summary, recap, recapAt, modified, startTime, endTime, durationMinutes, messageCount, gitBranch, agent, peerId"
     },
     {
       "name": "SessionMetrics",
@@ -1580,7 +2004,23 @@
     },
     {
       "name": "DashboardResponse",
-      "fields": "usageLimits, usageLimitsStatus, codexUsageLimits, usageHistory, dailyActivity, modelUsage, costEstimates, hourlyActivity, version, systemMetrics, diskUsage, connectedClients"
+      "fields": "usageLimits, usageLimitsStatus, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, groqSttUsage, usageHistory, dailyActivity, modelUsage, hourlyActivity, version, systemMetrics, diskUsage, connectedClients, herdrUpdate, hrdleUpdate, generatedAt, stale"
+    },
+    {
+      "name": "HerdrUpdateStatus / HrdleUpdateStatus",
+      "fields": "Version skew reports for herdr (binary vs running server) and for hrdle itself. Reporting only; both are applied by an explicit user action"
+    },
+    {
+      "name": "GrokUsageSummary / KimiUsageSummary / OpenCodeUsageSummary",
+      "fields": "Per-agent 24h and 7d token windows. None of these three expose rate-limit windows locally, so totals are all they can show. Kimi is priced against OpenRouter list prices (an estimate); OpenCode carries its own per-turn cost (not an estimate)"
+    },
+    {
+      "name": "GroqSttUsageSummary",
+      "fields": "Requests (capped per day) and audio seconds (capped per hour) for glasses speech-to-text, recorded as they happen because Groq has no usage endpoint to read back"
+    },
+    {
+      "name": "OpenRouterAccountUsage",
+      "fields": "OpenRouter's own billed daily / weekly / monthly spend and credit balance (calendar windows, unlike the rolling estimates)"
     },
     {
       "name": "ConversationMessage",
@@ -1588,7 +2028,7 @@
     },
     {
       "name": "UsageLimits",
-      "fields": "fiveHour (UsageCycleInfo), sevenDay (UsageCycleInfo)"
+      "fields": "fiveHour (UsageCycleInfo), sevenDay (UsageCycleInfo), plus per-model scoped limits"
     },
     {
       "name": "SessionState",
@@ -1600,7 +2040,11 @@
     },
     {
       "name": "AgentProvider",
-      "fields": "'claude' | 'codex' (the AGENT_PROVIDERS registry defines the resume command and the rest)"
+      "fields": "'claude' | 'codex' | 'grok' | 'kimi' | 'opencode' (the AGENT_PROVIDERS registry defines the resume command, the process patterns and the rest; adding an agent is one entry plus the provider interfaces)"
+    },
+    {
+      "name": "SttModel",
+      "fields": "The closed set of Groq transcription models ('whisper-large-v3-turbo' | 'whisper-large-v3'). An unknown model is a 400 on every utterance and the wearer sees only a provider error"
     }
   ],
   "data_flows": [
@@ -1648,20 +2092,22 @@
     {
       "name": "Hook notifications",
       "steps": [
-        "A Claude Code / Codex hook (Stop, PreToolUse, UserPromptSubmit, PostToolUse)",
-        "The notify command (reading the hook JSON from stdin)",
+        "A Claude Code / Codex / Grok / Kimi hook (Stop, or PostToolUse for AskUserQuestion)",
+        "The notify command (reading the hook JSON from stdin; Grok's camelCase shape is normalized)",
         "POST /api/notify (unauthenticated)",
-        "HookStatusService updates the session's indicator state",
-        "The hook-event frame is broadcast over the WebSocket (debounced to one notification)",
-        "An OS notification through the browser Notification API"
+        "The pane is resolved from the hook's session_id or cwd. With glasses subscribed, a relay info item is created instead (90s TTL)",
+        "The hook-event frame is broadcast over the WebSocket, carrying deliveredToGlasses",
+        "A browser OS notification fires only when that flag is down - a duplicate notification beats a lost one",
+        "Web Push covers the case where no tab is awake to fire it"
       ]
     },
     {
       "name": "The real-time conversation stream",
       "steps": [
-        "The client sends subscribe-conversation { sessionId }",
+        "The client sends subscribe-conversation { sessionId, agentSessionId } - the pane's agent session, since a workspace with two agent panes holds two conversations",
         "ConversationWatcher watches that JSONL with fs.watch (150ms debounce)",
         "initial-conversation carries the whole thing; conversation-update then carries new turns only",
+        "A thread agent (codex / grok / kimi / opencode) has no server-side tail, so useThreadConversation polls instead",
         "ChatView / ConversationViewer render the increment"
       ]
     },
@@ -1672,7 +2118,7 @@
         "usePeers polls /api/peers every 5s (the list and its status)",
         "usePeerSessionsWatcher holds a WS to each remote peer's /ws/mux with its wsToken",
         "Each peer's sessions-updated and hook-event arrive",
-        "useSessions merges the local and peer sessions for the UI"
+        "useWorkspaces merges the local and peer sessions for the UI"
       ]
     },
     {
@@ -1683,6 +2129,28 @@
         "POST /api/sessions/:id/panes/input (with --wait it captures a viewport afterwards)",
         "GET /api/sessions/:id/panes/:paneId/viewport (hrdle peek)",
         "Prints the viewport's last N lines and the detected state (idle / processing / permission_prompt / ask_user_question)"
+      ]
+    },
+    {
+      "name": "Answering from the glasses",
+      "steps": [
+        "herdr reports a pane going blocked (pane.agent_status_changed)",
+        "GlassesRelayService assembles a waiting item - but only while a glasses client is subscribed (the presence gate)",
+        "The question comes from the agent's own record (AgentQuestion) or its pane reader, never from a general shape match; an agent with no reader gets no options",
+        "glasses-relay is pushed to subscribed mux connections; the G2 draws it",
+        "The wearer answers with a ring or touch gesture -> glasses-input -> the key that answers that row (choiceKeys, decided on the server)",
+        "Raw bytes go to the pane's control stream, exactly as a browser keystroke would"
+      ]
+    },
+    {
+      "name": "Speech to text from the glasses",
+      "steps": [
+        "The G2 SDK hands over raw PCM (it cannot transcribe), posted to /api/glasses/stt with the target session",
+        "resolveSttRequest decides the whole request once: model, language, and the vocabulary prompt (the session's own words first, then the glossary, within 190 characters, the session capped at half)",
+        "Groq whisper transcribes; GROQ_API_KEY never leaves this host",
+        "Consumption is recorded on the way past, before the status is acted on - a 429 still spends quota",
+        "SttCorrections repairs the two things a prompt cannot: spelling of glossary terms, and the stock sign-off Whisper writes over silence",
+        "The text is typed into the target pane, and the recorder writes down what produced it"
       ]
     }
   ]
@@ -1769,6 +2237,7 @@ function renderOverview() {
         <dt>Backend</dt><dd>${esc(DATA.stack.backend)}</dd>
         <dt>Frontend</dt><dd>${esc(DATA.stack.frontend)}</dd>
         <dt>Shared</dt><dd>${esc(DATA.stack.shared)}</dd>
+        <dt>Glasses</dt><dd>${esc(DATA.stack.glasses)}</dd>
         <dt>Transport</dt><dd>${esc(DATA.stack.transport)}</dd>
       </dl>
     </div>
