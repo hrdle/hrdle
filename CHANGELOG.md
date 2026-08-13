@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.125] - 2026-08-14
+
 ### Fixed
 - **The keyboard shortcuts work while a terminal has focus** (#345), which is
   the normal state — clicking a pane focuses xterm, and xterm consumes a key it
