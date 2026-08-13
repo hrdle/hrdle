@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.123] - 2026-08-14
+
 ### Fixed
 - **The lines between page 1 and page 2 of a message are reachable again**
   (#344). The recap heads the newest view and goes on the first swipe, so page 1
