@@ -25,6 +25,7 @@ import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
 import { sessionFetch } from "../services/peer-fetch";
 import { nukeClientCache } from "../utils/nuke-cache";
+import { shouldFollowSessionDir } from "../utils/file-viewer-follow";
 import { makeSessionKey, parseSessionKey } from "../utils/sessionKey";
 import { usePeers } from "../hooks/usePeers";
 import {
@@ -1631,6 +1632,34 @@ export function DesktopLayout({
 			) ?? null)
 		: null;
 
+	// An open file browser follows the session the pane is showing. Without
+	// this it keeps whichever directory it was opened for while the header
+	// names the new session — so the panel lists one workspace's files under
+	// another's name, and the Changes tab reports a repo the pane is not in.
+	//
+	// Keyed on the session, not on its currentPath: currentPath is the pane's
+	// foreground cwd, so keying on it would yank the panel elsewhere the moment
+	// someone typed `cd` in the terminal.
+	const followedSessionKeyRef = useRef<string | null>(activePaneSessionKey);
+	useEffect(() => {
+		if (followedSessionKeyRef.current === activePaneSessionKey) return;
+		const dir = activeSession?.currentPath;
+		// The session list can arrive a render after the switch. Leave the ref
+		// alone until it does, or the switch is recorded as handled and the
+		// panel stays where it was.
+		if (!dir) return;
+		followedSessionKeyRef.current = activePaneSessionKey;
+		if (!shouldFollowSessionDir(dir, activeFileViewerDir, fileViewerOpenDirs))
+			return;
+		openFileViewer(dir, activeSession.peerId);
+	}, [
+		activePaneSessionKey,
+		activeSession,
+		activeFileViewerDir,
+		fileViewerOpenDirs,
+		openFileViewer,
+	]);
+
 	// Handle session selection from modal
 	const handleModalSelectSession = useCallback(
 		(session: { id: string; peerId?: string; currentPath?: string }) => {
@@ -1639,10 +1668,6 @@ export function DesktopLayout({
 				paneId,
 				makeSessionKey(session.id, session.peerId),
 			);
-			// Update FileViewer active dir to follow session
-			if (session.currentPath) {
-				setActiveFileViewerDir(session.currentPath);
-			}
 		},
 		[handleSelectSessionForPane],
 	);
