@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.124] - 2026-08-14
+
 ### Fixed
 - **One dropped ping undid a ring selection.** A focus claim goes stale after
   25s, chosen as two of a browser's 10s heartbeats with room for jitter. The
