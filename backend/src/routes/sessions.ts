@@ -594,8 +594,13 @@ sessions.post('/', async (c) => {
       }
     }
 
+    // The id is herdr's workspace id, the same value the list answers with.
+    // Handing back the label instead leaves the caller holding an id that
+    // matches nothing in `GET /sessions`, and the frontend persists it into
+    // the pane tree — so the desktop comes back from a reload with a session
+    // it cannot resolve.
     return c.json({
-      id: name,
+      id: instanceId,
       name: name,
       instanceId,
       createdAt: new Date().toISOString(),
