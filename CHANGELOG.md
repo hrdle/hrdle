@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **An open file browser follows the session you switch to** (#346). It stayed
+  on whichever directory it was opened for while the header went on naming the
+  new session, so the panel listed one workspace's files under another's name -
+  and the Changes tab, bound to a directory the pane was not in, reported
+  "branch unknown, no changed files", which reads as a clean repo rather than
+  as the wrong one. It follows the session rather than the pane's `currentPath`,
+  so typing `cd` in the terminal does not move it, and a panel that was
+  dismissed stays dismissed
 - **A workspace created from the UI is now the one the desktop is on** (#347).
   `POST /api/sessions` answered with the workspace label as its `id` while the
   list answers with herdr's workspace id, so the frontend selected the session
