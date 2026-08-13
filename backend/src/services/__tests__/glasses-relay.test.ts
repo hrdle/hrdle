@@ -609,6 +609,120 @@ describe('trackGlassesRelay blocked transitions', () => {
 });
 
 // =============================================================================
+// a waiting item per pane
+// =============================================================================
+
+describe('two panes of one workspace asking at once', () => {
+  const working = () =>
+    ws('s1', [
+      { paneId: '%0', agentStatus: 'working' },
+      { paneId: '%1', agentStatus: 'working' },
+    ]);
+  const bothBlocked = () =>
+    ws('s1', [
+      { paneId: '%0', agentStatus: 'blocked' },
+      { paneId: '%1', agentStatus: 'blocked' },
+    ]);
+
+  /** Both panes blocked, with %0 having got there first. */
+  async function bothAsking(): Promise<FakeSocket> {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [working()];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay(); // baseline
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [
+        { paneId: '%0', agentStatus: 'blocked' },
+        { paneId: '%1', agentStatus: 'working' },
+      ]),
+    ];
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [bothBlocked()];
+    await trackGlassesRelay();
+    return sock;
+  }
+
+  test('the second pane to block gets an item of its own', async () => {
+    const sock = await bothAsking();
+    const items = sock.ofType('glasses-relay').map((m) => m.item as { id: string; paneId: string });
+    expect(items.map((i) => i.paneId)).toEqual(['%0', '%1']);
+    expect(items[0].id).not.toBe(items[1].id);
+    expect((await buildGlassesRelaySnapshot()).map((i) => i.paneId)).toEqual(['%0', '%1']);
+  });
+
+  test('a dismissed question on one pane does not silence the other', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [working()];
+    await subscribeGlassesRelay(sock);
+    await trackGlassesRelay();
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [
+        { paneId: '%0', agentStatus: 'blocked' },
+        { paneId: '%1', agentStatus: 'working' },
+      ]),
+    ];
+    await trackGlassesRelay();
+    dismissRelayItem((sock.ofType('glasses-relay')[0].item as { id: string }).id);
+    sock.messages = [];
+
+    glassesRelayDeps.listWorkspaces = async () => [bothBlocked()];
+    await trackGlassesRelay();
+
+    const raised = sock.ofType('glasses-relay').map((m) => m.item as { paneId: string });
+    expect(raised.map((i) => i.paneId)).toEqual(['%1']);
+  });
+
+  test('one pane unblocking leaves the other pane asking', async () => {
+    const sock = await bothAsking();
+    const first = sock.ofType('glasses-relay').map((m) => m.item as { id: string; paneId: string });
+    sock.messages = [];
+
+    glassesRelayDeps.listWorkspaces = async () => [
+      ws('s1', [
+        { paneId: '%0', agentStatus: 'working' },
+        { paneId: '%1', agentStatus: 'blocked' },
+      ]),
+    ];
+    await trackGlassesRelay();
+
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toEqual([first[0].id]);
+    expect((await buildGlassesRelaySnapshot()).map((i) => i.id)).toEqual([first[1].id]);
+  });
+
+  test('a snapshot synthesizes for every blocked pane, not the first one found', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.readPaneText = async () => QUESTION_PANE;
+    glassesRelayDeps.listWorkspaces = async () => [bothBlocked()];
+    await subscribeGlassesRelay(sock);
+
+    const snapshot = sock.ofType('glasses-relay-snapshot')[0].items as Array<{ paneId: string }>;
+    expect(snapshot.map((i) => i.paneId)).toEqual(['%0', '%1']);
+  });
+
+  test('an agent self-note is accepted per pane, and still only once per pane', () => {
+    expect(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'a?', paneId: '%0' }).status).toBe(200);
+    expect(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'b?', paneId: '%1' }).status).toBe(200);
+    expect(postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'again?', paneId: '%0' }).status).toBe(409);
+  });
+
+  test('a hook notification is not suppressed by another pane being blocked', async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+    postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'Which one?', paneId: '%0' });
+    sock.messages = [];
+
+    expect(postHookRelay({ sessionId: 's1', paneId: '%1', text: 'Response complete' })).toBe(true);
+    expect(sock.ofType('glasses-relay')).toHaveLength(1);
+    // Its own pane is still covered by the question already on the panel.
+    expect(postHookRelay({ sessionId: 's1', paneId: '%0', text: 'Response complete' })).toBe(true);
+    expect(sock.ofType('glasses-relay')).toHaveLength(1);
+  });
+});
+
+// =============================================================================
 // still-blocked refresh (multi-step AskUserQuestion)
 // =============================================================================
 
