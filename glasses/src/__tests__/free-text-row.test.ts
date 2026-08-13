@@ -36,7 +36,7 @@
 // build the next time an agent redraws its picker.
 
 import { describe, expect, test } from 'bun:test'
-import { GlassesController } from '../controller.ts'
+import { GlassesController, splitKeystrokes } from '../controller.ts'
 import type { GlassesPlatform } from '../controller.ts'
 
 function platform(): GlassesPlatform {
@@ -136,7 +136,7 @@ describe('the text field of a multi-select', () => {
     // server; this side only has to not substitute a number for it.
     const { c, keys } = picker(MULTI, FREE_TEXT, [4], WALK_TO_FIELD)
     await tapRow(c, 4)
-    expect(keys).toEqual([DOWN.repeat(4)])
+    expect(keys.join('')).toBe(DOWN.repeat(4))
   })
 
   test('sends nothing when the key it was given is empty', async () => {
@@ -151,12 +151,16 @@ describe('the text field of a multi-select', () => {
     expect(c.state.mode).toBe('voice')
   })
 
-  test('the whole walk goes in one send', async () => {
-    // The same rule the side-by-side walk follows: separate sends are separate
-    // requests and arrive in whatever order they finish in.
+  test('a walk arrives one keystroke at a time', async () => {
+    // Sent as one string it moves Claude Code's cursor nothing at all: its
+    // input is read a chunk at a time and a chunk is taken for one key, so
+    // everything after the first sequence is dropped. Measured against 2.1.228
+    // on 2026-08-13, on the pane where one arrow per write moved one row each
+    // time. Ordering is bought by awaiting each - a keystroke is a request,
+    // and two in flight arrive in whichever order they finish.
     const { c, keys } = picker(MULTI, FREE_TEXT, [4], WALK_TO_FIELD)
     await tapRow(c, 4)
-    expect(keys).toHaveLength(1)
+    expect(keys).toEqual([DOWN, DOWN, DOWN, DOWN])
   })
 })
 
@@ -167,7 +171,7 @@ describe('what the transcript does', () => {
     await tapRow(c, 4)
     c.state.voiceText = 'あとで相談したい'
     await inner(c).sendVoice()
-    expect(keys).toEqual([DOWN.repeat(4), 'あとで相談したい'])
+    expect(keys).toEqual([DOWN, DOWN, DOWN, DOWN, 'あとで相談したい'])
   })
 
   test('leaves the picker up, with the row reading back what was said', async () => {
@@ -232,10 +236,10 @@ describe('the rows that are not text', () => {
 describe('the send row', () => {
   const SEND_WALK = DOWN.repeat(5) + '\r'
 
-  test('sends the walk the server named for it', async () => {
+  test('sends the walk the server named for it, a keystroke at a time', async () => {
     const { c, keys } = picker(MULTI, FREE_TEXT, undefined, undefined, SEND_WALK)
     await tapRow(c, MULTI.length)
-    expect(keys).toEqual([SEND_WALK])
+    expect(keys).toEqual([DOWN, DOWN, DOWN, DOWN, DOWN, '\r'])
   })
 
   test('falls back to the Tab when a server names nothing', async () => {
@@ -250,5 +254,29 @@ describe('the send row', () => {
     const { c } = picker(MULTI, FREE_TEXT, undefined, undefined, SEND_WALK)
     inner(c).enterChoice(['[ ] a', '[ ] b'], { sessionId: 's1', paneId: '%0', itemId: 'q2' }, undefined, undefined, [])
     expect(c.state.choiceSend).toBeUndefined()
+  })
+})
+
+describe('splitting a string into keystrokes', () => {
+  test('a CSI sequence is one key', () => {
+    expect(splitKeystrokes('\x1b[B\x1b[B')).toEqual(['\x1b[B', '\x1b[B'])
+  })
+
+  test('so is an SS3 one, which is what some terminals send for an arrow', () => {
+    expect(splitKeystrokes('\x1bOB\r')).toEqual(['\x1bOB', '\r'])
+  })
+
+  test('anything else is a key on its own', () => {
+    expect(splitKeystrokes('ab\r')).toEqual(['a', 'b', '\r'])
+  })
+
+  test('a sequence cut off at the end is still one key', () => {
+    // Nothing should produce this, but splitting it into stray characters
+    // would send an ESC on its own - which cancels the picker.
+    expect(splitKeystrokes('\x1b[')).toEqual(['\x1b['])
+  })
+
+  test('an empty string is no keys, which is the walk of no steps', () => {
+    expect(splitKeystrokes('')).toEqual([])
   })
 })
