@@ -287,3 +287,20 @@ body {
 .cv-code .hljs-emphasis {
 	font-style: italic;
 }
+
+/* Math. KaTeX draws in currentColor, so it inherits the transcript's ink and
+   needs no palette of its own — what it does need is somewhere to go when a
+   formula is wider than a phone. `.katex-display` is a centred block, so an
+   overflowing one is clipped on both sides at once: the left half of the
+   equation is unreachable, not just the right. */
+.katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-block: 2px;
+}
+/* A formula whose glyphs cannot be built at all. KaTeX writes the source into
+   `title` and paints it in its own red; against the conversation surface that
+   is the one colour here worth replacing. */
+.katex-error {
+	color: var(--color-conv-accent);
+}

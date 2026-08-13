@@ -154,6 +154,13 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MiB
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Math is rare and KaTeX is not small: the renderer, its stylesheet and
+        // its fonts are about 500 KiB of the precache, downloaded by every
+        // device on every release whether or not a transcript ever contains a
+        // formula. They are split out of the bundle for exactly that reason, so
+        // precaching them puts the cost straight back. Fetched on first sight of
+        // math instead, and cached from then on by the rule below.
+        globIgnores: ['**/assets/{KaTeX_,MathMarkdown-}*'],
         // /glasses is a separate app the backend serves, not a route of this
         // SPA. navigateFallback defaults to answering EVERY navigation with
         // our index.html, so without this the glasses simulator opens as CC
@@ -161,6 +168,17 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/glasses/],
         importScripts: ['sw-notification.js'],
         runtimeCaching: [
+          {
+            // The math renderer and its fonts, kept once fetched. Their names
+            // carry a content hash, so a stale entry can only be an orphan of
+            // an older build rather than a wrong answer.
+            urlPattern: /\/assets\/(KaTeX_|MathMarkdown-)/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'katex-cache',
+              expiration: { maxEntries: 80 },
+            },
+          },
           {
             urlPattern: /^https:\/\/.*\.trycloudflare\.com\/api\//,
             handler: 'NetworkFirst',

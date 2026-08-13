@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.120] - 2026-08-13
+
 ### Added
 - **The conversation footer says whether the page will turn itself.** The hold a
   reader arms by paging back is invisible: the screen stops moving, and a screen
@@ -14,6 +16,36 @@ All notable changes to this project will be documented in this file.
   - Shown as its presence rather than its absence, and only on the conversation,
     which is the one screen the clock runs on
   - Needs glasses v0.0.77
+- **Math in the transcript is drawn as math** (#266). An agent writing a
+  voltage-drop calculation in LaTeX had it shown as its own source - the whole
+  point of the notation is that the rendered form is the readable one, and on a
+  phone the raw string is the worse of the two by a distance. Rendered with
+  KaTeX, which draws in the transcript's own ink rather than bringing a palette
+  of its own
+  - `\(...\)` and `\[...\]` are read as well as the dollar forms. The agents
+    write both, and the rewrite steps over fenced blocks and inline code on the
+    way - inside a fence `\[` is a subscript and `$` is a shell variable
+  - A `$$...$$` written on one line is opened out so it renders as display math.
+    That is the form the agents actually write, and read literally it is inline
+    math that happens to sit alone in a paragraph: text-sized, with fractions
+    cramped to match
+  - A formula wider than the screen scrolls inside its own box. It is a centred
+    block, so an overflowing one would otherwise be clipped at both ends at once
+    and the left half of the equation would be unreachable
+  - **A transcript with no math pays nothing for one that has some.** KaTeX and
+    its fonts are about 500 KiB, so they are split out of the bundle, kept out
+    of the precache, and fetched on first sight of a formula. Measured on a
+    math-free page load: no math asset is requested, and the precache is
+    marginally smaller than before this landed
+
+### Changed
+- **The architecture documentation describes what is actually here.** It had
+  been carried forward by the release script's version stamp while the code
+  moved underneath it: 36 services were missing, along with the whole of the
+  glasses, push and STT surface, and it still named a session list and a hook
+  that have both been renamed. Services 24 -> 60, routes 60 -> 86, types
+  24 -> 34, and the diagram's port corrected (`architecture.json`,
+  `architecture.html`)
 
 ## [0.3.119] - 2026-08-13
 
