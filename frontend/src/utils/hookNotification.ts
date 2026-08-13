@@ -5,8 +5,13 @@
  */
 
 import { toHomeShortPath } from "./path";
-import { dispatchNotificationNavigation } from "./notificationNavigation";
+import {
+	dispatchNotificationNavigation,
+	isSameNotificationPeer,
+} from "./notificationNavigation";
+import { isPushActive } from "./webPush";
 import { IDENTITY } from "../../../shared/identity";
+import { LOCAL_PEER_ID } from "../../../shared/types";
 
 const EVENT_MESSAGES: Record<string, string> = {
 	Stop: "Response complete",
@@ -68,6 +73,25 @@ export function fireHookNotification(
 	peerId?: string,
 ) {
 	if (!("Notification" in window) || Notification.permission !== "granted") {
+		return;
+	}
+
+	// One hook event reaches a subscribed device twice: once here, from the mux
+	// broadcast, and once from the server's own Web Push. Both paths are there
+	// for a reason — a frozen tab receives no broadcast, and a push establishes
+	// nothing about whether the page is running — but where both are live they
+	// are the same notification, a second apart (#331).
+	//
+	// The page is the side that yields, because push is strictly the wider
+	// channel: it arrives with the page closed, so nothing is lost by staying
+	// quiet here. This is not the `deliveredToGlasses` dilemma — whether *this*
+	// browser holds an accepted subscription is a local fact, not an inference
+	// about someone's face.
+	//
+	// Only for events from this server. A peer pushes to the browsers that
+	// subscribed *there*, which this one did not, so a peer's notification has
+	// this path and no other.
+	if (isSameNotificationPeer(peerId, LOCAL_PEER_ID) && isPushActive()) {
 		return;
 	}
 
