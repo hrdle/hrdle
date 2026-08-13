@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.122] - 2026-08-14
+
 ### Fixed
 - **Picking a session with the ring now wins the glasses focus** (#256). The
   glasses follow the screen a person most recently raised, and they were kept
