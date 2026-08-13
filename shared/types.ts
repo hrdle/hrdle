@@ -1527,10 +1527,15 @@ export interface GlassesRelayItem {
  *
  * Claimed by opening a session (subscribe), not by typing: watching a session
  * scroll by is the common case and produces no input.
+ *
+ * The glasses are the one candidate that does not work this way. They follow
+ * the election, so their subscriptions are the election's own output and are
+ * never a claim; only `glasses-focus` is, and the app sends that solely when
+ * the wearer picked a session with the ring.
  */
 export interface ClientFocus {
   sessionId: string;
-  deviceType: 'mobile' | 'tablet' | 'desktop';
+  deviceType: 'mobile' | 'tablet' | 'desktop' | 'glasses';
   /** Epoch ms the focus was claimed — last writer wins among visible clients. */
   at: number;
 }
@@ -1573,6 +1578,14 @@ export type MuxClientMessage =
   // alone rather than retired on a guess.
   | { type: 'subscribe-glasses-relay'; onDevice?: boolean; instanceId?: string }
   | { type: 'unsubscribe-glasses-relay' }
+  // The wearer picked a session with the ring. The only thing on a glasses
+  // connection that is a person's act rather than the focus election's own
+  // output: everything else the app subscribes to, it subscribes to *because*
+  // the election sent it there, and letting that claim would be a feedback
+  // loop. So the app says which of the two it is doing instead of the server
+  // guessing, and a ring selection then outbids a tablet left visible on a
+  // desk - which until now it never did.
+  | { type: 'glasses-focus'; sessionId: string }
   // Screen mirroring for demos. The device publishes; browsers subscribe.
   // Only a connection with a real Even Hub bridge publishes, so the simulator
   // never echoes its own frames back at itself.
@@ -1660,6 +1673,7 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
     instanceId: z.string().min(1).max(64).optional(),
   }),
   z.object({ type: z.literal('unsubscribe-glasses-relay') }),
+  z.object({ type: z.literal('glasses-focus'), sessionId: z.string().min(1) }),
   z.object({
     type: z.literal('glasses-screen'),
     screen: z.object({

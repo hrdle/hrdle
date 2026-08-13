@@ -80,9 +80,16 @@ export interface MuxData {
   /** Session this client last opened, and when. */
   focusSessionId?: string;
   focusAt?: number;
-  /** Set by `subscribe-glasses-relay`: the glasses follow focus, never claim
-   *  it, otherwise following would feed back into the election. */
+  /** Set by `subscribe-glasses-relay`: what this connection subscribes to is
+   *  the election's own output, so none of the fields above are a claim on it.
+   *  Only `glasses-focus` is. */
   isGlasses?: boolean;
+  /** The session the wearer last picked with the ring, and when. Separate from
+   *  `focusSessionId`/`focusAt` on purpose: those move with every subscription
+   *  the app makes, including the ones it makes because the election told it
+   *  to, and reusing them would let a follow re-claim as itself. */
+  glassesFocusSessionId?: string;
+  glassesFocusAt?: number;
   /** Set by `subscribe-glasses-screen`: this connection watches the mirror. */
   watchesGlassesScreen?: boolean;
 }
@@ -236,34 +243,53 @@ function logFocusClaim(
   );
 }
 
+/** A screen someone is looking at, and the session it has open. */
+function screenClaim(d: MuxData): ClientFocus | undefined {
+  // Focus means "the screen a person is looking at", and a driven browser is
+  // not one. This machine runs several agents that open the web UI headlessly
+  // to take screenshots; each claimed the focus, and a wearer reading a
+  // conversation was carried off to whatever session one of them landed on -
+  // three times in one recording. Refused here rather than filtered by the
+  // glasses, because nothing downstream wants it either.
+  if (d.automated) return undefined;
+  // A claim is minted by a person: opening a session, or picking the device
+  // up. A connection that has done neither since it came back is a machine
+  // that is merely awake, and being the only one awake used to be enough to
+  // win - which is how a laptop left on a workspace finished days ago kept
+  // taking the wearer there, most of the switches recorded on 2026-08-11.
+  // Nobody qualifying leaves the followers holding what they have, which is
+  // the right answer when nobody is at a screen.
+  if (d.focusAt === undefined) return undefined;
+  if (!d.deviceType || !d.focusSessionId || d.visible !== true) return undefined;
+  return { sessionId: d.focusSessionId, deviceType: d.deviceType, at: d.focusAt };
+}
+
+/**
+ * The session the wearer picked with the ring.
+ *
+ * Read from fields no subscription writes, which is the whole of why this is
+ * separate: the glasses subscribe to whatever the election sends them to, so
+ * their subscriptions are its output and a claim minted from one would chase
+ * its own tail. `visible` and `deviceType` are not asked for - there is no
+ * `client-info` from a face, and a wearer who just chose a session is by
+ * construction looking at it.
+ */
+function glassesClaim(d: MuxData): ClientFocus | undefined {
+  if (!d.glassesFocusSessionId || d.glassesFocusAt === undefined) return undefined;
+  return { sessionId: d.glassesFocusSessionId, deviceType: 'glasses', at: d.glassesFocusAt };
+}
+
 export function pickClientFocus(clients: MuxData[], now: number): ClientFocus | undefined {
-  let best: MuxData | undefined;
+  let best: ClientFocus | undefined;
   for (const d of clients) {
-    // The glasses follow focus; letting them claim it would be a feedback loop.
-    if (d.isGlasses) continue;
     // A screen that stopped saying it is there is not one anyone is looking at,
     // whatever its last `visible` said.
     if (now - d.lastPingAt > FOCUS_HEARTBEAT_MS) continue;
-    // Focus means "the screen a person is looking at", and a driven browser is
-    // not one. This machine runs several agents that open the web UI headlessly
-    // to take screenshots; each claimed the focus, and a wearer reading a
-    // conversation was carried off to whatever session one of them landed on -
-    // three times in one recording. Refused here rather than filtered by the
-    // glasses, because nothing downstream wants it either.
-    if (d.automated) continue;
-    // A claim is minted by a person: opening a session, or picking the device
-    // up. A connection that has done neither since it came back is a machine
-    // that is merely awake, and being the only one awake used to be enough to
-    // win - which is how a laptop left on a workspace finished days ago kept
-    // taking the wearer there, most of the switches recorded on 2026-08-11.
-    // Nobody qualifying leaves the followers holding what they have, which is
-    // the right answer when nobody is at a screen.
-    if (d.focusAt === undefined) continue;
-    if (!d.deviceType || !d.focusSessionId || d.visible !== true) continue;
-    if (!best || (d.focusAt ?? 0) > (best.focusAt ?? 0)) best = d;
+    const claim = d.isGlasses ? glassesClaim(d) : screenClaim(d);
+    if (!claim) continue;
+    if (!best || claim.at > best.at) best = claim;
   }
-  if (!best?.focusSessionId || !best.deviceType) return undefined;
-  return { sessionId: best.focusSessionId, deviceType: best.deviceType, at: best.focusAt ?? 0 };
+  return best;
 }
 
 function computeClientFocus(): ClientFocus | undefined {
@@ -470,6 +496,21 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
   if (msg.type === 'unsubscribe-glasses-relay') {
     unsubscribeGlassesRelay(ws);
+    ws.data.glassesFocusSessionId = undefined;
+    ws.data.glassesFocusAt = undefined;
+    maybePushFocus();
+    return;
+  }
+
+  // The wearer picked a session with the ring. Accepted only from a connection
+  // that declared itself glasses, so an ordinary client cannot mint a claim
+  // that skips the visibility rules the election holds it to.
+  if (msg.type === 'glasses-focus') {
+    if (!ws.data.isGlasses) return;
+    ws.data.glassesFocusSessionId = msg.sessionId;
+    ws.data.glassesFocusAt = Date.now();
+    console.log(`[focus] glasses claim ${msg.sessionId}: ring selection`);
+    maybePushFocus();
     return;
   }
 

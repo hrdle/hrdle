@@ -232,3 +232,66 @@ describe('an election needs someone to have done something', () => {
     expect(pickClientFocus([client(laptop)], NOW)?.sessionId).toBe('w4H');
   });
 });
+
+/**
+ * A wearer picking a session with the ring is the most recent thing a person
+ * did, and until now it lost to a tablet sitting visible on a desk: the glasses
+ * were excluded from the election wholesale, because the subscriptions they
+ * make while *following* it would otherwise feed back into it. Two different
+ * acts were being refused together. The app now says which one it is doing.
+ */
+describe('a ring selection claims the focus', () => {
+  /** What the app sends on a tap: `glasses-focus`, handled in the mux route. */
+  function ringPick(sessionId: string, at: number): Partial<MuxData> {
+    return { isGlasses: true, glassesFocusSessionId: sessionId, glassesFocusAt: at };
+  }
+
+  test('the wearer outbids a tablet that claimed earlier', () => {
+    const tablet = client({ focusSessionId: 'w54', focusAt: 100, deviceType: 'tablet' });
+    const glasses = client(ringPick('w66', 200) as Partial<MuxData>);
+    expect(pickClientFocus([tablet, glasses], NOW)).toEqual({
+      sessionId: 'w66',
+      deviceType: 'glasses',
+      at: 200,
+    });
+  });
+
+  /** Last writer still wins: a tablet picked up afterwards is a person too. */
+  test('but not one raised after the pick', () => {
+    const glasses = client(ringPick('w66', 100) as Partial<MuxData>);
+    const tablet = client({ focusSessionId: 'w54', focusAt: 200, deviceType: 'tablet' });
+    expect(pickClientFocus([glasses, tablet], NOW)?.sessionId).toBe('w54');
+  });
+
+  /**
+   * The feedback loop this whole separation exists to prevent. Following the
+   * focus makes the app subscribe, and a subscribe writes `focusAt` on any
+   * connection - so if the election read that field on a glasses connection,
+   * every follow would re-claim as the wearer and the glasses would hold the
+   * focus against every other screen forever.
+   */
+  test('following a focus is not picking one', () => {
+    const followed = client({
+      isGlasses: true,
+      focusSessionId: 'w54',
+      focusAt: NOW,
+    } as Partial<MuxData>);
+    expect(pickClientFocus([followed], NOW)).toBeUndefined();
+  });
+
+  test('and a claim survives the follows that come after it', () => {
+    const glasses = client({
+      ...ringPick('w66', 100),
+      // The subscribe the app makes on being sent elsewhere, later than the pick.
+      focusSessionId: 'w54',
+      focusAt: 300,
+    } as Partial<MuxData>);
+    expect(pickClientFocus([glasses], NOW)?.sessionId).toBe('w66');
+  });
+
+  /** Same rule as every other candidate: a socket nobody is behind drops out. */
+  test('a pick from glasses that stopped pinging drops out', () => {
+    const glasses = client({ ...ringPick('w66', 100), lastPingAt: NOW - 60_000 } as Partial<MuxData>);
+    expect(pickClientFocus([glasses], NOW)).toBeUndefined();
+  });
+});
