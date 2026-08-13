@@ -132,7 +132,10 @@ export interface DashboardResponse {
  */
 export interface ClientFocus {
   sessionId: string
-  deviceType: 'mobile' | 'tablet' | 'desktop'
+  /** `glasses` is this app's own claim coming back to it - the wearer picked a
+   *  session with the ring, and the election agreed. Following it is a no-op by
+   *  construction, since the session is already the one on screen. */
+  deviceType: 'mobile' | 'tablet' | 'desktop' | 'glasses'
   at: number
 }
 

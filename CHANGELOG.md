@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Picking a session with the ring now wins the glasses focus** (#256). The
+  glasses follow the screen a person most recently raised, and they were kept
+  out of that election entirely - so a tablet sitting visible on a desk outbid
+  a wearer who had just chosen a session, and the choice was undone by the next
+  push. Two different acts were being refused together: following the election,
+  which must never claim, and the wearer's own selection, which is the most
+  recent thing a person did
+  - The app says which of the two it is doing, on a new `glasses-focus`
+    message. The server cannot tell them apart from the outside - following
+    subscribes exactly as a tap does - so the claim is a message of its own
+    rather than something read off a subscription
+  - Held in fields no subscription writes, so a follow arriving afterwards
+    cannot re-claim as the wearer. That loop is the reason the blanket
+    exclusion was there
+  - Sent on a tap on a session row and on a tap on a waiting notification, and
+    from nowhere else. A resume point, a reconnect and a follow all subscribe
+    without claiming
+  - Last writer still wins: a tablet picked up after the ring selection takes
+    the focus back, as any other screen would
+  - Needs glasses v0.0.78
+
 ## [0.3.121] - 2026-08-14
 
 ### Fixed

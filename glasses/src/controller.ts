@@ -1004,6 +1004,10 @@ export class GlassesController {
         }
         const s = this.currentSession()
         if (!s) return
+        // A tap on a row is the wearer choosing, so it outbids a tablet left
+        // visible on a desk. The subscribe below cannot say that on its own -
+        // following the focus makes the identical call.
+        this.ws.claimFocus(s.id)
         this.ws.subscribe(s.id)
         st.mode = 'conversation'
         st.conversation = []
@@ -1743,6 +1747,8 @@ export class GlassesController {
   private async jumpToItem(item: GlassesRelayItem): Promise<void> {
     const idx = this.state.sessions.findIndex((s) => s.id === item.sessionId)
     if (idx >= 0) this.state.sessionIndex = idx
+    // Reached only by a tap on the item, so this is a choice like any other.
+    this.ws.claimFocus(item.sessionId)
     this.ws.subscribe(item.sessionId)
     this.state.mode = 'conversation'
     this.state.overlayItemId = null
