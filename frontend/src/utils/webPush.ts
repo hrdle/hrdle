@@ -46,19 +46,46 @@ export type PushSetupResult =
 	| "no-server-key"
 	| "failed";
 
+/**
+ * Whether a push from this server reaches this browser without the page.
+ *
+ * Held in memory rather than in storage, and set only once the server has
+ * *accepted* the subscription. Both halves matter, because the page reads this
+ * to decide whether to stay quiet (`fireHookNotification`): a stale `true` from
+ * a previous load, or one set when the subscription was merely requested, means
+ * neither channel fires. Unset says only "not established" — the cost of that
+ * being wrong is a notification twice, which is the failure worth having.
+ */
+let pushActive = false;
+
+/** Whether this browser is on the server's push list, as of the last attempt. */
+export function isPushActive(): boolean {
+	return pushActive;
+}
+
 export async function ensurePushSubscription(): Promise<PushSetupResult> {
-	if (!("serviceWorker" in navigator) || !("PushManager" in window)) return "unsupported";
+	if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+		pushActive = false;
+		return "unsupported";
+	}
 	if (!("Notification" in window) || Notification.permission !== "granted") {
 		// Nothing is asked for here. The permission prompt belongs to whatever
 		// the user just clicked, not to a page load.
+		pushActive = false;
 		return "no-permission";
 	}
 
 	try {
 		const keyRes = await fetch("/api/push/key", { headers: authHeaders() });
-		if (!keyRes.ok) return "no-server-key";
+		if (!keyRes.ok) {
+			pushActive = false;
+			return "no-server-key";
+		}
 		const { publicKey } = (await keyRes.json()) as { publicKey?: string };
-		if (!publicKey) return "no-server-key";
+		if (!publicKey) {
+			pushActive = false;
+			return "no-server-key";
+		}
 
 		const registration = await navigator.serviceWorker.ready;
 		const wanted = urlBase64ToUint8Array(publicKey);
@@ -85,9 +112,11 @@ export async function ensurePushSubscription(): Promise<PushSetupResult> {
 			headers: authHeaders(),
 			body: JSON.stringify({ ...sub.toJSON(), label: navigator.userAgent.slice(0, 120) }),
 		});
+		pushActive = res.ok;
 		return res.ok ? "subscribed" : "failed";
 	} catch (err) {
 		console.warn("[push] subscribe failed:", err);
+		pushActive = false;
 		return "failed";
 	}
 }

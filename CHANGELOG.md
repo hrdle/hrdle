@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **One notification per hook event on a device that also holds a push
+  subscription** (#331, reported by @Chapapon). A subscribed phone with the page
+  open was given two banners a second apart for every Stop: one from the mux
+  broadcast, one from the server's own Web Push, identical text. Neither path
+  can be dropped - a frozen tab receives no broadcast, and a push establishes
+  nothing about whether the page is running - so the page yields where both are
+  live. Push is strictly the wider channel there, arriving with the page closed,
+  and nothing is lost by staying quiet
+  - This is not the `deliveredToGlasses` dilemma, where suppression rests on an
+    inference about whether anyone is wearing anything. Whether *this* browser
+    holds a subscription the server accepted is a local fact
+  - The flag is raised only on the server's ok. Raised when the subscription was
+    merely requested, it would silence the page for a subscription that was
+    never stored, and then neither channel fires
+  - A peer's event still fires from the page. A peer pushes to the browsers
+    that subscribed *there*, which this one did not
+
 ## [0.3.118] - 2026-08-13
 
 ### Fixed
