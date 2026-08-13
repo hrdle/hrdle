@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { extractInlineChoices } from '../../../shared/inline-choices';
 import type { AgentProvider, GlassesRelayItem } from '../../../shared/types';
 import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
-import { hasPaneReader, readPaneQuestion } from './pane-readers';
+import { hasPaneReader, readerNeedsPaint, readPaneQuestion } from './pane-readers';
 import type { PaneQuestion } from './pane-readers';
 import {
   CJK_EDGE,
@@ -761,6 +761,8 @@ interface WaitingPayload {
   choiceFieldRows?: number[];
   /** What finishes a multi-select, for the send row the app draws itself. */
   choiceSend?: string;
+  /** Which way the pane's cursor walks between the options. */
+  choiceAxis?: GlassesRelayItem['choiceAxis'];
 }
 
 /**
@@ -850,7 +852,13 @@ async function assembleWaitingPayload(
   // 2026-08-12, was the agent's own output: a `grep` listing and four options
   // written out in a sentence, neither of which was a question.
   if (hasPaneReader(pane?.agent)) {
-    const picker = readPaneQuestion(pane?.agent, lines);
+    // Fetched only where a reader says it needs it: it is a second read of the
+    // same pane, and every agent whose cursor is a character in the text has
+    // no use for it.
+    const painted = readerNeedsPaint(pane?.agent)
+      ? ((await glassesRelayDeps.readPaneAnsi(herdrPaneId))?.split('\n') ?? undefined)
+      : undefined;
+    const picker = readPaneQuestion(pane?.agent, { lines, painted });
     if (picker) {
       const fieldRows = fieldRowsOf(picker);
       return {
@@ -866,7 +874,11 @@ async function assembleWaitingPayload(
         // options and no `choiceInput` reads as a numbered one, and the glasses
         // would type a digit where digits do nothing at all.
         ...(picker.choiceInput === 'arrow' && picker.choiceSelected !== undefined
-          ? { choiceInput: 'arrow' as const, choiceSelected: picker.choiceSelected }
+          ? {
+              choiceInput: 'arrow' as const,
+              choiceSelected: picker.choiceSelected,
+              ...(picker.choiceAxis ? { choiceAxis: picker.choiceAxis } : {}),
+            }
           : {}),
       };
     }
@@ -959,6 +971,7 @@ function makeItem(
     /** Not indexed against `choices` at all - the send row is the app's own,
      *  drawn after the pane's options rather than being one of them. */
     choiceSend?: string;
+    choiceAxis?: GlassesRelayItem['choiceAxis'];
   },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
@@ -1041,6 +1054,7 @@ function makeItem(
       if (answerable) {
         item.choiceInput = 'arrow';
         item.choiceSelected = selected;
+        if (answering.choiceAxis) item.choiceAxis = answering.choiceAxis;
       } else {
         delete item.choices;
         delete item.choiceDetails;
@@ -1076,6 +1090,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
       choiceKeys: payload.choiceKeys,
       choiceFieldRows: payload.choiceFieldRows,
       choiceSend: payload.choiceSend,
+      choiceAxis: payload.choiceAxis,
     },
   );
 }
