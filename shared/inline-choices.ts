@@ -37,6 +37,15 @@ export interface InlineChoices {
   options: string[]
   /** Index into `options` of the item the pane has highlighted. */
   selected: number
+  /**
+   * Which way the pane's cursor walks between them.
+   *
+   * Absent is `row`, which is every prompt this module was written for: a line
+   * of buttons walked with left and right. OpenCode's Confirm prompt is a list
+   * of the same options drawn down the pane, and left and right move nothing
+   * on it.
+   */
+  axis?: 'row' | 'column'
 }
 
 /** How far back from the tail a row of options may sit. Matches the numbered
@@ -319,7 +328,13 @@ export function inlineChoicesInRow(line: string): InlineChoices | undefined {
 
 /** Which way to walk the row, and how far. */
 export interface Move {
-  key: 'left' | 'right'
+  /**
+   * Which way along the list, not which key.
+   *
+   * The key depends on the axis - right and down are both `forward` - and this
+   * used to be named for one of them, from when there was only one.
+   */
+  key: 'back' | 'forward'
   count: number
 }
 
@@ -337,10 +352,10 @@ export interface Move {
  */
 export function moveTo(choices: InlineChoices, target: number): Move {
   const n = choices.options.length
-  if (n === 0) return { key: 'right', count: 0 }
+  if (n === 0) return { key: 'forward', count: 0 }
   const forward = ((target - choices.selected) % n + n) % n
   const backward = n - forward
   return forward <= backward
-    ? { key: 'right', count: forward }
-    : { key: 'left', count: backward }
+    ? { key: 'forward', count: forward }
+    : { key: 'back', count: backward }
 }

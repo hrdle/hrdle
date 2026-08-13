@@ -1255,11 +1255,21 @@ export class GlassesController {
           // makes it true, and that is a tick of the clock away - long enough
           // for a toggle to look like a gesture that did nothing.
           this.toggleLocalChoice()
-          await this.sendKeyStrokes(this.choiceKeyFor(st.choiceIndex))
+          // A list with no keys of its own is ticked by walking to the row and
+          // pressing Enter - which is what `sendInlineChoice` does, and it
+          // remembers where it left the pane's cursor. That memory is the whole
+          // difference: the relay re-reads every five seconds, and a wearer
+          // ticking three boxes in three seconds would otherwise walk the
+          // second and third from where the pane no longer is.
+          if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
+          else await this.sendKeyStrokes(this.choiceKeyFor(st.choiceIndex))
           return
         }
-        if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
-        else await this.sendKeyStrokes(onChoiceSend(st) ? this.sendKey() : this.choiceKeyFor(st.choiceIndex))
+        // The send row is this app's own and is not a row of the pane, so a
+        // walk to it would be a walk to an option. It has its own key.
+        if (onChoiceSend(st)) await this.sendKeyStrokes(this.sendKey())
+        else if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
+        else await this.sendKeyStrokes(this.choiceKeyFor(st.choiceIndex))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         this.echoAnswer(this.pickedText())
@@ -1858,11 +1868,16 @@ export class GlassesController {
    * that had cursor-driving removed. An older server sends neither field, and
    * then this is undefined and the numbered path answers as it always did.
    */
-  private inlineFromItem(item: { choices?: string[]; choiceInput?: string; choiceSelected?: number }): InlineChoices | undefined {
+  private inlineFromItem(item: {
+    choices?: string[]
+    choiceInput?: string
+    choiceSelected?: number
+    choiceAxis?: 'row' | 'column'
+  }): InlineChoices | undefined {
     if (item.choiceInput !== 'arrow') return undefined
     if (!item.choices?.length || typeof item.choiceSelected !== 'number') return undefined
     if (item.choiceSelected < 0 || item.choiceSelected >= item.choices.length) return undefined
-    return { options: item.choices, selected: item.choiceSelected }
+    return { options: item.choices, selected: item.choiceSelected, axis: item.choiceAxis }
   }
 
   /** Terminal scrape — fallback when the active waiting item has no choices. */
@@ -1888,7 +1903,16 @@ export class GlassesController {
     const inline = this.inlineChoices
     if (!inline) return
     const move = moveTo(inline, index)
-    const arrow = move.key === 'right' ? '\x1b[C' : '\x1b[D'
+    // Down a list, along a row of buttons. Sending one for the other moves
+    // nothing at all, which is a picker that looks like it worked.
+    const arrow =
+      inline.axis === 'column'
+        ? move.key === 'forward'
+          ? '\x1b[B'
+          : '\x1b[A'
+        : move.key === 'forward'
+          ? '\x1b[C'
+          : '\x1b[D'
     // One payload, not one request per key.
     //
     // Each send is a POST of its own and none of them waits, so the order they

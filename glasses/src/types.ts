@@ -303,6 +303,15 @@ export interface GlassesRelayItem {
    * behaviour was written for.
    */
   choiceSend?: string
+  /**
+   * Which way the pane's cursor walks between the options.
+   *
+   * Absent is `row` - side-by-side buttons, walked with left and right, which
+   * is what every `arrow` pane was until OpenCode's Confirm list. Mirrored from
+   * `GlassesRelayItem` in `shared/types.ts`; glasses/src keeps no dependency on
+   * shared.
+   */
+  choiceAxis?: 'row' | 'column'
   source: 'auto' | 'agent'
   /**
    * How much of the wearer's attention the server thinks this is worth.

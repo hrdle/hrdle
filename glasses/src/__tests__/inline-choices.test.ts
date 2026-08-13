@@ -242,27 +242,27 @@ describe('moveTo', () => {
   const choices = { options: ['Allow once', 'Allow always', 'Reject'], selected: 0 }
 
   test('staying put is no presses at all', () => {
-    expect(moveTo(choices, 0)).toEqual({ key: 'right', count: 0 })
+    expect(moveTo(choices, 0)).toEqual({ key: 'forward', count: 0 })
   })
 
   test('walks forward when forward is nearer', () => {
-    expect(moveTo(choices, 1)).toEqual({ key: 'right', count: 1 })
+    expect(moveTo(choices, 1)).toEqual({ key: 'forward', count: 1 })
   })
 
   /** Both directions wrap, so the far end of the row is one press backwards
    *  rather than several forwards. */
   test('walks backward when backward is nearer', () => {
-    expect(moveTo(choices, 2)).toEqual({ key: 'left', count: 1 })
-    expect(moveTo({ ...choices, selected: 2 }, 0)).toEqual({ key: 'right', count: 1 })
+    expect(moveTo(choices, 2)).toEqual({ key: 'back', count: 1 })
+    expect(moveTo({ ...choices, selected: 2 }, 0)).toEqual({ key: 'forward', count: 1 })
   })
 
   test('ties go forward', () => {
     const four = { options: ['a', 'b', 'c', 'd'], selected: 0 }
-    expect(moveTo(four, 2)).toEqual({ key: 'right', count: 2 })
+    expect(moveTo(four, 2)).toEqual({ key: 'forward', count: 2 })
   })
 
   test('an empty row asks for nothing', () => {
-    expect(moveTo({ options: [], selected: 0 }, 0)).toEqual({ key: 'right', count: 0 })
+    expect(moveTo({ options: [], selected: 0 }, 0)).toEqual({ key: 'forward', count: 0 })
   })
 })
 

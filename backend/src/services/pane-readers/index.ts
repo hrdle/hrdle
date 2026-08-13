@@ -21,11 +21,26 @@
 
 import type { AgentProvider } from '../../../../shared/types';
 import { readClaudePicker } from './claude';
+import { readOpenCodePicker } from './opencode';
 import type { PickerOption } from './shared';
 import { readGrokPicker } from './grok';
 import { readKimiPrompt } from './kimi';
 
 export type { PickerOption } from './shared';
+
+/**
+ * A pane as its reader gets it: stripped, and painted where that is asked for.
+ *
+ * Two shapes of the same screen rather than one, because what a reader needs
+ * differs by agent - claude marks its cursor with a glyph the text carries,
+ * OpenCode with a background the text does not.
+ */
+export interface PaneRead {
+  /** The pane with its escape sequences removed. */
+  lines: string[];
+  /** The same pane with them left on, for the agents in `NEEDS_PAINT`. */
+  painted?: string[];
+}
 
 export interface PaneQuestion {
   /** The question as the pane wrapped it, rejoined; absent when only the
@@ -48,6 +63,15 @@ export interface PaneQuestion {
   /** What finishes a multi-select, for the send row the app draws itself.
    *  Absent leaves the app's own default, which is a Tab. */
   choiceSend?: string;
+  /**
+   * Which way the pane's own cursor walks between the options.
+   *
+   * Absent is `row`, which is what the first `arrow` pane was - OpenCode's
+   * permission prompt, three buttons side by side, walked with left and right.
+   * A list walks with up and down, and sending the one for the other moves
+   * nothing at all.
+   */
+  choiceAxis?: 'row' | 'column';
   /**
    * Where the pane's own cursor is, on a list that is answered by number anyway.
    *
@@ -73,15 +97,31 @@ export interface PaneQuestion {
  * its `AskUserQuestion`; the reader carries the two prompts the record knows
  * nothing about, its approval and its trust screens.
  */
-const READERS: Partial<Record<AgentProvider, (lines: string[]) => PaneQuestion | undefined>> = {
-  claude: readClaudePicker,
-  kimi: readKimiPrompt,
-  grok: readGrokPicker,
+const READERS: Partial<Record<AgentProvider, (read: PaneRead) => PaneQuestion | undefined>> = {
+  claude: (r) => readClaudePicker(r.lines),
+  kimi: (r) => readKimiPrompt(r.lines),
+  grok: (r) => readGrokPicker(r.lines),
+  opencode: readOpenCodePicker,
 };
 
-export function readPaneQuestion(agent: AgentProvider | undefined, lines: string[]): PaneQuestion | undefined {
+/**
+ * The agents whose prompt cannot be read from the text alone.
+ *
+ * OpenCode marks the row its cursor is on by painting it, and nothing else:
+ * every row is `N. [x] label` at the same indent, so stripped of its colours
+ * the list says which options there are and not which one is under the cursor.
+ * The paint costs a second read of the pane, so it is fetched for the agents
+ * that need it and no others.
+ */
+const NEEDS_PAINT = new Set<AgentProvider>(['opencode']);
+
+export function readerNeedsPaint(agent: AgentProvider | undefined): boolean {
+  return !!agent && NEEDS_PAINT.has(agent);
+}
+
+export function readPaneQuestion(agent: AgentProvider | undefined, read: PaneRead): PaneQuestion | undefined {
   if (!agent) return undefined;
-  return READERS[agent]?.(lines);
+  return READERS[agent]?.(read);
 }
 
 /** Whether this side has a reader for the agent at all — the caller needs to

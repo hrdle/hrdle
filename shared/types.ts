@@ -1466,6 +1466,18 @@ export interface GlassesRelayItem {
    * Absent means the app's Tab, which is what an older server sends.
    */
   choiceSend?: string;
+  /**
+   * Which way the pane's own cursor walks between the options.
+   *
+   * Absent is `row`, which is what the first `arrow` pane was: OpenCode's
+   * permission prompt, three buttons side by side, walked with left and right.
+   * Its Confirm prompt is a list and walks with up and down, and sending one
+   * for the other moves nothing at all - which is the harmless failure. The
+   * harmful one is what happened before either travelled: the list numbers its
+   * rows, so it read as a numbered pane and was sent digits, and a wearer who
+   * ticked four boxes had three arrive in a different combination.
+   */
+  choiceAxis?: 'row' | 'column';
   source: 'auto' | 'agent';
   /**
    * How much of the wearer's attention this is worth — decided here, obeyed
