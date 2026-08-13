@@ -1288,14 +1288,30 @@ export function DesktopLayout({
 	// Keyboard shortcuts
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
+			// Alt + Arrow: Move the focus between panes. Ctrl+Arrow is word
+			// motion in every shell, so the app does not take it.
+			if (
+				e.altKey &&
+				!e.ctrlKey &&
+				!e.metaKey &&
+				(e.key === "ArrowLeft" ||
+					e.key === "ArrowRight" ||
+					e.key === "ArrowUp" ||
+					e.key === "ArrowDown")
+			) {
+				e.preventDefault();
+				handleFocusNavigation(e.key);
+				return;
+			}
+
 			// Accept both Ctrl and Cmd (Meta) for all shortcuts.
 			// This supports Mac keyboards on Linux and vice versa.
 			const modifier = e.ctrlKey || e.metaKey;
 
 			if (!modifier) return;
 
-			// Ctrl/Cmd + D: Vertical split (right)
-			if (!e.shiftKey && e.key.toLowerCase() === "d") {
+			// Ctrl/Cmd + Shift + E: Vertical split (right)
+			if (e.shiftKey && e.key.toLowerCase() === "e") {
 				e.preventDefault();
 				handleSplit("horizontal");
 				return;
@@ -1308,8 +1324,9 @@ export function DesktopLayout({
 				return;
 			}
 
-			// Ctrl/Cmd + W: Close pane
-			if (!e.shiftKey && e.key.toLowerCase() === "w") {
+			// Ctrl/Cmd + Shift + X: Close pane. Not Ctrl+Shift+W, which the
+			// browser keeps for closing its own window and a page cannot take.
+			if (e.shiftKey && e.key.toLowerCase() === "x") {
 				e.preventDefault();
 				handleClosePane();
 				return;
@@ -1426,19 +1443,6 @@ export function DesktopLayout({
 			if (e.shiftKey && e.key === "F5") {
 				e.preventDefault();
 				void nukeClientCache();
-				return;
-			}
-
-			// Ctrl/Cmd + Arrow: Focus navigation (without Shift)
-			if (
-				!e.shiftKey &&
-				(e.key === "ArrowLeft" ||
-					e.key === "ArrowRight" ||
-					e.key === "ArrowUp" ||
-					e.key === "ArrowDown")
-			) {
-				e.preventDefault();
-				handleFocusNavigation(e.key);
 				return;
 			}
 
