@@ -264,6 +264,19 @@ export class WsClient {
     this.send({ type: 'unsubscribe-glasses-relay' })
   }
 
+  /** The wearer picked this session with the ring.
+   *
+   *  Call this from a gesture and from nowhere else. Every other `subscribe`
+   *  this client makes - following the focus, restoring a resume point,
+   *  re-subscribing after a reconnect - is the server's decision arriving back
+   *  here, and claiming on one would make the glasses fight themselves for a
+   *  focus they were only ever handed. That is why the claim is a message of
+   *  its own rather than something the server reads off a subscription: only
+   *  this side knows which of the two just happened. */
+  claimFocus(sessionId: string): void {
+    this.send({ type: 'glasses-focus', sessionId })
+  }
+
   /** Publish the screen the panel is showing, for demo mirrors. Only the
    *  device calls this — the simulator has no bridge and would otherwise echo
    *  its own frames back at itself. */
