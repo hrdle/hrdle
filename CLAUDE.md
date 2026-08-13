@@ -315,6 +315,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **useFileViewer.ts** - File viewing state
 - **useAuth.ts** - Authentication state management
 - **useTheme.ts** - Dark/light theme management
+- **useRemoteControlMode.ts** - Whether the desktop renders the terminal itself. **Default: it does not.** On a desktop the terminal is already on screen in herdr, and a second copy of it painted over a WebSocket is the slowest thing here for the least it buys; what the desktop is for is the part herdr has no answer to — the session list, history, the dashboard, starting a session. Everything except the live render still works in this mode (focus, split/close via REST, tabs, prompts, Files, Dashboard, Chat), so it is a narrower desktop rather than a read-only one. Tablets and phones have no local herdr, so the gate is `!isTablet && flag` in `DesktopLayout`, and the toggle stays for a desktop browser away from the herdr host. Stored under `hrdle-desktop-terminal`, written only by a deliberate toggle — the previous key was written on mount, so it held an explicit value nobody had chosen and the default could not be changed
 - **useUiScale.ts** - Persists and applies the global UI scale factor
 - **useNetworkLatency.ts** - WebSocket latency tracking
 - **useLineSelection.ts** - Text line selection utilities
