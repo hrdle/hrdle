@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.116] - 2026-08-13
+
+### Added
+- **OpenCode's Confirm prompt can be answered from the glasses.** It numbers
+  its rows, so the general numbered rule matched them and served them as a
+  numbered list - and the digits are decoration there: its own footer says
+  `↑↓ select  enter toggle`. A wearer who ticked four boxes had three arrive,
+  in a different combination. It has a reader of its own now
+  - **The paint travels with the text.** Every row is `N. [x] label` at the
+    same indent and only the background says which one the cursor is on, so a
+    reader can ask for the pane with its escape sequences left on. Fetched for
+    the agents that need it and no others
+  - **A walk has an axis** (`choiceAxis`). `arrow` meant left and right, from
+    when the only such pane was a row of buttons; a list walks with up and
+    down, and sending one for the other moves nothing at all
+  - Needs glasses v0.0.75
+
 ### Fixed
 - **A walk is sent one keystroke at a time.** Written at once,
   `\x1b[B\x1b[B\x1b[B\x1b[B` moves Claude Code's cursor nothing at all - its
