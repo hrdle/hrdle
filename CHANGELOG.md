@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A walk is sent one keystroke at a time.** Written at once,
+  `\x1b[B\x1b[B\x1b[B\x1b[B` moves Claude Code's cursor nothing at all - its
+  input is read a chunk at a time and a chunk is taken for one key, so
+  everything after the first sequence is dropped. A walk ending in Enter fared
+  worse: it arrived as a bare Enter, which toggled whatever row the cursor had
+  not moved off, so the box the wearer had ticked came back unticked. Glasses
+  only, in v0.0.74 - **which is the build the Send fix below needs**, not the
+  v0.0.73 it names
+
 ## [0.3.115] - 2026-08-13
 
 ### Fixed
