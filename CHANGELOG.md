@@ -37,6 +37,20 @@ All notable changes to this project will be documented in this file.
   rather than a wrong id
 
 ### Changed
+- **A desktop browser no longer renders the terminal itself.** Remote-control
+  mode, which has been there as an opt-in, is now the default on desktop: the
+  terminal is already on screen in the local herdr client, and a second copy of
+  it painted over a WebSocket is the slowest thing here for the least it buys.
+  What the desktop keeps is the part herdr has no answer to — the session list,
+  history, the dashboard, files, the transcript, and starting a session — plus
+  focus, split, close, tabs and prompts, which go over REST and never needed a
+  control stream. So it is a narrower desktop, not a read-only one
+  - Tablets and phones are unaffected. They have no local herdr, and they are
+    what the terminal render is for
+  - The toggle stays, for a desktop browser away from the herdr host. It now
+    writes `hrdle-desktop-terminal` and only on a deliberate press: the old key
+    was written on mount, so every desktop held a value nobody had chosen and
+    the default could not have been changed at all
 - **`Ctrl+D`, `Ctrl+W` and `Ctrl+Arrow` belong to the pane** (#345). They are
   EOF, delete-word and word motion in every shell, and the browser has no other
   way to send them — taking them means a REPL cannot be exited from a phone.

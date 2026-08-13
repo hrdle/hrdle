@@ -418,7 +418,7 @@
 	},
 	"remoteControl": {
 		"active": "Remote control mode",
-		"hint": "The terminal is rendered by your local herdr client. Pane operations and prompts still work from here.",
+		"hint": "The terminal is rendered by your local herdr client. Pane operations and prompts still work from here. To render it here instead, use the plug button in the toolbar.",
 		"openChat": "View conversation in Chat"
 	},
 	"update": {
