@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A workspace created from the UI is now the one the desktop is on** (#347).
+  `POST /api/sessions` answered with the workspace label as its `id` while the
+  list answers with herdr's workspace id, so the frontend selected the session
+  it had just created by an id that matched nothing. The header read
+  "no session selected", the file browser and chat toggle went with it, and the
+  pane tree persisted that id — so a reload came back to the same place. The
+  terminal kept working throughout, because a label is still accepted where a
+  session id is expected, which is what made it look like a display glitch
+  rather than a wrong id
+
 ## [0.3.124] - 2026-08-14
 
 ### Fixed
