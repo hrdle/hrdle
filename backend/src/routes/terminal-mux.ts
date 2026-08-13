@@ -92,6 +92,9 @@ export interface MuxData {
   glassesFocusAt?: number;
   /** Set by `subscribe-glasses-screen`: this connection watches the mirror. */
   watchesGlassesScreen?: boolean;
+  /** Last `client-info` this connection was logged as saying, so a page
+   *  re-declaring the same thing on every session switch is logged once. */
+  lastDeclaration?: string;
 }
 
 // ── Glasses screen mirror ──
@@ -266,6 +269,45 @@ function logFocusClaim(
   console.log(
     `[focus] ${ws.data.deviceType ?? 'undeclared'} claims ${ws.data.focusSessionId ?? 'no session'}: ${via} (${device})`,
   );
+}
+
+/**
+ * A client declaring itself, in the words the election judges it by.
+ *
+ * Pure and exported for the tests.
+ */
+export function describeDeclaration(msg: {
+  visible?: boolean;
+  fresh?: boolean;
+  automated?: boolean;
+}): string {
+  const parts = [msg.visible ? 'visible' : 'hidden', msg.fresh ? 'opened' : 'reconnected'];
+  if (msg.automated) parts.push('automated');
+  return parts.join(', ');
+}
+
+/**
+ * That a client was here at all, whether or not it claimed anything.
+ *
+ * A claim is logged where it is minted; nothing was logged when a connection
+ * merely arrived, so a quiet log had two readings that could not be told apart:
+ * the client came back and correctly declined to claim, or it never came back.
+ * That distinction is the whole of the verification, and three fixes to this
+ * election were judged on the absence of a symptom without it - one of them
+ * declared fixed six minutes before the next unwanted switch.
+ *
+ * Repeats are dropped. A page re-declares itself every time a subscription is
+ * confirmed, which is once per session switch and says nothing new; a change in
+ * any of the three words does.
+ */
+function logClientPresence(
+  ws: ServerWebSocket<MuxData>,
+  msg: { deviceType: string; visible?: boolean; fresh?: boolean; automated?: boolean },
+): void {
+  const said = `${msg.deviceType}: ${describeDeclaration(msg)}`;
+  if (ws.data.lastDeclaration === said) return;
+  ws.data.lastDeclaration = said;
+  console.log(`[focus] present ${said} (${ws.data.deviceId ?? 'no device id'})`);
 }
 
 /** A screen someone is looking at, and the session it has open. */
@@ -595,6 +637,13 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
 export function muxClose(ws: ServerWebSocket<MuxData>, code: number, reason: string) {
   console.log(`[mux] WebSocket closed: ${ws.data.visitorId} (code=${code}, reason=${reason})`);
+  // The other end of a presence line. Arrivals alone cannot say who was there
+  // at a given moment, and the close line above carries the visitor id rather
+  // than the device - a different identifier, and not the one the election or
+  // the claim lines are written in.
+  if (ws.data.lastDeclaration) {
+    console.log(`[focus] gone ${ws.data.deviceType} (${ws.data.deviceId ?? 'no device id'})`);
+  }
   activeMuxConnections.delete(ws);
   // A glasses run ending, recorded from the one place that does not depend on
   // the run being able to speak. The app announces its own exit when the host
@@ -1087,6 +1136,7 @@ async function handleControlMessage(
         // which is the same intent as opening a session on it.
         ws.data.deviceType = msg.deviceType;
         if (msg.automated !== undefined) ws.data.automated = msg.automated;
+        logClientPresence(ws, msg);
         if (msg.visible !== undefined) {
           const claimed = ws.data.focusAt;
           applyClientInfoFocus(ws.data, { visible: msg.visible, fresh: msg.fresh }, Date.now());
