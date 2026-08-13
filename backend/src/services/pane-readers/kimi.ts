@@ -137,7 +137,7 @@ export function readKimiPrompt(lines: string[]): PaneQuestion | undefined {
     ...(numbered
       ? { choiceInput: 'number' as const }
       : selected >= 0 && kept.length === rows.length
-        ? { choiceInput: 'arrow' as const, choiceSelected: selected }
+        ? { choiceInput: 'arrow' as const, choiceAxis: 'column' as const, choiceSelected: selected }
         : {}),
   };
 }

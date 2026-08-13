@@ -1595,6 +1595,11 @@ export const glassesRelayDeps = {
    * can tell them apart needs the colours. `readPane` already asked herdr for
    * `format: 'ansi'` — `strip_ansi: false` alone does not do it, the format is
    * what decides.
+   *
+   * The same window as the stripped read, and that matters beyond tidiness:
+   * OpenCode's reader lines the two up by position - the nth row matched here
+   * is the nth option matched there - so two windows over different parts of
+   * the pane would name the wrong row as the one under the cursor.
    */
   readPaneAnsi: (herdrPaneId: string): Promise<string | null> =>
     readPane(herdrPaneId, 'recent', 30),
