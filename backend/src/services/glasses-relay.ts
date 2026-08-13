@@ -3,8 +3,8 @@
  * decide" channel for the G2 glasses.
  *
  * Three responsibilities:
- *   1. Store: one `waiting` + one `info` slot per session. waiting items live
- *      for a blocked epoch (enter-blocked creates, exit-blocked deletes,
+ *   1. Store: one `waiting` per pane and one `info` per session. waiting items
+ *      live for a blocked epoch (enter-blocked creates, exit-blocked deletes,
  *      dismiss only flags); info items are agent self-reports with a TTL.
  *   2. Tracker: diffs per-pane herdr `agent_status` snapshots and turns
  *      `*→blocked` transitions into waiting items. Assembly (pane scrape) and
@@ -144,12 +144,58 @@ export function normalizeRelayText(s: string): string {
 // Store
 // =============================================================================
 
+/**
+ * What a session is currently showing the glasses.
+ *
+ * `waiting` is per pane. A pane is its own screen with its own agent on it, so
+ * two panes asking at once are two decisions rather than one - and while the
+ * slot held a single item per session, the second pane's question never
+ * arrived at all: the first pane's item was still there, `enterBlocked`
+ * returned early on it, and dismissing it did not help because the pane-id
+ * check in `refreshBlocked` sat above the dismissed check. Measured on a
+ * three-pane workspace on 2026-08-13, with herdr reporting blocked and nothing
+ * on the panel.
+ *
+ * `info` stays per session, and that asymmetry is deliberate: a waiting item is
+ * answered by typing into the pane that asked, so it must name one, while a
+ * hook notification or an agent's self-note is about the session and reads the
+ * same wherever it came from.
+ *
+ * The empty string keys a waiting item that named no pane - an agent self-note
+ * posted with `--session` alone. It is nobody's blocked epoch, so nothing that
+ * walks panes ever touches it.
+ */
 interface RelaySlot {
-  waiting?: GlassesRelayItem;
+  waiting: Map<string, GlassesRelayItem>;
   info?: GlassesRelayItem;
 }
 
 const store = new Map<string, RelaySlot>();
+
+/** An item that is still asking, as opposed to absent or dismissed. */
+function isActive(item: GlassesRelayItem | undefined): item is GlassesRelayItem {
+  return item !== undefined && !item.dismissed;
+}
+
+/**
+ * Whether something is still being asked that a note about `paneId` would only
+ * be repeating.
+ *
+ * A named pane answers for itself, plus the session-level slot: an agent's
+ * `--session` note is about the workspace, so it covers every pane of it. An
+ * unnamed caller could not be narrowed to a pane in the first place, so any
+ * active question stands in its way.
+ */
+function hasActiveWaiting(slot: RelaySlot, paneId: string | undefined): boolean {
+  if (paneId === undefined) return [...slot.waiting.values()].some(isActive);
+  return isActive(slot.waiting.get(paneId)) || isActive(slot.waiting.get(''));
+}
+
+/** Forget a session that is holding nothing, so the store stays bounded by
+ *  what is actually on the glasses rather than by what once was. */
+function dropSlotIfEmpty(sessionId: string, slot: RelaySlot): void {
+  if (slot.waiting.size === 0 && !slot.info) store.delete(sessionId);
+}
 
 function evictStoreIfNeeded(): void {
   while (store.size > MAX_STORE_SESSIONS) {
@@ -162,7 +208,7 @@ function evictStoreIfNeeded(): void {
 function getSlot(sessionId: string): RelaySlot {
   let slot = store.get(sessionId);
   if (!slot) {
-    slot = {};
+    slot = { waiting: new Map() };
     store.set(sessionId, slot);
   }
   // Refresh LRU position.
@@ -1097,9 +1143,11 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
 
 /**
  * Agent self-note via `POST /api/glasses/relay` (the `hrdle glasses` CLI).
- * waiting: at most one ACTIVE per session — a second one is rejected (409)
- * because unanswered decisions must not be silently replaced. info: latest
- * one per session wins, with a TTL.
+ * waiting: at most one ACTIVE per PANE — a second one for the same pane is
+ * rejected (409) because unanswered decisions must not be silently replaced,
+ * while a second pane of the same workspace is a different agent asking a
+ * different thing and gets its own. info: latest one per session wins, with a
+ * TTL.
  */
 export function postAgentRelay(input: {
   sessionId: string;
@@ -1117,13 +1165,15 @@ export function postAgentRelay(input: {
   const slot = getSlot(input.sessionId);
 
   if (input.kind === 'waiting') {
-    if (slot.waiting && !slot.waiting.dismissed) {
-      return { status: 409, error: 'an active waiting item already exists', item: slot.waiting };
+    const key = input.paneId ?? '';
+    const existing = slot.waiting.get(key);
+    if (isActive(existing)) {
+      return { status: 409, error: 'an active waiting item already exists', item: existing };
     }
     const item = makeItem(input.sessionId, 'waiting', 'agent', input.text, input.paneId, input.choices, INFO_TTL_MS, {
       choiceDetails: input.choiceDetails,
     });
-    slot.waiting = item;
+    slot.waiting.set(key, item);
     broadcastUpsert(item);
     return { status: 200, item };
   }
@@ -1209,8 +1259,13 @@ export function postHookRelay(input: {
   // An unanswered question already outranks anything a hook can say, and it is
   // on screen with its choices. "Response complete" underneath it would only
   // describe the same moment a second time, less usefully.
+  //
+  // Judged on the hook's own pane, since that is the one it describes: another
+  // pane of the same workspace being blocked says nothing about this one, and
+  // suppressing on it would lose the notification for the whole workspace
+  // whenever any pane of it happened to be asking something.
   const existing = store.get(input.sessionId);
-  if (existing?.waiting && !existing.waiting.dismissed) return reachesAWearer;
+  if (existing && hasActiveWaiting(existing, input.paneId)) return reachesAWearer;
 
   if (!checkRateLimit(input.sessionId)) return false;
   evictStoreIfNeeded();
@@ -1238,7 +1293,7 @@ export function postHookRelay(input: {
  *  the PC UI keeps showing the session as waiting. */
 export function dismissRelayItem(id: string): GlassesRelayItem | null {
   for (const slot of store.values()) {
-    for (const item of [slot.waiting, slot.info]) {
+    for (const item of [...slot.waiting.values(), slot.info]) {
       if (item?.id === id) {
         item.dismissed = true;
         broadcastUpsert(item);
@@ -1256,7 +1311,7 @@ function sweepExpiredInfo(): void {
     if (slot.info?.expiresAt !== undefined && slot.info.expiresAt <= now) {
       const id = slot.info.id;
       delete slot.info;
-      if (!slot.waiting) store.delete(sessionId);
+      dropSlotIfEmpty(sessionId, slot);
       broadcastRemove(id);
     }
   }
@@ -1276,16 +1331,16 @@ function statusKey(sessionId: string, paneId: string): string {
 async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   if (subscribers.size === 0) return; // presence gate: only track, never assemble
   const slot = getSlot(ws.id);
-  if (slot.waiting && !slot.waiting.dismissed) return; // active waiting already covers this session
-  // A dismissed item belongs to an older epoch (or another pane): this is a
-  // fresh blocked transition, so it gets a fresh item.
+  if (isActive(slot.waiting.get(paneId))) return; // this pane is already asking
+  // A dismissed item belongs to an older epoch: this is a fresh blocked
+  // transition, so it gets a fresh item.
   const payload = await assembleWaitingPayload(ws, paneId);
   // Blocked without asking. herdr reports it for the gaps between turns as
   // well as for a question, and there is nothing on that pane worth a
   // notification - least of all one that would then claim double-tap.
   if (!payload) return;
   const item = waitingItem(ws.id, paneId, payload);
-  slot.waiting = item;
+  slot.waiting.set(paneId, item);
   broadcastUpsert(item);
   // A hook can report "waiting for input" a beat before herdr reports blocked,
   // leaving the session described twice — once vaguely, once with the actual
@@ -1316,7 +1371,7 @@ async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
 async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
   if (subscribers.size === 0) return; // presence gate, same as enterBlocked
   const slot = store.get(ws.id);
-  const item = slot?.waiting;
+  const item = slot?.waiting.get(paneId);
   // Nothing here yet, and the pane is blocked: it may have begun asking without
   // a transition to announce it. That is the ordinary case rather than an edge
   // one - a pane holding queued input is already blocked when the question
@@ -1332,7 +1387,8 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
     await enterBlocked(ws, paneId);
     return;
   }
-  if (!slot || item.source !== 'auto' || item.paneId !== paneId) return;
+  // An agent's own note about this pane is not the blocked epoch's to redraw.
+  if (!slot || item.source !== 'auto') return;
   // "Later / on PC" was said about this pane, and the wearer meant the pane
   // rather than the sentence. Re-raising it on every redraw would be arguing.
   if (item.dismissed) return;
@@ -1384,7 +1440,7 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
     return;
   }
 
-  slot.waiting = next;
+  slot.waiting.set(paneId, next);
   broadcastRemove(item.id);
   broadcastUpsert(next);
 }
@@ -1395,28 +1451,25 @@ function sameChoices(a: string[] | undefined, b: string[] | undefined): boolean 
 }
 
 /**
- * blocked→* on one pane. Removes the session's waiting item when it belongs
- * to this pane, then promotes another still-blocked pane of the same session
- * (multi-pane workspaces) so exactly one waiting item remains while anything
- * still waits.
+ * blocked→* on one pane. Takes down that pane's waiting item and nothing else.
+ *
+ * There used to be a promotion here — the next still-blocked pane of the same
+ * workspace was raised as this one came down — and it existed only because the
+ * store held one waiting item per session. Every blocked pane has its own item
+ * now, so there is nothing to promote it from and nothing to promote it into.
  *
  * Only `auto` items follow the herdr blocked epoch. Agent self-notes
  * (source 'agent', posted via `hrdle glasses`) have their own lifecycle —
- * answered→dismissed — and are NOT tied to any pane's blocked state, so an
- * unrelated pane unblocking must never drop them. Auto items always
- * carry the blocked pane's id, so an exact paneId match is the right test.
+ * answered→dismissed — and are NOT tied to any pane's blocked state, so a pane
+ * unblocking must never drop one that happens to name it.
  */
-async function exitBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
-  const slot = store.get(ws.id);
-  const item = slot?.waiting;
-  if (item && item.source === 'auto' && item.paneId === paneId) {
-    delete slot?.waiting;
-    if (slot && !slot.info) store.delete(ws.id);
-    broadcastRemove(item.id);
-  }
-  if (subscribers.size === 0 || store.get(ws.id)?.waiting) return;
-  const other = ws.panes?.find((p) => p.agentStatus === 'blocked' && p.paneId !== paneId);
-  if (other) await enterBlocked(ws, other.paneId);
+function exitBlocked(sessionId: string, paneId: string): void {
+  const slot = store.get(sessionId);
+  const item = slot?.waiting.get(paneId);
+  if (!slot || !item || item.source !== 'auto') return;
+  slot.waiting.delete(paneId);
+  dropSlotIfEmpty(sessionId, slot);
+  broadcastRemove(item.id);
 }
 
 /**
@@ -1446,7 +1499,7 @@ export async function trackGlassesRelay(): Promise<void> {
       // tracking starts are covered by the subscribe-time snapshot instead.
       if (prev === undefined) continue;
       if (next === 'blocked') await enterBlocked(ws, pane.paneId);
-      else if (prev === 'blocked') await exitBlocked(ws, pane.paneId);
+      else if (prev === 'blocked') exitBlocked(ws.id, pane.paneId);
     }
   }
 
@@ -1458,10 +1511,8 @@ export async function trackGlassesRelay(): Promise<void> {
     const [sessionId, paneId] = key.split('/');
     const wasBlocked = paneStatus.get(key) === 'blocked';
     paneStatus.delete(key);
-    if (wasBlocked && workspaceIds.has(sessionId)) {
-      const ws = workspaces.find((w) => w.id === sessionId);
-      if (ws) await exitBlocked(ws, paneId);
-    }
+    // A workspace that is gone entirely is cleared below, items and all.
+    if (wasBlocked && workspaceIds.has(sessionId)) exitBlocked(sessionId, paneId);
   }
 
   // Drop store items whose session is gone — including items a snapshot
@@ -1472,7 +1523,7 @@ export async function trackGlassesRelay(): Promise<void> {
   if (workspaces.length > 0) {
     for (const [sessionId, slot] of [...store.entries()]) {
       if (workspaceIds.has(sessionId)) continue;
-      for (const item of [slot.waiting, slot.info]) {
+      for (const item of [...slot.waiting.values(), slot.info]) {
         if (item) broadcastRemove(item.id);
       }
       store.delete(sessionId);
@@ -1498,6 +1549,10 @@ export function resetGlassesRelayTracker(): void {
  * that are blocked RIGHT NOW but have no item yet, prune auto items whose
  * pane is no longer blocked (stale from a tracking gap), and return the
  * active set — waiting first, dismissed excluded.
+ *
+ * Every blocked pane, not the first one found. A workspace's panes each hold
+ * an agent of their own, and picking one of them was how a three-pane
+ * workspace reached the glasses with two of its three questions invisible.
  */
 export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
   sweepExpiredInfo();
@@ -1505,32 +1560,33 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
 
   for (const ws of workspaces) {
     const slot = store.get(ws.id);
-    const blockedPane = ws.panes?.find((p) => p.agentStatus === 'blocked');
+    const blocked = (ws.panes ?? []).filter((p) => p.agentStatus === 'blocked').map((p) => p.paneId);
 
-    // Prune a stale auto item whose blocked epoch ended while tracking was off.
-    if (slot?.waiting && slot.waiting.source === 'auto') {
-      const stillBlocked = ws.panes?.some(
-        (p) => p.agentStatus === 'blocked' && (!slot.waiting?.paneId || p.paneId === slot.waiting.paneId),
-      );
-      if (!stillBlocked) {
-        const id = slot.waiting.id;
-        delete slot.waiting;
-        if (!slot.info) store.delete(ws.id);
-        broadcastRemove(id);
+    // Prune stale auto items whose blocked epoch ended while tracking was off.
+    // Keyed by the pane they were assembled from, so the key is the test.
+    if (slot) {
+      for (const [paneId, item] of [...slot.waiting]) {
+        if (item.source !== 'auto' || blocked.includes(paneId)) continue;
+        slot.waiting.delete(paneId);
+        broadcastRemove(item.id);
       }
+      dropSlotIfEmpty(ws.id, slot);
     }
 
     // Synthesize for a blocked pane with no item at all (covers pre-existing
     // blocked panes the tracker baseline-skipped). A dismissed item suppresses
     // re-synthesis for the same epoch.
-    if (!store.get(ws.id)?.waiting && blockedPane) {
-      await enterBlocked(ws, blockedPane.paneId);
+    for (const paneId of blocked) {
+      if (store.get(ws.id)?.waiting.has(paneId)) continue;
+      await enterBlocked(ws, paneId);
     }
   }
 
   const items: GlassesRelayItem[] = [];
   for (const slot of store.values()) {
-    if (slot.waiting && !slot.waiting.dismissed) items.push(slot.waiting);
+    for (const waiting of slot.waiting.values()) {
+      if (!waiting.dismissed) items.push(waiting);
+    }
     if (slot.info && !slot.info.dismissed) items.push(slot.info);
   }
   items.sort((a, b) => {

@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.118] - 2026-08-13
+
+### Fixed
+- **Every blocked pane of a workspace reaches the glasses, not just one of
+  them.** The relay held one waiting item per session, so a second pane that
+  started asking while the first was still up got nothing - and dismissing the
+  first did not release it either, because the pane check sat above the
+  dismissed check. Measured on a three-pane workspace: herdr reported blocked,
+  the panel was empty, and the question was only findable by opening the pane.
+  A pane is its own screen with its own agent on it, so a waiting item is per
+  pane now
+  - The promotion that raised the next still-blocked pane as one came down goes
+    with it: it existed only to keep the single slot occupied
+  - A hook notification is judged against its own pane too. Another pane of the
+    same workspace being blocked used to suppress it
+
 ## [0.3.117] - 2026-08-13
 
 ### Fixed
