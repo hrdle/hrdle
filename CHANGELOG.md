@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The conversation footer says whether the page will turn itself.** The hold a
+  reader arms by paging back is invisible: the screen stops moving, and a screen
+  that has stopped moving without saying why is indistinguishable from one that
+  has stopped working. `auto` sits after the page number while the clock has the
+  view and goes when a reader takes it, so the gesture that took it is confirmed
+  by the word leaving
+  - Shown as its presence rather than its absence, and only on the conversation,
+    which is the one screen the clock runs on
+  - Needs glasses v0.0.77
+
 ## [0.3.119] - 2026-08-13
 
 ### Fixed

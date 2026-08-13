@@ -180,6 +180,15 @@ export interface AppState {
   conversationLastLoaded: number
   conversationHasMore: boolean
   conversationLoading: boolean
+  /**
+   * Whether the clock still has this view, or a reader took it.
+   *
+   * On the state rather than private to the controller because the footer says
+   * which it is: a screen that stops moving without saying so is indisputably
+   * still, and unaccountably so. Absent means the clock has it, which is what
+   * every screen starts as.
+   */
+  autoAdvance?: boolean
   choiceIndex: number
   choiceOptions: string[]
   /**
@@ -1271,6 +1280,11 @@ function conversationContent(state: AppState): {
   // is worth a look, without spending the lines to say what.
   const notices = otherSessionInfoCount(state)
   const noticeMark = notices > 0 ? `  [i]${notices}` : ''
+  // Whether this page will turn itself. Said only where it is a fact about what
+  // the screen is about to do - the clock runs on the conversation and nowhere
+  // else - and shown as its presence rather than its absence, so the reader who
+  // stopped it sees the word go and knows their gesture landed.
+  const auto = state.autoAdvance === false ? '' : '  auto'
   return {
     noticeText,
     headerText: withClock(
@@ -1278,7 +1292,7 @@ function conversationContent(state: AppState): {
       `${statusBadge}${noticeMark}${demoTail}`,
     ),
     bodyText,
-    footerText: pageInfo ? `${action}  ${pageInfo.trim()}` : action,
+    footerText: `${pageInfo ? `${action}  ${pageInfo.trim()}` : action}${auto}`,
   }
 }
 

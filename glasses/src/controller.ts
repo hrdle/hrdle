@@ -442,8 +442,13 @@ export class GlassesController {
    * it. So it is taken as "someone is here", and the same contract
    * `maybeRefreshConversation` already keeps is kept - nothing moves on its own
    * until the view is at the newest message again.
+   *
+   * Kept on the state as `autoAdvance` rather than here: the footer says which
+   * of the two the screen is in, and a private copy would be a second answer to
+   * that question.
    */
-  private readerPinned = false
+  private get readerPinned(): boolean { return this.state.autoAdvance === false }
+  private set readerPinned(held: boolean) { this.state.autoAdvance = !held }
 
   private audioChunks: Uint8Array[] = []
   private recording = false
