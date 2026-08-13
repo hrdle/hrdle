@@ -507,6 +507,13 @@ export const TerminalComponent = memo(
 					e.preventDefault();
 					return false;
 				}
+				// An app shortcut: xterm must not consume it, and must not
+				// stopPropagation() it either, or the window listener that runs
+				// the shortcut never sees it. The default is that listener's to
+				// suppress.
+				if (action === "app-shortcut") {
+					return false;
+				}
 				return true;
 			});
 

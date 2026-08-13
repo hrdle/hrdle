@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	filterMouseTrackingInput,
+	isAppShortcut,
 	shouldInterceptKeyEvent,
 } from "../terminal-filters";
 
@@ -77,6 +78,7 @@ describe("shouldInterceptKeyEvent", () => {
 			ctrlKey: boolean;
 			metaKey: boolean;
 			shiftKey: boolean;
+			altKey: boolean;
 		}> = {},
 	) => ({
 		type: "keydown",
@@ -84,6 +86,7 @@ describe("shouldInterceptKeyEvent", () => {
 		ctrlKey: false,
 		metaKey: false,
 		shiftKey: false,
+		altKey: false,
 		...overrides,
 	});
 
@@ -158,4 +161,83 @@ describe("shouldInterceptKeyEvent", () => {
 		expect(shouldInterceptKeyEvent(mkEvent({ key: "ArrowUp" }))).toBe(null);
 		expect(shouldInterceptKeyEvent(mkEvent({ key: "ArrowDown" }))).toBe(null);
 	});
+
+	test('reports an app shortcut as "app-shortcut"', () => {
+		expect(shouldInterceptKeyEvent(mkEvent({ ctrlKey: true, key: "b" }))).toBe(
+			"app-shortcut",
+		);
+	});
+
+	test("Ctrl+C without a selection still outranks the app-shortcut check", () => {
+		expect(shouldInterceptKeyEvent(mkEvent({ ctrlKey: true, key: "c" }))).toBe(
+			null,
+		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// isAppShortcut
+// ---------------------------------------------------------------------------
+describe("isAppShortcut", () => {
+	const key = (
+		k: string,
+		mods: Partial<{
+			ctrlKey: boolean;
+			metaKey: boolean;
+			shiftKey: boolean;
+			altKey: boolean;
+		}> = {},
+	) => ({
+		key: k,
+		ctrlKey: false,
+		metaKey: false,
+		shiftKey: false,
+		altKey: false,
+		...mods,
+	});
+
+	// Every chord DesktopLayout's window listener acts on. A chord missing from
+	// isAppShortcut is one xterm may eat before the listener runs.
+	const owned: Array<[string, ReturnType<typeof key>]> = [
+		["Ctrl+B (sessions)", key("b", { ctrlKey: true })],
+		["Ctrl+Shift+B (dashboard)", key("B", { ctrlKey: true, shiftKey: true })],
+		["Ctrl+Shift+E (split right)", key("E", { ctrlKey: true, shiftKey: true })],
+		["Ctrl+Shift+D (split down)", key("D", { ctrlKey: true, shiftKey: true })],
+		["Ctrl+Shift+X (close pane)", key("X", { ctrlKey: true, shiftKey: true })],
+		[
+			"Ctrl+Shift+Right (resize)",
+			key("ArrowRight", { ctrlKey: true, shiftKey: true }),
+		],
+		["Ctrl+Shift+= (equalize)", key("=", { ctrlKey: true, shiftKey: true })],
+		["Ctrl+Shift+F5 (cache clear)", key("F5", { ctrlKey: true, shiftKey: true })],
+		["Ctrl+= (font size up)", key("=", { ctrlKey: true })],
+		["Ctrl+- (font size down)", key("-", { ctrlKey: true })],
+		["Ctrl+0 (font size reset)", key("0", { ctrlKey: true })],
+		["Ctrl+3 (switch session)", key("3", { ctrlKey: true })],
+		["Alt+Left (focus a pane)", key("ArrowLeft", { altKey: true })],
+		["Cmd+B (sessions, mac)", key("b", { metaKey: true })],
+	];
+	for (const [name, event] of owned) {
+		test(`claims ${name}`, () => {
+			expect(isAppShortcut(event)).toBe(true);
+		});
+	}
+
+	// The pane needs these more than the app does — taking them costs EOF,
+	// delete-word and word motion, with nothing left to send them with.
+	const leftToThePane: Array<[string, ReturnType<typeof key>]> = [
+		["Ctrl+D", key("d", { ctrlKey: true })],
+		["Ctrl+W", key("w", { ctrlKey: true })],
+		["Ctrl+Left", key("ArrowLeft", { ctrlKey: true })],
+		["Ctrl+Right", key("ArrowRight", { ctrlKey: true })],
+		["Ctrl+A", key("a", { ctrlKey: true })],
+		["Ctrl+Alt+B", key("b", { ctrlKey: true, altKey: true })],
+		["a bare letter", key("b")],
+		["a bare arrow", key("ArrowUp")],
+	];
+	for (const [name, event] of leftToThePane) {
+		test(`leaves ${name} to the pane`, () => {
+			expect(isAppShortcut(event)).toBe(false);
+		});
+	}
 });

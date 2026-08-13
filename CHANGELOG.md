@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **The keyboard shortcuts work while a terminal has focus** (#345), which is
+  the normal state — clicking a pane focuses xterm, and xterm consumes a key it
+  has a binding for and calls `stopPropagation()`, so the window listener that
+  runs the shortcut never saw it. `Ctrl+B`, `Ctrl+W`, `Ctrl+Shift+Arrow` and
+  `Ctrl+D` all did nothing but write a control byte to the pane. `Ctrl+D` was
+  the damaging one: zsh reads it as EOF at an empty prompt and exits, so the
+  advertised "split the pane" closed it, and closing the last pane took the
+  whole workspace with it
+  - The chords the app owns are now listed in one place (`isAppShortcut`,
+    `utils/terminal-filters.ts`), and xterm is kept off exactly those. Whether
+    xterm binds a chord depends on the pane's mode, so this was never
+    consistent to begin with: `Ctrl+Shift+Arrow` reached the window from a
+    Claude Code pane and was swallowed by a plain zsh one
 - **An open file browser follows the session you switch to** (#346). It stayed
   on whichever directory it was opened for while the header went on naming the
   new session, so the panel listed one workspace's files under another's name -
@@ -22,6 +35,22 @@ All notable changes to this project will be documented in this file.
   terminal kept working throughout, because a label is still accepted where a
   session id is expected, which is what made it look like a display glitch
   rather than a wrong id
+
+### Changed
+- **`Ctrl+D`, `Ctrl+W` and `Ctrl+Arrow` belong to the pane** (#345). They are
+  EOF, delete-word and word motion in every shell, and the browser has no other
+  way to send them — taking them means a REPL cannot be exited from a phone.
+  The app's versions moved to chords a shell has no use for:
+
+  | Was | Now |
+  |---|---|
+  | `Ctrl+D` split vertically | `Ctrl+Shift+E` |
+  | `Ctrl+W` close pane | `Ctrl+Shift+X` |
+  | `Ctrl+Arrow` move focus | `Alt+Arrow` |
+
+  `Ctrl+Shift+W` would have been the obvious home for closing a pane and is not
+  available: the browser keeps it for closing its own window, and a page cannot
+  take it back
 
 ## [0.3.124] - 2026-08-14
 

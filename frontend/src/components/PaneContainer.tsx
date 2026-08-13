@@ -538,7 +538,7 @@ function TerminalPane({
 									controlModeContext.splitPane(paneId, "h");
 								}}
 								className="p-1.5 text-white/50 hover:text-th-text transition-colors"
-								title="Split vertically (Ctrl+D)"
+								title="Split vertically (Ctrl+Shift+E)"
 								data-onboarding="split-pane"
 							>
 								<svg

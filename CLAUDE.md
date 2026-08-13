@@ -337,20 +337,41 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 
 ### Keyboard Shortcuts (Desktop)
 
+**Every chord here is listed in `isAppShortcut` (`utils/terminal-filters.ts`),
+and adding one to this table without adding it there does not give you a
+shortcut.** xterm.js consumes a key it has a binding for and calls
+`stopPropagation()`, so the window listener that runs the shortcut never sees
+it — the pane gets the control byte instead. Whether xterm binds a chord also
+depends on the pane's mode, so trying it once is not evidence: `Ctrl+Shift+Arrow`
+reached the window from a Claude Code pane and was swallowed by a plain zsh one.
+
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+B` | Open session modal |
 | `Ctrl+Shift+B` | Toggle dashboard panel |
-| `Ctrl+D` | Split pane vertically |
-| `Shift+D` (in session modal) | Split pane horizontally |
-| `Ctrl+W` | Close current pane |
+| `Ctrl+Shift+E` | Split pane vertically (new pane on the right) |
+| `Ctrl+Shift+D` | Split pane horizontally (new pane below) |
+| `Ctrl+Shift+X` | Close current pane |
+| `Alt+Arrow` | Move focus between panes |
 | `Ctrl+Shift+Arrow` | Resize pane |
 | `Ctrl+Shift+=` | Equalize pane sizes |
+| `Ctrl/Cmd+1`..`9` | Switch session |
 | `Ctrl/Cmd+=` or `+` | Increase font size |
 | `Ctrl/Cmd+-` | Decrease font size |
 | `Ctrl/Cmd+0` | Reset font size to default (14px) |
 | `Ctrl/Cmd+C` (with selection) | Copy selected text |
 | `Ctrl/Cmd+V` | Paste from clipboard |
+
+**`Ctrl+D`, `Ctrl+W` and `Ctrl+Arrow` belong to the pane**, and the app's
+versions of those live on the Shift'd chords above. They are EOF, delete-word
+and word motion in every shell, and the browser has no other way to send them —
+taking them means a REPL cannot be exited from a phone. `Ctrl+D` used to split
+a pane and instead exited the shell, closing the pane and, when it was the last
+one, the whole workspace.
+
+`Ctrl+Shift+W` is not available for anything: the browser keeps it for closing
+its own window and a page cannot preventDefault it. Same for `Ctrl+W` and
+`Ctrl+T`.
 
 ### Terminal Communication
 
