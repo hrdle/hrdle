@@ -12,6 +12,7 @@
 import { describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
 import type { GlassesPlatform } from '../controller.ts'
+import { screenText } from '../display.ts'
 import type { ConversationMessage } from '../../../shared/types'
 
 function platform(): GlassesPlatform {
@@ -60,6 +61,35 @@ function idleThenTick(c: GlassesController, ticks = 10): void {
   inner(c).lastGestureAt = Date.now() - 60_000
   for (let i = 0; i < ticks; i++) inner(c).tickAutoAdvance()
 }
+
+describe('the footer says which of the two the screen is in', () => {
+  // A screen that stops moving without saying so is still, and unaccountably
+  // so: the reader cannot tell their gesture from a hung app.
+  test('the word is there while the clock has the view, and goes when it does not', () => {
+    const c = reading()
+    expect(screenText(c.state).footer).toContain('auto')
+
+    // From the first page of the newest message there is nothing to page back
+    // to, so the clock has to have moved first - which is the case the hold is
+    // for anyway.
+    idleThenTick(c)
+    c.swipeUp()
+    expect(screenText(c.state).footer).not.toContain('auto')
+  })
+
+  test('it comes back with the clock', () => {
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
+    expect(screenText(c.state).footer).not.toContain('auto')
+
+    c.swipeDown()
+    expect(screenText(c.state).footer).toContain('auto')
+  })
+})
 
 describe('the auto-advance clock yields to a reader', () => {
   test('untouched, it walks the pages by itself', () => {
