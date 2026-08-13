@@ -49,9 +49,55 @@ function splitDisplayLines(text: string): string[] {
 }
 
 /**
+ * How many lines each page of a message draws with.
+ *
+ * Two numbers rather than one, because the recap heads the first page only: it
+ * takes its share of the panel there and gives it back on the next swipe, so
+ * the first page is shorter than every page after it. One number can only
+ * describe the page that happens to be on screen, and describing the others
+ * with it is what `pageStarts` exists to stop.
+ */
+export interface ConversationPageBudget {
+  /** Lines the first page draws, with the recap up. */
+  first: number
+  /** Lines every later page draws, once the recap is gone. */
+  rest: number
+}
+
+/** A budget from one number: every page the same, which is what a caller with
+ *  nothing above the body means. */
+function toBudget(budget: number | ConversationPageBudget): ConversationPageBudget {
+  return typeof budget === 'number' ? { first: budget, rest: budget } : budget
+}
+
+/**
+ * Where each page starts when the pages are not all the same height.
+ *
+ * Tiling at one fixed `perPage` cannot keep the pages tiling when the page on
+ * screen is what decides that number: the first page was tiled at 5 lines
+ * (recap up) and the second re-tiled at 8 (recap gone), so lines 5 to 7 were on
+ * no page under either tiling. Recorded on 2026-08-14 in `hail 設計` - the
+ * footer said `p1/8`, the next swipe said `p2/5`, and the first item of a
+ * numbered list could not be reached from any page, with nothing on screen to
+ * say a line had been skipped.
+ */
+function pageStarts(total: number, budget: ConversationPageBudget): number[] {
+  const first = Math.max(1, budget.first)
+  const rest = Math.max(1, budget.rest)
+  const starts = [0]
+  for (let at = first; at < total; at += rest) starts.push(at)
+  return starts
+}
+
+/** Lines page `p` has to itself. */
+function pageCapacity(page: number, budget: ConversationPageBudget): number {
+  return Math.max(1, page === 0 ? budget.first : budget.rest)
+}
+
+/**
  * Paginate a single message by display lines.
  *
- * `lines` is how many the body will actually draw, which is **not** always
+ * The budget is how many the body will actually draw, which is **not** always
  * `MAX_LINES`: a notice takes its share of the panel first, and what is left is
  * `conversationLines(notice)`. Paging by the panel's height while drawing the
  * smaller number tore a hole at every page boundary - the body clipped its
@@ -61,21 +107,22 @@ function splitDisplayLines(text: string): string[] {
  * one's heading missing, page 1 ending mid-list and page 2 resuming after the
  * gap, with nothing to say anything had been skipped.
  */
-function paginateSingleMessage(fullText: string, page: number, lines = MAX_LINES): { text: string; pageInfo: string; totalPages: number } {
+function paginateSingleMessage(fullText: string, page: number, budget: number | ConversationPageBudget = MAX_LINES): { text: string; pageInfo: string; totalPages: number } {
+  const b = toBudget(budget)
   const allLines = splitDisplayLines(fullText)
-  const perPage = Math.max(1, lines)
 
-  if (allLines.length <= perPage) {
+  if (allLines.length <= pageCapacity(0, b)) {
     return { text: fullText, pageInfo: '', totalPages: 1 }
   }
 
   // Pages tile: no line appears twice. Carrying the last line over as context
   // sounded helpful and read as the page not having advanced — the reader has
   // to work out which of the seven lines is the one they already know.
-  const totalPages = Math.ceil(allLines.length / perPage)
+  const starts = pageStarts(allLines.length, b)
+  const totalPages = starts.length
   const p = Math.min(page, totalPages - 1)
-  const start = p * perPage
-  const pageLines = allLines.slice(start, start + perPage)
+  const start = starts[p]
+  const pageLines = allLines.slice(start, start + pageCapacity(p, b))
   const text = pageLines.join('\n')
   const pageInfo = ` p${p + 1}/${totalPages}`
   return { text, pageInfo, totalPages }
@@ -119,7 +166,7 @@ function buildMultiMessageViewFrom(msgs: ConversationMessage[], fromIndex: numbe
 }
 
 /** Main pagination entry point */
-function paginateMessage(msgs: ConversationMessage[], msgIndex: number, page: number, lines = MAX_LINES): { text: string; pageInfo: string; totalPages: number; multiCount: number } {
+function paginateMessage(msgs: ConversationMessage[], msgIndex: number, page: number, budget: number | ConversationPageBudget = MAX_LINES): { text: string; pageInfo: string; totalPages: number; multiCount: number } {
   if (msgIndex < 0) return { text: '(no messages)', pageInfo: '', totalPages: 0, multiCount: 0 }
 
   if (page === 0) {
@@ -136,30 +183,30 @@ function paginateMessage(msgs: ConversationMessage[], msgIndex: number, page: nu
   }
 
   const fullText = formatMessage(msgs[msgIndex])
-  const result = paginateSingleMessage(fullText, page, lines)
+  const result = paginateSingleMessage(fullText, page, budget)
   return { ...result, multiCount: 1 }
 }
 
 /**
  * Get total pages for the message at a given offset.
  *
- * `lines` must be the number the body will draw with, or the count disagrees
+ * The budget must be what the body will draw with, or the count disagrees
  * with what paging actually does: the footer promises `p1/2` while the reader
  * needs three presses to reach the end, and the last press appears to do
  * nothing.
  */
-export function getTotalPagesAt(msgs: ConversationMessage[], offset: number, lines = MAX_LINES): number {
+export function getTotalPagesAt(msgs: ConversationMessage[], offset: number, budget: number | ConversationPageBudget = MAX_LINES): number {
   const msgIndex = msgs.length > 0 ? Math.max(0, msgs.length - 1 - offset) : -1
   if (msgIndex < 0) return 0
-  const { totalPages } = paginateMessage(msgs, msgIndex, 0, lines)
+  const { totalPages } = paginateMessage(msgs, msgIndex, 0, budget)
   return totalPages
 }
 
 /** The text of one page, built the way the body builds it. Exported for the
  *  tests, which check that paging a message loses none of it. */
-export function conversationPageText(msgs: ConversationMessage[], offset: number, page: number, lines = MAX_LINES): string {
+export function conversationPageText(msgs: ConversationMessage[], offset: number, page: number, budget: number | ConversationPageBudget = MAX_LINES): string {
   const msgIndex = msgs.length > 0 ? Math.max(0, msgs.length - 1 - offset) : -1
-  return paginateMessage(msgs, msgIndex, page, lines).text
+  return paginateMessage(msgs, msgIndex, page, budget).text
 }
 
 /** Calculate how many messages are shown at a given offset, for offset jumping */
@@ -1070,7 +1117,15 @@ function kindOfAgent(agent: string | undefined): 'summary' | 'last-message' {
   return agent && agent !== 'claude' ? 'last-message' : 'summary'
 }
 
-function conversationNoticeText(state: AppState): string {
+/**
+ * The strip above the conversation body, as it stands on `page`.
+ *
+ * The page is a parameter rather than read off the state because the budget has
+ * to ask what the strip will be on a page the reader is not on yet: the recap
+ * is on page 0 alone, and how much room the other pages have is decided by its
+ * absence there.
+ */
+function conversationNoticeText(state: AppState, page = state.conversationPage): string {
   const session = state.sessions[state.sessionIndex]
   const pane = state.selectedPaneId
     ? (session?.panes ?? []).find((p) => p.paneId === state.selectedPaneId)
@@ -1078,7 +1133,7 @@ function conversationNoticeText(state: AppState): string {
   const banner = relayBannerLines(state)
   // Recap heads the latest view; deeper paging drops it for message space,
   // and so does the conversation moving past it.
-  const onLatest = state.conversationOffset === 0 && state.conversationPage === 0
+  const onLatest = state.conversationOffset === 0 && page === 0
   const recapText = pane ? pane.recap : session?.ccRecap
   const recapAt = pane ? pane.recapAt : session?.ccRecapAt
   // A pane's recap is Claude's, so it is always a summary. A session's may be
@@ -1205,16 +1260,25 @@ export function conversationLines(noticeLines: number): number {
   return Math.max(0, Math.floor((body - 2 * BODY_PAD) / LINE_H))
 }
 
-/**
- * The lines the conversation body has right now, notice included.
- *
- * The single answer to "how much fits", so that what is paged and what is
- * drawn cannot disagree. The controller needs it too: it counts pages to know
- * when a swipe should move to the next message instead of the next page.
- */
-export function conversationBodyLines(state: AppState): number {
-  const notice = noticeScrollOf(conversationNoticeText(state), state.noticeWindow ?? 0)
+/** The lines the body has on one page, once that page's notice has taken its
+ *  share. */
+function conversationBodyLinesOn(state: AppState, page: number): number {
+  const notice = noticeScrollOf(conversationNoticeText(state, page), state.noticeWindow ?? 0)
   return conversationLines(notice.length)
+}
+
+/**
+ * How much room each page of the current message has.
+ *
+ * The controller needs it too: it counts pages to know when a swipe should move
+ * to the next message instead of the next page, and a count taken at the page
+ * the reader is standing on is a count of a different tiling.
+ */
+export function conversationPageBudget(state: AppState): ConversationPageBudget {
+  return {
+    first: conversationBodyLinesOn(state, 0),
+    rest: conversationBodyLinesOn(state, 1),
+  }
 }
 
 function conversationContent(state: AppState): {
@@ -1250,7 +1314,10 @@ function conversationContent(state: AppState): {
   const noticeLines = noticeScrollOf(allNotice, state.noticeWindow ?? 0)
   const noticeText = noticeLines.join('\n')
   const bodyLines = conversationLines(noticeLines.length)
-  const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage, bodyLines)
+  // Every page's budget, not this one's: the recap gives the later pages three
+  // lines this one does not have, and paging as though they were all this size
+  // left the lines between page 1 and page 2 on no page at all.
+  const { text: convText, pageInfo } = paginateMessage(msgs, msgIndex, state.conversationPage, conversationPageBudget(state))
   // The body container clips overflow: cap the banner+recap+content block at
   // one page so a waiting overlay never pushes conversation text off-screen.
   // Everything is measured in display lines — counting the conversation in

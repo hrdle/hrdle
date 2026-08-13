@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The lines between page 1 and page 2 of a message are reachable again**
+  (#344). The recap heads the newest view and goes on the first swipe, so page 1
+  draws five lines and every page after it eight. Paging tiled at whichever
+  number the page on screen happened to have: page 1 covered lines 0-4 and page
+  2 opened at line 8, leaving lines 5 to 7 on no page at all - with nothing on
+  screen to say a line had been skipped. Pages are now laid out from a budget
+  that knows the first page is the short one, so they tile whatever is above
+  them
+  - Recorded on 2026-08-14 in `hail 設計`: the footer said `p1/8`, the next
+    swipe said `p2/5`, and the first item of a numbered list could not be
+    reached from any page. Two tilings of one message, and the page count was
+    whichever view the reader was standing in
+  - The same hole as 2026-08-08 (paging by the panel's height while drawing the
+    notice's leftovers) by a second route. That fix made paging agree with
+    drawing for one view; it did not hold when the budget differs between one
+    page and the next
+
 ## [0.3.122] - 2026-08-14
 
 ### Fixed
