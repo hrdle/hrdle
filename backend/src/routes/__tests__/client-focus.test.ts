@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   applyClientInfoFocus,
   applySubscribeFocus,
+  describeDeclaration,
   pickClientFocus,
   type MuxData,
 } from '../terminal-mux';
@@ -310,5 +311,35 @@ describe('a ring selection claims the focus', () => {
   test('a browser is still held to its own faster beat', () => {
     const tablet = client({ deviceType: 'tablet', lastPingAt: NOW - 30_000 });
     expect(pickClientFocus([tablet], NOW)).toBeUndefined();
+  });
+});
+
+/**
+ * A claim is logged where it is minted, and nothing was logged when a client
+ * merely arrived - so a quiet log meant either "it came back and declined to
+ * claim" or "it never came back", and the two could not be told apart. That
+ * distinction is the whole of the verification: three fixes to this election
+ * were judged on the absence of a symptom, and one was declared fixed six
+ * minutes before the next unwanted switch.
+ */
+describe('what a client said about itself', () => {
+  test('the three words the election judges it by', () => {
+    expect(describeDeclaration({ visible: true, fresh: true })).toBe('visible, opened');
+    expect(describeDeclaration({ visible: true, fresh: false })).toBe('visible, reconnected');
+    expect(describeDeclaration({ visible: false })).toBe('hidden, reconnected');
+  });
+
+  /** The one that explains a screenshot agent sitting in the list and never
+   *  winning anything. */
+  test('a driven browser says so', () => {
+    expect(describeDeclaration({ visible: true, fresh: true, automated: true })).toBe(
+      'visible, opened, automated',
+    );
+  });
+
+  /** A client too old to send `fresh` reads as a reconnect, which is what the
+   *  election already treats it as. */
+  test('an old client reads as a reconnect', () => {
+    expect(describeDeclaration({ visible: true })).toBe('visible, reconnected');
   });
 });

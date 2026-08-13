@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The focus log now says a client was here, not only that it claimed
+  something** (#359). A claim was logged where it was minted; an arrival was
+  logged nowhere, so a quiet log had two readings that could not be told apart -
+  the client came back and correctly declined to claim, or it never came back at
+  all. That distinction is the whole of the verification: three fixes to this
+  election were judged on the absence of a symptom, and one of them was declared
+  fixed six minutes before the next unwanted switch
+  - `[focus] present desktop: visible, reconnected (<device>)` when a client
+    declares itself, and `[focus] gone desktop (<device>)` when it leaves, so a
+    run of claims has a beginning and an end. `journalctl --user -u hrdle | grep
+    '\[focus\]'` is now the whole story rather than half of it
+  - Written in the words the election judges a client by: visible or hidden,
+    opened or reconnected, and automated when the browser is being driven
+  - Repeats are dropped. A page re-declares itself every time a subscription is
+    confirmed, which is once per session switch and says nothing new
+
 ## [0.3.125] - 2026-08-14
 
 ### Fixed
