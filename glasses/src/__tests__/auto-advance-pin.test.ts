@@ -1,0 +1,128 @@
+// Who is allowed to move the conversation: the clock, or the reader.
+//
+// The auto-advance clock is for the glance - look up, see the whole answer
+// without touching anything. Read at a person's own pace it is a fight: a page
+// of a long reply takes longer than the ten seconds of ring silence the clock
+// waits for, so the view moves mid-sentence, the reader pages back, and ten
+// seconds later it happens again.
+//
+// Paging back is the one move the clock never makes, so it is what says a
+// reader is here.
+
+import { describe, expect, test } from 'bun:test'
+import { GlassesController } from '../controller.ts'
+import type { GlassesPlatform } from '../controller.ts'
+import type { ConversationMessage } from '../../../shared/types'
+
+function platform(): GlassesPlatform {
+  return {
+    onDevice: false,
+    render() {},
+    renderHeader() {},
+    requestExit() {},
+    async startMicCapture() { return true },
+    async stopMicCapture() {},
+    async transcribeAudio() { throw new Error('not used here') },
+  } as unknown as GlassesPlatform
+}
+
+type Internals = {
+  tickAutoAdvance(): void
+  lastGestureAt: number
+  loadConversation(): Promise<void>
+}
+
+const inner = (c: GlassesController) => c as unknown as Internals
+
+/** A reply several screens long, which is the only kind this is about. */
+const LONG = Array.from({ length: 40 }, (_, i) => `line ${i + 1} of the answer`).join('\n')
+
+/** Reading the newest message of an open conversation. */
+function reading(): GlassesController {
+  const c = new GlassesController(platform())
+  c.state.sessions = [{ id: 's1', name: 'one', state: 'idle' }] as GlassesController['state']['sessions']
+  c.state.sessionIndex = 0
+  c.state.mode = 'conversation'
+  c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
+  c.state.conversationOffset = 0
+  c.state.conversationPage = 0
+  return c
+}
+
+/**
+ * Ring silence, then enough ticks for the clock to reach a page turn.
+ *
+ * A page costs several ticks (`AUTO_PAGE_STEP_MS` over `AUTO_SCROLL_STEP_MS`),
+ * and the ten seconds are moved into the past rather than waited out - the
+ * clock this reads is the only one in play.
+ */
+function idleThenTick(c: GlassesController, ticks = 10): void {
+  inner(c).lastGestureAt = Date.now() - 60_000
+  for (let i = 0; i < ticks; i++) inner(c).tickAutoAdvance()
+}
+
+describe('the auto-advance clock yields to a reader', () => {
+  test('untouched, it walks the pages by itself', () => {
+    const c = reading()
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBeGreaterThan(0)
+  })
+
+  test('a page back holds the view still', () => {
+    const c = reading()
+    idleThenTick(c)
+    const advanced = c.state.conversationPage
+    expect(advanced).toBeGreaterThan(0)
+
+    c.swipeUp()
+    const readingAt = c.state.conversationPage
+    expect(readingAt).toBe(advanced - 1)
+
+    // Ten seconds later it used to happen again.
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBe(readingAt)
+  })
+
+  test('paging back onto the newest page holds it there too', () => {
+    // The page a reader spends longest on is the first one, and swiping up to
+    // it lands where "at the newest message" is otherwise measured. Releasing
+    // on arrival would leave the complaint exactly where it was.
+    const c = reading()
+    idleThenTick(c)
+    while (c.state.conversationPage > 0) c.swipeUp()
+
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBe(0)
+  })
+
+  test('swiping back down to the newest message gives the clock the screen', () => {
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
+    expect(c.state.conversationOffset).toBe(1)
+
+    c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+
+    c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBeGreaterThan(0)
+  })
+
+  test('a reload takes the pin with the position it was holding', async () => {
+    // New messages arriving at the newest edge replace what the reader had
+    // pinned. Held past that, one page back would switch the glance mode off
+    // for the rest of the session.
+    const c = reading()
+    idleThenTick(c)
+    c.swipeUp()
+
+    await inner(c).loadConversation()
+    c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBeGreaterThan(0)
+  })
+})
