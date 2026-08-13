@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.115] - 2026-08-13
+
+### Fixed
+- **Send finishes a multi-select.** It sent a Tab, on the reasoning that the
+  picker's Submit tab is a tab away - and from inside the list it is not: Tab
+  moves the pane's cursor onto the Submit button drawn under the rows and stops
+  there, pressing it again changes nothing, and the app meanwhile treats the
+  send as done and leaves the picker. So Send did nothing at all, and a wearer
+  who had ticked four boxes was left with the question still open. The button
+  is walked to and pressed now, and the walk is worked out here from where the
+  pane's cursor actually is (`choiceSend`)
+  - The button is not an option and is not in the list, but the pane's cursor
+    stops on it, so rows for walking are counted apart from rows for choosing
+  - Indentation is measured with the cursor blanked rather than stripped: a row
+    the pane is sitting on is drawn at the left edge, so the button was thrown
+    away as furniture the moment a walk reached it - the state every read after
+    a Send would have seen
+  - Needs glasses v0.0.73
+
 ## [0.3.114] - 2026-08-12
 
 ### Changed
