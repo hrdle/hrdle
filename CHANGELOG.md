@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.126] - 2026-08-14
+
 ### Added
 - **The focus log now says a client was here, not only that it claimed
   something** (#359). A claim was logged where it was minted; an arrival was
