@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.117] - 2026-08-13
+
+### Fixed
+- **Kimi's prompts reach the glasses.** Two things were in the way. The pane
+  was read as the last 30 lines of `recent`, which is not the screen: on a
+  pane with little scrollback herdr answers that with eight lines - the bottom
+  eight of the trust prompt - and its reader finds a prompt by its rule and its
+  hint line, so it had neither. The screen said `Trust this folder?` and the
+  glasses were shown nothing. The window is the screen now, whole and with no
+  line count, since a prompt being asked is on it by definition and scrollback
+  is where old prompts are
+  - The painted read moves with it. OpenCode's reader lines the two up by
+    position, so two windows over different parts of the pane would name the
+    wrong row as the one under the cursor
+- **Kimi's trust prompt is walked down rather than sideways.** It is a list, and
+  it carried no axis - so it was walked with left and right, which move nothing
+  on it, and had been since the walk existed
+
 ## [0.3.116] - 2026-08-13
 
 ### Added
