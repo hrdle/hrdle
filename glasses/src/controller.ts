@@ -430,6 +430,20 @@ export class GlassesController {
   /** Set once the screen has shown everything it has, twice. Nothing moves
    *  again until a gesture says someone is there. */
   private autoResting = false
+  /**
+   * A reader paged back, so the screen stays where they put it.
+   *
+   * Ten seconds of ring silence is not evidence that a page has been read - a
+   * reply longer than a screen, read at a person's own pace, takes more than
+   * that per page, and the view moved out from under them mid-sentence. They
+   * page back, and ten seconds later it happens again.
+   *
+   * Paging *back* is the thing only a reader does: the clock never produces
+   * it. So it is taken as "someone is here", and the same contract
+   * `maybeRefreshConversation` already keeps is kept - nothing moves on its own
+   * until the view is at the newest message again.
+   */
+  private readerPinned = false
 
   private audioChunks: Uint8Array[] = []
   private recording = false
@@ -614,6 +628,9 @@ export class GlassesController {
     if (this.autoResting) return
     // The reader is working the ring; do not fight them for it.
     if (Date.now() - this.lastGestureAt < AUTO_ADVANCE_IDLE_MS) return
+    // They paged back, which the clock never does. Held until they are at the
+    // newest message again.
+    if (this.readerPinned) return
 
     const steps = noticeScrollSteps(st)
     if ((st.noticeWindow ?? 0) < steps - 1) {
@@ -1021,6 +1038,7 @@ export class GlassesController {
     const st = this.state
     switch (action) {
       case 'swipeUp': {
+        const wasAt = [st.conversationOffset, st.conversationPage]
         // Page up within message, then previous message(s)
         if (st.conversationPage > 0) {
           st.conversationPage--
@@ -1038,6 +1056,12 @@ export class GlassesController {
             st.conversationPage = Math.max(0, this.currentMsgTotalPages() - 1)
           }
         }
+        // Went back somewhere, by hand. Checked against where it started rather
+        // than set in each branch above, so a way back that gets added later is
+        // covered without anyone remembering to.
+        if (st.conversationOffset !== wasAt[0] || st.conversationPage !== wasAt[1]) {
+          this.readerPinned = true
+        }
         this.render()
         return
       }
@@ -1052,6 +1076,9 @@ export class GlassesController {
           st.conversationPage = 0
           st.noticeWindow = 0
         }
+        // Caught up with the newest message: the reading position the pin was
+        // holding is the one the screen moves from anyway.
+        if (st.conversationOffset === 0 && st.conversationPage === 0) this.readerPinned = false
         this.render()
         return
       }
@@ -2195,6 +2222,12 @@ export class GlassesController {
    * different conversation resets it — those call sites do it themselves.
    */
   private async loadConversation(): Promise<void> {
+    // The position the pin was holding is gone - a different conversation, the
+    // way back to the top, or new messages arriving at one already there. Left
+    // set, one page back would switch the glance mode off for the rest of the
+    // session. Nothing a reader is still holding is released: every caller has
+    // either just discarded the position itself or is at the newest message.
+    this.readerPinned = false
     const target = this.conversationTarget()
     if (!target) {
       this.state.conversation = []
