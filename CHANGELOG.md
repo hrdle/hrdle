@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The screens that were still `100vh` now shrink with the soft keyboard**
+  (#257). `h-screen` is `height: 100vh`, and `100vh` is the large viewport by
+  definition - it does not shrink when the keyboard opens, on any browser. The
+  terminal was moved off it earlier; the session list, the desktop/tablet shell,
+  the loading view and the login form were not, so their bottoms sat behind the
+  keyboard. All four now use `h-full`, which resolves against the `#root` height
+  the app already tracks from `visualViewport`
+  - Measured at a 390x844 viewport with the height driven down to 420: the
+    session list ended at 844 before the change and ends at 420 after it. The
+    desktop shell tracks the same way at 1280x800
+  - The session list's `inline` prop went with it. It only ever chose between
+    those two heights, and both branches now want the same one
+
 ## [0.3.120] - 2026-08-13
 
 ### Added
