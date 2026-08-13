@@ -4,7 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.119] - 2026-08-13
+
 ### Fixed
+- **The conversation view stays where a reader put it.** The auto-advance clock
+  waits ten seconds of ring silence and then walks the notice strip and the
+  pages of the message - right for a glance, a fight for anyone reading at their
+  own pace. A page of a long reply takes longer than ten seconds, so the view
+  moved mid-sentence, the reader paged back with the ring, and ten seconds later
+  it happened again (#332, reported from outside). Paging back is the one move
+  the clock never makes, so it is taken as a reader being there: nothing
+  advances on its own until the view is at the newest message again, which is
+  the contract a refresh already keeps
+  - Released by swiping down onto the newest message, or by the double-tap that
+    already means "back to the top, live updates resume". Reloading the
+    conversation releases it too - a different conversation, or new messages
+    arriving at one already at the top - because the position it was holding is
+    gone. Held past that, one page back would switch the glance mode off for the
+    rest of the session
+  - The first page turn still happens: the gesture is what arms it, so a reader
+    has to be moved once before they can say they are there
+  - Needs glasses v0.0.76
 - **One notification per hook event on a device that also holds a push
   subscription** (#331, reported by @Chapapon). A subscribed phone with the page
   open was given two banners a second apart for every Stop: one from the mux
