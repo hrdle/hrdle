@@ -60,6 +60,7 @@ type Internals = {
     freeText?: number[],
     keys?: string[],
     fieldRows?: number[],
+    send?: string,
   ): void
   sendChoiceKey(data: string): void
   handle(action: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'): Promise<void>
@@ -94,6 +95,7 @@ function picker(
   freeText: number[],
   fieldRows?: number[],
   choiceKeys?: string[],
+  send?: string,
 ): { c: GlassesController; keys: string[] } {
   const c = new GlassesController(platform())
   c.state.sessions = [{ id: 's1', name: 'ws', state: 'idle' }] as GlassesController['state']['sessions']
@@ -107,6 +109,7 @@ function picker(
     freeText,
     choiceKeys,
     fieldRows,
+    send,
   )
   return { c, keys }
 }
@@ -215,5 +218,37 @@ describe('the rows that are not text', () => {
     const { c, keys } = picker(MULTI, FREE_TEXT, [4], WALK_TO_FIELD)
     await tapRow(c, MULTI.length)
     expect(keys).toEqual(['\t'])
+  })
+})
+
+// The row that finishes a multi-select.
+//
+// It used to send a Tab, on the reasoning that the picker's Submit tab is a tab
+// away. From inside the list it is not: Tab moves the pane's cursor to the
+// Submit button drawn under the rows and stops there, pressing it again changes
+// nothing, and this app meanwhile treats the send as done and leaves the
+// picker. Recorded off the device on 2026-08-12: Send pressed twice, the
+// question still open both times.
+describe('the send row', () => {
+  const SEND_WALK = DOWN.repeat(5) + '\r'
+
+  test('sends the walk the server named for it', async () => {
+    const { c, keys } = picker(MULTI, FREE_TEXT, undefined, undefined, SEND_WALK)
+    await tapRow(c, MULTI.length)
+    expect(keys).toEqual([SEND_WALK])
+  })
+
+  test('falls back to the Tab when a server names nothing', async () => {
+    // An older server sends no walk, and its panes are the ones the Tab was
+    // written for.
+    const { c, keys } = picker(MULTI, FREE_TEXT)
+    await tapRow(c, MULTI.length)
+    expect(keys).toEqual(['\t'])
+  })
+
+  test("a walk from the last question does not answer this one", async () => {
+    const { c } = picker(MULTI, FREE_TEXT, undefined, undefined, SEND_WALK)
+    inner(c).enterChoice(['[ ] a', '[ ] b'], { sessionId: 's1', paneId: '%0', itemId: 'q2' }, undefined, undefined, [])
+    expect(c.state.choiceSend).toBeUndefined()
   })
 })

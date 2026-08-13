@@ -45,6 +45,9 @@ export interface PaneQuestion {
   choiceSelected?: number;
   /** The key each option answers to, when it is not the option's position. */
   choiceKeys?: string[];
+  /** What finishes a multi-select, for the send row the app draws itself.
+   *  Absent leaves the app's own default, which is a Tab. */
+  choiceSend?: string;
   /**
    * Where the pane's own cursor is, on a list that is answered by number anyway.
    *

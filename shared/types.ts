@@ -1447,6 +1447,25 @@ export interface GlassesRelayItem {
    * the next agent that draws a field differently be handled without an ehpk.
    */
   choiceFieldRows?: number[];
+  /**
+   * What finishes a multi-select — for the send row the app draws, which is
+   * not one of the pane's options and so has no `choiceKeys` entry of its own.
+   *
+   * The app used to send a Tab, on the reasoning that the picker's Submit tab
+   * is a tab away. From inside the list it is not: Tab moves the pane's cursor
+   * to the Submit button drawn under the rows and stops there, and pressing it
+   * again changes nothing - while the app treats the send as done and leaves
+   * the picker. So Send did nothing at all and the question stayed open, which
+   * is where a wearer who had ticked four boxes was left on 2026-08-12.
+   *
+   * Walked to and pressed instead: arrow keys from where the pane's cursor
+   * actually is, then Enter. Digits do not move that cursor, so ticking boxes
+   * cannot invalidate the walk - only a field row's own walk does, and that
+   * changes the row's label, which mints a fresh item with a fresh walk.
+   *
+   * Absent means the app's Tab, which is what an older server sends.
+   */
+  choiceSend?: string;
   source: 'auto' | 'agent';
   /**
    * How much of the wearer's attention this is worth — decided here, obeyed

@@ -206,6 +206,9 @@ export interface AppState {
   /** Which of `choiceFreeText` are a field the transcript is typed into where
    *  it stands, rather than a row that opens a prompt to send one to. */
   choiceFieldRows?: number[]
+  /** What the send row sends. Absent falls back to a Tab, which is what this
+   *  app sent before any server named it. */
+  choiceSend?: string
   /**
    * The options are checkboxes rather than a single pick.
    *

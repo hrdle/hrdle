@@ -287,6 +287,22 @@ export interface GlassesRelayItem {
    * decided server-side: this app sends whatever it is handed.
    */
   choiceFieldRows?: number[]
+  /**
+   * What finishes a multi-select, for the send row this app adds.
+   *
+   * It used to be a Tab, on the reasoning that the picker's Submit tab is a
+   * tab away. From inside the list it is not: Tab moves the pane's cursor to
+   * the Submit button under the rows and stops there, pressing it again
+   * changes nothing, and the app meanwhile treats the send as done and leaves
+   * the picker - so the wearer's Send did nothing at all, twice, and the
+   * question stayed open. Measured on 2026-08-12.
+   *
+   * Walked to and pressed instead, and the walk is worked out server-side from
+   * where the pane's cursor actually is. Absent, the Tab is still what goes:
+   * an older server sends nothing here and its panes are the ones that
+   * behaviour was written for.
+   */
+  choiceSend?: string
   source: 'auto' | 'agent'
   /**
    * How much of the wearer's attention the server thinks this is worth.
