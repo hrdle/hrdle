@@ -22,7 +22,7 @@ export function LoginForm({ onLogin, isLoading, error }: LoginFormProps) {
 	};
 
 	return (
-		<div className="min-h-screen flex items-center justify-center bg-th-bg">
+		<div className="h-full flex items-center justify-center bg-th-bg">
 			<div className="bg-th-surface p-8 rounded-md border border-th-border w-full max-w-sm">
 				<div className="flex flex-col items-center gap-3 mb-8">
 					<div className="w-10 h-10 rounded-md bg-th-surface-hover flex items-center justify-center">

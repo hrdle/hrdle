@@ -1652,7 +1652,7 @@ export function DesktopLayout({
 	// wrong one.
 	return (
 		<div
-			className="h-screen flex bg-th-bg"
+			className="h-full flex bg-th-bg"
 			data-layout={isTablet ? "tablet" : "desktop"}
 		>
 			{/* Main content */}

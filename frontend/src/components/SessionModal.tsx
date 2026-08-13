@@ -58,7 +58,6 @@ export function SessionModal({
 			>
 				<WorkspaceList
 					onSelectSession={handleSelectSession}
-					inline={true}
 					onClose={onClose}
 					onToggleDashboard={() => setShowDashboard((v) => !v)}
 					dashboardOpen={showDashboard}

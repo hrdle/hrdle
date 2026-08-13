@@ -163,7 +163,6 @@ interface SessionListProps {
 	onSelectPane?: (session: ExtendedSessionResponse, paneId: string) => void;
 	onBack?: () => void;
 	onClose?: () => void; // Close button in header (used in modal)
-	inline?: boolean; // true for side panel, false for fullscreen
 	contentScale?: number; // Scale factor for content (tabs remain fixed)
 	isOnboarding?: boolean; // Show dummy session for onboarding
 	onToggleDashboard?: () => void; // Show a dashboard toggle in the header when provided
@@ -1780,7 +1779,6 @@ export function WorkspaceList({
 	onSelectPane,
 	onBack,
 	onClose,
-	inline = false,
 	contentScale,
 	isOnboarding = false,
 	onToggleDashboard,
@@ -2215,7 +2213,7 @@ export function WorkspaceList({
 	if (serverReachable === false && sessions.length === 0 && !isOnboarding) {
 		return (
 			<div
-				className={`flex items-center justify-center bg-[#0a0a0a] ${inline ? "h-full" : "h-screen"}`}
+				className="h-full flex items-center justify-center bg-[#0a0a0a]"
 			>
 				<ServerUnreachableNotice onRetry={() => void refreshPeers()} />
 			</div>
@@ -2226,7 +2224,7 @@ export function WorkspaceList({
 	if (isLoading && sessions.length === 0 && !isOnboarding) {
 		return (
 			<div
-				className={`flex items-center justify-center bg-[#0a0a0a] ${inline ? "h-full" : "h-screen"}`}
+				className="h-full flex items-center justify-center bg-[#0a0a0a]"
 			>
 				<div className="text-zinc-500">{t("common.loading")}</div>
 			</div>
@@ -2250,12 +2248,8 @@ export function WorkspaceList({
 
 	const isDraggable = !searchQuery; // Disable drag during search
 
-	const containerClass = inline
-		? "h-full flex flex-col bg-[#0a0a0a] text-white overflow-hidden"
-		: "h-screen flex flex-col bg-[#0a0a0a] text-white";
-
 	return (
-		<div className={containerClass}>
+		<div className="h-full flex flex-col bg-[#0a0a0a] text-white overflow-hidden">
 			{/* ─── Header: frosted glass ─── */}
 			<div className="shrink-0 px-4 pt-3 pb-2 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
 				<div className="max-w-lg">

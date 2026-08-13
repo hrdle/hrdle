@@ -80,7 +80,7 @@ function LoadingScreen({
 			: t("loading.fetchingSessions");
 
 	return (
-		<div className="flex flex-col items-center justify-center h-screen bg-th-bg gap-3">
+		<div className="flex flex-col items-center justify-center h-full bg-th-bg gap-3">
 			{error ? (
 				<>
 					<div className="text-red-400 text-sm">{error}</div>
