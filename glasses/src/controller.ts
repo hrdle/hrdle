@@ -27,7 +27,7 @@
 
 import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationBodyLines, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -2189,7 +2189,7 @@ export class GlassesController {
     return getTotalPagesAt(
       this.state.conversation,
       this.state.conversationOffset,
-      conversationBodyLines(this.state),
+      conversationPageBudget(this.state),
     )
   }
 
