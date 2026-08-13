@@ -294,4 +294,21 @@ describe('a ring selection claims the focus', () => {
     const glasses = client({ ...ringPick('w66', 100), lastPingAt: NOW - 60_000 } as Partial<MuxData>);
     expect(pickClientFocus([glasses], NOW)).toBeUndefined();
   });
+
+  /**
+   * The budget is two and a half beats, and the glasses beat at 15s rather than
+   * a browser's 10s. Counted in the browser's number it was one beat and two
+   * thirds, so a single dropped ping handed the focus straight back to the
+   * tablet this feature exists to outbid - over BLE through the phone, which is
+   * the least reliable leg any client has.
+   */
+  test('one dropped ping does not undo the pick', () => {
+    const glasses = client({ ...ringPick('w66', 100), lastPingAt: NOW - 30_000 } as Partial<MuxData>);
+    expect(pickClientFocus([glasses], NOW)?.sessionId).toBe('w66');
+  });
+
+  test('a browser is still held to its own faster beat', () => {
+    const tablet = client({ deviceType: 'tablet', lastPingAt: NOW - 30_000 });
+    expect(pickClientFocus([tablet], NOW)).toBeUndefined();
+  });
 });

@@ -178,6 +178,31 @@ export function applySubscribeFocus(
 const FOCUS_HEARTBEAT_MS = 25_000;
 
 /**
+ * The same budget, counted in the glasses' own beats.
+ *
+ * 25s is two browser beats and a half. The glasses ping every 15s
+ * (PING_INTERVAL_MS in glasses/src/ws-client.ts) - the interval is set against
+ * the 60s zombie timeout, not against this - so the same number is one beat and
+ * two thirds there, and a single dropped ping drops the wearer out of the
+ * election. What takes the focus in that gap is a tablet left visible on a
+ * desk: the exact thing the ring claim exists to outbid. Nothing on the wire
+ * refreshes the clock either - `lastPingAt` moves on `ping` and on nothing
+ * else, so a busy connection is no safer than an idle one.
+ *
+ * The glasses reach the server through the phone over BLE, which is the least
+ * reliable leg any client has, so they need more slack than a browser rather
+ * than less. Kept as a ratio of the beat, not a round number: two and a half
+ * beats of 15s.
+ */
+const GLASSES_FOCUS_HEARTBEAT_MS = 37_500;
+
+/** A claim is stale after two and a half of the client's own beats, and the
+ *  glasses beat slower than a browser. */
+function focusHeartbeatWindow(d: MuxData): number {
+  return d.isGlasses ? GLASSES_FOCUS_HEARTBEAT_MS : FOCUS_HEARTBEAT_MS;
+}
+
+/**
  * What a `client-info` does to this client's claim on the glasses focus.
  *
  * `visible` is a transition, not a state a socket owns. A person picking a
@@ -284,7 +309,7 @@ export function pickClientFocus(clients: MuxData[], now: number): ClientFocus | 
   for (const d of clients) {
     // A screen that stopped saying it is there is not one anyone is looking at,
     // whatever its last `visible` said.
-    if (now - d.lastPingAt > FOCUS_HEARTBEAT_MS) continue;
+    if (now - d.lastPingAt > focusHeartbeatWindow(d)) continue;
     const claim = d.isGlasses ? glassesClaim(d) : screenClaim(d);
     if (!claim) continue;
     if (!best || claim.at > best.at) best = claim;

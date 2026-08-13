@@ -24,6 +24,11 @@ All notable changes to this project will be documented in this file.
     without claiming
   - Last writer still wins: a tablet picked up after the ring selection takes
     the focus back, as any other screen would
+  - A claim goes stale after two and a half of the client's own heartbeats, and
+    the glasses beat slower than a browser (15s against 10s). Counted in the
+    browser's number, one dropped ping handed the focus straight back to the
+    tablet the pick had just outbid - over BLE through the phone, the least
+    reliable leg any client has
   - Needs glasses v0.0.78
 
 ## [0.3.121] - 2026-08-14
