@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **One dropped ping undid a ring selection.** A focus claim goes stale after
+  25s, chosen as two of a browser's 10s heartbeats with room for jitter. The
+  glasses beat every 15s - that interval was set against the 60s zombie timeout,
+  not against this - so the same number was one beat and two thirds there, and a
+  single missed ping dropped the wearer out of the election. What took the focus
+  in that gap was a tablet left visible on a desk: exactly what the ring claim
+  had just been added (0.3.122) to outbid
+  - Nothing else refreshes the clock. The last-ping time moves on a ping and on
+    nothing else, so a busy connection is no safer than an idle one
+  - The window is now two and a half beats of whichever client it is - 25s for a
+    browser, 37.5s for the glasses - rather than one number that happened to fit
+    the browser. Widening it for everyone would have blunted what the 25s is for:
+    dropping a sleeping laptop's claim quickly
+  - Server-side only; the glasses build is unchanged
+
 ## [0.3.123] - 2026-08-14
 
 ### Fixed
