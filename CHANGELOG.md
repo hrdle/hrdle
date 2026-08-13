@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.121] - 2026-08-14
+
 ### Fixed
 - **The screens that were still `100vh` now shrink with the soft keyboard**
   (#257). `h-screen` is `height: 100vh`, and `100vh` is the large viewport by
@@ -12,9 +14,12 @@ All notable changes to this project will be documented in this file.
   the loading view and the login form were not, so their bottoms sat behind the
   keyboard. All four now use `h-full`, which resolves against the `#root` height
   the app already tracks from `visualViewport`
-  - Measured at a 390x844 viewport with the height driven down to 420: the
-    session list ended at 844 before the change and ends at 420 after it. The
-    desktop shell tracks the same way at 1280x800
+  - Measured on an Android phone with the keyboard actually up: the session list
+    stood 935 tall against a 469 visible area, so 466 of it - about five rows of
+    its scroll viewport - could not be brought into view while typing in the
+    search box. It now ends at 469. 935 rather than the 879 the page gets with
+    the browser toolbar showing, because `100vh` is sized for a chrome that is
+    not retracted and a keyboard that is not up
   - The session list's `inline` prop went with it. It only ever chose between
     those two heights, and both branches now want the same one
 
