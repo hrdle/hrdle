@@ -1,5 +1,6 @@
 import type { PickerOption } from './shared';
 import {
+  bareLabel,
   blankCursor,
   CURSOR,
   dropSidePanel,
@@ -71,6 +72,17 @@ export interface ClaudePicker {
    * way a keyboard reaches it, and a walk needs a measured starting point.
    */
   choiceCursor?: number;
+  /**
+   * What finishes a multi-select: the walk to the pane's own `Submit` button
+   * and the Enter that presses it.
+   *
+   * The button is drawn under the rows, is not numbered, and is not an option -
+   * it is dropped from the list as furniture. The pane's cursor stops on it
+   * though, so it is a row for the purpose of walking even while it is not one
+   * for the purpose of choosing, and the two counts are kept apart for that
+   * reason.
+   */
+  choiceSend?: string;
 }
 
 /**
@@ -185,6 +197,12 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
   let firstOptionAt = -1;
   let labelColumn = 0;
   let cursorAt = -1;
+  // Every row the pane's own cursor stops on, in the order it walks them. Not
+  // the same list as the options: the Submit button is one of these and none
+  // of those.
+  let navRows = 0;
+  let cursorRow = -1;
+  let submitRow = -1;
 
   for (let i = 0; i < block.length; i++) {
     const line = block[i];
@@ -201,7 +219,11 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
       // edge and they are indented to clear it.
       const blanked = blankCursor(line);
       labelColumn = indentOf(blanked);
-      if (blanked !== line) cursorAt = options.length;
+      if (blanked !== line) {
+        cursorAt = options.length;
+        cursorRow = navRows;
+      }
+      navRows++;
       options.push({ label, detail: '' });
       continue;
     }
@@ -220,11 +242,27 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
       labelColumn = Number.POSITIVE_INFINITY;
       continue;
     }
-    if (indentOf(line) < labelColumn) continue;
-    const text = dropSidePanel(line).trim();
+    // Measured with the cursor blanked, not stripped: the marker is drawn at
+    // the left edge, so a row the pane happens to be sitting on measures as
+    // further left than the rows around it and is thrown away as furniture.
+    // Which is what happened to the Submit button the moment the walk reached
+    // it - so the next read could not find the button it had just walked to.
+    const bare = blankCursor(line);
+    if (indentOf(bare) < labelColumn) continue;
+    const text = dropSidePanel(bare).trim();
     // The button a multi-select is finished with sits under the last row, at the
     // indent a description has, and reads as one: `Type something — Submit`.
-    if (!text || isFurniture(text)) continue;
+    if (!text || isFurniture(text)) {
+      // Not an option, but the pane's cursor stops on it and it is what
+      // finishes the answer - so it counts as a row for the walk even though
+      // it is not one for the list.
+      if (text && bareLabel(text) === 'Submit') {
+        if (bare !== line) cursorRow = navRows;
+        submitRow = navRows;
+        navRows++;
+      }
+      continue;
+    }
     last.detail = joinWrapped(last.detail, text);
   }
 
@@ -246,13 +284,28 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
   }
 
   const choiceCursor = kept.findIndex(({ at }) => at === cursorAt);
+  const choiceSend = walkTo(submitRow, cursorRow);
 
   return {
     question: questionOf(block.slice(0, firstOptionAt < 0 ? block.length : firstOptionAt)),
     options: answerable,
     multiSelect: answerable.some((o) => /^\[[ xX*✓✔]\]/.test(o.label)),
     ...(choiceCursor >= 0 ? { choiceCursor } : {}),
+    ...(choiceSend ? { choiceSend } : {}),
   };
+}
+
+/**
+ * The keys that put the pane's cursor on a row and press it.
+ *
+ * Nothing when either end is unknown: the app falls back to the Tab it has
+ * always sent, which is no worse than a walk from a guessed position - and a
+ * walk from a guessed position lands on an option and toggles it.
+ */
+function walkTo(row: number, from: number): string | undefined {
+  if (row < 0 || from < 0) return undefined;
+  const steps = row - from;
+  return (steps >= 0 ? '\x1b[B' : '\x1b[A').repeat(Math.abs(steps)) + '\r';
 }
 
 function indentOf(line: string): number {

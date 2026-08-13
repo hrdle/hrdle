@@ -317,6 +317,26 @@ describe('the screen Send opens', () => {
   });
 });
 
+describe('a list the pane draws no Submit button under', () => {
+  test('nothing is named, and the app keeps its own Tab', () => {
+    // A single pick is finished by picking, so there is no button to walk to.
+    // Naming a walk anyway would be naming one measured from nothing.
+    const single = readClaudePicker([
+      '────────────────────────────',
+      ' \u2610 移行範囲 ',
+      '',
+      'どちらにしますか?',
+      '',
+      '❯ 1. すぐ',
+      '  2. 次のリリースで',
+      '',
+      'Enter to select · ↑/↓ to navigate · Esc to cancel',
+    ]);
+    expect(single?.options).toHaveLength(2);
+    expect(single?.choiceSend).toBeUndefined();
+  });
+});
+
 describe('a multi-select on a real pane', () => {
   const live = readClaudePicker(MULTI_LIVE);
 
@@ -365,6 +385,28 @@ describe('a multi-select on a real pane', () => {
       MULTI_LIVE.map((l) => l.replace('☐ 機能選択', '☒ 機能選択').replace('2. [ ] 通知', '2. [✔] 通知')),
     );
     expect(ticked?.options[1].label).toBe('[✔] 通知');
+  });
+
+  test('the button that finishes it is walked to and pressed', () => {
+    // The app's Send row used to be a Tab, which from inside the list moves the
+    // pane's cursor onto this button and stops - pressing it again changes
+    // nothing, while the app treats the send as done and leaves the picker. So
+    // Send did nothing at all and the question stayed open.
+    //
+    // Five rows down from the cursor, then Enter. The button is not an option
+    // and is not in the list, but the pane's cursor stops on it, so it counts
+    // as a row for the walk and not for the choosing.
+    expect(live?.choiceSend).toBe('\x1b[B'.repeat(5) + '\r');
+  });
+
+  test('the pane already sitting on the button is a walk of nothing', () => {
+    // Which is where the pane is left the moment a Send lands, so it is the
+    // state the next read sees. The marker is drawn at the left edge, so the
+    // row measures as further left than the ones around it - measured
+    // literally, the button was thrown away as furniture and the walk that had
+    // just reached it could not be named again.
+    const at = readClaudePicker(MULTI_LIVE.map((l) => l.replace('     Submit', '❯    Submit')));
+    expect(at?.choiceSend).toBe('\r');
   });
 
   test('the button the list is finished with is not a description', () => {

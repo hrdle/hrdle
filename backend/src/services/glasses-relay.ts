@@ -759,6 +759,8 @@ interface WaitingPayload {
   choiceSelected?: number;
   /** Which of `choiceFreeText` are a field typed into where it stands. */
   choiceFieldRows?: number[];
+  /** What finishes a multi-select, for the send row the app draws itself. */
+  choiceSend?: string;
 }
 
 /**
@@ -858,6 +860,7 @@ async function assembleWaitingPayload(
         choiceFreeText: indicesOf(picker.options),
         choiceKeys: choiceKeysOf(picker, fieldRows),
         choiceFieldRows: fieldRows,
+        choiceSend: picker.choiceSend,
         // A list with no keys of its own is answered by walking the pane's
         // cursor, and both halves travel or neither does - an item carrying
         // options and no `choiceInput` reads as a numbered one, and the glasses
@@ -953,6 +956,9 @@ function makeItem(
     choiceKeys?: string[];
     /** Indices into `choices`, before any filtering here. */
     choiceFieldRows?: number[];
+    /** Not indexed against `choices` at all - the send row is the app's own,
+     *  drawn after the pane's options rather than being one of them. */
+    choiceSend?: string;
   },
 ): GlassesRelayItem {
   const item: GlassesRelayItem = {
@@ -1007,6 +1013,10 @@ function makeItem(
       .map((i) => rows.findIndex((r) => r.from === i))
       .filter((i) => i >= 0);
     if (fields.length > 0) item.choiceFieldRows = fields;
+    // Not re-indexed with the rows: it names no option. Dropping a row does
+    // move the pane's Submit button one nearer, but the walk is measured on
+    // the pane, where nothing was dropped.
+    if (answering?.choiceSend) item.choiceSend = answering.choiceSend;
     const width = detailWidthFor(kept.length);
     const details = width > 0 ? rows.map((r) => clampDisplayWidth(r.detail, width)) : [];
     if (details.some((d) => d.length > 0)) item.choiceDetails = details;
@@ -1065,6 +1075,7 @@ function waitingItem(sessionId: string, paneId: string, payload: WaitingPayload)
       choiceFreeText: payload.choiceFreeText,
       choiceKeys: payload.choiceKeys,
       choiceFieldRows: payload.choiceFieldRows,
+      choiceSend: payload.choiceSend,
     },
   );
 }
@@ -1338,12 +1349,22 @@ async function refreshBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> 
   // "the cursor moved" and "it is asking something else".
   if (next.text === item.text && sameChoices(item.choices, next.choices)) {
     const sameDetails = sameChoices(item.choiceDetails, next.choiceDetails);
-    if (next.choiceSelected === item.choiceSelected && sameDetails) return;
+    // Both of these are measured from where the pane's cursor is, so both go
+    // stale the moment it moves - which a walk to a field row does, without
+    // changing a label or a description. Refreshed here or a wearer who opened
+    // that field and said nothing is left with a Send that walks from where
+    // the cursor no longer is, and lands on an option.
+    const sameWalks = next.choiceSend === item.choiceSend && sameChoices(item.choiceKeys, next.choiceKeys);
+    if (next.choiceSelected === item.choiceSelected && sameDetails && sameWalks) return;
     item.choiceSelected = next.choiceSelected;
     // Not a new decision - the same options, saying a little more or less about
     // themselves as the pane redraws. Edited in place so the picker under the
     // wearer's finger keeps its id and its cursor.
     if (!sameDetails) item.choiceDetails = next.choiceDetails;
+    if (!sameWalks) {
+      item.choiceSend = next.choiceSend;
+      item.choiceKeys = next.choiceKeys;
+    }
     broadcastUpsert(item);
     return;
   }

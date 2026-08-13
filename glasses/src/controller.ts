@@ -1042,6 +1042,7 @@ export class GlassesController {
               top.choiceFreeText,
               top.choiceKeys,
               top.choiceFieldRows,
+              top.choiceSend,
             )
             return
           }
@@ -1163,6 +1164,20 @@ export class GlassesController {
     return this.state.choiceKeys?.[index] ?? String(index + 1)
   }
 
+  /**
+   * What finishes a multi-select.
+   *
+   * The send row is this app's own - it is not one of the pane's options - so
+   * it has no `choiceKeys` entry and the server names it separately. The Tab
+   * is what this always sent, and is kept for a server that names nothing:
+   * against Claude Code it moves the pane's cursor to the Submit button and
+   * stops, which is why the walk exists, but it is still the only thing known
+   * to do anything at all on a pane this app has never been told about.
+   */
+  private sendKey(): string {
+    return this.state.choiceSend ?? '\t'
+  }
+
   private async onChoiceAction(action: RingAction): Promise<void> {
     const st = this.state
     const rows = choiceRows(st).length
@@ -1210,7 +1225,7 @@ export class GlassesController {
           return Promise.resolve()
         }
         if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
-        else this.sendChoiceKey(onChoiceSend(st) ? '\t' : this.choiceKeyFor(st.choiceIndex))
+        else this.sendChoiceKey(onChoiceSend(st) ? this.sendKey() : this.choiceKeyFor(st.choiceIndex))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         this.echoAnswer(this.pickedText())
@@ -1643,6 +1658,7 @@ export class GlassesController {
         item.choiceFreeText,
         item.choiceKeys,
         item.choiceFieldRows,
+        item.choiceSend,
       )
       void this.loadConversation().then(() => this.render())
       return
@@ -1694,6 +1710,7 @@ export class GlassesController {
     freeText?: number[],
     keys?: string[],
     fieldRows?: number[],
+    send?: string,
   ): void {
     const keepCursor =
       this.state.mode === 'choice' &&
@@ -1713,6 +1730,9 @@ export class GlassesController {
     // a field on the last question is a row this one would type into rather
     // than answer.
     this.state.choiceFieldRows = fieldRows
+    // Cleared when absent for the third time: a walk measured on the last
+    // question's pane would land somewhere in this one's list and press it.
+    this.state.choiceSend = send
     this.state.choiceMulti = looksMultiSelect(options)
     // Set here rather than left over from whatever ran last: two halves feed
     // this - a relay item that already carries the reading, and a terminal
@@ -1964,6 +1984,7 @@ export class GlassesController {
         item.choiceFreeText,
         item.choiceKeys,
         item.choiceFieldRows,
+        item.choiceSend,
       )
       return
     }
