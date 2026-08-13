@@ -47,6 +47,40 @@ import type { Session, Pane, ConversationMessage, GlassesRelayItem, ClientFocus 
 const INITIAL_LOAD_COUNT = 20
 const LOAD_MORE_INCREMENT = 20
 const CONV_REFRESH_INTERVAL = 3000
+/** Between one keystroke of a walk and the next. Two writes inside one turn of
+ *  the event loop can still arrive at the pane as a single read. */
+const KEYSTROKE_GAP_MS = 40
+
+/**
+ * One string of input, split into the keys a TUI will count as keys.
+ *
+ * A CSI sequence is `ESC [`, then parameter bytes, then one final byte in the
+ * `@`-`~` range; anything else is a key on its own. Nothing here needs to
+ * understand what a sequence *means* - only where one ends, so the next is
+ * written separately.
+ */
+export function splitKeystrokes(data: string): string[] {
+  const keys: string[] = []
+  let i = 0
+  while (i < data.length) {
+    if (data[i] !== '\x1b') {
+      keys.push(data[i])
+      i++
+      continue
+    }
+    let j = i + 1
+    if (data[j] === '[' || data[j] === 'O') {
+      j++
+      while (j < data.length && !/[@-~]/.test(data[j])) j++
+      j++
+    } else {
+      j++
+    }
+    keys.push(data.slice(i, j))
+    i = j
+  }
+  return keys
+}
 /**
  * How long a notification holds the panel before giving it back.
  *
@@ -1221,11 +1255,11 @@ export class GlassesController {
           // makes it true, and that is a tick of the clock away - long enough
           // for a toggle to look like a gesture that did nothing.
           this.toggleLocalChoice()
-          this.sendChoiceKey(this.choiceKeyFor(st.choiceIndex))
-          return Promise.resolve()
+          await this.sendKeyStrokes(this.choiceKeyFor(st.choiceIndex))
+          return
         }
         if (this.inlineChoices) this.sendInlineChoice(st.choiceIndex)
-        else this.sendChoiceKey(onChoiceSend(st) ? this.sendKey() : this.choiceKeyFor(st.choiceIndex))
+        else await this.sendKeyStrokes(onChoiceSend(st) ? this.sendKey() : this.choiceKeyFor(st.choiceIndex))
         this.answeredItem(this.choiceTarget?.itemId)
         this.choiceFollowUntil = Date.now() + CHOICE_FOLLOW_MS
         this.echoAnswer(this.pickedText())
@@ -1279,7 +1313,7 @@ export class GlassesController {
     // Sent even when empty: the server has a walk of no steps to express when
     // the pane is already sitting on the row, and an empty key is how.
     const key = this.choiceKeyFor(index)
-    if (key) this.sendChoiceKey(key)
+    if (key) await this.sendKeyStrokes(key)
     if (this.state.choiceFieldRows?.includes(index)) {
       await this.startVoice({ ...target, fillsField: true })
       return
@@ -1369,14 +1403,39 @@ export class GlassesController {
    * keep in step. The index this app holds is now a display cursor and nothing
    * more, which is what it always looked like from the outside.
    */
-  private sendChoiceKey(data: string): void {
+  /**
+   * The same, one keystroke per write.
+   *
+   * A walk sent as `\x1b[B\x1b[B\x1b[B\x1b[B` in a single write moves Claude
+   * Code's cursor **nothing at all** - measured against 2.1.228 on 2026-08-13,
+   * against the same pane where one arrow per write moves one row each time.
+   * Its input is read a chunk at a time and a chunk is taken for one key, so
+   * everything after the first sequence is dropped; a walk ending in Enter
+   * fared worse still, arriving as a bare Enter that toggled whatever row the
+   * cursor had not moved off.
+   *
+   * The gap matters as much as the split: two writes inside one turn of the
+   * event loop can still reach the pane as one read.
+   */
+  private async sendKeyStrokes(data: string): Promise<void> {
+    const keys = splitKeystrokes(data)
+    for (let i = 0; i < keys.length; i++) {
+      // Awaited, not merely spaced: a keystroke is one HTTP request, and two in
+      // flight together arrive in whichever order they finish. A walk delivered
+      // out of order lands somewhere else and presses whatever is there.
+      if (i > 0) await new Promise((r) => setTimeout(r, KEYSTROKE_GAP_MS))
+      await this.sendChoiceKey(keys[i])
+    }
+  }
+
+  private async sendChoiceKey(data: string): Promise<void> {
     const t = this.choiceTarget
     if (!t) return
     // Cursor movement is local to the panel in a demo; there is no pane whose
     // cursor could disagree with it, and nothing to send a key to.
     if (this.demo) return
     if (t.paneId) {
-      void sendPaneInput(t.sessionId, t.paneId, data).catch(() => {
+      await sendPaneInput(t.sessionId, t.paneId, data).catch(() => {
         this.ws.sendInput(t.sessionId, data)
       })
     } else {
@@ -1543,7 +1602,7 @@ export class GlassesController {
     // Down the same pipe as the keys, because it is the same pipe: text typed
     // at a pane is input like an arrow is, and this is where the paneless
     // session and the demo are already handled.
-    this.sendChoiceKey(text)
+    void this.sendChoiceKey(text)
     // Said locally rather than waited for: the relay's re-read is what makes it
     // true, and until it lands the row would still read `Type something` - a
     // wearer who has just watched their words transcribed, seeing the row they
@@ -1843,7 +1902,7 @@ export class GlassesController {
     // and there is no reason to let it be interleaved at all. In one request
     // the guarantee is real rather than probable: it is the single stdin pipe
     // the pane already promises.
-    this.sendChoiceKey(arrow.repeat(move.count) + '\r')
+    void this.sendChoiceKey(arrow.repeat(move.count) + '\r')
     // The pane is where we just sent it; a re-read will confirm, but until then
     // this keeps a second tap from walking from a stale position.
     this.inlineChoices = { ...inline, selected: index }
