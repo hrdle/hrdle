@@ -219,6 +219,16 @@ export function getMultiCountAt(msgs: ConversationMessage[], offset: number): nu
 
 export interface AppState {
   mode: Mode
+  /**
+   * The panel is dark, and `mode` is the screen waiting underneath it.
+   *
+   * A flag rather than a sixth mode on purpose: waking must return to the
+   * exact screen the wearer left, and a mode would have to remember which one
+   * that was. While this is set the controller ignores every gesture except
+   * the double-tap that clears it, so the OS root double-tap (exit dialogue)
+   * and the wake gesture never mean two things at once.
+   */
+  screenOff?: boolean
   sessions: Session[]
   sessionIndex: number
   conversation: ConversationMessage[]
@@ -1542,6 +1552,10 @@ export function screenText(state: AppState): {
   // from one that crashed, which is the thing the wearer has been seeing all
   // day; this is the app saying which of the two it was.
   if (state.fatal) return fatalScreen(state.fatal)
+  // After `fatal`: a run saying goodbye outranks a panel resting. Everything
+  // empty is what the wearer sees — no lit pixels — and quoting it as such is
+  // what lets a test assert the dark screen the same way it asserts any other.
+  if (state.screenOff) return { header: '', body: '', footer: '' }
   switch (state.mode) {
     case 'session_list':
       // No header: the list screen gave that bar back to the list.
@@ -1958,6 +1972,31 @@ function buildVoice(state: AppState): RebuildPageContainer {
   })
 }
 
+/**
+ * The dark panel: one full-size container holding a single space.
+ *
+ * A space rather than an empty string, because a container's `content` is also
+ * what the skip-if-unchanged record keys on, and elsewhere in this file empty
+ * strings have a habit of not surviving transport. A space lights no pixels,
+ * which on this panel is the whole ask - the G2 has no screen-off call, so
+ * "draw nothing" is how the display is put out.
+ */
+function buildScreenOff(): RebuildPageContainer {
+  const blank = new TextContainerProperty({
+    xPosition: 0, yPosition: 0,
+    width: W, height: H,
+    borderWidth: 0,
+    paddingLength: 0,
+    containerID: 1, containerName: 'off',
+    isEventCapture: 0,
+    content: ' ',
+  })
+  return new RebuildPageContainer({
+    containerTotalNum: 1,
+    textObject: [blank],
+  })
+}
+
 function buildOverlay(state: AppState): RebuildPageContainer {
   const { headerText, bodyText, footerText } = overlayContent(state)
 
@@ -2053,7 +2092,7 @@ const CREATE_RESULT_NAMES: Record<number, string> = {
   3: 'outOfMemory',
 }
 
-let currentMode: Mode | null = null
+let currentMode: Mode | 'screen_off' | null = null
 /** Notice-strip height last sent, so a change in it triggers the rebuild the
  *  new geometry needs. */
 let currentNoticeLines = 0
@@ -2338,27 +2377,41 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
   // which is why the panel is not rebuilt every render.
   // The list's notice is one row or none, but its presence shifts every
   // container id below it - so it is watched the same way the strip's height is.
+  // A dark panel is its own geometry: `mode` still names the screen waiting
+  // underneath, so the sleeping screen's own strip and card counts are pinned
+  // to zero or a growing notice would rebuild a panel nobody is shown.
+  const off = state.screenOff === true
   const notice =
-    state.mode === 'conversation'
+    !off && state.mode === 'conversation'
       ? noticeLineCount(state)
-      : state.mode === 'session_list'
+      : !off && state.mode === 'session_list'
         ? (sessionListNotice(state) ? 1 : 0)
         : 0
-  const card = state.mode === 'overlay' ? cardLineCount(state) : 0
+  const card = !off && state.mode === 'overlay' ? cardLineCount(state) : 0
+  const modeKey = off ? 'screen_off' : state.mode
   const needsRebuild =
-    state.mode !== currentMode || notice !== currentNoticeLines || card !== currentCardLines
-  currentMode = state.mode
+    modeKey !== currentMode || notice !== currentNoticeLines || card !== currentCardLines
+  currentMode = modeKey
   currentNoticeLines = notice
   currentCardLines = card
 
+  // Nothing changes on a dark panel, so past the one rebuild that darkened it
+  // every render returns before touching the bridge - which is also what keeps
+  // a sleeping app off the BLE link.
+  if (off && !needsRebuild) return
+
   if (needsRebuild) {
     let container: RebuildPageContainer
-    switch (state.mode) {
-      case 'session_list': container = buildSessionList(state); break
-      case 'conversation': container = buildConversation(state); break
-      case 'choice': container = buildChoice(state); break
-      case 'voice': container = buildVoice(state); break
-      case 'overlay': container = buildOverlay(state); break
+    if (off) {
+      container = buildScreenOff()
+    } else {
+      switch (state.mode) {
+        case 'session_list': container = buildSessionList(state); break
+        case 'conversation': container = buildConversation(state); break
+        case 'choice': container = buildChoice(state); break
+        case 'voice': container = buildVoice(state); break
+        case 'overlay': container = buildOverlay(state); break
+      }
     }
     const ok = await bridge.rebuildPageContainer(container)
     if (ok === false) {
