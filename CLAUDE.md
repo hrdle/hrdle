@@ -595,7 +595,7 @@ stored by `services/glasses-settings.ts` in `<dataDir>/glasses-settings.json`
 
 | | Precedence | Notes |
 |---|---|---|
-| Groq key | setting, then `GROQ_API_KEY` | Write-only through the API - `GET /api/glasses/settings` reports only whether one is set and where it came from |
+| Groq key | setting, then `GROQ_API_KEY` | Write-only through the API - `GET /api/glasses/settings` reports only whether one is set and where it came from. **Sent to Groq and to nothing else**: a custom endpoint has its own `sttEndpointKey`, because a key belongs to one destination and a URL somebody typed must not receive this one |
 | Language | `?lang=` on the request, then the setting, then `ja` | `auto` sends no language at all and lets Whisper detect it. The glossary is Japanese, so a prompt of its own is what makes another language work properly |
 | Model | setting, then `whisper-large-v3-turbo` | A closed set (`STT_MODELS` in `shared/types.ts`) - an unknown model is a 400 on every utterance and the wearer sees only "STT provider error" |
 | Vocabulary bias | `HRDLE_STT_PROMPT=off` or the `sttBias` switch turns it off; `HRDLE_STT_PROMPT` set to anything else replaces the line; otherwise composed | The env var replaces and the switch disables, and nothing a screen saves does either: a field reachable from the device must not be able to silently disable everything else. The env var can switch the bias off but the screen cannot switch *that* back on, and says so |

@@ -25,6 +25,15 @@ export type SttLang = 'auto' | string;
 export interface GlassesSettings {
   /** Groq API key. Overrides GROQ_API_KEY when set. */
   groqApiKey?: string;
+  /**
+   * Key for the custom transcription endpoint, when it wants one.
+   *
+   * Separate from `groqApiKey` because a key belongs to one destination. One
+   * key sent to every target means a URL somebody typed - possibly `http://`,
+   * possibly a mistake - receives the Groq key, with no way to decline. Absent
+   * means the endpoint is keyless, which is what a local Whisper is.
+   */
+  sttEndpointKey?: string;
   /** Language sent to Whisper, or `auto` to let it detect. */
   sttLang?: SttLang;
   /**
@@ -129,6 +138,9 @@ function asSttModel(value: unknown): SttModel | undefined {
 export interface GlassesSettingsView {
   hasApiKey: boolean;
   apiKeySource: 'setting' | 'env' | 'none';
+  /** Whether the custom endpoint has a key stored. Write-only, like the Groq
+   *  one: this says whether, never what. */
+  hasEndpointKey: boolean;
   sttLang: SttLang;
   sttLangSource: 'setting' | 'default';
   /** Whether a vocabulary prompt is sent at all. */
@@ -181,6 +193,7 @@ export async function loadGlassesSettings(): Promise<GlassesSettings> {
     const parsed = JSON.parse(raw) as GlassesSettings & { sttPrompt?: unknown };
     cache = {
       groqApiKey: typeof parsed.groqApiKey === 'string' ? parsed.groqApiKey : undefined,
+      sttEndpointKey: typeof parsed.sttEndpointKey === 'string' ? parsed.sttEndpointKey : undefined,
       sttLang: typeof parsed.sttLang === 'string' ? parsed.sttLang : undefined,
       sttBias: readBias(parsed),
       // A model that is no longer offered reads back as unset rather than as
@@ -230,6 +243,7 @@ function readBias(parsed: { sttBias?: unknown; sttPrompt?: unknown }): 'on' | 'o
  */
 export async function updateGlassesSettings(patch: {
   groqApiKey?: string | null;
+  sttEndpointKey?: string | null;
   sttLang?: string | null;
   sttBias?: 'on' | 'off' | null;
   sttModel?: string | null;
@@ -243,7 +257,7 @@ export async function updateGlassesSettings(patch: {
     const current = await loadGlassesSettings();
     const next: GlassesSettings = { ...current };
 
-    for (const key of ['groqApiKey', 'sttLang', 'sttModel', 'sttEndpointUrl', 'sttEndpointModel'] as const) {
+    for (const key of ['groqApiKey', 'sttEndpointKey', 'sttLang', 'sttModel', 'sttEndpointUrl', 'sttEndpointModel'] as const) {
       const value = patch[key];
       if (value === undefined) continue;
       const trimmed = value === null ? '' : value.trim();
@@ -345,11 +359,13 @@ export async function glassesSettingsView(): Promise<GlassesSettingsView> {
   const { lang, source: sttLangSource } = await resolveSttLang();
   const { model: sttModel, source: sttModelSource } = await resolveSttModel();
   const { enabled: sttBias, source: sttBiasSource } = await resolveSttBias();
-  const storedScreenOff = (await loadGlassesSettings()).screenOffSeconds;
+  const stored = await loadGlassesSettings();
+  const storedScreenOff = stored.screenOffSeconds;
 
   return {
     hasApiKey: apiKeySource !== 'none',
     apiKeySource,
+    hasEndpointKey: stored.sttEndpointKey !== undefined,
     sttLang: lang,
     sttLangSource,
     sttBias,
