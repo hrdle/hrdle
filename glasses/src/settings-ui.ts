@@ -241,11 +241,13 @@ export async function wireSettingsPanel(): Promise<void> {
     // screen cannot undo it, so the switch says so rather than pretending.
     bias.disabled = v.sttBiasSource === 'env'
 
+    // The stored-value text, not the save confirmation: render() is also the
+    // initial paint, and a panel that opens saying "Saved" has saved nothing.
     screenOffSeconds.value = String(v.screenOffSeconds)
     if (screenOffStatus) {
       screenOffStatus.textContent =
         v.screenOffSecondsSource === 'setting'
-          ? t('settings.screenOffSaved')
+          ? t('settings.screenOffStored')
           : t('settings.screenOffDefault')
     }
 
@@ -362,6 +364,7 @@ export async function wireSettingsPanel(): Promise<void> {
     }
     try {
       render(await putGlassesSettings({ screenOffSeconds: seconds }))
+      if (screenOffStatus) screenOffStatus.textContent = t('settings.screenOffSaved')
     } catch (err) {
       fail(screenOffStatus, err)
     }

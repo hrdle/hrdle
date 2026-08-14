@@ -445,6 +445,13 @@ export class GlassesController {
   private lastActivityAt = Date.now()
   /** Idle time before the panel goes dark; `0` disables. Server-tunable. */
   private screenOffIdleMs = SCREEN_OFF_IDLE_MS
+  /**
+   * Items already presented once, so a relay snapshot cannot present them
+   * again. The snapshot is re-sent on every WS reconnect, and a flaky link
+   * was relighting a dark panel with the same pending question over and over
+   * — a reconnect is not news. Ids leave when the server removes the item.
+   */
+  private presentedItemIds = new Set<string>()
   /** Ticks of the auto-advance clock since the settings were last fetched. */
   private settingsPollTicks = 0
   /** What that gesture was. Reported on the way out: `SYSTEM_EXIT_EVENT` is
@@ -667,7 +674,13 @@ export class GlassesController {
    */
   private tickScreenOff(): void {
     const st = this.state
-    if (this.screenOffIdleMs <= 0) return
+    if (this.screenOffIdleMs <= 0) {
+      // Disabling the timeout while the panel is dark must also relight it:
+      // the wearer who just saved 0 on the phone reads a still-black panel
+      // as a save that did not work.
+      if (st.screenOff) this.wake(true)
+      return
+    }
     if (this.stopped || !this.foreground || st.screenOff || this.demo) return
     if (st.mode !== 'session_list' && st.mode !== 'conversation' && st.mode !== 'overlay') return
     if (Date.now() - Math.max(this.lastGestureAt, this.lastActivityAt) < this.screenOffIdleMs) return
@@ -688,7 +701,16 @@ export class GlassesController {
   private refreshScreenOffSetting(): void {
     void getGlassesSettings()
       .then((view) => {
-        this.screenOffIdleMs = view.screenOffSeconds * 1000
+        // The field's `number` type is an assertion over the server's JSON,
+        // not a runtime guarantee: a server older than this feature answers
+        // without it, and `undefined * 1000` is NaN — which slips every
+        // comparison in `tickScreenOff` and blanks the panel with no idle
+        // time at all. The store hands out the app independently of anyone's
+        // server, so app-newer-than-server is the normal state, not the edge.
+        const seconds = view.screenOffSeconds
+        if (Number.isFinite(seconds) && seconds >= 0) {
+          this.screenOffIdleMs = seconds * 1000
+        }
       })
       .catch(() => {})
   }
@@ -1841,13 +1863,15 @@ export class GlassesController {
   private canTakeOverFor(item: GlassesRelayItem): boolean {
     const present = item.present ?? (item.kind === 'waiting' ? 'takeover' : 'takeover-if-elsewhere')
     if (present === 'banner') return false
-    // A dark panel is interruptible by definition: only the read-only screens
-    // ever sleep, so there is no pick or utterance underneath to protect, and
-    // "already on this conversation" protects a reader who is not looking at
-    // anything.
-    if (this.state.screenOff) return true
-    // Mid-utterance / mid-pick: the wearer is using the panel, not reading it.
-    if (this.state.mode !== 'session_list' && this.state.mode !== 'conversation') return false
+    // A dark panel bypasses only the mid-input check below: the read-only
+    // screens are the only ones that ever sleep, so there is no pick or
+    // utterance underneath to protect. The same-session rule still applies —
+    // the notices it suppresses are raised again on every agent turn, and a
+    // panel they could relight would never reach its timeout.
+    if (!this.state.screenOff) {
+      // Mid-utterance / mid-pick: the wearer is using the panel, not reading it.
+      if (this.state.mode !== 'session_list' && this.state.mode !== 'conversation') return false
+    }
     if (present === 'takeover-if-elsewhere' && this.state.mode === 'conversation') {
       // Not about what is already on screen. "This conversation is done" thrown
       // over the conversation itself tells the reader nothing they cannot see,
@@ -2194,11 +2218,13 @@ export class GlassesController {
   private onRelaySnapshot(items: GlassesRelayItem[]): void {
     this.queue.applySnapshot(items)
     this.syncRelay()
-    // (Re)connected with a decision already pending: present it, under the same
-    // rule a fresh one arrives by. A reconnect is not a reason to show the
-    // wearer less than they would have been shown a moment earlier.
+    // Connected with a decision already pending: present it, under the same
+    // rule a fresh one arrives by — but only the first time. The snapshot is
+    // re-sent on every reconnect, and presenting the same item again relights
+    // a dark panel and re-enters the overlay with nothing new to show.
     const top = this.queue.topWaiting()
-    if (top && this.canTakeOverFor(top)) {
+    if (top && !this.presentedItemIds.has(top.id) && this.canTakeOverFor(top)) {
+      this.presentedItemIds.add(top.id)
       this.wake(false)
       this.enterOverlay(top.id)
       return
@@ -2213,6 +2239,7 @@ export class GlassesController {
     // being asked, because the wearer is mid-answer and the alternative is a
     // notice they have to find their way back to.
     if (this.shouldFollowChoice(item)) {
+      this.presentedItemIds.add(item.id)
       this.wake(false)
       this.enterChoice(
         item.choices as string[],
@@ -2233,6 +2260,7 @@ export class GlassesController {
       // The active event is what relights a dark panel: the wearer asked to be
       // interrupted by these, and a notification drawn onto a screen that
       // stays black was never delivered.
+      this.presentedItemIds.add(item.id)
       this.wake(false)
       this.enterOverlay(item.id)
       if (item.kind === 'info') this.scheduleNoticeDismiss(item.id)
@@ -2243,6 +2271,7 @@ export class GlassesController {
 
   /** Item removed server-side (blocked resolved / TTL) → clear the overlay. */
   private onRelayRemove(id: string): void {
+    this.presentedItemIds.delete(id)
     if (!this.queue.remove(id)) return
     this.syncRelay()
     if (this.state.mode === 'overlay') {
