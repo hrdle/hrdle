@@ -27,6 +27,13 @@ const LANGS: Array<{ value: string; labelKey: string }> = [
   { value: 'en', labelKey: 'settings.langEn' },
 ]
 
+/**
+ * Auto screen-off choices, in minutes; `0` never sleeps. A closed set like the
+ * models: the server clamps to 0..60 anyway, and a select is one tap where a
+ * number field is a keyboard.
+ */
+const SCREEN_OFF_CHOICES = [0, 1, 3, 5, 10]
+
 // The accent is a variable because this panel has two homes with different
 // palettes: the phone wizard, which is red like the app icon, and the browser
 // simulator, which is green because that is the colour the G2 actually draws in.
@@ -88,6 +95,15 @@ export function settingsPanelHtml(): string {
            named, that is the glossary every session shares. -->
       <div id="stt-bias-preview" style="${S.preview}"></div>
       <div id="stt-bias-status" style="${S.status}"></div>
+
+      <label style="${S.label}" for="screen-off">${t('settings.screenOff')}</label>
+      <select id="screen-off" style="${S.input}">
+        ${SCREEN_OFF_CHOICES.map(
+          (m) =>
+            `<option value="${m}">${m === 0 ? t('settings.screenOffNever') : t('settings.screenOffMinutes', { minutes: String(m) })}</option>`,
+        ).join('')}
+      </select>
+      <div id="screen-off-status" style="${S.status}"></div>
     </div>
   `
 }
@@ -130,11 +146,13 @@ export async function wireSettingsPanel(): Promise<void> {
   const lang = el<HTMLSelectElement>('stt-lang')
   const model = el<HTMLSelectElement>('stt-model')
   const bias = el<HTMLInputElement>('stt-bias')
-  if (!key || !lang || !model || !bias) return
+  const screenOff = el<HTMLSelectElement>('screen-off')
+  if (!key || !lang || !model || !bias || !screenOff) return
 
   const keyStatus = el('stt-key-status')
   const langStatus = el('stt-lang-status')
   const modelStatus = el('stt-model-status')
+  const screenOffStatus = el('screen-off-status')
   const biasStatus = el('stt-bias-status')
   const biasPreview = el('stt-bias-preview')
 
@@ -174,6 +192,22 @@ export async function wireSettingsPanel(): Promise<void> {
     // `HRDLE_STT_PROMPT=off` is a decision made at the process level and this
     // screen cannot undo it, so the switch says so rather than pretending.
     bias.disabled = v.sttBiasSource === 'env'
+
+    // A stored value outside the offered set still has to be shown as itself,
+    // or the select would silently claim a timeout the server is not using.
+    if (!SCREEN_OFF_CHOICES.includes(v.screenOffMinutes)) {
+      screenOff.insertAdjacentHTML(
+        'beforeend',
+        `<option value="${v.screenOffMinutes}">${t('settings.screenOffMinutes', { minutes: String(v.screenOffMinutes) })}</option>`,
+      )
+    }
+    screenOff.value = String(v.screenOffMinutes)
+    if (screenOffStatus) {
+      screenOffStatus.textContent =
+        v.screenOffMinutesSource === 'setting'
+          ? t('settings.screenOffSaved')
+          : t('settings.screenOffDefault')
+    }
   }
 
   /**
@@ -251,6 +285,14 @@ export async function wireSettingsPanel(): Promise<void> {
       await renderPreview()
     } catch (err) {
       fail(biasStatus, err)
+    }
+  })
+
+  screenOff.addEventListener('change', async () => {
+    try {
+      render(await putGlassesSettings({ screenOffMinutes: Number(screenOff.value) }))
+    } catch (err) {
+      fail(screenOffStatus, err)
     }
   })
 }

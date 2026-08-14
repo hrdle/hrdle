@@ -235,6 +235,8 @@ const GlassesSettingsPatchSchema = z.object({
   // A closed set: an unknown model is a 400 on every utterance, and the wearer
   // would see only "STT provider error".
   sttModel: z.enum(STT_MODELS).nullable().optional(),
+  // Minutes before the glasses blank their panel. 0 = never, an hour at most.
+  screenOffMinutes: z.number().int().min(0).max(60).nullable().optional(),
 });
 
 /**

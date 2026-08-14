@@ -86,6 +86,11 @@ const EN: Table = {
   'settings.biasEnv': 'Replaced by HRDLE_STT_PROMPT in the server environment.',
   'settings.biasComposed':
     'Sent with every transcription. A session speaking adds its own words in front of these - set those with `hrdle stt-prompt` in it, or from its settings.',
+  'settings.screenOff': 'Auto screen-off',
+  'settings.screenOffNever': 'Never',
+  'settings.screenOffMinutes': 'After {minutes} min idle',
+  'settings.screenOffSaved': 'Saved. The glasses pick it up on their next reconnect or resume.',
+  'settings.screenOffDefault': 'Default. Double-tap the ring to wake a dark screen.',
   'settings.failed': 'Failed: {error}',
 
   // The demo, which is a tutorial: every string is a caption for the thing it
@@ -170,6 +175,11 @@ const JA: Table = {
   'settings.biasEnv': 'サーバー環境変数の HRDLE_STT_PROMPT で置き換えられています。',
   'settings.biasComposed':
     '毎回の文字起こしに送られます。話しかけるセッション自身の語はこの前に付きます（そのセッションで `hrdle stt-prompt`、または設定から）。',
+  'settings.screenOff': '自動消灯',
+  'settings.screenOffNever': '消灯しない',
+  'settings.screenOffMinutes': '無操作 {minutes} 分で消灯',
+  'settings.screenOffSaved': '保存しました。グラスには次の再接続・復帰時に反映されます。',
+  'settings.screenOffDefault': '既定値です。消灯中はリングのダブルタップで復帰します。',
   'settings.failed': '失敗しました: {error}',
 
   // The demo. Japanese is full-width, so each of these has half the room the

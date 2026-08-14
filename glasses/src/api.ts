@@ -177,6 +177,9 @@ export interface GlassesSettingsView {
   sttModelSource: 'setting' | 'default'
   /** Every model the server will accept, so this app need not hardcode them. */
   sttModels: string[]
+  /** Minutes before this app blanks its panel; `0` = never. */
+  screenOffMinutes: number
+  screenOffMinutesSource: 'setting' | 'default'
 }
 
 /**
@@ -227,6 +230,7 @@ export async function putGlassesSettings(patch: {
   sttLang?: string | null
   sttBias?: 'on' | 'off' | null
   sttModel?: string | null
+  screenOffMinutes?: number | null
 }): Promise<GlassesSettingsView> {
   const res = await fetch(`${baseUrl}/api/glasses/settings`, {
     method: 'PUT',

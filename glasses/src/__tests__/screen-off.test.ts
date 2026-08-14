@@ -34,6 +34,7 @@ type Internals = {
   lastGestureAt: number
   lastActivityAt: number
   recording: boolean
+  screenOffIdleMs: number
   tickScreenOff(): void
   onRelayUpsert(item: GlassesRelayItem): void
 }
@@ -96,6 +97,25 @@ describe('going dark', () => {
     ageOut(c)
     inner(c).tickScreenOff()
     expect(c.state.screenOff).toBeUndefined()
+  })
+
+  test('a timeout of zero means the panel never sleeps', () => {
+    // `0` is the settings screen's "never" - the server hands it over in
+    // minutes and the controller keeps it as a disabled clock.
+    const { c } = controller('session_list')
+    inner(c).screenOffIdleMs = 0
+    ageOut(c)
+    inner(c).tickScreenOff()
+    expect(c.state.screenOff).toBeUndefined()
+  })
+
+  test('a shorter server-set timeout is honoured', () => {
+    const { c } = controller('session_list')
+    inner(c).screenOffIdleMs = 60_000
+    inner(c).lastGestureAt = Date.now() - 61_000
+    inner(c).lastActivityAt = Date.now() - 61_000
+    inner(c).tickScreenOff()
+    expect(c.state.screenOff).toBe(true)
   })
 
   test('an item that recently took the screen holds the deadline off', () => {

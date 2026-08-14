@@ -145,6 +145,39 @@ describe('glasses settings store', () => {
  * The bias switch, and the one thing carried over from the shared-words field
  * it replaced (#255).
  */
+describe('the auto screen-off timeout', () => {
+  test('defaults to three minutes and reports where the value came from', async () => {
+    const view = await glassesSettingsView();
+    expect(view.screenOffMinutes).toBe(3);
+    expect(view.screenOffMinutesSource).toBe('default');
+  });
+
+  test('stores minutes, including 0 for never, and clears back to the default', async () => {
+    await updateGlassesSettings({ screenOffMinutes: 1 });
+    expect((await glassesSettingsView()).screenOffMinutes).toBe(1);
+    expect((await glassesSettingsView()).screenOffMinutesSource).toBe('setting');
+
+    // 0 is a value ("never"), not an absence - it must survive the store.
+    await updateGlassesSettings({ screenOffMinutes: 0 });
+    const never = await glassesSettingsView();
+    expect(never.screenOffMinutes).toBe(0);
+    expect(never.screenOffMinutesSource).toBe('setting');
+
+    await updateGlassesSettings({ screenOffMinutes: null });
+    expect((await glassesSettingsView()).screenOffMinutesSource).toBe('default');
+  });
+
+  test('a value outside 0..60 in the file reads back as unset', async () => {
+    await writeFile(
+      join(tempDir, 'glasses-settings.json'),
+      JSON.stringify({ screenOffMinutes: 720 }),
+    );
+    resetGlassesSettingsCache();
+    expect((await loadGlassesSettings()).screenOffMinutes).toBeUndefined();
+    expect((await glassesSettingsView()).screenOffMinutesSource).toBe('default');
+  });
+});
+
 describe('the vocabulary bias switch', () => {
   test('it is on until somebody says otherwise', async () => {
     expect(await resolveSttBias()).toEqual({ enabled: true, source: 'default' });

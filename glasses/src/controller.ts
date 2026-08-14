@@ -25,7 +25,7 @@
 //                 doubleTap=cancel (item stays queued)
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
-import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
+import { getConversation, getGlassesSettings, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
 import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
@@ -187,13 +187,21 @@ const AUTO_SCROLL_DWELL_MS = 3 * SECONDS_PER_LINE_MS
 const AUTO_SCROLL_MAX_PASSES = 2
 
 /**
- * How long the wearer has to be away before the panel goes dark.
+ * How long the wearer has to be away before the panel goes dark, until the
+ * server says otherwise.
  *
  * The panel has no screen-off of its own while this app is up, so an app
  * that draws something and is then forgotten stays lit until the battery
  * gives out. Three minutes:
  * auto-advance has finished its passes and rested by one minute, so this is
  * two further minutes of proven absence, not a reader mid-page.
+ *
+ * A default, not the value: the settings screen stores minutes server-side
+ * (`screenOffMinutes`, `0` = never) and the controller fetches them on connect
+ * and on resume, so retuning the timeout is a settings edit rather than an
+ * ehpk rebuild. This constant must agree with the server's
+ * DEFAULT_SCREEN_OFF_MINUTES, or an app that never reached its server sleeps
+ * on a different clock than the screen says.
  *
  * Only the read-only screens sleep (list, conversation, overlay). Choice and
  * voice are the wearer mid-input, and a panel that goes dark while it *is* the
@@ -436,6 +444,8 @@ export class GlassesController {
    * deadline must not be blanked before anyone could have walked over to it.
    */
   private lastActivityAt = Date.now()
+  /** Idle time before the panel goes dark; `0` disables. Server-tunable. */
+  private screenOffIdleMs = SCREEN_OFF_IDLE_MS
   /** What that gesture was. Reported on the way out: `SYSTEM_EXIT_EVENT` is
    *  the user confirming the host's exit dialogue, so what they pressed just
    *  before it is the difference between "they meant to leave" and "the app
@@ -618,6 +628,7 @@ export class GlassesController {
    *  a snapshot, then pushes upserts/removals. */
   connect(): void {
     if (this.stopped) return
+    this.refreshScreenOffSetting()
     this.ws.subscribeGlassesRelay(this.platform.onDevice, this.platform.instanceId)
     this.ws.connect()
     // One timer for the life of the app rather than start/stop bookkeeping on
@@ -647,11 +658,25 @@ export class GlassesController {
    */
   private tickScreenOff(): void {
     const st = this.state
+    if (this.screenOffIdleMs <= 0) return
     if (this.stopped || !this.foreground || st.screenOff || this.demo) return
     if (st.mode !== 'session_list' && st.mode !== 'conversation' && st.mode !== 'overlay') return
-    if (Date.now() - Math.max(this.lastGestureAt, this.lastActivityAt) < SCREEN_OFF_IDLE_MS) return
+    if (Date.now() - Math.max(this.lastGestureAt, this.lastActivityAt) < this.screenOffIdleMs) return
     st.screenOff = true
     this.render()
+  }
+
+  /**
+   * Take the timeout the settings screen holds. Fire-and-forget: an app that
+   * cannot reach its server keeps the built-in default, which the server's own
+   * default matches.
+   */
+  private refreshScreenOffSetting(): void {
+    void getGlassesSettings()
+      .then((view) => {
+        this.screenOffIdleMs = view.screenOffMinutes * 60_000
+      })
+      .catch(() => {})
   }
 
   /** Relight the panel. The screen underneath was kept, so this is only the
@@ -831,6 +856,8 @@ export class GlassesController {
     // Being brought back is the wearer's doing, so the panel relights: a
     // resume onto a dark screen reads as the crash it took a day to rule out.
     this.wake(false)
+    // The timeout may have been retuned from the phone while this slept.
+    this.refreshScreenOffSetting()
     this.ws.connect()
     this.render()
     void this.maybeRefreshConversation()

@@ -38,6 +38,14 @@ export interface GlassesSettings {
   sttBias?: 'on' | 'off';
   /** Transcription model. One of `STT_MODELS`. */
   sttModel?: string;
+  /**
+   * Minutes of ring silence before the glasses app blanks its panel.
+   * `0` means never. Absent means the app's own default.
+   *
+   * Stored here rather than in the app so changing it is a settings-screen
+   * edit, not an ehpk rebuild - the app fetches it on connect and on resume.
+   */
+  screenOffMinutes?: number;
 }
 
 /**
@@ -59,6 +67,13 @@ export { STT_MODELS, type SttModel } from '../../../shared/types';
  * picking here.
  */
 export const DEFAULT_STT_MODEL: SttModel = 'whisper-large-v3-turbo';
+
+/** `0` (never) up to an hour. Anything else reads back as unset. */
+function asScreenOffMinutes(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 60
+    ? value
+    : undefined;
+}
 
 function asSttModel(value: unknown): SttModel | undefined {
   return typeof value === 'string' && (STT_MODELS as readonly string[]).includes(value)
@@ -90,9 +105,20 @@ export interface GlassesSettingsView {
   sttModelSource: 'setting' | 'default';
   /** Every model that may be chosen, so the screen need not hardcode them. */
   sttModels: readonly SttModel[];
+  /** Minutes before the glasses blank their panel; `0` = never. */
+  screenOffMinutes: number;
+  screenOffMinutesSource: 'setting' | 'default';
 }
 
 export const DEFAULT_STT_LANG = 'ja';
+
+/**
+ * Matches the app's own built-in (SCREEN_OFF_IDLE_MS in glasses/src): an app
+ * that never fetched settings and a server that never stored any must agree,
+ * or the first settings save silently changes the wearer's timeout.
+ */
+export const DEFAULT_SCREEN_OFF_MINUTES = 3;
+
 const FILE_NAME = 'glasses-settings.json';
 
 /**
@@ -124,6 +150,7 @@ export async function loadGlassesSettings(): Promise<GlassesSettings> {
       // itself: every transcription would 400 otherwise, and the file is the
       // one place nobody looks when speech stops working.
       sttModel: asSttModel(parsed.sttModel),
+      screenOffMinutes: asScreenOffMinutes(parsed.screenOffMinutes),
     };
   } catch {
     cache = {};
@@ -158,6 +185,7 @@ export async function updateGlassesSettings(patch: {
   sttLang?: string | null;
   sttBias?: 'on' | 'off' | null;
   sttModel?: string | null;
+  screenOffMinutes?: number | null;
 }): Promise<GlassesSettings> {
   return withLock(async () => {
     const current = await loadGlassesSettings();
@@ -174,6 +202,12 @@ export async function updateGlassesSettings(patch: {
     if (patch.sttBias !== undefined) {
       if (patch.sttBias === null) delete next.sttBias;
       else next.sttBias = patch.sttBias;
+    }
+
+    if (patch.screenOffMinutes !== undefined) {
+      const minutes = patch.screenOffMinutes === null ? undefined : asScreenOffMinutes(patch.screenOffMinutes);
+      if (minutes === undefined) delete next.screenOffMinutes;
+      else next.screenOffMinutes = minutes;
     }
 
     await ensureDataDir();
@@ -243,6 +277,7 @@ export async function glassesSettingsView(): Promise<GlassesSettingsView> {
   const { lang, source: sttLangSource } = await resolveSttLang();
   const { model: sttModel, source: sttModelSource } = await resolveSttModel();
   const { enabled: sttBias, source: sttBiasSource } = await resolveSttBias();
+  const storedScreenOff = (await loadGlassesSettings()).screenOffMinutes;
 
   return {
     hasApiKey: apiKeySource !== 'none',
@@ -254,6 +289,8 @@ export async function glassesSettingsView(): Promise<GlassesSettingsView> {
     sttModel,
     sttModelSource,
     sttModels: STT_MODELS,
+    screenOffMinutes: storedScreenOff ?? DEFAULT_SCREEN_OFF_MINUTES,
+    screenOffMinutesSource: storedScreenOff === undefined ? 'default' : 'setting',
   };
 }
 
