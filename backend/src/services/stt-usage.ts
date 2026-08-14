@@ -1,13 +1,21 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { GroqSttRateLimit, GroqSttUsageDay, GroqSttUsageSummary } from '../../../shared/types';
-import { atomicWriteFile, createMutationLock, ensureDataDir } from '../utils/storage';
+import type { GroqSttRateLimit, SttUsageDay, SttUsageSummary } from '../../../shared/types';
+import { atomicWriteFile, createMutationLock, ensureDataDir, migrateDataFileName } from '../utils/storage';
 import { DEFAULT_STT_MODEL, resolveSttModel } from './glasses-settings';
 import { type SttTarget, groqTarget, sttHealth, sttTargets } from './stt-provider';
 import { localDateKey, startOfDayBefore } from './kimi-usage';
 
 /**
- * How much of Groq's transcription quota the glasses have been spending.
+ * How much transcription the glasses have been spending.
+ *
+ * Named for the job rather than for Groq because speech can now be sent
+ * anywhere (`stt-provider.ts`). **What actually reaches this tally is still
+ * only the billed target**: `routes/glasses.ts` records under `target.billed`,
+ * so a custom endpoint's requests are counted nowhere and a wearer using one
+ * exclusively sees an empty card. `billedSeconds` exists to separate the
+ * priced subset from the total once every target is recorded; until then it
+ * tracks `audioSeconds` on every path but the one where nothing was sent.
  *
  * Unlike every other usage service here, this one cannot read its history back
  * from anywhere. Kimi, Codex and Grok all leave transcripts on disk that can be
@@ -29,8 +37,19 @@ import { localDateKey, startOfDayBefore } from './kimi-usage';
  * a request.
  */
 
-const STORE_FILE = 'groq-stt-usage.json';
+const STORE_FILE = 'stt-usage.json';
 const STORE_VERSION = 1;
+
+/**
+ * The name this store had while Groq was the only destination.
+ *
+ * DELETE ON OR AFTER 2026-08-22, with the `migrateDataFileName` call in
+ * `load()`. Worth carrying at all because this file is the only copy there is:
+ * every other usage service re-derives itself from transcripts on disk, and
+ * Groq has no usage endpoint, so a day not carried across is a day nobody can
+ * get back.
+ */
+const LEGACY_STORE_FILE = 'groq-stt-usage.json';
 /** Roughly a year, matching the Kimi history file. A day is ~60 bytes. */
 const RETAIN_DAYS = 400;
 /** Days of history the summary carries. Two weeks is what the chart shows. */
@@ -192,14 +211,18 @@ export interface SttRequestOutcome {
   rateLimit?: GroqSttRateLimit;
 }
 
-export class GroqSttUsageService {
+export class SttUsageService {
   private days: Map<string, StoredSttDay> | null = null;
   private rateLimit?: GroqSttRateLimit;
 
   private async load(): Promise<Map<string, StoredSttDay>> {
     if (this.days) return this.days;
+    const dir = await ensureDataDir();
+    // The one caller. `load()` populates `this.days` on every path, including
+    // the failure one, so this runs once per process.
+    await migrateDataFileName(dir, LEGACY_STORE_FILE, STORE_FILE);
     try {
-      const parsed = parseStore(await readFile(join(await ensureDataDir(), STORE_FILE), 'utf-8'));
+      const parsed = parseStore(await readFile(join(dir, STORE_FILE), 'utf-8'));
       this.days = parsed.days;
       this.rateLimit = parsed.rateLimit;
     } catch {
@@ -256,7 +279,7 @@ export class GroqSttUsageService {
    * the glasses were used and said nothing, when in fact they were never used
    * on this server at all.
    */
-  async getUsageSummary(now = Date.now()): Promise<GroqSttUsageSummary | null> {
+  async getUsageSummary(now = Date.now()): Promise<SttUsageSummary | null> {
     const days = await this.load();
     if (days.size === 0) return null;
     // The model in force now, not a constant: it is a setting, and the card
@@ -271,7 +294,7 @@ export class GroqSttUsageService {
  * One instance for the process: the STT route writes to it and the dashboard
  * reads from it, and the last rate-limit reading lives in memory between them.
  */
-export const groqSttUsageService = new GroqSttUsageService();
+export const sttUsageService = new SttUsageService();
 
 /**
  * Contiguous days, oldest first, today last - a quiet day is a bar of height
@@ -286,8 +309,8 @@ export function buildSummary(
   // At runtime getUsageSummary passes the settings-aware resolution; the
   // env-free default here exists for tests that never touch settings.
   targets: { primary: SttTarget; fallback: SttTarget | null } | null = null,
-): GroqSttUsageSummary {
-  const daily: GroqSttUsageDay[] = [];
+): SttUsageSummary {
+  const daily: SttUsageDay[] = [];
   // Billed seconds stay out of the daily rows (the chart shows money, not
   // both second-counts), but the 7-day cost needs them summed.
   const billedSeconds: number[] = [];
@@ -307,7 +330,7 @@ export function buildSummary(
 
   const today = daily[daily.length - 1];
   const last7 = daily.slice(-7);
-  const sum = (pick: (d: GroqSttUsageDay) => number) =>
+  const sum = (pick: (d: SttUsageDay) => number) =>
     last7.reduce((total, day) => total + pick(day), 0);
   const audioSeconds7d = sum((d) => d.audioSeconds);
   const billedSeconds7d = billedSeconds.slice(-7).reduce((total, s) => total + s, 0);

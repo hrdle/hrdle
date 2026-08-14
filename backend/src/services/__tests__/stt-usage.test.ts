@@ -7,7 +7,7 @@ import {
   readRateLimitHeaders,
   wavSeconds,
   type StoredSttDay,
-} from '../groq-stt-usage';
+} from '../stt-usage';
 
 function wav(sampleRate: number, samples: number): Uint8Array {
   const pcm = new Uint8Array(samples * 2);
@@ -32,7 +32,8 @@ const day = (over: Partial<StoredSttDay> = {}): StoredSttDay => ({
   requests: 0,
   failures: 0,
   audioSeconds: 0,
-  // 既定は「送った分がすべて課金先へ行った」= 送り先が 1 つだった頃の前提。
+  // Everything sent went to the billed target - the assumption that held while
+  // there was only one destination.
   billedSeconds: over.audioSeconds ?? 0,
   ...over,
 });

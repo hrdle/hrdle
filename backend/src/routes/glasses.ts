@@ -17,11 +17,11 @@ import {
 } from '../services/glasses-settings';
 import { applySttCorrections } from '../services/stt-corrections';
 import {
-  groqSttUsageService,
+  sttUsageService,
   pcmSeconds,
   readRateLimitHeaders,
   wavSeconds,
-} from '../services/groq-stt-usage';
+} from '../services/stt-usage';
 import { notifyGlassesSettingsChanged } from '../services/glasses-relay';
 import {
   glassesRecordingEnabled,
@@ -192,7 +192,7 @@ glasses.post('/stt', async (c) => {
       // answers "how close to Groq's daily cap", and mixing in requests to a
       // custom endpoint would make the remaining headroom unreadable.
       if (target.billed) {
-        void groqSttUsageService.record({
+        void sttUsageService.record({
           audioSeconds,
           billedSeconds: audioSeconds,
           ok: res.ok,
@@ -243,7 +243,7 @@ glasses.post('/stt', async (c) => {
       // Never reached the target = a failure worth recording, and a billed one
       // only when the billed target was the one being tried (a custom server
       // asleep is not Groq usage). Zero seconds: nothing was transcribed.
-      if (target.billed) void groqSttUsageService.record({ audioSeconds, billedSeconds: 0, ok: false });
+      if (target.billed) void sttUsageService.record({ audioSeconds, billedSeconds: 0, ok: false });
       if (isPrimary) notePrimaryDown(target.url);
       lastError = `${target.label} unreachable`;
       console.error(`[glasses/stt] ${lastError}:`, err);

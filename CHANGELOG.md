@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The speech-to-text usage tally is no longer named after Groq.** Speech can
+  be sent anywhere now, so `GroqSttUsageService` is `SttUsageService`,
+  `groq-stt-usage.ts` is `stt-usage.ts`, the dashboard card and the shared types
+  follow, and the store on disk is `<dataDir>/stt-usage.json`
+  - **The existing tally is carried across, not restarted.** Every other usage
+    service can re-derive itself from transcripts on disk; this one is the only
+    copy there is, because Groq has no usage endpoint. A day not carried over is
+    a day nobody can get back
+  - The carrying is `migrateDataFileName` in `utils/storage.ts`, which **stays**
+    - renaming a service is a thing that keeps happening, and the awkward part
+    is not the rename but remembering that the store went with it. A file
+    already under the current name is never written over, so it cannot land on
+    top of live data. The *call* still expires, on 2026-08-22, and is one line
+    plus one constant when it does
+  - The name now describes the job rather than what actually reaches it: the
+    record calls still sit under `target.billed`, so a custom endpoint's
+    requests are counted nowhere. Fixing that is separate work
+
 ## [0.3.126] - 2026-08-14
 
 ### Added

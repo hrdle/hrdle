@@ -12,7 +12,7 @@ import { formatTokens, formatUsd } from "../../utils/format";
 import { nukeClientCache } from "../../utils/nuke-cache";
 import { Card, StatTile } from "./Card";
 import { DailyUsageChart } from "./DailyUsageChart";
-import { GroqSttUsageCard } from "./GroqSttUsageCard";
+import { SttUsageCard } from "./SttUsageCard";
 import { HourlyHeatmap } from "./HourlyHeatmap";
 import { KimiDailyCostChart } from "./KimiDailyCostChart";
 import { ModelUsageChart } from "./ModelUsageChart";
@@ -87,7 +87,7 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 	const kimiUsage = data?.kimiUsage;
 	const opencodeUsage = data?.opencodeUsage;
 	const openRouterUsage = data?.openRouterUsage;
-	const groqSttUsage = data?.groqSttUsage;
+	const sttUsage = data?.sttUsage;
 	// Claude is "available" when we have any actionable Claude data. The endpoint
 	// returns empty arrays / no-credentials errors on a Codex-only machine.
 	const claudeAvailable =
@@ -478,7 +478,7 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 					    numbers, above a list of peers it did not describe. */}
 					{/* Not in the agent section above: Groq is not an agent, it is this
 					    server's own outbound spend on the glasses' voice input. */}
-					{groqSttUsage && <GroqSttUsageCard usage={groqSttUsage} />}
+					{sttUsage && <SttUsageCard usage={sttUsage} />}
 					{sortedPeers.map((peer) => (
 						<PeerServerCard key={peer.id} peer={peer} />
 					))}

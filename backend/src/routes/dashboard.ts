@@ -7,7 +7,7 @@ import { KimiUsageService } from '../services/kimi-usage';
 import { KimiConfigService } from '../services/kimi-config';
 import { OpenCodeUsageService } from '../services/opencode-usage';
 import { OpenRouterAccountService } from '../services/openrouter';
-import { groqSttUsageService } from '../services/groq-stt-usage';
+import { sttUsageService } from '../services/stt-usage';
 import { UsageHistoryService } from '../services/usage-history';
 import { SystemMetricsService } from '../services/system-metrics';
 import { HerdrUpdateService } from '../services/herdr-update';
@@ -84,14 +84,14 @@ export async function leg<T>(label: string, work: () => T | Promise<T>, fallback
 export async function buildDashboard(): Promise<DashboardResponse> {
   // The herdr skew check rides on this poll instead of its own timer;
   // it is cached, so the extra spawn is far rarer than the request rate.
-  const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, groqSttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate, hrdleUpdate] = await Promise.all([
+  const [usageLimits, codexUsageLimits, grokUsage, kimiUsage, opencodeUsage, openRouterUsage, sttUsage, dailyActivity, modelUsage, hourlyActivity, usageHistory, systemMetrics, diskUsage, herdrUpdate, hrdleUpdate] = await Promise.all([
     leg('anthropic usage', () => anthropicUsageService.getUsageLimits(), null),
     leg('codex usage', () => codexUsageService.getUsageLimits(), null),
     leg('grok usage', () => grokUsageService.getUsageSummary(), null),
     leg('kimi usage', () => kimiUsageService.getUsageSummary(), null),
     leg('opencode usage', () => opencodeUsageService.getUsageSummary(), null),
     leg('openrouter usage', () => openRouterAccountService.getUsage(), null),
-    leg('groq stt usage', () => groqSttUsageService.getUsageSummary(), null),
+    leg('stt usage', () => sttUsageService.getUsageSummary(), null),
     leg('daily activity', () => statsService.getDailyActivity(14), []),
     leg('model usage', () => statsService.getModelUsage(), []),
     leg('hourly activity', () => statsService.getHourlyActivity(), {}),
@@ -120,7 +120,7 @@ export async function buildDashboard(): Promise<DashboardResponse> {
     kimiUsage,
     opencodeUsage,
     openRouterUsage,
-    groqSttUsage,
+    sttUsage,
     usageHistory,
     dailyActivity,
     modelUsage,
