@@ -92,19 +92,29 @@ export function GroqSttUsageCard({ usage, className = "" }: GroqSttUsageCardProp
 		<Card
 			title={t("dashboard.groqStt")}
 			aside={
-				<select
-					value={model}
-					onChange={(e) => changeModel(e.target.value)}
-					aria-label={t("dashboard.groqSttModel")}
-					title={t("dashboard.groqSttModel")}
-					className="max-w-[11rem] shrink-0 truncate bg-th-bg border border-th-border rounded px-1.5 py-0.5 text-[11px] text-th-text-muted focus:outline-none focus:border-blue-500"
-				>
-					{STT_MODELS.map((option) => (
-						<option key={option} value={option}>
-							{option}
-						</option>
-					))}
-				</select>
+				<div className="flex items-center gap-1.5 min-w-0">
+					{/* Shown only when the destination disagrees with the selection: with
+					    a custom endpoint and Groq trading places, the model select alone
+					    cannot say where speech is going right now. */}
+					{(usage.providerModel !== model || usage.primaryDown) && (
+						<span className="text-[11px] text-th-text-muted shrink truncate">
+							{usage.provider} · {usage.providerModel}
+						</span>
+					)}
+					<select
+						value={model}
+						onChange={(e) => changeModel(e.target.value)}
+						aria-label={t("dashboard.groqSttModel")}
+						title={t("dashboard.groqSttModel")}
+						className="max-w-[11rem] shrink-0 truncate bg-th-bg border border-th-border rounded px-1.5 py-0.5 text-[11px] text-th-text-muted focus:outline-none focus:border-blue-500"
+					>
+						{STT_MODELS.map((option) => (
+							<option key={option} value={option}>
+								{option}
+							</option>
+						))}
+					</select>
+				</div>
 			}
 			className={className}
 			footnote={
@@ -125,6 +135,13 @@ export function GroqSttUsageCard({ usage, className = "" }: GroqSttUsageCardProp
 				</>
 			}
 		>
+			{/* A silent switch onto the billed target otherwise surfaces on the
+			    invoice - while the fallback is standing in, say so where it is seen. */}
+			{usage.primaryDown && (
+				<div className="mb-2 px-2.5 py-2 rounded-lg bg-amber-900/20 border border-amber-700/30 text-[12px] text-amber-400">
+					{t("dashboard.sttFallbackActive", { provider: usage.provider })}
+				</div>
+			)}
 			<div className="grid grid-cols-3 gap-2">
 				<StatTile label={t("dashboard.groqSttRequests")}>
 					<div className="text-lg font-semibold text-th-text tabular-nums">

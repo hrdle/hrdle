@@ -58,7 +58,9 @@ const EN: Table = {
 
   'settings.title': 'Voice input',
   'settings.subtitle':
-    'Transcription runs on the server through Groq. The key never leaves that host.',
+    'Language and vocabulary travel with the speech, whichever server transcribes it.',
+  'settings.groqSubtitle':
+    'The default transcriber. The key is stored on the server and never leaves that host.',
   'settings.key': 'Groq API key',
   'settings.keySave': 'Save key',
   'settings.keyClear': 'Clear',
@@ -94,6 +96,34 @@ const EN: Table = {
   'settings.screenOffSaved': 'Saved. Running glasses pick it up within a couple of minutes.',
   'settings.screenOffDefault': 'Off by default - the screen stays on. Type seconds and save to enable.',
   'settings.screenOffInvalid': 'Whole seconds between 0 and 3600.',
+  'settings.groqTitle': 'Groq',
+  'settings.destinationLine': 'Transcription currently goes to {destination}.',
+  'settings.provider': 'Transcription provider',
+  'settings.providerGroq': 'Groq',
+  'settings.providerCustom': 'Custom server',
+  'settings.fallbackToggle': 'Switch to the other one when it fails',
+  'settings.endpoint': 'Custom transcription server',
+  'settings.endpointHint':
+    'An OpenAI-shaped endpoint (a local Whisper, for example), used when the provider above says so. Audio goes wherever this points.',
+  'settings.endpointUrl': 'Endpoint URL',
+  'settings.endpointModel': 'Model name the endpoint expects',
+  'settings.endpointFallback': 'Fall back to Groq when it is unreachable',
+  'settings.endpointSave': 'Save endpoint',
+  'settings.endpointClear': 'Clear',
+  'settings.endpointNone': 'Not set - transcription goes to Groq.',
+  'settings.endpointEnv':
+    'Set by the server environment (currently sending to {destination}). Saving here overrides it.',
+  'settings.endpointSaved': 'Saved here. Currently sending to {destination}.',
+  'settings.endpointSpecTitle': 'Running your own server? What it has to accept',
+  'settings.endpointSpec':
+    '<ul style="margin:0;padding-left:18px;display:grid;gap:6px;">' +
+    '<li>OpenAI-style <code>POST /v1/audio/transcriptions</code> (multipart: <code>file</code> as WAV, <code>model</code>, optional <code>language</code> and <code>prompt</code>), answered with JSON <code>{"text": ...}</code>.</li>' +
+    '<li>Treat an unknown <code>model</code> name as your default rather than an error.</li>' +
+    '<li>The request comes from the Hrdle server, not from this phone - the endpoint must be reachable from that machine (a Tailscale address works; with plain http the audio crosses the network unencrypted).</li>' +
+    "<li>A vocabulary <code>prompt</code> may be attached. whisper.cpp's server has been seen answering empty text when one is present - if speech stops coming back, switch the vocabulary bias off.</li>" +
+    '<li>On 5xx or no answer, Hrdle retries against Groq while the switch above is on. A 4xx is treated as a configuration error and fails as is.</li>' +
+    '<li>Whisper-family models invent text for silence and very short clips - expect hallucinated sentences from noise.</li>' +
+    '</ul>',
   'settings.failed': 'Failed: {error}',
 
   // The demo, which is a tutorial: every string is a caption for the thing it
@@ -150,7 +180,9 @@ const JA: Table = {
 
   'settings.title': '音声入力',
   'settings.subtitle':
-    '音声認識はサーバー側で Groq を通して実行されます。キーはそのホストから出ません。',
+    '言語と語彙の設定は、どの送り先で文字起こしする場合も共通です。',
+  'settings.groqSubtitle':
+    '既定の文字起こし先です。キーはサーバーに保存され、そのホストから出ません。',
   'settings.key': 'Groq API キー',
   'settings.keySave': 'キーを保存',
   'settings.keyClear': '消去',
@@ -186,6 +218,34 @@ const JA: Table = {
   'settings.screenOffSaved': '保存しました。稼働中のグラスにも 2 分以内に反映されます。',
   'settings.screenOffDefault': '既定では消灯しません。秒数を入れて保存すると有効になります。',
   'settings.screenOffInvalid': '0〜3600 の整数で入力してください。',
+  'settings.groqTitle': 'Groq',
+  'settings.destinationLine': '現在の文字起こしの送り先: {destination}',
+  'settings.provider': '文字起こしの送り先',
+  'settings.providerGroq': 'Groq',
+  'settings.providerCustom': 'カスタムサーバー',
+  'settings.fallbackToggle': '選んだ先がダメな時はもう一方に切り替える',
+  'settings.endpoint': 'カスタム文字起こしサーバー',
+  'settings.endpointHint':
+    'OpenAI 互換のエンドポイント (ローカルの Whisper 等)。上の「文字起こしの送り先」でこちらを選んだ時に使われます。音声はここで指定した先に送られます。',
+  'settings.endpointUrl': 'エンドポイント URL',
+  'settings.endpointModel': '送り先が要求するモデル名',
+  'settings.endpointFallback': '届かない時は Groq に切り替える',
+  'settings.endpointSave': '送り先を保存',
+  'settings.endpointClear': '消去',
+  'settings.endpointNone': '未設定 — 文字起こしは Groq に送られます。',
+  'settings.endpointEnv':
+    'サーバーの環境変数で設定されています (現在の送り先: {destination})。ここで保存すると上書きします。',
+  'settings.endpointSaved': 'ここに保存されています。現在の送り先: {destination}。',
+  'settings.endpointSpecTitle': '自分でサーバーを立てる場合の要件',
+  'settings.endpointSpec':
+    '<ul style="margin:0;padding-left:18px;display:grid;gap:6px;">' +
+    '<li>OpenAI 互換の <code>POST /v1/audio/transcriptions</code> (multipart: <code>file</code> は WAV、<code>model</code>、任意で <code>language</code> と <code>prompt</code>) を受け、JSON <code>{"text": ...}</code> で答えること。</li>' +
+    '<li>未知の <code>model</code> 名はエラーにせず、自分の既定モデルとして扱うこと。</li>' +
+    '<li>リクエストはこのスマホではなく Hrdle サーバーから届く — その機械から到達できるアドレスであること (Tailscale のアドレスで可。素の http では音声が暗号化されずに流れる)。</li>' +
+    '<li>語彙ヒントの <code>prompt</code> が付くことがある。whisper.cpp の server は prompt 付きで空文字を返す実測がある — 音声が返らなくなったら語彙バイアスを切ること。</li>' +
+    '<li>5xx か無応答なら、上のスイッチが有効な間は Groq へ切り替えて再試行する。4xx は設定間違いとしてそのまま失敗する。</li>' +
+    '<li>Whisper 系のモデルは無音・ごく短い音声に文をでっち上げる — 雑音から幻聴の文が返る前提でいること。</li>' +
+    '</ul>',
   'settings.failed': '失敗しました: {error}',
 
   // The demo. Japanese is full-width, so each of these has half the room the

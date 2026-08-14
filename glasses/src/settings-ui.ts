@@ -46,6 +46,11 @@ const S = {
   status: 'font-size:12px;color:#888;margin-top:8px;min-height:16px;',
   toggle:
     'display:flex;align-items:center;gap:8px;font-size:14px;color:#eee;margin-top:4px;cursor:pointer;',
+  // A provider's own box, nested inside the voice-input section: the border
+  // is what says "these fields belong to the choice above".
+  subsection:
+    'background:#0c0c0c;border:1px solid #2a2a2a;border-radius:10px;padding:12px;margin-top:14px;',
+  h3: 'font-size:13px;color:#ddd;margin:0 0 8px;font-weight:600;',
   // The line as it goes out: read-only, wrapping, and monospaced so a term cut
   // by the budget is visible as a term rather than as prose.
   preview:
@@ -53,9 +58,10 @@ const S = {
 }
 
 /**
- * Two sections: the glasses screen, and voice input. The screen setting is
- * not voice input at all, and a timeout living inside the Groq box read as a
- * Groq setting - which is exactly what it isn't.
+ * Two sections: the glasses screen, and voice input. Inside voice input the
+ * two transcribers are their own nested boxes under a provider choice -
+ * language and vocabulary sit above them because they travel with the speech
+ * to whichever box is chosen.
  */
 export function settingsPanelHtml(): string {
   return `
@@ -74,13 +80,18 @@ export function settingsPanelHtml(): string {
       <h2 style="${S.h2}">${t('settings.title')}</h2>
       <p style="${S.sub}">${t('settings.subtitle')}</p>
 
-      <label style="${S.label}" for="stt-key">${t('settings.key')}</label>
-      <input id="stt-key" type="password" autocomplete="off" placeholder="gsk_..." style="${S.input}" />
-      <div style="${S.row}">
-        <button type="button" id="stt-key-save" style="${S.btn}">${t('settings.keySave')}</button>
-        <button type="button" id="stt-key-clear" style="${S.btnGhost}">${t('settings.keyClear')}</button>
-      </div>
-      <div id="stt-key-status" style="${S.status}"></div>
+      <label style="${S.label}" for="stt-provider">${t('settings.provider')}</label>
+      <select id="stt-provider" style="${S.input}">
+        <option value="groq">${t('settings.providerGroq')}</option>
+        <option value="custom">${t('settings.providerCustom')}</option>
+      </select>
+      <label style="${S.toggle}">
+        <input type="checkbox" id="stt-fallback" />
+        <span>${t('settings.fallbackToggle')}</span>
+      </label>
+      <!-- Where speech goes right now - the one line that joins the choice
+           above to the two boxes below. -->
+      <div id="stt-destination" style="${S.status}"></div>
 
       <label style="${S.label}" for="stt-lang">${t('settings.lang')}</label>
       <select id="stt-lang" style="${S.input}">
@@ -99,11 +110,42 @@ export function settingsPanelHtml(): string {
       <div id="stt-bias-preview" style="${S.preview}"></div>
       <div id="stt-bias-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
-      <!-- Options come from the server's own list, so this app cannot offer a
-           model the server would reject. Filled in by wireSettingsPanel(). -->
-      <select id="stt-model" style="${S.input}"></select>
-      <div id="stt-model-status" style="${S.status}"></div>
+      <div id="stt-groq-settings" style="${S.subsection}">
+        <h3 style="${S.h3}">${t('settings.groqTitle')}</h3>
+        <p style="${S.sub}">${t('settings.groqSubtitle')}</p>
+
+        <label style="${S.label}" for="stt-key">${t('settings.key')}</label>
+        <input id="stt-key" type="password" autocomplete="off" placeholder="gsk_..." style="${S.input}" />
+        <div style="${S.row}">
+          <button type="button" id="stt-key-save" style="${S.btn}">${t('settings.keySave')}</button>
+          <button type="button" id="stt-key-clear" style="${S.btnGhost}">${t('settings.keyClear')}</button>
+        </div>
+        <div id="stt-key-status" style="${S.status}"></div>
+
+        <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
+        <!-- Options come from the server's own list, so this app cannot offer a
+             model the server would reject. Filled in by wireSettingsPanel(). -->
+        <select id="stt-model" style="${S.input}"></select>
+        <div id="stt-model-status" style="${S.status}"></div>
+      </div>
+
+      <div id="stt-custom-settings" style="${S.subsection}">
+        <h3 style="${S.h3}">${t('settings.endpoint')}</h3>
+        <p style="${S.sub}">${t('settings.endpointHint')}</p>
+        <label style="${S.label}" for="stt-endpoint-url">${t('settings.endpointUrl')}</label>
+        <input id="stt-endpoint-url" type="url" autocomplete="off" placeholder="https://..." style="${S.input}" />
+        <label style="${S.label}" for="stt-endpoint-model">${t('settings.endpointModel')}</label>
+        <input id="stt-endpoint-model" type="text" autocomplete="off" placeholder="whisper-1" style="${S.input}" />
+        <div style="${S.row}">
+          <button type="button" id="stt-endpoint-save" style="${S.btn}">${t('settings.endpointSave')}</button>
+          <button type="button" id="stt-endpoint-clear" style="${S.btnGhost}">${t('settings.endpointClear')}</button>
+        </div>
+        <div id="stt-endpoint-status" style="${S.status}"></div>
+        <details style="margin-top:8px;">
+          <summary style="${S.sub.replace('margin:0 0 12px;', 'cursor:pointer;')}">${t('settings.endpointSpecTitle')}</summary>
+          <div style="${S.sub.replace('margin:0 0 12px;', 'margin:8px 0 0;')}">${t('settings.endpointSpec')}</div>
+        </details>
+      </div>
     </div>
   `
 }
@@ -147,12 +189,18 @@ export async function wireSettingsPanel(): Promise<void> {
   const model = el<HTMLSelectElement>('stt-model')
   const bias = el<HTMLInputElement>('stt-bias')
   const screenOffSeconds = el<HTMLInputElement>('screen-off-seconds')
-  if (!key || !lang || !model || !bias || !screenOffSeconds) return
+  const provider = el<HTMLSelectElement>('stt-provider')
+  const fallback = el<HTMLInputElement>('stt-fallback')
+  const endpointUrl = el<HTMLInputElement>('stt-endpoint-url')
+  const endpointModel = el<HTMLInputElement>('stt-endpoint-model')
+  if (!key || !lang || !model || !bias || !screenOffSeconds || !provider || !fallback || !endpointUrl || !endpointModel) return
 
   const keyStatus = el('stt-key-status')
   const langStatus = el('stt-lang-status')
   const modelStatus = el('stt-model-status')
   const screenOffStatus = el('screen-off-status')
+  const endpointStatus = el('stt-endpoint-status')
+  const destination = el('stt-destination')
   const biasStatus = el('stt-bias-status')
   const biasPreview = el('stt-bias-preview')
 
@@ -199,6 +247,28 @@ export async function wireSettingsPanel(): Promise<void> {
         v.screenOffSecondsSource === 'setting'
           ? t('settings.screenOffSaved')
           : t('settings.screenOffDefault')
+    }
+
+    provider.value = v.sttEndpoint.provider
+    fallback.checked = v.sttEndpoint.fallback
+    if (destination) {
+      destination.textContent = t('settings.destinationLine', {
+        destination: v.sttEndpoint.destination,
+      })
+    }
+
+    endpointUrl.value = v.sttEndpoint.url ?? ''
+    endpointModel.value = v.sttEndpoint.model ?? ''
+    // The env var can only be replaced by saving a value here, not edited, so
+    // the fields still fill in - what the status line says is where today's
+    // answer came from and where speech is going right now.
+    if (endpointStatus) {
+      endpointStatus.textContent =
+        v.sttEndpoint.source === 'none'
+          ? t('settings.endpointNone')
+          : t(v.sttEndpoint.source === 'env' ? 'settings.endpointEnv' : 'settings.endpointSaved', {
+              destination: v.sttEndpoint.destination,
+            })
     }
   }
 
@@ -297,4 +367,51 @@ export async function wireSettingsPanel(): Promise<void> {
     }
   })
 
+  provider.addEventListener('change', async () => {
+    try {
+      render(await putGlassesSettings({ sttProvider: provider.value as 'groq' | 'custom' }))
+      await renderPreview()
+    } catch (err) {
+      fail(destination, err)
+    }
+  })
+
+  fallback.addEventListener('change', async () => {
+    try {
+      render(await putGlassesSettings({ sttFallback: fallback.checked ? 'on' : 'off' }))
+    } catch (err) {
+      fail(destination, err)
+    }
+  })
+
+  el('stt-endpoint-save')?.addEventListener('click', async () => {
+    const url = endpointUrl.value.trim()
+    // URL and model travel together: the model belongs to the URL it was
+    // written for.
+    try {
+      render(
+        await putGlassesSettings({
+          sttEndpointUrl: url || null,
+          sttEndpointModel: endpointModel.value.trim() || null,
+        }),
+      )
+      await renderPreview()
+    } catch (err) {
+      fail(endpointStatus, err)
+    }
+  })
+
+  el('stt-endpoint-clear')?.addEventListener('click', async () => {
+    try {
+      render(
+        await putGlassesSettings({
+          sttEndpointUrl: null,
+          sttEndpointModel: null,
+        }),
+      )
+      await renderPreview()
+    } catch (err) {
+      fail(endpointStatus, err)
+    }
+  })
 }
