@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.127] - 2026-08-15
+
 ### Fixed
 - **The Groq key is no longer sent to whatever URL was typed in** (#368). A
   custom transcription endpoint now has its own `sttEndpointKey`, and each key
