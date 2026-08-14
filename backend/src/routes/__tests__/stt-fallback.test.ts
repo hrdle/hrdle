@@ -241,3 +241,96 @@ test('while the fallback stands in, the preview answers the fallback', async () 
   expect(shown.model).toBe('whisper-large-v3-turbo'); // Groq speaks the chosen model
   expect(shown.fallback).toBeNull(); // there is nowhere further to escape to
 });
+
+// ── A key belongs to one destination ──
+
+/** What each target was actually sent, so a key crossing to the wrong host is
+ *  visible rather than inferred. */
+function stubAuth(handler: (url: string) => Response) {
+  const auth: Record<string, string | null> = {};
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    auth[url] = new Headers(init?.headers).get('authorization');
+    return handler(url);
+  }) as typeof fetch;
+  return auth;
+}
+
+const ok = () => new Response(JSON.stringify({ text: 'hi' }), { status: 200 });
+
+test('the Groq key is never sent to a custom endpoint', async () => {
+  await updateGlassesSettings({ sttProvider: 'custom' });
+  const auth = stubAuth(() => ok());
+
+  await transcribe();
+
+  expect(auth[ENDPOINT]).toBeNull();
+});
+
+test('the endpoint key goes to the endpoint and Groq keeps its own', async () => {
+  await updateGlassesSettings({ sttProvider: 'custom', sttEndpointKey: 'endpoint-secret' });
+  const auth = stubAuth((url) =>
+    url.startsWith(ENDPOINT) ? new Response('nope', { status: 503 }) : ok(),
+  );
+
+  await transcribe();
+
+  expect(auth[ENDPOINT]).toBe('Bearer endpoint-secret');
+  // The fallback leg, on the same utterance: its own key, not the endpoint's.
+  expect(Object.entries(auth).find(([url]) => url.includes('groq.com'))?.[1]).toBe(
+    'Bearer test-key',
+  );
+});
+
+/**
+ * With Groq chosen, no Groq key and a keyless endpoint standing there, the
+ * request used to be refused outright - 503 while a working transcriber went
+ * untried, because the key guard only looked at the first attempt.
+ */
+test('a missing Groq key does not refuse a keyless endpoint', async () => {
+  const key = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = '';
+  try {
+    await updateGlassesSettings({ sttProvider: 'groq' });
+    const seen = stubFetch(() => ok());
+
+    const res = await transcribe();
+
+    expect(res.status).toBe(200);
+    expect(seen.some((url) => url.startsWith(ENDPOINT))).toBe(true);
+    expect(seen.some((url) => url.includes('groq.com'))).toBe(false);
+  } finally {
+    process.env.GROQ_API_KEY = key;
+  }
+});
+
+// ── "not now" is not "wrong" ──
+
+/**
+ * Running out of Groq quota is its most likely failure and exactly what a local
+ * Whisper is standing by for. Treated as a configuration error, it took voice
+ * input down for the rest of the day with a working endpoint idle.
+ */
+test('a 429 from the primary falls back', async () => {
+  await updateGlassesSettings({ sttProvider: 'groq' });
+  const seen = stubFetch((url) =>
+    url.includes('groq.com') ? new Response('rate limited', { status: 429 }) : ok(),
+  );
+
+  const res = await transcribe();
+
+  expect(res.status).toBe(200);
+  expect(seen.some((url) => url.startsWith(ENDPOINT))).toBe(true);
+});
+
+test('a 400 still does not - it answers the same wherever it is sent', async () => {
+  await updateGlassesSettings({ sttProvider: 'groq' });
+  const seen = stubFetch((url) =>
+    url.includes('groq.com') ? new Response('bad model', { status: 400 }) : ok(),
+  );
+
+  const res = await transcribe();
+
+  expect(res.status).toBe(502);
+  expect(seen.some((url) => url.startsWith(ENDPOINT))).toBe(false);
+});

@@ -30,6 +30,14 @@ export interface SttTarget {
   /** Whether the target requires an API key. A keyless target must not turn
    *  a missing key into a 503. */
   needsKey: boolean;
+  /**
+   * Which stored key authenticates this target.
+   *
+   * A key belongs to one destination. Sending one key to whatever URL is
+   * configured hands the Groq key to a host somebody typed - and to a plain
+   * `http://` one, in cleartext - with no way to decline.
+   */
+  keySource: 'groq' | 'endpoint';
   /** Whether requests here spend billed quota. Cost accounting keys on this. */
   billed: boolean;
   /** Short name for logs and the dashboard's narrow column. */
@@ -43,6 +51,7 @@ const GROQ: SttTarget = {
   url: GROQ_URL,
   model: GROQ_MODEL,
   needsKey: true,
+  keySource: 'groq',
   billed: true,
   label: 'Groq',
 };
@@ -114,10 +123,10 @@ export async function sttTargets(defaultModel: string = GROQ_MODEL): Promise<{
         // utterance.
         model: endpoint.model || defaultModel,
         // Not *required*: a local Whisper runs keyless, and a missing key must
-        // not 503. If a key is set it is still sent - a commercial
-        // OpenAI-compatible endpoint wants it, and a server that does not
-        // ignores an unknown Authorization header.
+        // not 503. A commercial compatible endpoint that does want one is
+        // given `sttEndpointKey`, never Groq's.
         needsKey: false,
+        keySource: 'endpoint',
         billed: false,
         label: hostOf(endpoint.url),
       }
@@ -136,7 +145,10 @@ export async function sttTargets(defaultModel: string = GROQ_MODEL): Promise<{
       provider === 'custom' ? (fallbackOn ? groq : null) : fallbackOn && custom ? custom : null,
     source: endpoint.source,
     provider,
-    providerSource: stored.sttProvider ? 'setting' : 'default',
+    // `setting` only when the stored choice is the one in force. Choosing
+    // `custom` before typing a URL resolves to Groq, and reporting that as
+    // chosen tells the screen "Groq, by you" about a decision nobody made.
+    providerSource: stored.sttProvider === provider ? 'setting' : 'default',
     fallbackOn,
   };
 }
@@ -256,27 +268,31 @@ export interface SttDelivery {
 export async function resolveSttDelivery(options: {
   sessionId?: string;
   lang?: string;
-  /** Whether a Groq key exists. Without one a fallback *to Groq* cannot be
-   *  used; the key itself stays out of here. */
-  hasKey: boolean;
+  /** Which stored keys exist, by the target they authenticate. The keys
+   *  themselves stay out of here - they are write-only. */
+  keys: { groq: boolean; endpoint: boolean };
 }): Promise<SttDelivery> {
   const request = await resolveSttRequest({ sessionId: options.sessionId, lang: options.lang });
 
   const targets = await sttTargets(request.model);
-  // A fallback that needs a key is only usable with one; a keyless custom
-  // fallback is usable regardless.
-  const usableFallback =
-    targets.fallback && (!targets.fallback.needsKey || options.hasKey) ? targets.fallback : null;
+  // A target that needs a key it does not have cannot be tried. Applied to the
+  // primary as well as the fallback: with Groq chosen, no Groq key and a
+  // keyless endpoint configured, refusing the request answers 503 while a
+  // working transcriber stands there unused.
+  const usable = (t: SttTarget | null): t is SttTarget =>
+    t !== null && (!t.needsKey || options.keys[t.keySource]);
+  const primary = usable(targets.primary) ? targets.primary : null;
+  const fallback = usable(targets.fallback) ? targets.fallback : null;
   const attempts: SttAttempt[] = [];
   // While the primary is known to be down, start at the fallback - a sleeping
   // machine answers never, and waiting out the timeout on every utterance is
   // what the down-window exists to avoid.
-  if (!(usableFallback && shouldSkipPrimary(targets.primary.url))) {
-    attempts.push({ target: targets.primary, isPrimary: true });
+  if (primary && !(fallback && shouldSkipPrimary(primary.url))) {
+    attempts.push({ target: primary, isPrimary: true });
   }
-  if (usableFallback) attempts.push({ target: usableFallback, isPrimary: false });
+  if (fallback) attempts.push({ target: fallback, isPrimary: false });
 
-  const sending = attempts[0].target;
+  const sending = attempts[0]?.target ?? targets.primary;
   return {
     attempts,
     preview: {

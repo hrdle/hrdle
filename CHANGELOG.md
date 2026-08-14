@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **The Groq key is no longer sent to whatever URL was typed in** (#368). A
+  custom transcription endpoint now has its own `sttEndpointKey`, and each key
+  reaches its own destination and no other. One key sent everywhere meant a host
+  somebody typed - possibly `http://`, possibly a mistake, possibly only the
+  fallback they never chose - received the Groq key with no way to decline
+  - Keeping it simply unsent was not the fix: a commercial OpenAI-compatible
+    endpoint wants a key, and dropping it would have removed the feature rather
+    than secured it
+- **A missing Groq key no longer refuses a working custom endpoint.** The key
+  guard inspected only the first attempt, so Groq-chosen with no key and a
+  keyless endpoint configured answered 503 on every utterance while a
+  transcriber stood there untried
+- **A 429 falls back.** Running out of Groq quota is its most likely failure and
+  exactly what a local Whisper is standing by for; treated as a configuration
+  error it took voice input down for the rest of the day. 408 goes with it
+- **The primary is given one deadline rather than eight seconds.** The signal
+  covers the upload too, and a 30s clip is ~960 KB - on a modest uplink a short
+  deadline aborted a remote primary that was working, marked it down, and
+  diverted the next minute of speech. A host that is really down refuses in
+  milliseconds and never reaches a deadline at all
+- **The dashboard no longer announces a fallback that does not exist.** One Groq
+  5xx on an install with no custom endpoint had the card naming Groq as the
+  escape from Groq for the following minute
+- **Every destination is counted, and only Groq is billed.** A wearer using a
+  custom endpoint exclusively saw an empty card while transcription worked;
+  meanwhile a rejected request recorded its seconds as billed, inflating the one
+  figure `billedSeconds` exists to keep honest. A request that never left the
+  host now records no audio at all
+- **Choosing "Custom server" before typing a URL no longer snaps back to Groq.**
+  The screen was written the resolved provider rather than the stored one, so a
+  save that worked was denied by the panel that made it
+
+### Fixed
 - **An older server no longer blanks the glasses panel for good** (#366). A
   server predating the screen-off setting answers without `screenOffSeconds`,
   and the field's `number` type is an assertion over its JSON rather than a

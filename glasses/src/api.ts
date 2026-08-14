@@ -177,6 +177,9 @@ export interface GlassesSettingsView {
   sttModelSource: 'setting' | 'default'
   /** Every model the server will accept, so this app need not hardcode them. */
   sttModels: string[]
+  /** Whether the custom endpoint has a key stored. Write-only, like the Groq
+   *  one: whether, never what. */
+  hasEndpointKey?: boolean
   /** Seconds before this app blanks its panel; `0` = never. */
   screenOffSeconds: number
   screenOffSecondsSource: 'setting' | 'default'
@@ -243,6 +246,7 @@ export async function putGlassesSettings(patch: {
   sttLang?: string | null
   sttBias?: 'on' | 'off' | null
   sttModel?: string | null
+  sttEndpointKey?: string | null
   screenOffSeconds?: number | null
   sttEndpointUrl?: string | null
   sttEndpointModel?: string | null

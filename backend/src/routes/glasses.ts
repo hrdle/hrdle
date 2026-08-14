@@ -12,6 +12,7 @@ import {
 import {
   STT_MODELS,
   glassesSettingsView,
+  loadGlassesSettings,
   resolveGroqApiKey,
   updateGlassesSettings,
 } from '../services/glasses-settings';
@@ -83,6 +84,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  */
 glasses.post('/stt', async (c) => {
   const { key: apiKey } = await resolveGroqApiKey();
+  const endpointKey = (await loadGlassesSettings()).sttEndpointKey;
 
   const format = c.req.query('format') || 'pcm';
   const sampleRate = Number(c.req.query('sampleRate')) || 16000;
@@ -94,10 +96,11 @@ glasses.post('/stt', async (c) => {
   const { attempts, preview: stt } = await resolveSttDelivery({
     sessionId: c.req.query('session'),
     lang: c.req.query('lang'),
-    hasKey: !!apiKey,
+    keys: { groq: !!apiKey, endpoint: !!endpointKey },
   });
 
-  if (attempts[0].target.needsKey && !apiKey) {
+  // Nothing left to try: every configured target wants a key that is not set.
+  if (attempts.length === 0) {
     return c.json({ error: 'No Groq API key: set one in the glasses settings or GROQ_API_KEY' }, 503);
   }
 
@@ -170,19 +173,25 @@ glasses.post('/stt', async (c) => {
   for (const [index, { target, isPrimary }] of attempts.entries()) {
     const isLast = index === attempts.length - 1;
     try {
-      // The server's own idle timeout is 120s, and the wearer is watching
-      // "Transcribing..." for all of it. Bound the leg we do not control well
-      // inside that, so a stalled provider comes back as a 502 the glasses can
-      // report rather than as the connection dying under them: 8 seconds of
-      // audio transcribes in ~0.33s, so 60 is already far past slow.
-      // With a fallback still waiting its turn, wait far less - a sleeping
-      // host answers never, and spending the full timeout before escaping
-      // defeats the point of having somewhere to escape to.
+      // Each target gets its own key and no other. A URL somebody typed must
+      // not receive the Groq key, and a plain `http://` one must not receive it
+      // in cleartext.
+      const key = target.keySource === 'groq' ? apiKey : endpointKey;
       const res = await fetch(target.url, {
         method: 'POST',
-        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        headers: key ? { Authorization: `Bearer ${key}` } : {},
         body: buildForm(target),
-        signal: AbortSignal.timeout(isLast ? 60_000 : 8_000),
+        // The server's own idle timeout is 120s and the wearer watches
+        // "Transcribing..." for all of it, so the leg we do not control is
+        // bounded well inside that.
+        //
+        // One deadline, not a short one for the primary: the signal covers the
+        // upload too, and a 30s clip is ~960 KB - on a modest uplink a short
+        // deadline aborts a remote primary that was working, marks it down, and
+        // diverts the next minute of speech elsewhere. A host that is actually
+        // down refuses or fails DNS in milliseconds and never reaches this
+        // deadline, which is the case the fallback is really for.
+        signal: AbortSignal.timeout(60_000),
       });
 
       // Recorded before the status is acted on: a rejected request still
@@ -230,20 +239,24 @@ glasses.post('/stt', async (c) => {
       }
 
       const detail = await res.text().catch(() => '');
-      if (isPrimary && res.status >= 500) notePrimaryDown(target.url);
+      // 408 and 429 are "not now", not "wrong". Running out of Groq quota is
+      // its most likely failure and precisely what a local Whisper is standing
+      // by for; treating it as a configuration error took voice input down for
+      // the rest of the day with a working endpoint idle.
+      const retryable = res.status >= 500 || res.status === 408 || res.status === 429;
+      if (isPrimary && retryable) notePrimaryDown(target.url);
       lastError = `${target.label} ${res.status}`;
       console.error(`[glasses/stt] ${lastError}: ${detail.slice(0, 300)}`);
       recordAttempt(target, { ok: false });
-      // A 4xx answers the same wherever it is sent - the request or the key is
-      // wrong. The fallback is only for a target that is broken or absent.
-      if (res.status < 500 || isLast) {
+      // Any other 4xx answers the same wherever it is sent - the request or the
+      // key is wrong. The fallback is only for a target that is unavailable.
+      if (!retryable || isLast) {
         return c.json({ error: `STT provider error (${res.status})` }, 502);
       }
     } catch (err) {
-      // Never reached the target = a failure worth recording, and a billed one
-      // only when the billed target was the one being tried (a custom server
-      // asleep is not Groq usage). Zero seconds: nothing was transcribed.
-      if (target.billed) void sttUsageService.record({ audioSeconds, billedSeconds: 0, ok: false });
+      // A failure worth counting, but no audio: nothing left the host, so
+      // recording the seconds would put speech nobody sent into "Audio today".
+      void sttUsageService.record({ audioSeconds: 0, billedSeconds: 0, ok: false });
       if (isPrimary) notePrimaryDown(target.url);
       lastError = `${target.label} unreachable`;
       console.error(`[glasses/stt] ${lastError}:`, err);
@@ -267,10 +280,11 @@ glasses.post('/stt', async (c) => {
  */
 glasses.get('/stt-preview', async (c) => {
   const { key } = await resolveGroqApiKey();
+  const endpointKey = (await loadGlassesSettings()).sttEndpointKey;
   const { preview } = await resolveSttDelivery({
     sessionId: c.req.query('session'),
     lang: c.req.query('lang'),
-    hasKey: !!key,
+    keys: { groq: !!key, endpoint: !!endpointKey },
   });
   return c.json(preview);
 });
@@ -298,19 +312,26 @@ glasses.get('/stt-preview', async (c) => {
 async function settingsWithEndpoint() {
   const view = await glassesSettingsView();
   const endpoint = await resolveSttEndpoint();
+  const stored = await loadGlassesSettings();
   const targets = await sttTargets(view.sttModel);
   return {
     ...view,
     sttEndpoint: {
       url: endpoint.url ?? null,
       model: endpoint.model ?? null,
-      provider: targets.provider,
+      // The stored intent, not the resolution. Choosing `custom` before typing
+      // a URL resolves to Groq, and writing that back snapped the dropdown to
+      // Groq under someone who had just moved it - a save that worked, denied
+      // by the screen. Same reasoning as `fallback` below.
+      provider: stored.sttProvider ?? targets.provider,
       providerSource: targets.providerSource,
+      // Where speech goes right now, which is the resolution rather than the
+      // intent and is why both are here.
+      destination: targets.primary.label,
       // The stored intent, not whether a target exists today: the checkbox
       // must not appear to flip itself off just because no custom URL is set.
       fallback: targets.fallbackOn,
       source: endpoint.source,
-      destination: targets.primary.label,
     },
   };
 }
@@ -361,6 +382,9 @@ const GlassesSettingsPatchSchema = z.object({
     .optional(),
   // Free text, not STT_MODELS: a custom server names its own models.
   sttEndpointModel: z.string().max(100).nullable().optional(),
+  // The endpoint's own key, kept apart from the Groq one so neither is sent to
+  // the other's destination. Absent means keyless, which a local Whisper is.
+  sttEndpointKey: z.string().max(500).nullable().optional(),
   // Which transcriber speech goes to first, and whether the other one is the
   // escape when it fails.
   sttProvider: z.enum(['groq', 'custom']).nullable().optional(),

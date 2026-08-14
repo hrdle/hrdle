@@ -347,7 +347,10 @@ export function buildSummary(
     model,
     provider: active.label,
     providerModel: active.model,
-    primaryDown: health.primaryDown,
+    // Only when there is somewhere to fall back to. Reported on the flag
+    // alone, one Groq 5xx on an install with no custom endpoint had the card
+    // announcing Groq as the escape from Groq for the next minute.
+    primaryDown: health.primaryDown && resolved.fallback !== null,
     lastFallbackAt: health.lastFallbackAt,
     today: {
       requests: today.requests,
