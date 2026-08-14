@@ -18,6 +18,8 @@ export interface WsCallbacks {
   /** A newer run of the app has connected; this one is the ghost the host left
    *  behind and should let go of everything. `by` is the newcomer's id. */
   onSuperseded?: (by: string) => void
+  /** The settings were edited (from the phone panel); refetch what you read. */
+  onSettingsChanged?: () => void
   /** The server has been unreachable long enough that retrying is no longer
    *  worth the resources it costs. Nothing will be attempted after this. */
   onGiveUp?: () => void
@@ -207,6 +209,10 @@ export class WsClient {
         this.callbacks.onGlassesScreen?.((msg.screen ?? null) as GlassesScreen | null)
       } else if (msg.type === 'glasses-superseded') {
         this.callbacks.onSuperseded?.(String(msg.by ?? '?'))
+      } else if (msg.type === 'glasses-settings-changed') {
+        // The phone edited the settings; whoever cares refetches. No payload
+        // on purpose - one honest signal beats a copy that can go stale.
+        this.callbacks.onSettingsChanged?.()
       }
     } catch { /* ignore */ }
   }

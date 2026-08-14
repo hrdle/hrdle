@@ -27,12 +27,6 @@ const LANGS: Array<{ value: string; labelKey: string }> = [
   { value: 'en', labelKey: 'settings.langEn' },
 ]
 
-/**
- * Auto screen-off choices, in minutes; `0` never sleeps. A closed set like the
- * models: the server clamps to 0..60 anyway, and a select is one tap where a
- * number field is a keyboard.
- */
-const SCREEN_OFF_CHOICES = [0, 1, 3, 5, 10]
 
 // The accent is a variable because this panel has two homes with different
 // palettes: the phone wizard, which is red like the app icon, and the browser
@@ -58,9 +52,24 @@ const S = {
     'margin-top:8px;padding:10px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#bbb;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-word;',
 }
 
-/** Markup for the panel. Mount it wherever, then call `wireSettingsPanel()`. */
+/**
+ * Two sections: the glasses screen, and voice input. The screen setting is
+ * not voice input at all, and a timeout living inside the Groq box read as a
+ * Groq setting - which is exactly what it isn't.
+ */
 export function settingsPanelHtml(): string {
   return `
+    <div id="glasses-screen-settings" style="${S.section}">
+      <h2 style="${S.h2}">${t('settings.glassesTitle')}</h2>
+      <label style="${S.label}" for="screen-off-seconds">${t('settings.screenOff')}</label>
+      <p style="${S.sub}">${t('settings.screenOffHint')}</p>
+      <input id="screen-off-seconds" type="number" inputmode="numeric" min="0" max="3600" step="1" style="${S.input}" />
+      <div style="${S.row}">
+        <button type="button" id="screen-off-save" style="${S.btn}">${t('settings.screenOffSave')}</button>
+      </div>
+      <div id="screen-off-status" style="${S.status}"></div>
+    </div>
+
     <div id="stt-settings" style="${S.section}">
       <h2 style="${S.h2}">${t('settings.title')}</h2>
       <p style="${S.sub}">${t('settings.subtitle')}</p>
@@ -79,12 +88,6 @@ export function settingsPanelHtml(): string {
       </select>
       <div id="stt-lang-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
-      <!-- Options come from the server's own list, so this app cannot offer a
-           model the server would reject. Filled in by wireSettingsPanel(). -->
-      <select id="stt-model" style="${S.input}"></select>
-      <div id="stt-model-status" style="${S.status}"></div>
-
       <span style="${S.label}">${t('settings.bias')}</span>
       <label style="${S.toggle}">
         <input type="checkbox" id="stt-bias" />
@@ -96,14 +99,11 @@ export function settingsPanelHtml(): string {
       <div id="stt-bias-preview" style="${S.preview}"></div>
       <div id="stt-bias-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="screen-off">${t('settings.screenOff')}</label>
-      <select id="screen-off" style="${S.input}">
-        ${SCREEN_OFF_CHOICES.map(
-          (m) =>
-            `<option value="${m}">${m === 0 ? t('settings.screenOffNever') : t('settings.screenOffMinutes', { minutes: String(m) })}</option>`,
-        ).join('')}
-      </select>
-      <div id="screen-off-status" style="${S.status}"></div>
+      <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
+      <!-- Options come from the server's own list, so this app cannot offer a
+           model the server would reject. Filled in by wireSettingsPanel(). -->
+      <select id="stt-model" style="${S.input}"></select>
+      <div id="stt-model-status" style="${S.status}"></div>
     </div>
   `
 }
@@ -146,8 +146,8 @@ export async function wireSettingsPanel(): Promise<void> {
   const lang = el<HTMLSelectElement>('stt-lang')
   const model = el<HTMLSelectElement>('stt-model')
   const bias = el<HTMLInputElement>('stt-bias')
-  const screenOff = el<HTMLSelectElement>('screen-off')
-  if (!key || !lang || !model || !bias || !screenOff) return
+  const screenOffSeconds = el<HTMLInputElement>('screen-off-seconds')
+  if (!key || !lang || !model || !bias || !screenOffSeconds) return
 
   const keyStatus = el('stt-key-status')
   const langStatus = el('stt-lang-status')
@@ -193,18 +193,10 @@ export async function wireSettingsPanel(): Promise<void> {
     // screen cannot undo it, so the switch says so rather than pretending.
     bias.disabled = v.sttBiasSource === 'env'
 
-    // A stored value outside the offered set still has to be shown as itself,
-    // or the select would silently claim a timeout the server is not using.
-    if (!SCREEN_OFF_CHOICES.includes(v.screenOffMinutes)) {
-      screenOff.insertAdjacentHTML(
-        'beforeend',
-        `<option value="${v.screenOffMinutes}">${t('settings.screenOffMinutes', { minutes: String(v.screenOffMinutes) })}</option>`,
-      )
-    }
-    screenOff.value = String(v.screenOffMinutes)
+    screenOffSeconds.value = String(v.screenOffSeconds)
     if (screenOffStatus) {
       screenOffStatus.textContent =
-        v.screenOffMinutesSource === 'setting'
+        v.screenOffSecondsSource === 'setting'
           ? t('settings.screenOffSaved')
           : t('settings.screenOffDefault')
     }
@@ -288,11 +280,21 @@ export async function wireSettingsPanel(): Promise<void> {
     }
   })
 
-  screenOff.addEventListener('change', async () => {
+  el('screen-off-save')?.addEventListener('click', async () => {
+    // Validated here as well as at the server, because the server's answer to
+    // a bad number is a 400 whose message is for a machine. Emptiness first:
+    // Number('') is 0, which would silently save "never turn off".
+    const raw = screenOffSeconds.value.trim()
+    const seconds = Number(raw)
+    if (raw === '' || !Number.isInteger(seconds) || seconds < 0 || seconds > 3600) {
+      if (screenOffStatus) screenOffStatus.textContent = t('settings.screenOffInvalid')
+      return
+    }
     try {
-      render(await putGlassesSettings({ screenOffMinutes: Number(screenOff.value) }))
+      render(await putGlassesSettings({ screenOffSeconds: seconds }))
     } catch (err) {
       fail(screenOffStatus, err)
     }
   })
+
 }

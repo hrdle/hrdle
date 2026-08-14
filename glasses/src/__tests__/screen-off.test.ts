@@ -11,7 +11,7 @@
 //   panel was never delivered
 
 import { describe, expect, test } from 'bun:test'
-import { GlassesController, SCREEN_OFF_IDLE_MS } from '../controller.ts'
+import { GlassesController } from '../controller.ts'
 import type { GlassesPlatform } from '../controller.ts'
 import { screenText } from '../display.ts'
 import type { GlassesRelayItem } from '../types.ts'
@@ -41,9 +41,14 @@ type Internals = {
 
 const inner = (c: GlassesController) => c as unknown as Internals
 
+/** The timeout the tests run with. Auto-off ships disabled (0), so every
+ *  controller here opts in the way a wearer would - via the setting. */
+const TEST_IDLE_MS = 3 * 60_000
+
 function controller(mode: 'session_list' | 'conversation' | 'overlay' | 'voice' | 'choice') {
   const counts = { exits: 0 }
   const c = new GlassesController(platform(counts))
+  inner(c).screenOffIdleMs = TEST_IDLE_MS
   c.state.sessions = [
     { id: 's1', name: 'one', state: 'idle' },
   ] as GlassesController['state']['sessions']
@@ -54,8 +59,8 @@ function controller(mode: 'session_list' | 'conversation' | 'overlay' | 'voice' 
 
 /** Age both clocks past the deadline, as three quiet minutes would. */
 function ageOut(c: GlassesController): void {
-  inner(c).lastGestureAt = Date.now() - SCREEN_OFF_IDLE_MS - 1
-  inner(c).lastActivityAt = Date.now() - SCREEN_OFF_IDLE_MS - 1
+  inner(c).lastGestureAt = Date.now() - TEST_IDLE_MS - 1
+  inner(c).lastActivityAt = Date.now() - TEST_IDLE_MS - 1
 }
 
 describe('going dark', () => {
@@ -122,7 +127,7 @@ describe('going dark', () => {
     // The gesture clock is stale but the activity clock is not - a question
     // that arrived moments ago must not be blanked before anyone could look.
     const { c } = controller('overlay')
-    inner(c).lastGestureAt = Date.now() - SCREEN_OFF_IDLE_MS - 1
+    inner(c).lastGestureAt = Date.now() - TEST_IDLE_MS - 1
     inner(c).lastActivityAt = Date.now() - 1000
     inner(c).tickScreenOff()
     expect(c.state.screenOff).toBeUndefined()

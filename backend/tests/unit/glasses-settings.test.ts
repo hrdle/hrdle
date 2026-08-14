@@ -146,35 +146,35 @@ describe('glasses settings store', () => {
  * it replaced (#255).
  */
 describe('the auto screen-off timeout', () => {
-  test('defaults to three minutes and reports where the value came from', async () => {
+  test('defaults to never - the screen stayed on before this feature existed', async () => {
     const view = await glassesSettingsView();
-    expect(view.screenOffMinutes).toBe(3);
-    expect(view.screenOffMinutesSource).toBe('default');
+    expect(view.screenOffSeconds).toBe(0);
+    expect(view.screenOffSecondsSource).toBe('default');
   });
 
-  test('stores minutes, including 0 for never, and clears back to the default', async () => {
-    await updateGlassesSettings({ screenOffMinutes: 1 });
-    expect((await glassesSettingsView()).screenOffMinutes).toBe(1);
-    expect((await glassesSettingsView()).screenOffMinutesSource).toBe('setting');
+  test('stores seconds, including 0 for never, and clears back to the default', async () => {
+    await updateGlassesSettings({ screenOffSeconds: 90 });
+    expect((await glassesSettingsView()).screenOffSeconds).toBe(90);
+    expect((await glassesSettingsView()).screenOffSecondsSource).toBe('setting');
 
     // 0 is a value ("never"), not an absence - it must survive the store.
-    await updateGlassesSettings({ screenOffMinutes: 0 });
+    await updateGlassesSettings({ screenOffSeconds: 0 });
     const never = await glassesSettingsView();
-    expect(never.screenOffMinutes).toBe(0);
-    expect(never.screenOffMinutesSource).toBe('setting');
+    expect(never.screenOffSeconds).toBe(0);
+    expect(never.screenOffSecondsSource).toBe('setting');
 
-    await updateGlassesSettings({ screenOffMinutes: null });
-    expect((await glassesSettingsView()).screenOffMinutesSource).toBe('default');
+    await updateGlassesSettings({ screenOffSeconds: null });
+    expect((await glassesSettingsView()).screenOffSecondsSource).toBe('default');
   });
 
-  test('a value outside 0..60 in the file reads back as unset', async () => {
+  test('a value outside 0..3600 in the file reads back as unset', async () => {
     await writeFile(
       join(tempDir, 'glasses-settings.json'),
-      JSON.stringify({ screenOffMinutes: 720 }),
+      JSON.stringify({ screenOffSeconds: 7200 }),
     );
     resetGlassesSettingsCache();
-    expect((await loadGlassesSettings()).screenOffMinutes).toBeUndefined();
-    expect((await glassesSettingsView()).screenOffMinutesSource).toBe('default');
+    expect((await loadGlassesSettings()).screenOffSeconds).toBeUndefined();
+    expect((await glassesSettingsView()).screenOffSecondsSource).toBe('default');
   });
 });
 

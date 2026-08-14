@@ -187,27 +187,26 @@ const AUTO_SCROLL_DWELL_MS = 3 * SECONDS_PER_LINE_MS
 const AUTO_SCROLL_MAX_PASSES = 2
 
 /**
- * How long the wearer has to be away before the panel goes dark, until the
- * server says otherwise.
+ * Idle time before the panel goes dark; `0` = never, which is the default.
  *
- * The panel has no screen-off of its own while this app is up, so an app
- * that draws something and is then forgotten stays lit until the battery
- * gives out. Three minutes:
- * auto-advance has finished its passes and rested by one minute, so this is
- * two further minutes of proven absence, not a reader mid-page.
- *
- * A default, not the value: the settings screen stores minutes server-side
- * (`screenOffMinutes`, `0` = never) and the controller fetches them on connect
- * and on resume, so retuning the timeout is a settings edit rather than an
- * ehpk rebuild. This constant must agree with the server's
- * DEFAULT_SCREEN_OFF_MINUTES, or an app that never reached its server sleeps
+ * The panel stays lit for as long as this app is up, so auto-off exists as an
+ * opt-in: the settings screen stores seconds server-side (`screenOffSeconds`)
+ * and the controller fetches them on connect, on resume, on a settings-changed
+ * push and on a slow poll. Off by default because the app never slept before
+ * this feature, and a default is not the place to change behavior under an
+ * existing wearer. This constant must agree with the server's
+ * DEFAULT_SCREEN_OFF_SECONDS, or an app that never reached its server sleeps
  * on a different clock than the screen says.
  *
- * Only the read-only screens sleep (list, conversation, overlay). Choice and
- * voice are the wearer mid-input, and a panel that goes dark while it *is* the
- * input loses what they were in the middle of.
+ * When enabled, only the read-only screens sleep (list, conversation,
+ * overlay). Choice and voice are the wearer mid-input, and a panel that goes
+ * dark while it *is* the input loses what they were in the middle of.
  */
-export const SCREEN_OFF_IDLE_MS = 3 * 60_000
+export const SCREEN_OFF_IDLE_MS = 0
+
+/** How many auto-advance ticks between settings fetches: 48 × 2.5s = two
+ *  minutes, which is one small GET against how stale a phone edit may look. */
+const SETTINGS_POLL_TICKS = 48
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
@@ -446,6 +445,8 @@ export class GlassesController {
   private lastActivityAt = Date.now()
   /** Idle time before the panel goes dark; `0` disables. Server-tunable. */
   private screenOffIdleMs = SCREEN_OFF_IDLE_MS
+  /** Ticks of the auto-advance clock since the settings were last fetched. */
+  private settingsPollTicks = 0
   /** What that gesture was. Reported on the way out: `SYSTEM_EXIT_EVENT` is
    *  the user confirming the host's exit dialogue, so what they pressed just
    *  before it is the difference between "they meant to leave" and "the app
@@ -501,6 +502,7 @@ export class GlassesController {
       onRelayUpsert: (item) => this.onRelayUpsert(item),
       onRelayRemove: (id) => this.onRelayRemove(id),
       onSuperseded: (by) => this.onSuperseded(by),
+      onSettingsChanged: () => this.refreshScreenOffSetting(),
       onGiveUp: () => this.onWsGaveUp(),
     })
   }
@@ -642,6 +644,13 @@ export class GlassesController {
     this.autoTimer = setInterval(() => {
       this.tickScreenOff()
       this.tickAutoAdvance()
+      // The slow settings poll rides the same clock: one GET every couple of
+      // minutes, so a timeout edited on the phone reaches running glasses
+      // without waiting for a reconnect.
+      if (++this.settingsPollTicks >= SETTINGS_POLL_TICKS) {
+        this.settingsPollTicks = 0
+        if (this.foreground && !this.stopped) this.refreshScreenOffSetting()
+      }
     }, AUTO_SCROLL_STEP_MS)
   }
 
@@ -670,11 +679,16 @@ export class GlassesController {
    * Take the timeout the settings screen holds. Fire-and-forget: an app that
    * cannot reach its server keeps the built-in default, which the server's own
    * default matches.
+   *
+   * Also called on a slow poll (`SETTINGS_POLL_TICKS`), because the screen
+   * that edits this is a phone and the glasses are already running: a save
+   * that only landed on the next reconnect looked like a save that did not
+   * work (measured 2026-08-14, the first edit anyone made from the phone).
    */
   private refreshScreenOffSetting(): void {
     void getGlassesSettings()
       .then((view) => {
-        this.screenOffIdleMs = view.screenOffMinutes * 60_000
+        this.screenOffIdleMs = view.screenOffSeconds * 1000
       })
       .catch(() => {})
   }
