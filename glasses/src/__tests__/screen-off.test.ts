@@ -11,7 +11,7 @@
 //   panel was never delivered
 
 import { describe, expect, test } from 'bun:test'
-import { GlassesController } from '../controller.ts'
+import { GlassesController, screenOffMsFrom } from '../controller.ts'
 import type { GlassesPlatform } from '../controller.ts'
 import { screenText } from '../display.ts'
 import type { GlassesRelayItem } from '../types.ts'
@@ -201,6 +201,90 @@ describe('what relights the panel on its own', () => {
     // The reconnect wants a `location`; a resume's waking is what is on trial.
     c.ws.connect = () => {}
     c.onForegroundEnter()
+    expect(c.state.screenOff).toBe(false)
+  })
+})
+
+/**
+ * The compatibility direction that actually happens: the store hands out an app
+ * newer than whatever server it is pointed at.
+ */
+describe('a server that does not know the setting', () => {
+  test('a view without the field yields no timeout, so the built-in one stands', () => {
+    expect(screenOffMsFrom({} as { screenOffSeconds?: number })).toBeNull()
+    expect(screenOffMsFrom({ screenOffSeconds: Number.NaN })).toBeNull()
+    expect(screenOffMsFrom({ screenOffSeconds: -1 })).toBeNull()
+    expect(screenOffMsFrom({ screenOffSeconds: 0 })).toBe(0)
+    expect(screenOffMsFrom({ screenOffSeconds: 180 })).toBe(180_000)
+  })
+
+  /** Why the guard is `Number.isFinite` rather than a truthiness check: NaN
+   *  passes both of `tickScreenOff`'s tests, because every comparison against
+   *  it is false. Nothing about the symptom points back at the setting. */
+  test('NaN would have blanked the panel with no idle time at all', () => {
+    const { c } = controller('conversation')
+    inner(c).screenOffIdleMs = Number.NaN
+
+    inner(c).lastGestureAt = Date.now()
+    inner(c).lastActivityAt = Date.now()
+    inner(c).tickScreenOff()
+
+    expect(c.state.screenOff).toBe(true)
+  })
+})
+
+describe('turning the timeout off', () => {
+  test('relights a panel that is already dark', () => {
+    const { c } = controller('conversation')
+    ageOut(c)
+    inner(c).tickScreenOff()
+    expect(c.state.screenOff).toBe(true)
+
+    inner(c).screenOffIdleMs = 0
+    inner(c).tickScreenOff()
+
+    expect(c.state.screenOff).toBe(false)
+  })
+})
+
+describe('a dark panel and the takeover rule', () => {
+  /**
+   * `takeover-if-elsewhere` is every non-`waiting` item, and those come from
+   * the `Stop` hook on every response. Relighting for the conversation already
+   * being read means an agent working in bursts keeps the panel awake for good.
+   */
+  test('a completion notice for the session on screen does not relight it', () => {
+    const { c } = controller('conversation')
+    ageOut(c)
+    inner(c).tickScreenOff()
+    expect(c.state.screenOff).toBe(true)
+
+    inner(c).onRelayUpsert({
+      id: 'done-1',
+      kind: 'info',
+      source: 'auto',
+      sessionId: 's1',
+      text: 'Response complete',
+      present: 'takeover-if-elsewhere',
+    } as GlassesRelayItem)
+
+    expect(c.state.screenOff).toBe(true)
+  })
+
+  test('but one for another session still does', () => {
+    const { c } = controller('conversation')
+    ageOut(c)
+    inner(c).tickScreenOff()
+
+    inner(c).onRelayUpsert({
+      id: 'done-2',
+      kind: 'info',
+      source: 'auto',
+      sessionId: 's2',
+      text: 'Response complete',
+      present: 'takeover-if-elsewhere',
+    } as GlassesRelayItem)
+
     expect(c.state.screenOff).toBe(false)
   })
 })

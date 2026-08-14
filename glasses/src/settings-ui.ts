@@ -243,10 +243,15 @@ export async function wireSettingsPanel(): Promise<void> {
 
     screenOffSeconds.value = String(v.screenOffSeconds)
     if (screenOffStatus) {
+      // What is set, not what just happened - `render` is the initial paint as
+      // well as the one after a save, and the save's own line is written by the
+      // handler that performed it.
       screenOffStatus.textContent =
-        v.screenOffSecondsSource === 'setting'
-          ? t('settings.screenOffSaved')
-          : t('settings.screenOffDefault')
+        v.screenOffSecondsSource !== 'setting'
+          ? t('settings.screenOffDefault')
+          : v.screenOffSeconds > 0
+            ? t('settings.screenOffOn', { seconds: String(v.screenOffSeconds) })
+            : t('settings.screenOffNever')
     }
 
     provider.value = v.sttEndpoint.provider
@@ -362,6 +367,7 @@ export async function wireSettingsPanel(): Promise<void> {
     }
     try {
       render(await putGlassesSettings({ screenOffSeconds: seconds }))
+      if (screenOffStatus) screenOffStatus.textContent = t('settings.screenOffSaved')
     } catch (err) {
       fail(screenOffStatus, err)
     }
