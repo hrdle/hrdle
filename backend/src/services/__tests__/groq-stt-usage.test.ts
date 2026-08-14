@@ -32,6 +32,8 @@ const day = (over: Partial<StoredSttDay> = {}): StoredSttDay => ({
   requests: 0,
   failures: 0,
   audioSeconds: 0,
+  // 既定は「送った分がすべて課金先へ行った」= 送り先が 1 つだった頃の前提。
+  billedSeconds: over.audioSeconds ?? 0,
   ...over,
 });
 

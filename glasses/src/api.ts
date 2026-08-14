@@ -180,6 +180,19 @@ export interface GlassesSettingsView {
   /** Seconds before this app blanks its panel; `0` = never. */
   screenOffSeconds: number
   screenOffSecondsSource: 'setting' | 'default'
+  /** Where transcription goes, and where that was decided. */
+  sttEndpoint: {
+    url: string | null
+    model: string | null
+    /** Which transcriber speech goes to first. */
+    provider: 'groq' | 'custom'
+    providerSource: 'setting' | 'default'
+    /** Whether the other transcriber is the escape when the chosen one fails. */
+    fallback: boolean
+    source: 'setting' | 'env' | 'none'
+    /** Short name of the target that would be hit right now. */
+    destination: string
+  }
 }
 
 /**
@@ -231,6 +244,10 @@ export async function putGlassesSettings(patch: {
   sttBias?: 'on' | 'off' | null
   sttModel?: string | null
   screenOffSeconds?: number | null
+  sttEndpointUrl?: string | null
+  sttEndpointModel?: string | null
+  sttProvider?: 'groq' | 'custom' | null
+  sttFallback?: 'on' | 'off' | null
 }): Promise<GlassesSettingsView> {
   const res = await fetch(`${baseUrl}/api/glasses/settings`, {
     method: 'PUT',

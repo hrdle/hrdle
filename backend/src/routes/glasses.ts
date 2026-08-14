@@ -1,6 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { resolveSttRequest } from '../services/stt-request';
+import {
+  noteFallbackUsed,
+  notePrimaryDown,
+  notePrimaryUp,
+  resolveSttDelivery,
+  resolveSttEndpoint,
+  type SttTarget,
+  sttTargets,
+} from '../services/stt-provider';
 import {
   STT_MODELS,
   glassesSettingsView,
@@ -24,7 +32,6 @@ import {
 
 const glasses = new Hono();
 
-const GROQ_STT_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // Groq's file limit
 
 /**
@@ -76,18 +83,23 @@ function pcmToWav(pcm: Uint8Array, sampleRate: number, channels = 1, bitsPerSamp
  */
 glasses.post('/stt', async (c) => {
   const { key: apiKey } = await resolveGroqApiKey();
-  if (!apiKey) {
-    return c.json({ error: 'No Groq API key: set one in the glasses settings or GROQ_API_KEY' }, 503);
-  }
 
   const format = c.req.query('format') || 'pcm';
   const sampleRate = Number(c.req.query('sampleRate')) || 16000;
   // `?session=` names the workspace being spoken to, so its own vocabulary
   // leads the prompt.
-  const stt = await resolveSttRequest({
+  // Content and destination are decided in one call (stt-provider.ts), and the
+  // preview reads the same call - so "what was reported" and "what is sent"
+  // cannot structurally disagree.
+  const { attempts, preview: stt } = await resolveSttDelivery({
     sessionId: c.req.query('session'),
     lang: c.req.query('lang'),
+    hasKey: !!apiKey,
   });
+
+  if (attempts[0].target.needsKey && !apiKey) {
+    return c.json({ error: 'No Groq API key: set one in the glasses settings or GROQ_API_KEY' }, 503);
+  }
 
   const raw = new Uint8Array(await c.req.arrayBuffer());
   if (raw.length === 0) {
@@ -100,6 +112,28 @@ glasses.post('/stt', async (c) => {
   const wav = format === 'wav' ? raw : pcmToWav(raw, sampleRate);
   const audioSeconds = format === 'wav' ? wavSeconds(raw) : pcmSeconds(raw.length, sampleRate);
 
+  // Copy into a freshly-allocated ArrayBuffer-backed view so the Blob part
+  // types cleanly (Bun's Uint8Array is ArrayBufferLike, not ArrayBuffer).
+  const wavBytes = new Uint8Array(wav.length);
+  wavBytes.set(wav);
+
+  const buildForm = (target: SttTarget): FormData => {
+    const form = new FormData();
+    form.append('file', new Blob([wavBytes.buffer], { type: 'audio/wav' }), 'audio.wav');
+    // The one thing that differs per target is the model name - a custom
+    // endpoint names its own.
+    form.append('model', target.model);
+    // A null language means send none, so Whisper detects it.
+    if (stt.language) form.append('language', stt.language);
+    form.append('response_format', 'json');
+    // Greedy decoding keeps short commands fast and deterministic.
+    form.append('temperature', '0');
+    // What the speech is about. Without it the model has no reason to produce
+    // the product's own coinages over ordinary words.
+    if (stt.prompt) form.append('prompt', stt.prompt);
+    return form;
+  };
+
   /**
    * Write the request into the screen recording, beside the frame that will
    * show its result.
@@ -108,10 +142,17 @@ glasses.post('/stt', async (c) => {
    * reading transcripts back - and a transcript that does not say which model
    * wrote it leaves the comparison resting on somebody's memory of when the
    * setting was last changed. Off unless the recording is on.
+   *
+   * One line per target tried. When the fallback stood in, the failed and the
+   * successful attempt sit next to each other, so a transcript read back later
+   * says where it actually came from.
    */
-  const recordAttempt = (result: { ok: boolean; text?: string; raw?: string }) => {
+  const recordAttempt = (
+    target: SttTarget,
+    result: { ok: boolean; text?: string; raw?: string },
+  ) => {
     recordSttRequest({
-      model: stt.model,
+      model: target.model,
       language: stt.language,
       prompt: stt.prompt,
       promptSource: stt.promptSource,
@@ -125,64 +166,93 @@ glasses.post('/stt', async (c) => {
     });
   };
 
-  try {
-    // Copy into a freshly-allocated ArrayBuffer-backed view so the Blob part
-    // types cleanly (Bun's Uint8Array is ArrayBufferLike, not ArrayBuffer).
-    const wavBytes = new Uint8Array(wav.length);
-    wavBytes.set(wav);
+  let lastError = '';
+  for (const [index, { target, isPrimary }] of attempts.entries()) {
+    const isLast = index === attempts.length - 1;
+    try {
+      // The server's own idle timeout is 120s, and the wearer is watching
+      // "Transcribing..." for all of it. Bound the leg we do not control well
+      // inside that, so a stalled provider comes back as a 502 the glasses can
+      // report rather than as the connection dying under them: 8 seconds of
+      // audio transcribes in ~0.33s, so 60 is already far past slow.
+      // With a fallback still waiting its turn, wait far less - a sleeping
+      // host answers never, and spending the full timeout before escaping
+      // defeats the point of having somewhere to escape to.
+      const res = await fetch(target.url, {
+        method: 'POST',
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        body: buildForm(target),
+        signal: AbortSignal.timeout(isLast ? 60_000 : 8_000),
+      });
 
-    const form = new FormData();
-    form.append('file', new Blob([wavBytes.buffer], { type: 'audio/wav' }), 'audio.wav');
-    form.append('model', stt.model);
-    // A null language means send none, so Whisper detects it.
-    if (stt.language) form.append('language', stt.language);
-    form.append('response_format', 'json');
-    // Greedy decoding keeps short commands fast and deterministic.
-    form.append('temperature', '0');
-    // What the speech is about. Without it the model has no reason to produce
-    // `パネル` over `ペイント`, and reaches for the ordinary Japanese word.
-    if (stt.prompt) form.append('prompt', stt.prompt);
+      // Recorded before the status is acted on: a rejected request still
+      // spends quota, and the headers on a 429 are the ones worth having. Not
+      // awaited - the user is waiting on the transcript, not on a tally.
+      // **Only attempts against the billed target are counted**: this tally
+      // answers "how close to Groq's daily cap", and mixing in requests to a
+      // custom endpoint would make the remaining headroom unreadable.
+      if (target.billed) {
+        void groqSttUsageService.record({
+          audioSeconds,
+          billedSeconds: audioSeconds,
+          ok: res.ok,
+          rateLimit: readRateLimitHeaders(res.headers, new Date().toISOString()),
+        });
+      }
 
-    // The server's own idle timeout is 120s, and the wearer is watching
-    // "Transcribing..." for all of it. Bound the leg we do not control well
-    // inside that, so a stalled provider comes back as a 502 the glasses can
-    // report rather than as the connection dying under them: 8 seconds of
-    // audio transcribes in ~0.33s, so 60 is already far past slow.
-    const res = await fetch(GROQ_STT_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(60_000),
-    });
+      if (res.ok) {
+        if (isPrimary) {
+          notePrimaryUp();
+        } else {
+          noteFallbackUsed();
+          console.warn(`[glasses/stt] using ${target.label} (primary unavailable)`);
+        }
+        // Parsing sits outside the send's try: inside it, one broken JSON
+        // body would count the same request as both "succeeded" and "never
+        // arrived", and roll the fallback judgement back with it. The send
+        // itself has already been decided.
+        const data = await res
+          .json()
+          .then((j) => j as { text?: string })
+          .catch(() => null);
+        if (!data) {
+          lastError = `${target.label} unreadable response`;
+          console.error(`[glasses/stt] ${lastError}`);
+          recordAttempt(target, { ok: false });
+          return c.json({ error: 'transcription failed' }, 502);
+        }
+        // Spelling the prompt cannot reach, and the sign-off Whisper writes into
+        // silence. An emptied hallucination is reported as nothing said, not as an
+        // error: the request happened and its quota was spent either way.
+        const text = applySttCorrections(data.text || '');
+        recordAttempt(target, { ok: true, text, raw: data.text || '' });
+        return c.json({ text });
+      }
 
-    // Recorded before the status is acted on: a rejected request still spends
-    // quota, and the headers on a 429 are the ones worth having. Not awaited -
-    // the user is waiting on the transcript, not on a tally.
-    void groqSttUsageService.record({
-      audioSeconds,
-      ok: res.ok,
-      rateLimit: readRateLimitHeaders(res.headers, new Date().toISOString()),
-    });
-
-    if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      console.error(`[glasses/stt] Groq ${res.status}: ${detail.slice(0, 300)}`);
-      recordAttempt({ ok: false });
-      return c.json({ error: `STT provider error (${res.status})` }, 502);
+      if (isPrimary && res.status >= 500) notePrimaryDown(target.url);
+      lastError = `${target.label} ${res.status}`;
+      console.error(`[glasses/stt] ${lastError}: ${detail.slice(0, 300)}`);
+      recordAttempt(target, { ok: false });
+      // A 4xx answers the same wherever it is sent - the request or the key is
+      // wrong. The fallback is only for a target that is broken or absent.
+      if (res.status < 500 || isLast) {
+        return c.json({ error: `STT provider error (${res.status})` }, 502);
+      }
+    } catch (err) {
+      // Never reached the target = a failure worth recording, and a billed one
+      // only when the billed target was the one being tried (a custom server
+      // asleep is not Groq usage). Zero seconds: nothing was transcribed.
+      if (target.billed) void groqSttUsageService.record({ audioSeconds, billedSeconds: 0, ok: false });
+      if (isPrimary) notePrimaryDown(target.url);
+      lastError = `${target.label} unreachable`;
+      console.error(`[glasses/stt] ${lastError}:`, err);
+      recordAttempt(target, { ok: false });
+      if (isLast) return c.json({ error: 'transcription failed' }, 500);
     }
-
-    const data = (await res.json()) as { text?: string };
-    // Spelling the prompt cannot reach, and the sign-off Whisper writes into
-    // silence. An emptied hallucination is reported as nothing said, not as an
-    // error: the request happened and its quota was spent either way.
-    const text = applySttCorrections(data.text || '');
-    recordAttempt({ ok: true, text, raw: data.text || '' });
-    return c.json({ text });
-  } catch (err) {
-    console.error('[glasses/stt] transcription failed:', err);
-    recordAttempt({ ok: false });
-    return c.json({ error: 'transcription failed' }, 500);
   }
+  console.error(`[glasses/stt] all targets failed (${lastError})`);
+  return c.json({ error: 'transcription failed' }, 502);
 });
 
 /**
@@ -196,9 +266,13 @@ glasses.post('/stt', async (c) => {
  * The Groq key is not in it. Nothing reads that back out, including this.
  */
 glasses.get('/stt-preview', async (c) => {
-  return c.json(
-    await resolveSttRequest({ sessionId: c.req.query('session'), lang: c.req.query('lang') }),
-  );
+  const { key } = await resolveGroqApiKey();
+  const { preview } = await resolveSttDelivery({
+    sessionId: c.req.query('session'),
+    lang: c.req.query('lang'),
+    hasKey: !!key,
+  });
+  return c.json(preview);
 });
 
 /**
@@ -213,8 +287,36 @@ glasses.get('/stt-preview', async (c) => {
  * question, and the field that looked as though it did was where an afternoon
  * went.
  */
+/**
+ * The stored view plus where transcription is actually going.
+ *
+ * The endpoint block is composed here rather than in `glassesSettingsView`
+ * because half the answer (the resolved targets) lives in `stt-provider`, and
+ * `glasses-settings` importing it back would be a cycle. `destination` names
+ * the target that would be hit right now, which is what the screen shows.
+ */
+async function settingsWithEndpoint() {
+  const view = await glassesSettingsView();
+  const endpoint = await resolveSttEndpoint();
+  const targets = await sttTargets(view.sttModel);
+  return {
+    ...view,
+    sttEndpoint: {
+      url: endpoint.url ?? null,
+      model: endpoint.model ?? null,
+      provider: targets.provider,
+      providerSource: targets.providerSource,
+      // The stored intent, not whether a target exists today: the checkbox
+      // must not appear to flip itself off just because no custom URL is set.
+      fallback: targets.fallbackOn,
+      source: endpoint.source,
+      destination: targets.primary.label,
+    },
+  };
+}
+
 glasses.get('/settings', async (c) => {
-  return c.json(await glassesSettingsView());
+  return c.json(await settingsWithEndpoint());
 });
 
 /**
@@ -238,6 +340,31 @@ const GlassesSettingsPatchSchema = z.object({
   sttModel: z.enum(STT_MODELS).nullable().optional(),
   // Seconds before the glasses blank their panel. 0 = never, an hour at most.
   screenOffSeconds: z.number().int().min(0).max(3600).nullable().optional(),
+  // A custom OpenAI-shaped transcription endpoint. http(s) only - audio goes
+  // wherever this points, so a URL that is not one is refused here rather
+  // than failing every utterance later.
+  sttEndpointUrl: z
+    .string()
+    .max(500)
+    .refine(
+      (value) => {
+        try {
+          const url = new URL(value);
+          return url.protocol === 'http:' || url.protocol === 'https:';
+        } catch {
+          return false;
+        }
+      },
+      { message: 'expected an http(s) URL' },
+    )
+    .nullable()
+    .optional(),
+  // Free text, not STT_MODELS: a custom server names its own models.
+  sttEndpointModel: z.string().max(100).nullable().optional(),
+  // Which transcriber speech goes to first, and whether the other one is the
+  // escape when it fails.
+  sttProvider: z.enum(['groq', 'custom']).nullable().optional(),
+  sttFallback: z.enum(['on', 'off']).nullable().optional(),
 });
 
 /**
@@ -270,7 +397,7 @@ glasses.put('/settings', async (c) => {
   // Applied now on running glasses, not at their next poll: the first person
   // to edit the timeout from the phone read the slow pickup as a failed save.
   notifyGlassesSettingsChanged();
-  return c.json(await glassesSettingsView());
+  return c.json(await settingsWithEndpoint());
 });
 
 export { glasses };

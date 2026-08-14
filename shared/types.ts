@@ -768,6 +768,17 @@ export interface GroqSttUsageDay extends GroqSttUsageWindow {
 export interface GroqSttUsageSummary {
   /** The transcription model these figures were priced and spent against. */
   model: string;
+  /** Display name of the target speech goes to right now (`Groq`, or the
+   *  custom endpoint's host). */
+  provider: string;
+  /** The model actually sent to that target. Differs from `model` only when a
+   *  custom endpoint names its own. */
+  providerModel: string;
+  /** Whether the primary is unreachable and the fallback is standing in. A
+   *  silent switch onto the billed target otherwise surfaces on the invoice. */
+  primaryDown: boolean;
+  /** When the fallback last carried a transcription (ISO); unset if never. */
+  lastFallbackAt?: string;
   today: GroqSttUsageWindow;
   last7d: GroqSttUsageWindow;
   /** Local calendar days, oldest first, today last. Contiguous. */

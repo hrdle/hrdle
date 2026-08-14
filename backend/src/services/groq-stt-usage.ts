@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { GroqSttRateLimit, GroqSttUsageDay, GroqSttUsageSummary } from '../../../shared/types';
 import { atomicWriteFile, createMutationLock, ensureDataDir } from '../utils/storage';
 import { DEFAULT_STT_MODEL, resolveSttModel } from './glasses-settings';
+import { type SttTarget, groqTarget, sttHealth, sttTargets } from './stt-provider';
 import { localDateKey, startOfDayBefore } from './kimi-usage';
 
 /**
@@ -51,9 +52,16 @@ const USD_PER_AUDIO_HOUR: Record<string, number> = {
 
 export interface StoredSttDay {
   requests: number;
-  /** Requests Groq rejected or that never reached it. Included in `requests`. */
+  /** Requests the provider rejected or that never reached it. Included in `requests`. */
   failures: number;
   audioSeconds: number;
+  /**
+   * Seconds sent to the billed target (Groq); a subset of `audioSeconds`.
+   * A custom endpoint and its Groq fallback can share a day, so cost cannot
+   * be computed from the total. Files from before this field are read as
+   * all-billed - everything was Groq then.
+   */
+  billedSeconds: number;
 }
 
 interface StoreFile {
@@ -90,6 +98,9 @@ export function parseStore(text: string): {
         requests: day.requests,
         failures: day.failures,
         audioSeconds: day.audioSeconds,
+        // Files from before billedSeconds existed: everything went to Groq
+        // then, so the whole figure is the billed one.
+        billedSeconds: typeof day.billedSeconds === 'number' ? day.billedSeconds : day.audioSeconds,
       });
     }
   }
@@ -168,12 +179,15 @@ export function estimateCostUsd(audioSeconds: number, model: string): number | u
 }
 
 function emptyDay(): StoredSttDay {
-  return { requests: 0, failures: 0, audioSeconds: 0 };
+  return { requests: 0, failures: 0, audioSeconds: 0, billedSeconds: 0 };
 }
 
 export interface SttRequestOutcome {
   /** Length of the audio sent, in seconds. Zero when it could not be measured. */
   audioSeconds: number;
+  /** The part of `audioSeconds` that went to the billed target. Zero when the
+   *  billed target was never reached. */
+  billedSeconds: number;
   ok: boolean;
   rateLimit?: GroqSttRateLimit;
 }
@@ -213,6 +227,7 @@ export class GroqSttUsageService {
         requests: day.requests + 1,
         failures: day.failures + (outcome.ok ? 0 : 1),
         audioSeconds: day.audioSeconds + outcome.audioSeconds,
+        billedSeconds: day.billedSeconds + outcome.billedSeconds,
       });
       if (outcome.rateLimit) this.rateLimit = outcome.rateLimit;
       for (const key of [...days.keys()]) {
@@ -247,7 +262,8 @@ export class GroqSttUsageService {
     // The model in force now, not a constant: it is a setting, and the card
     // that names it would otherwise keep naming the one it used to be.
     const { model } = await resolveSttModel();
-    return buildSummary(days, this.rateLimit, now, model);
+    const { primary, fallback } = await sttTargets(model);
+    return buildSummary(days, this.rateLimit, now, model, { primary, fallback });
   }
 }
 
@@ -267,17 +283,24 @@ export function buildSummary(
   rateLimit: GroqSttRateLimit | undefined,
   now: number,
   model: string = DEFAULT_STT_MODEL,
+  // At runtime getUsageSummary passes the settings-aware resolution; the
+  // env-free default here exists for tests that never touch settings.
+  targets: { primary: SttTarget; fallback: SttTarget | null } | null = null,
 ): GroqSttUsageSummary {
   const daily: GroqSttUsageDay[] = [];
+  // Billed seconds stay out of the daily rows (the chart shows money, not
+  // both second-counts), but the 7-day cost needs them summed.
+  const billedSeconds: number[] = [];
   for (let i = SUMMARY_DAYS - 1; i >= 0; i--) {
     const date = localDateKey(startOfDayBefore(now, i));
     const day = days.get(date);
+    billedSeconds.push(day?.billedSeconds ?? 0);
     daily.push({
       date,
       requests: day?.requests ?? 0,
       failures: day?.failures ?? 0,
       audioSeconds: Math.round(day?.audioSeconds ?? 0),
-      costUsd: estimateCostUsd(day?.audioSeconds ?? 0, model),
+      costUsd: estimateCostUsd(day?.billedSeconds ?? 0, model),
       observed: day !== undefined,
     });
   }
@@ -287,9 +310,22 @@ export function buildSummary(
   const sum = (pick: (d: GroqSttUsageDay) => number) =>
     last7.reduce((total, day) => total + pick(day), 0);
   const audioSeconds7d = sum((d) => d.audioSeconds);
+  const billedSeconds7d = billedSeconds.slice(-7).reduce((total, s) => total + s, 0);
+
+  // Where speech goes *now* is a different question from the daily tallies,
+  // but it belongs on the same card - a silent switch to the billed fallback
+  // otherwise surfaces on the invoice. While the primary is down, the
+  // fallback is the actual destination.
+  const resolved = targets ?? { primary: groqTarget(model), fallback: null };
+  const health = sttHealth(resolved.primary.url);
+  const active = health.primaryDown && resolved.fallback ? resolved.fallback : resolved.primary;
 
   return {
     model,
+    provider: active.label,
+    providerModel: active.model,
+    primaryDown: health.primaryDown,
+    lastFallbackAt: health.lastFallbackAt,
     today: {
       requests: today.requests,
       failures: today.failures,
@@ -300,7 +336,7 @@ export function buildSummary(
       requests: sum((d) => d.requests),
       failures: sum((d) => d.failures),
       audioSeconds: audioSeconds7d,
-      costUsd: estimateCostUsd(audioSeconds7d, model),
+      costUsd: estimateCostUsd(billedSeconds7d, model),
     },
     daily,
     rateLimit,

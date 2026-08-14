@@ -48,6 +48,25 @@ export interface GlassesSettings {
    * typed number now, and a wearer asking for 90 should not be rounded.
    */
   screenOffSeconds?: number;
+  /**
+   * A transcription endpoint that is not Groq, in the OpenAI transcription
+   * shape - a local Whisper, an mlx sidecar, a commercial compatible service.
+   * Absent means Groq.
+   *
+   * `sttEndpointModel` travels with the URL as one unit: a custom server
+   * names its own models (`whisper-1`), so pairing this store's Groq model
+   * names with someone else's URL would 400 on every utterance.
+   */
+  sttEndpointUrl?: string;
+  sttEndpointModel?: string;
+  /**
+   * Which of the two transcribers speech goes to first. Absent derives from
+   * what is configured: a custom endpoint that exists is used, otherwise Groq.
+   */
+  sttProvider?: 'groq' | 'custom';
+  /** Whether to switch to the other transcriber when the chosen one fails.
+   *  Absent means yes - the safe default is speech that keeps working. */
+  sttFallback?: 'on' | 'off';
 }
 
 /**
@@ -69,6 +88,19 @@ export { STT_MODELS, type SttModel } from '../../../shared/types';
  * picking here.
  */
 export const DEFAULT_STT_MODEL: SttModel = 'whisper-large-v3-turbo';
+
+/** An http(s) URL, or nothing. A file that holds anything else reads back as
+ *  unset - a broken URL would fail every utterance with only "STT provider
+ *  error" to show for it, same reasoning as the model list. */
+function asEndpointUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** `0` (never) up to an hour. Anything else reads back as unset. */
 function asScreenOffSeconds(value: unknown): number | undefined {
@@ -156,6 +188,17 @@ export async function loadGlassesSettings(): Promise<GlassesSettings> {
       // one place nobody looks when speech stops working.
       sttModel: asSttModel(parsed.sttModel),
       screenOffSeconds: asScreenOffSeconds(parsed.screenOffSeconds),
+      sttEndpointUrl: asEndpointUrl(parsed.sttEndpointUrl),
+      sttEndpointModel:
+        typeof parsed.sttEndpointModel === 'string' ? parsed.sttEndpointModel : undefined,
+      sttProvider:
+        parsed.sttProvider === 'groq' || parsed.sttProvider === 'custom'
+          ? parsed.sttProvider
+          : undefined,
+      sttFallback:
+        parsed.sttFallback === 'on' || parsed.sttFallback === 'off'
+          ? parsed.sttFallback
+          : undefined,
     };
   } catch {
     cache = {};
@@ -191,12 +234,16 @@ export async function updateGlassesSettings(patch: {
   sttBias?: 'on' | 'off' | null;
   sttModel?: string | null;
   screenOffSeconds?: number | null;
+  sttEndpointUrl?: string | null;
+  sttEndpointModel?: string | null;
+  sttProvider?: 'groq' | 'custom' | null;
+  sttFallback?: 'on' | 'off' | null;
 }): Promise<GlassesSettings> {
   return withLock(async () => {
     const current = await loadGlassesSettings();
     const next: GlassesSettings = { ...current };
 
-    for (const key of ['groqApiKey', 'sttLang', 'sttModel'] as const) {
+    for (const key of ['groqApiKey', 'sttLang', 'sttModel', 'sttEndpointUrl', 'sttEndpointModel'] as const) {
       const value = patch[key];
       if (value === undefined) continue;
       const trimmed = value === null ? '' : value.trim();
@@ -214,6 +261,21 @@ export async function updateGlassesSettings(patch: {
       if (seconds === undefined) delete next.screenOffSeconds;
       else next.screenOffSeconds = seconds;
     }
+
+    if (patch.sttProvider !== undefined) {
+      if (patch.sttProvider === null) delete next.sttProvider;
+      else next.sttProvider = patch.sttProvider;
+    }
+
+    if (patch.sttFallback !== undefined) {
+      if (patch.sttFallback === null) delete next.sttFallback;
+      else next.sttFallback = patch.sttFallback;
+    }
+
+    // The URL was validated at the route; a value that still fails to parse
+    // here is dropped rather than stored, for the same reason a retired model
+    // is - a stored value must never be one every utterance fails on.
+    if (next.sttEndpointUrl && !asEndpointUrl(next.sttEndpointUrl)) delete next.sttEndpointUrl;
 
 
     await ensureDataDir();
