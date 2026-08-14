@@ -204,6 +204,21 @@ const AUTO_SCROLL_MAX_PASSES = 2
  */
 export const SCREEN_OFF_IDLE_MS = 0
 
+/**
+ * The timeout a settings view carries, or null when it carries none.
+ *
+ * A server older than this field sends nothing, and `screenOffSeconds: number`
+ * is an assertion over its JSON rather than a guarantee. `NaN` would slip past
+ * both of `tickScreenOff`'s guards - every comparison against it is false - and
+ * blank the panel permanently, against a server the wearer has no reason to
+ * connect with an unusable screen.
+ */
+export function screenOffMsFrom(view: { screenOffSeconds?: number }): number | null {
+  const seconds = view.screenOffSeconds
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return null
+  return seconds * 1000
+}
+
 /** How many auto-advance ticks between settings fetches: 48 × 2.5s = two
  *  minutes, which is one small GET against how stale a phone edit may look. */
 const SETTINGS_POLL_TICKS = 48
@@ -667,7 +682,12 @@ export class GlassesController {
    */
   private tickScreenOff(): void {
     const st = this.state
-    if (this.screenOffIdleMs <= 0) return
+    if (this.screenOffIdleMs <= 0) {
+      // Switching the timeout off is done by someone looking at a dark panel
+      // wanting it back; leaving it dark reads as a save that did not work.
+      if (st.screenOff && !this.stopped) this.wake(true)
+      return
+    }
     if (this.stopped || !this.foreground || st.screenOff || this.demo) return
     if (st.mode !== 'session_list' && st.mode !== 'conversation' && st.mode !== 'overlay') return
     if (Date.now() - Math.max(this.lastGestureAt, this.lastActivityAt) < this.screenOffIdleMs) return
@@ -688,7 +708,8 @@ export class GlassesController {
   private refreshScreenOffSetting(): void {
     void getGlassesSettings()
       .then((view) => {
-        this.screenOffIdleMs = view.screenOffSeconds * 1000
+        const ms = screenOffMsFrom(view)
+        if (ms !== null) this.screenOffIdleMs = ms
       })
       .catch(() => {})
   }
@@ -1841,13 +1862,18 @@ export class GlassesController {
   private canTakeOverFor(item: GlassesRelayItem): boolean {
     const present = item.present ?? (item.kind === 'waiting' ? 'takeover' : 'takeover-if-elsewhere')
     if (present === 'banner') return false
-    // A dark panel is interruptible by definition: only the read-only screens
-    // ever sleep, so there is no pick or utterance underneath to protect, and
-    // "already on this conversation" protects a reader who is not looking at
-    // anything.
-    if (this.state.screenOff) return true
     // Mid-utterance / mid-pick: the wearer is using the panel, not reading it.
-    if (this.state.mode !== 'session_list' && this.state.mode !== 'conversation') return false
+    // Only the read-only screens ever sleep, so a dark panel is past this.
+    if (
+      !this.state.screenOff &&
+      this.state.mode !== 'session_list' &&
+      this.state.mode !== 'conversation'
+    ) {
+      return false
+    }
+    // `mode` names the screen under a dark panel, so this reads the same either
+    // way - and it has to, or every `Stop` hook relights the conversation the
+    // wearer was already on and nothing ever sleeps.
     if (present === 'takeover-if-elsewhere' && this.state.mode === 'conversation') {
       // Not about what is already on screen. "This conversation is done" thrown
       // over the conversation itself tells the reader nothing they cannot see,
@@ -2198,7 +2224,11 @@ export class GlassesController {
     // rule a fresh one arrives by. A reconnect is not a reason to show the
     // wearer less than they would have been shown a moment earlier.
     const top = this.queue.topWaiting()
-    if (top && this.canTakeOverFor(top)) {
+    // A snapshot arrives on every reconnect, so an item already on show is not
+    // news - and re-presenting it relights a panel the wearer let sleep, once
+    // per reconnect for as long as the link is unhappy.
+    const alreadyShown = this.state.mode === 'overlay' && this.state.overlayItemId === top?.id
+    if (top && !alreadyShown && this.canTakeOverFor(top)) {
       this.wake(false)
       this.enterOverlay(top.id)
       return

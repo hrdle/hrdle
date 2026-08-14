@@ -93,7 +93,9 @@ const EN: Table = {
   'settings.screenOffHint':
     '0 = never. After this long with no ring input the panel goes dark; a double-tap wakes it.',
   'settings.screenOffSave': 'Save',
-  'settings.screenOffSaved': 'Saved. Running glasses pick it up within a couple of minutes.',
+  'settings.screenOffSaved': 'Saved. Running glasses pick it up within seconds.',
+  'settings.screenOffOn': 'The panel goes dark after {seconds}s with no ring input; a double-tap wakes it.',
+  'settings.screenOffNever': 'Set to stay on.',
   'settings.screenOffDefault': 'Off by default - the screen stays on. Type seconds and save to enable.',
   'settings.screenOffInvalid': 'Whole seconds between 0 and 3600.',
   'settings.groqTitle': 'Groq',
@@ -215,7 +217,9 @@ const JA: Table = {
   'settings.screenOffHint':
     '0 で消灯しない。リング無操作がこの秒数続くと画面が消え、ダブルタップで戻ります。',
   'settings.screenOffSave': '保存',
-  'settings.screenOffSaved': '保存しました。稼働中のグラスにも 2 分以内に反映されます。',
+  'settings.screenOffSaved': '保存しました。稼働中のグラスにも数秒で反映されます。',
+  'settings.screenOffOn': 'リング無操作 {seconds} 秒でパネルが消灯し、ダブルタップで戻ります。',
+  'settings.screenOffNever': '消灯しない設定です。',
   'settings.screenOffDefault': '既定では消灯しません。秒数を入れて保存すると有効になります。',
   'settings.screenOffInvalid': '0〜3600 の整数で入力してください。',
   'settings.groqTitle': 'Groq',

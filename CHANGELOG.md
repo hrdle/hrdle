@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **An older server no longer blanks the glasses panel for good** (#366). A
+  server predating the screen-off setting answers without `screenOffSeconds`,
+  and the field's `number` type is an assertion over its JSON rather than a
+  guarantee - so the app stored `NaN`, which slips past both of the timeout's
+  guards because every comparison against it is false. The panel went dark on
+  the first tick with no idle time, and again seconds after every wake. An app
+  newer than the server it is pointed at is the normal state for anything the
+  store hands out
+- **A dark panel is no longer relit by the notices the takeover rule exists to
+  suppress.** Every non-`waiting` relay item is `takeover-if-elsewhere` and they
+  arrive from the `Stop` hook on every response, so "response complete" for the
+  conversation already being read woke the panel each turn - an agent working
+  faster than the timeout meant a screen that never slept
+- **Turning the timeout off relights a panel that is already dark.** Switching
+  it off is done by someone looking at a dark screen wanting it back; leaving it
+  black read as a save that had not worked
+- **A reconnect no longer re-presents a question already on show.** The relay
+  snapshot arrives on every reconnect, so a flaky link relit the panel and
+  re-entered the overlay with nothing new in it
+- **The settings panel says what is set, rather than "Saved" before anything
+  was.** Its render is the initial paint as well as the post-save one. The
+  pickup wording was stale in the other direction too - with the settings push
+  it is seconds, not "a couple of minutes"
+
 ### Changed
 - **The speech-to-text usage tally is no longer named after Groq.** Speech can
   be sent anywhere now, so `GroqSttUsageService` is `SttUsageService`,
