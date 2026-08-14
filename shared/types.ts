@@ -733,7 +733,7 @@ export interface GroqSttRateLimit {
 export const STT_MODELS = ['whisper-large-v3-turbo', 'whisper-large-v3'] as const;
 export type SttModel = (typeof STT_MODELS)[number];
 
-export interface GroqSttUsageWindow {
+export interface SttUsageWindow {
   requests: number;
   /** Requests that failed. Counted within `requests`, not on top of it. */
   failures: number;
@@ -749,7 +749,7 @@ export interface GroqSttUsageWindow {
   costUsd?: number;
 }
 
-export interface GroqSttUsageDay extends GroqSttUsageWindow {
+export interface SttUsageDay extends SttUsageWindow {
   date: string; // local YYYY-MM-DD
   /**
    * False when this server was not running for any of the day. Distinct from
@@ -765,7 +765,7 @@ export interface GroqSttUsageDay extends GroqSttUsageWindow {
  * Recorded as requests happen rather than aggregated from logs: unlike the
  * agents, Groq leaves nothing on this host to re-read afterwards.
  */
-export interface GroqSttUsageSummary {
+export interface SttUsageSummary {
   /** The transcription model these figures were priced and spent against. */
   model: string;
   /** Display name of the target speech goes to right now (`Groq`, or the
@@ -779,10 +779,10 @@ export interface GroqSttUsageSummary {
   primaryDown: boolean;
   /** When the fallback last carried a transcription (ISO); unset if never. */
   lastFallbackAt?: string;
-  today: GroqSttUsageWindow;
-  last7d: GroqSttUsageWindow;
+  today: SttUsageWindow;
+  last7d: SttUsageWindow;
   /** Local calendar days, oldest first, today last. Contiguous. */
-  daily: GroqSttUsageDay[];
+  daily: SttUsageDay[];
   rateLimit?: GroqSttRateLimit;
 }
 
@@ -913,7 +913,7 @@ export interface DashboardResponse {
   openRouterUsage?: OpenRouterAccountUsage | null;
   // Groq speech-to-text spend by the glasses. Null until this server has made
   // a transcription; there is no history to read back from Groq.
-  groqSttUsage?: GroqSttUsageSummary | null;
+  sttUsage?: SttUsageSummary | null;
   usageHistory: UsageSnapshot[]; // Usage history for line chart
   dailyActivity: DailyActivity[];
   modelUsage: ModelUsage[];

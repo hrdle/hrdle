@@ -2,7 +2,7 @@
  * Where a transcription is sent. **This module is the only answer.**
  *
  * The sender (`routes/glasses.ts`) and the usage tally
- * (`services/groq-stt-usage.ts`) must never resolve the destination
+ * (`services/stt-usage.ts`) must never resolve the destination
  * separately: the failure mode is a dashboard that keeps naming Groq and its
  * prices while speech actually goes to a server in the next room. Both read
  * `sttTargets()`, so they cannot disagree.

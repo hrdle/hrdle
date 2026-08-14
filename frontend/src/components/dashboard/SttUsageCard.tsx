@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { STT_MODELS, type GroqSttUsageSummary } from "../../../../shared/types";
+import { STT_MODELS, type SttUsageSummary } from "../../../../shared/types";
 import { API_BASE, authFetch } from "../../services/api";
 import { formatUsd } from "../../utils/format";
 import { Card, StatTile } from "./Card";
 
-interface GroqSttUsageCardProps {
-	usage: GroqSttUsageSummary;
+interface SttUsageCardProps {
+	usage: SttUsageSummary;
 	className?: string;
 }
 
@@ -39,7 +39,7 @@ function formatAudio(seconds: number): string {
  * its own rounding and this server never sees the invoice, which is why the
  * figure is labelled rather than presented as a balance.
  */
-export function GroqSttUsageCard({ usage, className = "" }: GroqSttUsageCardProps) {
+export function SttUsageCard({ usage, className = "" }: SttUsageCardProps) {
 	const { t } = useTranslation();
 	const { today, last7d, daily, rateLimit } = usage;
 	const maxAudio = Math.max(...daily.map((d) => d.audioSeconds), 1);
