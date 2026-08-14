@@ -50,29 +50,36 @@ the testing group, nor the store listing.
    gh pr merge <number> --repo hrdle/hrdle --merge
    ```
 
-5. **Log in to EVEN Hub** (through agent-browser):
+5. **Open the app in EVEN Hub** (through agent-browser). **Both pages are
+   reachable by URL** — no clicking through the project list:
    ```bash
-   agent-browser --session-name evenhub open https://hub.evenrealities.com/hub
-   agent-browser --session-name evenhub wait --load networkidle
+   # the build list ("Builds" tab)
+   agent-browser --session-name evenhub open https://hub.evenrealities.com/hub/com.hrdle.glasses
+   # the review and publish panel ("Store listing" tab)
+   agent-browser --session-name evenhub open https://hub.evenrealities.com/hub/com.hrdle.glasses/store-listing
    agent-browser --session-name evenhub set viewport 1280 800  # required: the default 393x852 (mobile) puts layout elements outside the viewport and clicks are ignored
-   agent-browser --session-name evenhub snapshot -i
+   agent-browser --session-name evenhub wait --load networkidle
    ```
-   - Skip this if the session is already logged in
+   - `/hub/com.hrdle.glasses/builds` is a 404. The build list is the project
+     page itself
+   - Skip the login if the session is already logged in
    - Otherwise: fill the "Email" textbox with `$EVENHUB_EMAIL`, press
      "Continue", fill the "Password" textbox with `$EVENHUB_PASSWORD`, press
      "Continue" (**a two-step flow**)
    - The credentials come from environment variables
 
-6. **Open the app's detail page**:
+6. **Read the state before touching anything.** What is Public, what is Beta,
+   and whether a review is in flight decide the rest of this:
    ```bash
-   # click "Hrdle" (the URL does not change below a 1280x800 viewport)
-   agent-browser --session-name evenhub click @eXX  # the ref for Hrdle in the snapshot
-   agent-browser --session-name evenhub wait --load networkidle
+   agent-browser --session-name evenhub eval '(()=>{const t=document.body.innerText.replace(/\n+/g," | "); const i=t.indexOf("Public build"); return t.slice(i,i+240);})()'          # project page
+   agent-browser --session-name evenhub eval '(()=>{const t=document.body.innerText.replace(/\n+/g," | "); const i=t.indexOf("Publish to hub"); return t.slice(i,i+240);})()'         # store listing
    ```
+   Wrap every `eval` in an **IIFE**: the execution context persists between
+   calls, so a bare `const x = ...` twice fails with "already been declared".
 
 7. **Upload the build**:
    ```bash
-   agent-browser --session-name evenhub click @eXX  # the ref for "Upload a build"
+   agent-browser --session-name evenhub find text "Upload a build" click
    sleep 3
    ```
 
@@ -80,17 +87,18 @@ the testing group, nor the store listing.
    ordinary click does nothing). Getting the page's WS URL:
    ```bash
    # write /json/list to a file first (a shell wrapper can truncate stdout, so do not pipe it directly)
-   rtk proxy curl -s http://127.0.0.1:<port>/json/list > /tmp/cdp-list.json
+   PORT=$(agent-browser --session-name evenhub get cdp-url | sed -E 's|.*127.0.0.1:([0-9]+)/.*|\1|')
+   curl -s http://127.0.0.1:$PORT/json/list > /tmp/cdp-list.json
    python3 -c "
    import json
    with open('/tmp/cdp-list.json') as f:
        data = json.load(f)
    for t in data:
-       if t.get('type') == 'page':
+       # pick the Hub tab by URL: other sessions' pages are on the same browser
+       if t.get('type') == 'page' and 'evenrealities' in t.get('url', ''):
            print(t['webSocketDebuggerUrl'])
            break
    "
-   # the port comes from `agent-browser --session-name evenhub get cdp-url`
    ```
 
    Then setFileInputFiles over that PAGE_WS:
@@ -129,11 +137,15 @@ the testing group, nor the store listing.
 8. **Enter the changelog and submit**:
    ```bash
    sleep 3
-   agent-browser --session-name evenhub snapshot -i
+   agent-browser --session-name evenhub snapshot -i               # the dialog is all the snapshot holds: "Change log", "Cancel", "Add build"
    agent-browser --session-name evenhub fill @eXX "what changed"  # Change log
    agent-browser --session-name evenhub click @eXX                # "Add build"
    agent-browser --session-name evenhub wait --load networkidle
    ```
+
+   Take the textarea's ref from the snapshot. `find role textbox fill` does not
+   reach it — it answers `Element not found` while `snapshot -i` lists the same
+   field as `textbox "Change log"`.
 
    **Write it in English, and get it right the first time.** Everything typed
    into EVEN Hub — the changelog, the store description, the tagline — is prose
@@ -224,7 +236,56 @@ the testing group, nor the store listing.
     - The coordinates move with the viewport and the number of builds, so
       **always look them up dynamically** (never hardcode them)
 
-11. **Close the browser**:
+11. **Publish what was approved, then submit the new build.** Everything here is
+    the **Store listing** tab's `Publish to hub` panel, and it is a different
+    record from the Beta switch above: a build's `Private / Beta / Public` lives
+    on the build list, the review lives here and is attached to the build that
+    was submitted.
+
+    **The order is fixed** (the user's, 2026-08-14): promote the approved build
+    to Public first, then submit the new one. A build cannot be swapped while a
+    review is in flight — `Submit for review` fails with `Failed to submit /
+    invalid parameter` and a reload restores the old submission — so anything
+    already `In review` has to finish before the next one can go out. Read
+    `Review status` before answering any question about what can be submitted.
+
+    - **Ask before publishing.** Promotion changes what every user gets, and
+      "approved" is not "the user wants it out today"
+    - Press `Publish to Even Hub`, then `Select build` -> the build's row ->
+      `Confirm` -> `Submit for review`
+    - **The panel's controls sit below a 1280x800 viewport** (y around 950), and
+      `find text "<label>" click` **reports `✓ Done` without pressing them**.
+      Measured on 2026-08-15: `Publish to Even Hub` answered `✓ Done` three
+      times, a reload still read `Approved`, and it looked like a broken button.
+      Scroll it into view and click through the point:
+      ```bash
+      agent-browser --session-name evenhub eval '(()=>{const e=Array.from(document.querySelectorAll("*")).filter(x=>x.textContent.trim()==="Publish to Even Hub"&&x.children.length===0).pop(); e.scrollIntoView({block:"center"}); const r=e.getBoundingClientRect(); return {x:Math.round(r.x+r.width/2), y:Math.round(r.y+r.height/2)};})()'
+      agent-browser --session-name evenhub eval '(()=>{ document.elementFromPoint(<x>,<y>)?.click(); return "clicked"; })()'
+      ```
+      Match on text with `children.length === 0` rather than on `button`:
+      `Select build` is a `span`, so `querySelectorAll("button")` misses it
+    - **`Publish to Even Hub` succeeded when the panel becomes
+      `Select build / Submit for review`.** The promotion does not show in the
+      DOM until a reload, and the panel's own version line keeps saying
+      `Approved` in the meantime, so this is the signal to read
+    - The build dialog is two steps: click the row, **check the icon**, then
+      `Confirm`. Selection is carried by an icon and nothing else — chosen is
+      `i-er:ic-checkbox-mark`, unchosen `i-er:ic-checkbox`; there is no `input`,
+      `role` or `aria-selected`:
+      ```bash
+      agent-browser --session-name evenhub eval '(()=>{const d=document.querySelector("[role=dialog]"); return JSON.stringify(Array.from(d.querySelectorAll("span.iconify")).map(s=>s.className.toString()));})()'
+      ```
+    - **The `Private` badge the panel shows after selecting is not the build's
+      Beta/Public state.** Check the build list instead
+    - **`Submit for review` sends immediately** — no form, no confirmation.
+      Read the selected version back before pressing it
+    - Confirm afterwards with a reload: `Review status` should read
+      `Submitted <time> / In review`
+    - If a review comes back `Rejected`, do not promote and do not resubmit on
+      your own — read the reason and tell the user (v0.0.48 failed on the colour
+      of its screenshots)
+
+12. **Close the browser**:
     ```bash
     agent-browser --session-name evenhub close
     ```
@@ -244,8 +305,16 @@ the testing group, nor the store listing.
 - **The Beta badge cannot be driven by a snapshot ref**: use
   `elementFromPoint(x, y)?.click()`, with the coordinates found through
   `querySelectorAll` + `getBoundingClientRect`
+- **A `✓ Done` from `find text ... click` is not proof the button was pressed.**
+  Anything below the viewport goes unpressed and still reports success, so read
+  the state back after every click that matters rather than trusting the return
+  value
 - **Fetch CDP `/json/list` through a file**: a shell wrapper can truncate stdout
   to `...(N bytes total)`. Redirect to `/tmp/cdp-list.json` and read it with
   python3 rather than piping
+- **The browser session is shared with the other worktrees.** `--session-name
+  evenhub` keeps it off the `default` session another agent may be driving, but
+  two agents on `evenhub` still fight over one page — say so before starting a
+  run that spans several minutes of clicking
 - **EVEN Hub is the public web (`hub.evenrealities.com`)** — no Tailscale IP is
   involved (do not confuse it with the Hrdle server itself)
