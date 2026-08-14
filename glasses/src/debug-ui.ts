@@ -747,6 +747,7 @@ export function startDebugUI(): void {
     // the relay line below, where it comes from.
     diag.textContent =
       `WS: ${ws.getState()} | Sub: ${ws.getSubscribed() || 'none'} | Buf: ${bufText.length}ch` +
+      (state.screenOff ? ' | screen off' : '') +
       (controller.isStopped() ? ' | stopped' : '')
     const top = state.relayWaiting[0]
     relay.textContent =

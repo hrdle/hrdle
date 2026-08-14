@@ -362,6 +362,16 @@ function broadcastUpsert(item: GlassesRelayItem): void {
   sendToSubscribers({ type: 'glasses-relay', item });
 }
 
+/**
+ * Tell connected glasses their settings changed, so a value
+ * edited on the phone (the screen-off timeout) applies now rather than at the
+ * next slow poll. Carries no payload: the app refetches, which keeps this one
+ * message honest for every field the settings may grow.
+ */
+export function notifyGlassesSettingsChanged(): void {
+  sendToSubscribers({ type: 'glasses-settings-changed' });
+}
+
 function broadcastRemove(id: string): void {
   sendToSubscribers({ type: 'glasses-relay-remove', id });
 }

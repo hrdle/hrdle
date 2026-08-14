@@ -86,6 +86,14 @@ const EN: Table = {
   'settings.biasEnv': 'Replaced by HRDLE_STT_PROMPT in the server environment.',
   'settings.biasComposed':
     'Sent with every transcription. A session speaking adds its own words in front of these - set those with `hrdle stt-prompt` in it, or from its settings.',
+  'settings.glassesTitle': 'Glasses screen',
+  'settings.screenOff': 'Auto screen-off (seconds)',
+  'settings.screenOffHint':
+    '0 = never. After this long with no ring input the panel goes dark; a double-tap wakes it.',
+  'settings.screenOffSave': 'Save',
+  'settings.screenOffSaved': 'Saved. Running glasses pick it up within a couple of minutes.',
+  'settings.screenOffDefault': 'Off by default - the screen stays on. Type seconds and save to enable.',
+  'settings.screenOffInvalid': 'Whole seconds between 0 and 3600.',
   'settings.failed': 'Failed: {error}',
 
   // The demo, which is a tutorial: every string is a caption for the thing it
@@ -142,7 +150,7 @@ const JA: Table = {
 
   'settings.title': '音声入力',
   'settings.subtitle':
-    '音声認識はサーバー側で Groq を通して実行されます。キーがそのホストから出ることはありません。',
+    '音声認識はサーバー側で Groq を通して実行されます。キーはそのホストから出ません。',
   'settings.key': 'Groq API キー',
   'settings.keySave': 'キーを保存',
   'settings.keyClear': '消去',
@@ -170,6 +178,14 @@ const JA: Table = {
   'settings.biasEnv': 'サーバー環境変数の HRDLE_STT_PROMPT で置き換えられています。',
   'settings.biasComposed':
     '毎回の文字起こしに送られます。話しかけるセッション自身の語はこの前に付きます（そのセッションで `hrdle stt-prompt`、または設定から）。',
+  'settings.glassesTitle': 'グラス画面',
+  'settings.screenOff': '自動消灯 (秒)',
+  'settings.screenOffHint':
+    '0 で消灯しない。リング無操作がこの秒数続くと画面が消え、ダブルタップで戻ります。',
+  'settings.screenOffSave': '保存',
+  'settings.screenOffSaved': '保存しました。稼働中のグラスにも 2 分以内に反映されます。',
+  'settings.screenOffDefault': '既定では消灯しません。秒数を入れて保存すると有効になります。',
+  'settings.screenOffInvalid': '0〜3600 の整数で入力してください。',
   'settings.failed': '失敗しました: {error}',
 
   // The demo. Japanese is full-width, so each of these has half the room the

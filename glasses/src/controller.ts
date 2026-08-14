@@ -25,7 +25,7 @@
 //                 doubleTap=cancel (item stays queued)
 //   voice:        tap=stop→transcribe / send  doubleTap=cancel
 
-import { getConversation, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
+import { getConversation, getGlassesSettings, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
 import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
@@ -185,6 +185,28 @@ const AUTO_SCROLL_DWELL_MS = 3 * SECONDS_PER_LINE_MS
  * not. A ring gesture starts the count over: that is a reader arriving.
  */
 const AUTO_SCROLL_MAX_PASSES = 2
+
+/**
+ * Idle time before the panel goes dark; `0` = never, which is the default.
+ *
+ * The panel stays lit for as long as this app is up, so auto-off exists as an
+ * opt-in: the settings screen stores seconds server-side (`screenOffSeconds`)
+ * and the controller fetches them on connect, on resume, on a settings-changed
+ * push and on a slow poll. Off by default because the app never slept before
+ * this feature, and a default is not the place to change behavior under an
+ * existing wearer. This constant must agree with the server's
+ * DEFAULT_SCREEN_OFF_SECONDS, or an app that never reached its server sleeps
+ * on a different clock than the screen says.
+ *
+ * When enabled, only the read-only screens sleep (list, conversation,
+ * overlay). Choice and voice are the wearer mid-input, and a panel that goes
+ * dark while it *is* the input loses what they were in the middle of.
+ */
+export const SCREEN_OFF_IDLE_MS = 0
+
+/** How many auto-advance ticks between settings fetches: 48 × 2.5s = two
+ *  minutes, which is one small GET against how stale a phone edit may look. */
+const SETTINGS_POLL_TICKS = 48
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
 
@@ -414,6 +436,17 @@ export class GlassesController {
   private stopped = false
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
   private lastGestureAt = 0
+  /**
+   * Last proof someone is (or should be) looking: a gesture, a resume, or an
+   * item taking the screen. The screen-off clock counts from here, not from
+   * `lastGestureAt` alone - a question that took the panel moments before the
+   * deadline must not be blanked before anyone could have walked over to it.
+   */
+  private lastActivityAt = Date.now()
+  /** Idle time before the panel goes dark; `0` disables. Server-tunable. */
+  private screenOffIdleMs = SCREEN_OFF_IDLE_MS
+  /** Ticks of the auto-advance clock since the settings were last fetched. */
+  private settingsPollTicks = 0
   /** What that gesture was. Reported on the way out: `SYSTEM_EXIT_EVENT` is
    *  the user confirming the host's exit dialogue, so what they pressed just
    *  before it is the difference between "they meant to leave" and "the app
@@ -469,6 +502,7 @@ export class GlassesController {
       onRelayUpsert: (item) => this.onRelayUpsert(item),
       onRelayRemove: (id) => this.onRelayRemove(id),
       onSuperseded: (by) => this.onSuperseded(by),
+      onSettingsChanged: () => this.refreshScreenOffSetting(),
       onGiveUp: () => this.onWsGaveUp(),
     })
   }
@@ -596,6 +630,7 @@ export class GlassesController {
    *  a snapshot, then pushes upserts/removals. */
   connect(): void {
     if (this.stopped) return
+    this.refreshScreenOffSetting()
     this.ws.subscribeGlassesRelay(this.platform.onDevice, this.platform.instanceId)
     this.ws.connect()
     // One timer for the life of the app rather than start/stop bookkeeping on
@@ -606,7 +641,65 @@ export class GlassesController {
     // left nothing able to stop them once the host took the app down — two
     // clocks drawing to a revoked panel for as long as the WebView lasted.
     this.spinnerTimer = setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
-    this.autoTimer = setInterval(() => this.tickAutoAdvance(), AUTO_SCROLL_STEP_MS)
+    this.autoTimer = setInterval(() => {
+      this.tickScreenOff()
+      this.tickAutoAdvance()
+      // The slow settings poll rides the same clock: one GET every couple of
+      // minutes, so a timeout edited on the phone reaches running glasses
+      // without waiting for a reconnect.
+      if (++this.settingsPollTicks >= SETTINGS_POLL_TICKS) {
+        this.settingsPollTicks = 0
+        if (this.foreground && !this.stopped) this.refreshScreenOffSetting()
+      }
+    }, AUTO_SCROLL_STEP_MS)
+  }
+
+  /**
+   * Put the panel out once nobody has been here for `SCREEN_OFF_IDLE_MS`.
+   *
+   * Rides the auto-advance clock rather than owning a timer: a 2.5s grain on
+   * a three-minute deadline is noise, and one clock is one thing to stop.
+   *
+   * The demo never sleeps. It exists to be watched by a reviewer whose first
+   * root double-tap must reach the host's exit dialogue - a dark demo would
+   * spend that gesture on waking instead, which is the one screen where the
+   * gesture's OS meaning is not ours to reassign.
+   */
+  private tickScreenOff(): void {
+    const st = this.state
+    if (this.screenOffIdleMs <= 0) return
+    if (this.stopped || !this.foreground || st.screenOff || this.demo) return
+    if (st.mode !== 'session_list' && st.mode !== 'conversation' && st.mode !== 'overlay') return
+    if (Date.now() - Math.max(this.lastGestureAt, this.lastActivityAt) < this.screenOffIdleMs) return
+    st.screenOff = true
+    this.render()
+  }
+
+  /**
+   * Take the timeout the settings screen holds. Fire-and-forget: an app that
+   * cannot reach its server keeps the built-in default, which the server's own
+   * default matches.
+   *
+   * Also called on a slow poll (`SETTINGS_POLL_TICKS`), because the screen
+   * that edits this is a phone and the glasses are already running: a save
+   * that only landed on the next reconnect looked like a save that did not
+   * work (measured 2026-08-14, the first edit anyone made from the phone).
+   */
+  private refreshScreenOffSetting(): void {
+    void getGlassesSettings()
+      .then((view) => {
+        this.screenOffIdleMs = view.screenOffSeconds * 1000
+      })
+      .catch(() => {})
+  }
+
+  /** Relight the panel. The screen underneath was kept, so this is only the
+   *  flag and the redraw; callers about to draw a new screen skip the render. */
+  private wake(render: boolean): void {
+    this.lastActivityAt = Date.now()
+    if (!this.state.screenOff) return
+    this.state.screenOff = false
+    if (render) this.render()
   }
 
   /**
@@ -628,7 +721,7 @@ export class GlassesController {
     // Nobody is looking at this panel, and nothing sent to it would arrive.
     // Advancing anyway would also walk the recap past the point the reader
     // left it, so they come back to the middle of something.
-    if (this.stopped || !this.foreground) return
+    if (this.stopped || !this.foreground || this.state.screenOff) return
     // Everything has been shown, twice. Drawing again would be for nobody.
     if (this.autoResting) return
     // The reader is working the ring; do not fight them for it.
@@ -684,8 +777,9 @@ export class GlassesController {
   private tickSpinner(): void {
     const st = this.state
     // Nothing drawn from the background arrives, so an animation run there is
-    // spent entirely on the way to being dropped.
-    if (this.stopped || !this.foreground) return
+    // spent entirely on the way to being dropped. A dark panel is the same
+    // audience.
+    if (this.stopped || !this.foreground || this.state.screenOff) return
     if (!this.somethingIsWorking()) return
     st.spinnerTick = (st.spinnerTick ?? 0) + 1
     this.platform.renderHeader(st)
@@ -773,6 +867,11 @@ export class GlassesController {
     if (this.stopped) return
     this.foreground = true
     this.state.spinnerTick = 0
+    // Being brought back is the wearer's doing, so the panel relights: a
+    // resume onto a dark screen reads as the crash it took a day to rule out.
+    this.wake(false)
+    // The timeout may have been retuned from the phone while this slept.
+    this.refreshScreenOffSetting()
     this.ws.connect()
     this.render()
     void this.maybeRefreshConversation()
@@ -948,6 +1047,17 @@ export class GlassesController {
     // Someone is here. Whatever the screen had settled into, it starts over.
     this.autoPasses = 0
     this.autoResting = false
+    // Dark panel: the double-tap relights it and is spent doing so - it must
+    // not fall through to the root exit dialogue, or waking the screen would
+    // also ask to leave the app. Everything else is ignored *without* waking,
+    // which is the point: a brush against the ring - in a pocket, or while
+    // the wearer's hands are busy with something else - is a single touch,
+    // and a single touch on a dark screen now does nothing at all.
+    if (this.state.screenOff) {
+      if (action === 'doubleTap') this.wake(true)
+      return
+    }
+    this.lastActivityAt = Date.now()
     switch (this.state.mode) {
       case 'session_list': return this.onSessionListAction(action)
       case 'conversation': return this.onConversationAction(action)
@@ -1731,6 +1841,11 @@ export class GlassesController {
   private canTakeOverFor(item: GlassesRelayItem): boolean {
     const present = item.present ?? (item.kind === 'waiting' ? 'takeover' : 'takeover-if-elsewhere')
     if (present === 'banner') return false
+    // A dark panel is interruptible by definition: only the read-only screens
+    // ever sleep, so there is no pick or utterance underneath to protect, and
+    // "already on this conversation" protects a reader who is not looking at
+    // anything.
+    if (this.state.screenOff) return true
     // Mid-utterance / mid-pick: the wearer is using the panel, not reading it.
     if (this.state.mode !== 'session_list' && this.state.mode !== 'conversation') return false
     if (present === 'takeover-if-elsewhere' && this.state.mode === 'conversation') {
@@ -2084,6 +2199,7 @@ export class GlassesController {
     // wearer less than they would have been shown a moment earlier.
     const top = this.queue.topWaiting()
     if (top && this.canTakeOverFor(top)) {
+      this.wake(false)
       this.enterOverlay(top.id)
       return
     }
@@ -2097,6 +2213,7 @@ export class GlassesController {
     // being asked, because the wearer is mid-answer and the alternative is a
     // notice they have to find their way back to.
     if (this.shouldFollowChoice(item)) {
+      this.wake(false)
       this.enterChoice(
         item.choices as string[],
         { sessionId: item.sessionId, paneId: item.paneId, itemId: item.id },
@@ -2113,6 +2230,10 @@ export class GlassesController {
     // screen — and, being one, hands it back without being asked. A question
     // stays until it is answered or put off.
     if (isNew && this.canTakeOverFor(item)) {
+      // The active event is what relights a dark panel: the wearer asked to be
+      // interrupted by these, and a notification drawn onto a screen that
+      // stays black was never delivered.
+      this.wake(false)
       this.enterOverlay(item.id)
       if (item.kind === 'info') this.scheduleNoticeDismiss(item.id)
       return

@@ -14,6 +14,7 @@ import {
   readRateLimitHeaders,
   wavSeconds,
 } from '../services/groq-stt-usage';
+import { notifyGlassesSettingsChanged } from '../services/glasses-relay';
 import {
   glassesRecordingEnabled,
   listRecordingDays,
@@ -235,6 +236,8 @@ const GlassesSettingsPatchSchema = z.object({
   // A closed set: an unknown model is a 400 on every utterance, and the wearer
   // would see only "STT provider error".
   sttModel: z.enum(STT_MODELS).nullable().optional(),
+  // Seconds before the glasses blank their panel. 0 = never, an hour at most.
+  screenOffSeconds: z.number().int().min(0).max(3600).nullable().optional(),
 });
 
 /**
@@ -264,6 +267,9 @@ glasses.put('/settings', async (c) => {
     return c.json({ error: parsed.error.issues[0]?.message || 'invalid settings' }, 400);
   }
   await updateGlassesSettings(parsed.data);
+  // Applied now on running glasses, not at their next poll: the first person
+  // to edit the timeout from the phone read the slow pickup as a failed save.
+  notifyGlassesSettingsChanged();
   return c.json(await glassesSettingsView());
 });
 

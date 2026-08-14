@@ -27,6 +27,7 @@ const LANGS: Array<{ value: string; labelKey: string }> = [
   { value: 'en', labelKey: 'settings.langEn' },
 ]
 
+
 // The accent is a variable because this panel has two homes with different
 // palettes: the phone wizard, which is red like the app icon, and the browser
 // simulator, which is green because that is the colour the G2 actually draws in.
@@ -51,9 +52,24 @@ const S = {
     'margin-top:8px;padding:10px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#bbb;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-word;',
 }
 
-/** Markup for the panel. Mount it wherever, then call `wireSettingsPanel()`. */
+/**
+ * Two sections: the glasses screen, and voice input. The screen setting is
+ * not voice input at all, and a timeout living inside the Groq box read as a
+ * Groq setting - which is exactly what it isn't.
+ */
 export function settingsPanelHtml(): string {
   return `
+    <div id="glasses-screen-settings" style="${S.section}">
+      <h2 style="${S.h2}">${t('settings.glassesTitle')}</h2>
+      <label style="${S.label}" for="screen-off-seconds">${t('settings.screenOff')}</label>
+      <p style="${S.sub}">${t('settings.screenOffHint')}</p>
+      <input id="screen-off-seconds" type="number" inputmode="numeric" min="0" max="3600" step="1" style="${S.input}" />
+      <div style="${S.row}">
+        <button type="button" id="screen-off-save" style="${S.btn}">${t('settings.screenOffSave')}</button>
+      </div>
+      <div id="screen-off-status" style="${S.status}"></div>
+    </div>
+
     <div id="stt-settings" style="${S.section}">
       <h2 style="${S.h2}">${t('settings.title')}</h2>
       <p style="${S.sub}">${t('settings.subtitle')}</p>
@@ -72,12 +88,6 @@ export function settingsPanelHtml(): string {
       </select>
       <div id="stt-lang-status" style="${S.status}"></div>
 
-      <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
-      <!-- Options come from the server's own list, so this app cannot offer a
-           model the server would reject. Filled in by wireSettingsPanel(). -->
-      <select id="stt-model" style="${S.input}"></select>
-      <div id="stt-model-status" style="${S.status}"></div>
-
       <span style="${S.label}">${t('settings.bias')}</span>
       <label style="${S.toggle}">
         <input type="checkbox" id="stt-bias" />
@@ -88,6 +98,12 @@ export function settingsPanelHtml(): string {
            named, that is the glossary every session shares. -->
       <div id="stt-bias-preview" style="${S.preview}"></div>
       <div id="stt-bias-status" style="${S.status}"></div>
+
+      <label style="${S.label}" for="stt-model">${t('settings.model')}</label>
+      <!-- Options come from the server's own list, so this app cannot offer a
+           model the server would reject. Filled in by wireSettingsPanel(). -->
+      <select id="stt-model" style="${S.input}"></select>
+      <div id="stt-model-status" style="${S.status}"></div>
     </div>
   `
 }
@@ -130,11 +146,13 @@ export async function wireSettingsPanel(): Promise<void> {
   const lang = el<HTMLSelectElement>('stt-lang')
   const model = el<HTMLSelectElement>('stt-model')
   const bias = el<HTMLInputElement>('stt-bias')
-  if (!key || !lang || !model || !bias) return
+  const screenOffSeconds = el<HTMLInputElement>('screen-off-seconds')
+  if (!key || !lang || !model || !bias || !screenOffSeconds) return
 
   const keyStatus = el('stt-key-status')
   const langStatus = el('stt-lang-status')
   const modelStatus = el('stt-model-status')
+  const screenOffStatus = el('screen-off-status')
   const biasStatus = el('stt-bias-status')
   const biasPreview = el('stt-bias-preview')
 
@@ -174,6 +192,14 @@ export async function wireSettingsPanel(): Promise<void> {
     // `HRDLE_STT_PROMPT=off` is a decision made at the process level and this
     // screen cannot undo it, so the switch says so rather than pretending.
     bias.disabled = v.sttBiasSource === 'env'
+
+    screenOffSeconds.value = String(v.screenOffSeconds)
+    if (screenOffStatus) {
+      screenOffStatus.textContent =
+        v.screenOffSecondsSource === 'setting'
+          ? t('settings.screenOffSaved')
+          : t('settings.screenOffDefault')
+    }
   }
 
   /**
@@ -253,4 +279,22 @@ export async function wireSettingsPanel(): Promise<void> {
       fail(biasStatus, err)
     }
   })
+
+  el('screen-off-save')?.addEventListener('click', async () => {
+    // Validated here as well as at the server, because the server's answer to
+    // a bad number is a 400 whose message is for a machine. Emptiness first:
+    // Number('') is 0, which would silently save "never turn off".
+    const raw = screenOffSeconds.value.trim()
+    const seconds = Number(raw)
+    if (raw === '' || !Number.isInteger(seconds) || seconds < 0 || seconds > 3600) {
+      if (screenOffStatus) screenOffStatus.textContent = t('settings.screenOffInvalid')
+      return
+    }
+    try {
+      render(await putGlassesSettings({ screenOffSeconds: seconds }))
+    } catch (err) {
+      fail(screenOffStatus, err)
+    }
+  })
+
 }
