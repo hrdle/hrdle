@@ -13,7 +13,9 @@ All notable changes to this project will be documented in this file.
   conversation palette, and a question's choices are answered in place, with
   "not now" as an answer of its own. The entry point appears in the session
   list only when the server reports a steward; a build carrying this code shows
-  nothing at all until then.
+  nothing at all until then. On a tablet the list is a modal rather than a
+  screen, so the entry point is wired there too - and the thread takes a
+  measure rather than the full width, which stops being readable past a phone.
 - **A summary can cite what it summarised.** The Claude parser was discarding
   the `uuid` on every record and now keeps it (present on both roles, unlike
   `message.id`, which exists only on assistant turns); OpenCode's row id travels

@@ -91,7 +91,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 				<h2 className="font-medium text-sm">{t("steward.title", "Steward")}</h2>
 			</header>
 
-			<div className="flex-1 overflow-y-auto px-3 py-3">
+			<div className="mx-auto w-full max-w-2xl flex-1 overflow-y-auto px-3 py-3">
 				{isLoading && <p className="text-cv-text-muted text-sm">{t("common.loading", "Loading...")}</p>}
 				{error && <p className="text-sm text-red-400">{error}</p>}
 				{!isLoading && !error && thread.length === 0 && (
@@ -113,7 +113,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 			{sendError && <p className="px-3 pb-1 text-red-400 text-xs">{sendError}</p>}
 
 			<form
-				className="flex items-end gap-2 border-cv-border border-t p-2"
+				className="mx-auto flex w-full max-w-2xl items-end gap-2 border-cv-border border-t p-2"
 				onSubmit={(e) => {
 					e.preventDefault();
 					const text = draft.trim();

@@ -147,3 +147,30 @@ test.describe('tracing a summary back', () => {
     await expect(page.getByRole('button', { name: '元の会話を見る' })).toHaveCount(0);
   });
 });
+
+/**
+ * A tablet reaches the list through the session modal rather than a screen of
+ * its own, so the entry point has to be wired there too - it was missed the
+ * first time, and nothing failed.
+ */
+test.describe('steward mode on a tablet', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-tablet', 'tablet only');
+  });
+
+  test('the entry point is in the session modal', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+
+    await page.getByTitle('スチュワード').click();
+    await expect(page.getByText('レビューが7件返っています')).toBeVisible();
+  });
+
+  test('is absent when the server has no steward', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: false } });
+    await page.locator('[data-onboarding="session-list"]').click();
+
+    await expect(page.getByRole('button', { name: 'ワークスペース' })).toBeVisible();
+    await expect(page.getByTitle('スチュワード')).toHaveCount(0);
+  });
+});
