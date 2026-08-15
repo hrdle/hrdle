@@ -13,6 +13,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getLastGlassesScreen, broadcastSteward } from './terminal-mux';
 import { getStewardSettings, isStewardEnabled } from '../services/steward-config';
+import { wakeObserverWith } from '../services/steward-runtime';
 import {
   answerAsk,
   appendSessionTurns,
@@ -171,6 +172,15 @@ steward.post('/thread/reply', async (c) => {
   const replyText = text ?? answerAsText(answer, updatedAsk);
   const item = await appendThreadItem({ kind: 'reply', askId, role: 'user', text: replyText });
   broadcastSteward({ type: 'steward-thread', item });
+
+  // No pane moves when a person answers, so the status watcher cannot see this.
+  // The wake-up carries the answer rather than announcing that one exists:
+  // waking and delivering are the same act, so there is nothing to poll.
+  wakeObserverWith(
+    askId
+      ? `The owner answered ask ${askId}: ${replyText}`
+      : `The owner said: ${replyText}`,
+  );
 
   return c.json({ item, ask: updatedAsk });
 });

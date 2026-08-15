@@ -15,6 +15,7 @@ import { migrateSessionIds } from './services/session-id-migration';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
 import { steward } from './routes/steward';
+import { startStewardRuntime } from './services/steward-runtime';
 import { glassesRelay } from './routes/glasses-relay';
 import { push } from './routes/push';
 import { muxOpen, muxMessage, muxClose, type MuxData } from './routes/terminal-mux';
@@ -625,6 +626,11 @@ if (discovery) {
     console.log(`   Short address: ${short}   (for the glasses app's setup screen)`);
   }
 }
+
+// The steward runs whether or not anyone has a screen open — that is the point
+// of it — so it starts here rather than off the first client connecting. A no-op
+// unless the gate is on.
+startStewardRuntime();
 
 // Build the dashboard payload once in the background so the first client to ask
 // is served from cache like every one after it. Everything downstream of this

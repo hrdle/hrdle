@@ -45,7 +45,10 @@ eval "$(cd "$ROOT" && bun -e 'const id = await Bun.file("identity.json").json();
   console.log(`STEWARD_ENV=${id.binaryName.toUpperCase()}_STEWARD`);')"
 
 if [ "$1" = "--env" ]; then
-  echo "export HERDR_SOCKET_PATH=$SOCKET"
+  # HERDR_SESSION rather than HERDR_SOCKET_PATH: hrdle resolves the socket from
+  # the session name and takes the name itself as "this is not the default
+  # server", which is what keeps the steward's own session out of the user's.
+  echo "export HERDR_SESSION=$SESSION"
   echo "export $DATA_DIR_ENV=$DEV_DATA_DIR"
   echo "export $STEWARD_ENV=1"
   exit 0
@@ -56,6 +59,11 @@ if [ "$1" = "--stop" ]; then
   echo "stopped the herdr dev server ($SESSION)"
   exit 0
 fi
+
+# Same as `bun run dev`: free the port first. Without it the new process finds
+# the old one answering /health, reports "already running" and exits, so an
+# edit-and-restart silently keeps testing the previous build.
+bash "$ROOT/scripts/stop.sh"
 
 if [ ! -S "$SOCKET" ]; then
   echo "starting herdr dev server ($SESSION)"
@@ -70,6 +78,7 @@ if [ ! -S "$SOCKET" ]; then
   fi
 fi
 
+export HERDR_SESSION="$SESSION"
 export HERDR_SOCKET_PATH="$SOCKET"
 
 # Something for the steward to observe. Only created on a fresh state
@@ -84,7 +93,7 @@ mkdir -p "$DEV_DATA_DIR"
 export "$DATA_DIR_ENV=$DEV_DATA_DIR"
 export "$STEWARD_ENV=1"
 
-echo "herdr socket : $HERDR_SOCKET_PATH"
+echo "herdr session: $HERDR_SESSION"
 echo "data dir     : $DEV_DATA_DIR"
 echo "steward      : on"
 

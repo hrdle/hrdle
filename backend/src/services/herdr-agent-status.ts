@@ -94,7 +94,7 @@ let running = false;
 let changeTimer: ReturnType<typeof setTimeout> | null = null;
 let resubscribeTimer: ReturnType<typeof setTimeout> | null = null;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
-let onStatusChange: (() => void) | null = null;
+const listeners = new Set<() => void>();
 
 function clearTimer(t: ReturnType<typeof setTimeout> | null): null {
   if (t) clearTimeout(t);
@@ -106,7 +106,14 @@ function scheduleChangePush(): void {
   if (changeTimer) return;
   changeTimer = setTimeout(() => {
     changeTimer = null;
-    onStatusChange?.();
+    // One listener throwing must not silence the others.
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (err) {
+        console.error('[herdr-status] listener failed:', err);
+      }
+    }
   }, CHANGE_DEBOUNCE_MS);
 }
 
@@ -177,23 +184,44 @@ async function subscribeToPanes(): Promise<void> {
 }
 
 /**
- * Start watching. `onChange` fires (debounced) whenever herdr reports an agent
- * status change or a pane appears/disappears. Idempotent.
+ * Watch until the returned function is called. `listener` fires (debounced)
+ * whenever herdr reports an agent status change or a pane appears/disappears.
+ *
+ * More than one listener, because the two callers stop for different reasons:
+ * the session push only matters while a browser is connected, while the steward
+ * has to keep being woken precisely when nobody is watching a screen.
  */
-export function startAgentStatusWatcher(onChange: () => void): void {
-  if (running) return;
-  running = true;
-  onStatusChange = onChange;
-  void subscribeToPanes();
+export function addAgentStatusListener(listener: () => void): () => void {
+  listeners.add(listener);
+  if (!running) {
+    running = true;
+    void subscribeToPanes();
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) teardown();
+  };
 }
 
-export function stopAgentStatusWatcher(): void {
+function teardown(): void {
   running = false;
-  onStatusChange = null;
   unsubscribe?.();
   unsubscribe = null;
   subscribedPaneIds = new Set();
   changeTimer = clearTimer(changeTimer);
   resubscribeTimer = clearTimer(resubscribeTimer);
   retryTimer = clearTimer(retryTimer);
+}
+
+let removeSessionPushListener: (() => void) | null = null;
+
+/** Idempotent single-listener form, for the session push. */
+export function startAgentStatusWatcher(onChange: () => void): void {
+  if (removeSessionPushListener) return;
+  removeSessionPushListener = addAgentStatusListener(onChange);
+}
+
+export function stopAgentStatusWatcher(): void {
+  removeSessionPushListener?.();
+  removeSessionPushListener = null;
 }
