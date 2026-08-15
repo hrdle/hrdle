@@ -12,6 +12,13 @@ import { bootApp } from './fixtures';
  * which is a screen of its own on a phone.
  */
 
+const TRANSCRIPT = {
+  messages: [
+    { id: 'm1', role: 'user', content: 'レビューして' },
+    { id: 'm2', role: 'assistant', content: '7件の指摘があります' },
+  ],
+};
+
 const THREAD = [
   {
     id: 'n1',
@@ -28,6 +35,14 @@ const THREAD = [
     kind: 'ask',
     text: '巻き戻しますか',
     ask: { id: 'q1', mode: 'single', choices: ['巻き戻す', 'このまま進む'] },
+  },
+  {
+    id: 'n2',
+    at: 1_760_000_002_000,
+    role: 'steward',
+    kind: 'notify',
+    text: '設計変更の指摘です',
+    source: { agentSessionId: 'sess-1', messageIds: ['m2'] },
   },
 ];
 
@@ -100,5 +115,35 @@ test.describe('steward mode', () => {
 
     const body = JSON.parse((await posted).postData() ?? '{}');
     expect(body).toEqual({ text: '止まっているものを教えて' });
+  });
+});
+
+test.describe('tracing a summary back', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  // A summary is only worth trusting if the thing it summarises can be reached.
+  test('opens the real transcript from the turn that cites it', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    // After bootApp: a later route wins in Playwright, and bootApp's `**/api/**`
+    // would otherwise answer this one with `{}`.
+    await page.route('**/api/sessions/history/sess-1/conversation*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(TRANSCRIPT) }),
+    );
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await page.getByRole('button', { name: '元の会話を見る' }).click();
+
+    await expect(page.getByText('7件の指摘があります')).toBeVisible();
+  });
+
+  test('a turn with no source offers nothing to open', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, thread: [THREAD[0]] } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByRole('button', { name: '元の会話を見る' })).toHaveCount(0);
   });
 });

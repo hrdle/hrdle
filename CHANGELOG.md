@@ -21,7 +21,10 @@ All notable changes to this project will be documented in this file.
   the field is optional and stays absent there. `ConversationViewer` takes an
   `anchorId` and scrolls to it, marked - an id no longer in the conversation is
   ignored rather than treated as an error, because a transcript trimmed since
-  the summary was written is the ordinary case.
+  the summary was written is the ordinary case. A steward turn that cites its
+  source offers "see the original", which opens the real transcript at that
+  message: reading the original is part of reading the summary, so it opens
+  from the steward's own view rather than being handed up to the app.
 
 ## [0.3.139] - 2026-08-16
 

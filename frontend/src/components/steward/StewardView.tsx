@@ -1,9 +1,22 @@
 import { ArrowLeft, CornerDownLeft, ExternalLink } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { StewardAsk, StewardThreadItem } from "../../../../shared/types";
+import type {
+	ConversationMessage,
+	StewardAsk,
+	StewardThreadItem,
+} from "../../../../shared/types";
 import { useSteward } from "../../hooks/useSteward";
-import { Markdown } from "../ConversationViewer";
+import { authFetch } from "../../services/api";
+import { ConversationViewer, Markdown } from "../ConversationViewer";
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+/** Where a turn was summarised from, once someone asks to see it. */
+interface OpenSource {
+	agentSessionId: string;
+	messageId?: string;
+}
 
 /**
  * The steward's own conversation, on a screen wide enough to show what the
@@ -14,20 +27,36 @@ import { Markdown } from "../ConversationViewer";
  * is the only place to type, so the ambiguity does not arise - and an `ask`
  * with nowhere to answer would be a question the steward can never resolve.
  */
-export function StewardView({
-	onClose,
-	onOpenSource,
-}: {
-	onClose: () => void;
-	/** Open the real transcript at the message a turn was summarised from. */
-	onOpenSource?: (source: { agentSessionId: string; messageId?: string }) => void;
-}) {
+export function StewardView({ onClose }: { onClose: () => void }) {
 	const { t } = useTranslation();
 	const { thread, isLoading, error, reply } = useSteward(true);
 	const [draft, setDraft] = useState("");
 	const [sending, setSending] = useState(false);
 	const [sendError, setSendError] = useState<string | null>(null);
 	const endRef = useRef<HTMLDivElement>(null);
+
+	// Reading the original is part of reading the summary, so it opens from
+	// here rather than being handed up to the app: nothing above this view
+	// needs to know a steward turn can be traced back.
+	const [source, setSource] = useState<OpenSource | null>(null);
+	const [sourceMessages, setSourceMessages] = useState<ConversationMessage[]>([]);
+	const [sourceLoading, setSourceLoading] = useState(false);
+
+	const openSource = useCallback(async (next: OpenSource) => {
+		setSource(next);
+		setSourceMessages([]);
+		setSourceLoading(true);
+		try {
+			const res = await authFetch(
+				`${API_BASE}/api/sessions/history/${encodeURIComponent(next.agentSessionId)}/conversation`,
+				{ cache: "no-store" },
+			);
+			const body = res.ok ? ((await res.json()) as { messages?: ConversationMessage[] }) : null;
+			setSourceMessages(body?.messages ?? []);
+		} finally {
+			setSourceLoading(false);
+		}
+	}, []);
 
 	// The newest exchange is the one being read; a thread that opens at the top
 	// makes someone scroll past everything they have already answered.
@@ -74,7 +103,7 @@ export function StewardView({
 				<ul className="flex flex-col gap-3">
 					{thread.map((item) => (
 						<li key={item.id}>
-							<ThreadItem item={item} onAnswer={send} onOpenSource={onOpenSource} />
+							<ThreadItem item={item} onAnswer={send} onOpenSource={openSource} />
 						</li>
 					))}
 				</ul>
@@ -107,6 +136,16 @@ export function StewardView({
 					<CornerDownLeft size={18} />
 				</button>
 			</form>
+
+			{source && (
+				<ConversationViewer
+					title={t("steward.originalTitle", "The original")}
+					messages={sourceMessages}
+					isLoading={sourceLoading}
+					onClose={() => setSource(null)}
+					anchorId={source.messageId}
+				/>
+			)}
 		</div>
 	);
 }
@@ -118,7 +157,7 @@ function ThreadItem({
 }: {
 	item: StewardThreadItem;
 	onAnswer: (input: { text?: string; askId?: string; answer?: { kind: "choice"; indices: number[] } | { kind: "dismissed" } }) => void;
-	onOpenSource?: (source: { agentSessionId: string; messageId?: string }) => void;
+	onOpenSource: (source: OpenSource) => void;
 }) {
 	const { t } = useTranslation();
 	const mine = item.role === "user";
@@ -149,7 +188,7 @@ function ThreadItem({
 
 				{item.kind === "ask" && <AskControls ask={item.ask} onAnswer={onAnswer} />}
 
-				{item.source && onOpenSource && (
+				{item.source && (
 					<button
 						type="button"
 						onClick={() =>

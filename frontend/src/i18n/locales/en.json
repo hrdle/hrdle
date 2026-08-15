@@ -452,6 +452,7 @@
     "seeOriginal": "See the original",
     "answered": "Answered",
     "dismissed": "dismissed",
-    "dismiss": "Not now"
+    "dismiss": "Not now",
+    "originalTitle": "The original"
   }
 }

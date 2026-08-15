@@ -450,6 +450,7 @@
     "seeOriginal": "元の会話を見る",
     "answered": "回答済み",
     "dismissed": "見送り",
-    "dismiss": "あとで"
+    "dismiss": "あとで",
+    "originalTitle": "元の会話"
   }
 }
