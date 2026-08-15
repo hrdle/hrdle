@@ -106,6 +106,52 @@ describe('the footer says which of the two the screen is in', () => {
     expect(c.state.conversationOffset).toBe(0)
     expect(screenText(c.state).footer).toContain('auto')
   })
+
+  // The pin is the innermost level: its release is the branch above both the
+  // banner dismiss and the back-out, so the double-tap goes there whatever
+  // else is true. The label is the only thing that can say so.
+  test('over a pinned read the label is the release, not the dismiss', () => {
+    const c = reading()
+    c.state.relayWaiting = [{
+      id: 'q1',
+      kind: 'waiting',
+      source: 'auto',
+      sessionId: 's1',
+      paneId: '%0',
+      text: 'Which store should the counters live in?',
+      createdAt: 1,
+    }] as GlassesRelayItem[]
+    // Unpinned, the double-tap does clear the banner, and the label says so.
+    expect(screenText(c.state).footer).toContain('dbl:later')
+
+    idleThenTick(c)
+    c.swipeUp()
+    const footer = screenText(c.state).footer
+    expect(footer).not.toContain('auto')
+    expect(footer).not.toContain('dbl:later')
+    expect(footer).toContain('dbl:top')
+    // Answering is still what a tap does; only the double-tap moved.
+    expect(footer).toContain('tap:respond')
+  })
+
+  test('pinned at the newest message, the label does not promise to leave', () => {
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
+    c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
+
+    // `dbl:back` here would be the session list, which is one gesture further
+    // off than it looks: this one hands the screen back and stays.
+    const footer = screenText(c.state).footer
+    expect(footer).not.toContain('auto')
+    expect(footer).not.toContain('dbl:back')
+    expect(footer).toContain('dbl:top')
+  })
 })
 
 describe('the auto-advance clock yields to a reader', () => {
