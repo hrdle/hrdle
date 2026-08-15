@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.133] - 2026-08-15
+
 ### Fixed
 - **The herdr update button works for Homebrew installs.** `herdr update`
   refuses a brew-managed binary with exit 1 (the reason only in herdr's server
