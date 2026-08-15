@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.135] - 2026-08-15
+
 ### Changed
 - **The pane header's controls come from the shared definition too** (#379).
   #8 put the session bar's controls in one table and left the pane header wired
