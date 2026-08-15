@@ -320,7 +320,7 @@ const markdownComponents = {
 
 const MathMarkdown = lazy(() => import("./MathMarkdown"));
 
-function Markdown({ content }: { content: string }) {
+export function Markdown({ content }: { content: string }) {
 	const { source, hasMath } = useMemo(
 		() => prepareMath(processImageReferences(content)),
 		[content],

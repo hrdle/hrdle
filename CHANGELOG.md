@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The steward has a screen on a phone** (#383, stage 3). Its thread, with a
+  composer - unlike the read-only chat view, this is the only place to type, so
+  the two-inputs ambiguity does not arise, and an `ask` with nowhere to answer
+  would be a question the steward could never resolve. A turn's `detail` (the
+  half the glasses could not carry) renders as markdown against the
+  conversation palette, and a question's choices are answered in place, with
+  "not now" as an answer of its own. The entry point appears in the session
+  list only when the server reports a steward; a build carrying this code shows
+  nothing at all until then.
+- **A summary can cite what it summarised.** The Claude parser was discarding
+  the `uuid` on every record and now keeps it (present on both roles, unlike
+  `message.id`, which exists only on assistant turns); OpenCode's row id travels
+  the same way. Grok, Kimi and Codex records carry no per-message identity, so
+  the field is optional and stays absent there. `ConversationViewer` takes an
+  `anchorId` and scrolls to it, marked - an id no longer in the conversation is
+  ignored rather than treated as an error, because a transcript trimmed since
+  the summary was written is the ordinary case.
+
 ## [0.3.139] - 2026-08-16
 
 ### Fixed

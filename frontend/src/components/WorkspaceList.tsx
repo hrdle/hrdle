@@ -10,6 +10,7 @@ import type { TFunction } from "i18next";
 import {
 	ArrowRight,
 	BarChart3,
+	MessagesSquare,
 	ChevronLeft,
 	ChevronRight,
 	ExternalLink,
@@ -172,6 +173,9 @@ interface SessionListProps {
 	// at the bottom edge loses its last row. Inside the desktop picker the
 	// list ends at the modal's edge, which nothing overlaps.
 	fullScreen?: boolean;
+	// Only passed when the server reports a steward; absent, no button appears.
+	onToggleSteward?: () => void;
+	stewardOpen?: boolean;
 }
 
 // Session menu dialog (color change + title edit + delete)
@@ -1789,6 +1793,8 @@ export function WorkspaceList({
 	onToggleDashboard,
 	dashboardOpen = false,
 	fullScreen = false,
+	onToggleSteward,
+	stewardOpen = false,
 }: SessionListProps) {
 	const { t } = useTranslation();
 	const {
@@ -2300,6 +2306,20 @@ export function WorkspaceList({
 							</div>
 						</div>
 						<div className="flex items-center gap-1 shrink-0">
+							{onToggleSteward && (
+								<button
+									type="button"
+									onClick={onToggleSteward}
+									className={`p-2 rounded-lg transition-colors ${
+										stewardOpen
+											? "text-blue-400 bg-blue-500/20"
+											: "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+									}`}
+									title={t("steward.title")}
+								>
+									<MessagesSquare className="w-[18px] h-[18px]" />
+								</button>
+							)}
 							{onToggleDashboard && (
 								<button
 									type="button"
