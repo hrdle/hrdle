@@ -1744,7 +1744,7 @@ export function DesktopLayout({
 							<button
 								type="button"
 								onClick={() => setShowSessionModal((prev) => !prev)}
-								className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-white/[0.06] transition-colors"
+								className="flex min-h-10 items-center gap-1.5 px-2 py-1 rounded-md hover:bg-white/[0.06] transition-colors"
 								data-onboarding="session-list"
 							>
 								<div

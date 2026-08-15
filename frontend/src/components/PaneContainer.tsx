@@ -24,6 +24,18 @@ import type { ControlModeConfig } from "./Terminal";
 import { TerminalComponent, type TerminalRef } from "./Terminal";
 import { soleVisiblePane, visiblePanes } from "../utils/panes";
 
+/**
+ * A pane-header control on a touch viewport.
+ *
+ * Padding alone left these at 28px square: the icon is 14px and `p-2` is 7px a
+ * side, because the app scales its spacing off a 14px root font rather than
+ * 16px. A minimum in the same units is what actually reaches the 32px the touch
+ * spec asks for, and the flex centering is what keeps the icon in the middle of
+ * the larger box.
+ */
+const TABLET_TAP_TARGET =
+	"p-2 min-w-10 min-h-10 flex items-center justify-center";
+
 // Pane node types.
 // sessionKey is the composite `peerId:id` key (utils/sessionKey.ts): session ids
 // (herdr workspace names) collide across peers, so the tree always holds the
@@ -378,7 +390,7 @@ function TerminalPane({
 									if (!disabled) handleToggleConversation();
 								}}
 								disabled={disabled}
-								className={`${isTablet ? "p-2" : "p-1"} rounded transition-colors ${
+								className={`${isTablet ? TABLET_TAP_TARGET : "p-1"} rounded transition-colors ${
 									disabled
 										? "text-white/20 cursor-not-allowed"
 										: "text-white/60 hover:text-th-text hover:bg-white/[0.06]"
@@ -416,7 +428,7 @@ function TerminalPane({
 								if (!bridgeId) return;
 								openClaudeAppSession(bridgeId);
 							}}
-							className={`${isTablet ? "p-2" : "p-1"} rounded transition-colors text-violet-300/80 hover:text-violet-200 hover:bg-violet-500/10`}
+							className={`${isTablet ? TABLET_TAP_TARGET : "p-1"} rounded transition-colors text-violet-300/80 hover:text-violet-200 hover:bg-violet-500/10`}
 							title={t("session.openInClaudeApp")}
 							aria-label={t("session.openInClaudeApp")}
 						>
