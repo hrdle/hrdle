@@ -8,11 +8,12 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - **A manual scroll owns the conversation on the glasses until an explicit
-  signal returns it** (#386). The auto-advance pin used position as a proxy for
-  attention, and it is a bad one: swiping down to the newest message released
-  it, and so did every conversation reload. A reader catching up by hand had the
-  view move out from under them moments after they arrived, and reading the
-  recap slowly was undone by the agent saying a single line
+  signal returns it** (contributed in #386 by @Chapapon). The auto-advance pin
+  used position as a proxy for attention, and it is a bad one: swiping down to
+  the newest message released it, and so did every conversation reload. A reader
+  catching up by hand had the view move out from under them moments after they
+  arrived, and reading the recap slowly was undone by the agent saying a single
+  line
   - Any manual scroll pins the screen, in either direction. Only the explicit
     signals hand it back: opening a conversation, the double-tap home, or
     answering and speaking. A refresh never touches it
@@ -27,8 +28,8 @@ All notable changes to this project will be documented in this file.
     reader pinned at the newest message keeps the text they are reading
   - The footer's `auto` flag keeps saying which of the two states the screen is
     in, so a still screen stays accountable
-  - Glasses build: reaches the wearer with the next EVEN Hub release, not with
-    this server
+  - Glasses build: this is `glasses/` code, so it reaches the wearer with the
+    next EVEN Hub release rather than with this server. It is not in 0.0.80
 
 ## [0.3.133] - 2026-08-15
 
