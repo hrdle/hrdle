@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  SESSION_ACTIONS,
   type LayoutVariant,
   actionTestId,
   actionsFor,
@@ -17,8 +18,13 @@ import { bootApp } from './fixtures';
  * phone and finds nothing.
  *
  * It asserts the definition is honoured, not that every action is everywhere -
- * `availableOn` records real differences between a phone and a desktop, and
+ * `surface` records real differences between a phone and a desktop, and
  * widening one is a product decision rather than a parity bug.
+ *
+ * Both surfaces are checked. A layout draws a control either in its session bar
+ * or on the pane header, never in both, so "somewhere on this layout" is the
+ * question worth asking - a control that moved between the two by accident is
+ * as broken as one that vanished.
  */
 const VARIANT: Record<string, LayoutVariant> = {
   'responsive-desktop': 'desktop',
@@ -31,11 +37,14 @@ test.describe('session action parity', () => {
     await bootApp(page);
 
     const variant = VARIANT[test.info().project.name];
-    // A session with no agent hides chat and the Claude app link; the stub boots
-    // one of those, so those two are checked by their absence below instead.
-    const expected = actionsFor(variant).filter(
-      (a) => !['chat', 'claude-app'].includes(a.id),
-    );
+    // These need something of the session before they appear at all: an agent to
+    // chat with or open in the Claude app, and a second pane to zoom or close.
+    // The stub boots neither, so they are checked by their absence below.
+    const CONDITIONAL = ['chat', 'claude-app', 'zoom', 'close-pane'];
+    const expected = [
+      ...actionsFor(variant, 'bar'),
+      ...actionsFor(variant, 'pane'),
+    ].filter((a) => !CONDITIONAL.includes(a.id));
     expect(expected.length).toBeGreaterThan(0);
 
     for (const action of expected) {
@@ -50,10 +59,7 @@ test.describe('session action parity', () => {
     await bootApp(page);
 
     const variant = VARIANT[test.info().project.name];
-    const mine = new Set(actionsFor(variant).map((a) => a.id));
-    const theirs = (['mobile', 'tablet', 'desktop'] as const)
-      .flatMap((v) => actionsFor(v))
-      .filter((a) => !mine.has(a.id));
+    const theirs = SESSION_ACTIONS.filter((a) => a.surface[variant] === null);
 
     for (const action of theirs) {
       await expect(
