@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **One layout draws the phone, the tablet and the PC** (#7). The phone had a
+  component tree of its own - 305 lines at the bottom of `App.tsx` plus a second
+  terminal implementation in `pages/TerminalPage.tsx` that subscribed, sized,
+  scrolled and painted panes the way `DesktopLayout` already did. Anything added
+  to one tree reached the other only if the person adding it remembered there
+  were two
+  - `DesktopLayout` now takes a `variant` (`desktop` / `tablet` / `mobile`), and
+    `App.tsx` renders the same component for all three
+  - What is still different about the phone is what a phone is actually
+    different about: no header (its bar is at the bottom, under the thumb), one
+    pane on screen chosen from a tab bar, a dashboard that takes the screen, and
+    no remembered pane tree - its tree is whichever session the app says is
+    active
+  - **One pane on screen is a server zoom, not a narrowed render.** The resize a
+    client sends is the whole window's, so a split would divide it again and the
+    PTY would be half the screen. The old code did the same; the reason is now
+    written where the code is
+  - The back gesture (close the list, then the file browser, then the
+    transcript) moved into the layout, which is what knows those are open.
+    Nothing pushes history on desktop or tablet, so back still leaves the app
+    there
+  - Dead code went with it: a delete dialog nothing could open, an overlay timer
+    that had been disabled, and a second copy of the file-viewer state.
+    `App.tsx` goes from 1460 lines to 735
+
 ## [0.3.129] - 2026-08-15
 
 ### Changed
