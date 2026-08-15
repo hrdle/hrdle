@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.138] - 2026-08-16
+
 ### Fixed
+- **Touch scrolling moves the text as far as the finger, not twice as far.**
+  Drag distance became lines through a fixed 8px step, while a row is about
+  18px at the default font size - so a finger travelling one visible row
+  scrolled a little over two, and the gap widened with the font size. Both the
+  drag and the momentum that follows it now divide by the row height the
+  renderer actually measured, which is the same figure the touch hit-testing
+  already reads, so a tap and a drag agree on what a row is. Thanks to
+  @Chapapon (#402)
 - **The conversation footer says what a double-tap will do while a read is
   pinned.** The pin's release moved above the banner dismiss and the back-out
   in #398, so the gesture goes there whatever else is true - but the label
