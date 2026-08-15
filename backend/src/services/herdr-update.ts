@@ -1,27 +1,17 @@
 /**
  * herdr version reporting and updating.
  *
- * Two different things can be out of date, and only one of them used to be
- * visible here:
+ * Two things can be stale: the running server behind the on-disk binary
+ * (skew — `herdr update` swaps the binary only, and hrdle spawns that binary
+ * to drive panes), and the binary behind the published release
+ * (`herdr.dev/latest.json`; `herdr status --json` cannot see that one).
  *
- * 1. **Skew** — `herdr update` only replaces the binary on disk; the running
- *    server keeps serving the old version until it is restarted. hrdle spawns
- *    the *binary* (`herdr terminal session control`, see PaneController) to
- *    drive panes, so in between we run new CLI against an old server: control
- *    streams fail to attach and the symptom reads as "the terminal won't
- *    connect", long after the user forgot they ran an update.
- * 2. **A newer release existing at all** — with the binary and the server on
- *    the same old version there is no skew to see, and `herdr status --json`
- *    answers only the skew question. So for months the dashboard was silent
- *    while herdr moved on. The version herdr publishes at
- *    `herdr.dev/latest.json` is the missing half.
- *
- * Applying is strictly a user action. Restarting herdr re-creates every pane
- * PTY and kills whatever is running in them (never the `hrdle update --auto`
- * timer, never `--handoff`: a handed-off server escapes systemd/launchd
- * supervision and fights `Restart=always`).
+ * Applying is strictly a user action — a restart re-creates every pane PTY.
+ * Never the `hrdle update --auto` timer, never `--handoff`.
  */
 
+import { realpath } from 'node:fs/promises';
+import { join, sep } from 'node:path';
 import type { HerdrUpdateStatus } from '../../../shared/types';
 import { herdrBin, herdrBinaryPath, herdrChildEnv } from './herdr-client';
 
@@ -52,13 +42,10 @@ function asString(value: unknown): string | undefined {
 }
 
 /**
- * Read `herdr status --json`, which reports the on-disk binary (`client`) and
- * the live server side by side plus herdr's own `restart_needed` verdict.
- *
- * Every field is treated as optional and unknown values are ignored: herdr's
- * output format is versioned independently of hrdle, and a format change must
- * degrade to "no skew detected" rather than nag the user with a false alarm.
- * Returns null when the output is unusable.
+ * Read `herdr status --json` (binary and server versions side by side, plus
+ * herdr's own `restart_needed` verdict). Every field is optional: a format
+ * change must degrade to "no skew detected", not a false restart nag. Null
+ * when the output is unusable.
  */
 export function parseHerdrStatus(raw: string): HerdrSkewReading | null {
   let parsed: unknown;
@@ -100,10 +87,8 @@ export interface HerdrLatestManifest {
 }
 
 /**
- * Read `herdr.dev/latest.json`. Only the version is load-bearing; the manifest
- * also carries assets, checksums and the changelog, which are `herdr update`'s
- * business rather than ours. Returns null for anything unusable, so a format
- * change reads as "no information" instead of a wrong version.
+ * Read `herdr.dev/latest.json`. Only the version is load-bearing; null for
+ * anything unusable, so a format change reads as "no information".
  */
 export function parseLatestManifest(raw: string): HerdrLatestManifest | null {
   let parsed: unknown;
@@ -124,11 +109,8 @@ export function parseLatestManifest(raw: string): HerdrLatestManifest | null {
 
 /**
  * Order two `MAJOR.MINOR.PATCH` versions; negative when `a` is older.
- *
- * Anything that doesn't parse compares as *equal*, which is the safe direction:
- * an unknown version string produces "no update available" rather than an
- * update prompt that would restart every pane on the strength of a string we
- * failed to read.
+ * Anything unparseable compares as *equal* — "no update available" is the
+ * direction that restarts nothing.
  */
 export function compareVersions(a: string, b: string): number {
   const parts = (v: string) =>
@@ -152,17 +134,23 @@ export function compareVersions(a: string, b: string): number {
 export type HerdrApplyMode = 'install' | 'restart';
 
 /**
- * What pressing the button should actually do, or null for "nothing".
- *
- * Null is the important answer: a restart re-creates every pane PTY and kills
- * whatever was running in them, so doing it when there is nothing to install is
- * pure damage. That is what the old apply did on every press.
+ * What pressing the button should actually do, or null for "nothing" — the
+ * important answer, since a restart with nothing to install is pure damage.
  */
 export function planHerdrApply(status: HerdrUpdateStatus): HerdrApplyMode | null {
   if (status.updateAvailable) return 'install';
   // The binary is already the one we want; only the running server is behind it.
   if (status.restartNeeded) return 'restart';
   return null;
+}
+
+/**
+ * Whether a binary resolves into a Homebrew Cellar — `herdr update` refuses
+ * those with exit 1; they must go through `brew upgrade herdr`. Takes the
+ * *resolved* path: the Cellar segment is behind a symlink.
+ */
+export function isBrewManagedPath(resolvedBinaryPath: string): boolean {
+  return resolvedBinaryPath.includes(`${sep}Cellar${sep}herdr${sep}`);
 }
 
 export interface HerdrApplyResult {
@@ -177,17 +165,18 @@ export interface HerdrApplyResult {
 }
 
 /**
- * Commands hrdle runs on the user's behalf, in order; callers stop at the first
- * non-zero exit. Returns null when the work cannot be done here: `systemctl
- * restart` is a no-op for a server hrdle itself spawned, so we show manual
- * steps instead of a button that silently does nothing.
+ * Commands hrdle runs on the user's behalf, in order; callers stop at the
+ * first non-zero exit. Null when the work cannot be done here (unsupervised).
  *
- * **The server must be down before `herdr update` runs**. It refuses to
- * replace the binary while any server answers its socket — and refuses by
- * printing `Herdr was not updated.` and **exiting 0**. The previous order here
- * (update, then restart) therefore could never install anything: it downloaded
- * the release, discarded it, and restarted every pane PTY for nothing while
- * reporting success.
+ * **The server must be down before `herdr update` runs** — it refuses to
+ * replace the binary while any server answers its socket, by printing `Herdr
+ * was not updated.` and exiting 0.
+ *
+ * **A brew-managed binary is the opposite case.** `herdr update` refuses it
+ * outright, and `brew upgrade` does not care about the socket — so with
+ * `brewPath` set the upgrade runs *first*, while the server is still up: panes
+ * stay alive through the download and a brew failure touches nothing. No plist
+ * needed either; the job is kickstarted, never booted out.
  */
 export function buildHerdrApplyCommands(
   supervisor: HerdrSupervisor,
@@ -195,10 +184,17 @@ export function buildHerdrApplyCommands(
   uid: number,
   mode: HerdrApplyMode = 'install',
   launchdPlistPath?: string,
+  brewPath?: string,
 ): string[][] | null {
   switch (supervisor) {
     case 'systemd':
       if (mode === 'restart') return [['systemctl', '--user', 'restart', 'herdr']];
+      if (brewPath) {
+        return [
+          [brewPath, 'upgrade', 'herdr'],
+          ['systemctl', '--user', 'restart', 'herdr'],
+        ];
+      }
       return [
         ['systemctl', '--user', 'stop', 'herdr'],
         [herdrPath, 'update'],
@@ -207,10 +203,14 @@ export function buildHerdrApplyCommands(
     case 'launchd': {
       const label = `gui/${uid}/com.herdr.server`;
       if (mode === 'restart') return [['launchctl', 'kickstart', '-k', label]];
-      // Installing needs the job *gone*, not bounced — `kickstart -k` hands the
-      // socket straight back to a new server, which `herdr update` then refuses
-      // to update around. `bootout` is the verb that keeps it down, and coming
-      // back needs the plist it was loaded from.
+      if (brewPath) {
+        return [
+          [brewPath, 'upgrade', 'herdr'],
+          ['launchctl', 'kickstart', '-k', label],
+        ];
+      }
+      // Installing needs the job *gone*, not bounced: `bootout` keeps it down,
+      // and coming back needs the plist it was loaded from.
       if (!launchdPlistPath) return null;
       return [
         ['launchctl', 'bootout', label],
@@ -218,6 +218,27 @@ export function buildHerdrApplyCommands(
         ['launchctl', 'bootstrap', `gui/${uid}`, launchdPlistPath],
       ];
     }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Brings the supervised server back after a failed install left it stopped —
+ * without this, a failure between stop and start strands the launchd job
+ * booted out and the apply button never comes back (`canApply` needs a
+ * supervisor). Null when there is nothing usable to run.
+ */
+export function buildHerdrRestoreCommand(
+  supervisor: HerdrSupervisor,
+  uid: number,
+  launchdPlistPath?: string,
+): string[] | null {
+  switch (supervisor) {
+    case 'systemd':
+      return ['systemctl', '--user', 'start', 'herdr'];
+    case 'launchd':
+      return launchdPlistPath ? ['launchctl', 'bootstrap', `gui/${uid}`, launchdPlistPath] : null;
     default:
       return null;
   }
@@ -336,9 +357,8 @@ export class HerdrUpdateService {
   }
 
   /**
-   * The binary's own version, read without a server — `herdr status --json`
-   * reports nothing while herdr is stopped, which is exactly when we need to
-   * know whether the swap landed.
+   * The binary's own version, readable while the server is stopped — which is
+   * exactly when we need to know whether the swap landed.
    */
   private async readBinaryVersion(): Promise<string | undefined> {
     try {
@@ -366,11 +386,7 @@ export class HerdrUpdateService {
     }
   }
 
-  /**
-   * Where launchd loaded the job from. `bootstrap` needs it, and there is no
-   * fixed location worth guessing — herdr may have been installed by brew or by
-   * hand.
-   */
+  /** Where launchd loaded the job from — `bootstrap` needs it, and there is no fixed location worth guessing. */
   private async detectLaunchdPlist(uid: number): Promise<string | undefined> {
     try {
       const { exitCode, stdout } = await runCapture([
@@ -380,6 +396,27 @@ export class HerdrUpdateService {
       ]);
       if (exitCode !== 0) return undefined;
       return /^\s*path\s*=\s*(\S.*?)\s*$/m.exec(stdout)?.[1];
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * The `brew` binary to upgrade herdr with, or undefined when herdr is not
+   * brew-managed. Falls back from PATH to `<prefix>/bin/brew` derived from the
+   * Cellar, for service environments that never saw the brew shellenv.
+   */
+  private async detectBrewPath(): Promise<string | undefined> {
+    try {
+      const binary = herdrBinaryPath();
+      if (!binary) return undefined;
+      const resolved = await realpath(binary);
+      if (!isBrewManagedPath(resolved)) return undefined;
+      const onPath = Bun.which('brew');
+      if (onPath) return onPath;
+      const prefix = resolved.slice(0, resolved.indexOf(`${sep}Cellar${sep}`));
+      const candidate = join(prefix, 'bin', 'brew');
+      return (await Bun.file(candidate).exists()) ? candidate : undefined;
     } catch {
       return undefined;
     }
@@ -403,13 +440,10 @@ export class HerdrUpdateService {
   }
 
   /**
-   * Install the published release (or, when only the server is stale, restart
-   * it) and confirm the version actually moved. Only ever called from the
-   * authenticated endpoint behind an explicit user click.
-   *
-   * `onPhase` reports the destructive window to connected clients: every
-   * pane PTY is re-created between `restarting` and `restored`, and a browser
-   * that isn't told just shows a terminal that has stopped answering.
+   * Install the published release (or restart a stale server) and confirm the
+   * version actually moved. Only called behind an explicit user click.
+   * `onPhase` tells connected clients about the destructive window — every
+   * pane PTY is re-created between `restarting` and `restored`.
    */
   async apply(onPhase?: (phase: 'restarting' | 'restored' | 'failed') => void): Promise<HerdrApplyResult> {
     const before = await this.readStatus();
@@ -432,9 +466,12 @@ export class HerdrUpdateService {
 
     const uid = process.getuid?.() ?? 0;
     const supervisor = await this.detectSupervisor();
+    const brewPath = mode === 'install' ? await this.detectBrewPath() : undefined;
     const plist =
-      supervisor === 'launchd' && mode === 'install' ? await this.detectLaunchdPlist(uid) : undefined;
-    const commands = buildHerdrApplyCommands(supervisor, herdrBin(), uid, mode, plist);
+      supervisor === 'launchd' && mode === 'install' && !brewPath
+        ? await this.detectLaunchdPlist(uid)
+        : undefined;
+    const commands = buildHerdrApplyCommands(supervisor, herdrBin(), uid, mode, plist, brewPath);
     if (!commands) {
       return {
         ok: false,
@@ -449,7 +486,8 @@ export class HerdrUpdateService {
 
     onPhase?.('restarting');
     let output = '';
-    for (const cmd of commands) {
+    for (let i = 0; i < commands.length; i++) {
+      const cmd = commands[i];
       const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe' });
       const [stdout, stderr, exitCode] = await Promise.all([
         new Response(proc.stdout).text(),
@@ -458,10 +496,33 @@ export class HerdrUpdateService {
       ]);
       output += stdout + stderr;
       if (exitCode !== 0) {
+        // The self-update sequence stops the server first; a mid-sequence
+        // failure must not leave it down and unsupervised.
+        let restoreNote = '';
+        if (!brewPath && mode === 'install' && i > 0 && i < commands.length - 1) {
+          const restore = buildHerdrRestoreCommand(supervisor, uid, plist);
+          if (restore) {
+            const restored = await Bun.spawn(restore, { stdout: 'pipe', stderr: 'pipe' });
+            const [rout, rerr, rcode] = await Promise.all([
+              new Response(restored.stdout).text(),
+              new Response(restored.stderr).text(),
+              restored.exited,
+            ]);
+            output += rout + rerr;
+            restoreNote =
+              rcode === 0 ? '; the server was restarted on the old version' : '; restarting the server also failed';
+          }
+        }
+        // The exit code alone says nothing; the refusal reason is in the output.
+        const detail = (stdout + stderr)
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .pop();
         onPhase?.('failed');
         return {
           ok: false,
-          error: `${cmd.join(' ')} failed (exit ${exitCode})`,
+          error: `${cmd.join(' ')} failed (exit ${exitCode})${detail ? `: ${detail}` : ''}${restoreNote}`,
           output,
           fromVersion: before.binaryVersion,
           installed: false,
@@ -472,9 +533,8 @@ export class HerdrUpdateService {
     this.invalidate();
     const toVersion = await this.readBinaryVersion();
 
-    // Exit codes are not evidence. `herdr update` prints "Herdr was not
-    // updated." and exits 0 whenever a server was still answering, so the only
-    // proof an install happened is the version on disk having moved.
+    // Exit codes are not evidence (`herdr update` can refuse and exit 0); the
+    // only proof of an install is the version on disk having moved.
     if (
       mode === 'install' &&
       !(before.binaryVersion && toVersion && compareVersions(toVersion, before.binaryVersion) > 0)

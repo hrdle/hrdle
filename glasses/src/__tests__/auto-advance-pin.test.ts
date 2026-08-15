@@ -6,8 +6,11 @@
 // waits for, so the view moves mid-sentence, the reader pages back, and ten
 // seconds later it happens again.
 //
-// Paging back is the one move the clock never makes, so it is what says a
-// reader is here.
+// A manual scroll - either direction - says a reader is here, and the screen
+// is theirs until one of the explicit signals hands it back: the double-tap
+// home, or answering. Arriving at the newest message by swiping is not such a
+// signal (the page a reader spends longest on is often the newest one), and
+// neither is the conversation refreshing underneath them.
 
 import { describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
@@ -30,7 +33,11 @@ function platform(): GlassesPlatform {
 type Internals = {
   tickAutoAdvance(): void
   lastGestureAt: number
+  lastConvRefresh: number
+  autoResting: boolean
   loadConversation(): Promise<void>
+  maybeRefreshConversation(): void
+  followFocus(focus: { sessionId: string }): boolean
 }
 
 const inner = (c: GlassesController) => c as unknown as Internals
@@ -77,7 +84,7 @@ describe('the footer says which of the two the screen is in', () => {
     expect(screenText(c.state).footer).not.toContain('auto')
   })
 
-  test('it comes back with the clock', () => {
+  test('it comes back with the double-tap home, not with a down-swipe', async () => {
     const c = reading()
     c.state.conversation = [
       { role: 'assistant', content: 'the newest thing said' },
@@ -86,7 +93,14 @@ describe('the footer says which of the two the screen is in', () => {
     c.swipeUp()
     expect(screenText(c.state).footer).not.toContain('auto')
 
+    // Swiping down is still a hand on the ring.
     c.swipeDown()
+    expect(screenText(c.state).footer).not.toContain('auto')
+
+    // The double-tap home is the explicit signal.
+    c.swipeUp()
+    await c.doubleTap()
+    expect(c.state.conversationOffset).toBe(0)
     expect(screenText(c.state).footer).toContain('auto')
   })
 })
@@ -125,7 +139,7 @@ describe('the auto-advance clock yields to a reader', () => {
     expect(c.state.conversationPage).toBe(0)
   })
 
-  test('swiping back down to the newest message gives the clock the screen', () => {
+  test('swiping down to the newest message keeps the screen with the reader', () => {
     const c = reading()
     c.state.conversation = [
       { role: 'assistant', content: 'the newest thing said' },
@@ -139,18 +153,138 @@ describe('the auto-advance clock yields to a reader', () => {
 
     c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
     idleThenTick(c)
-    expect(c.state.conversationPage).toBeGreaterThan(0)
+    expect(c.state.conversationPage).toBe(0)
   })
 
-  test('a reload takes the pin with the position it was holding', async () => {
-    // New messages arriving at the newest edge replace what the reader had
-    // pinned. Held past that, one page back would switch the glance mode off
-    // for the rest of the session.
+  test('a reload leaves a held pin alone', async () => {
     const c = reading()
     idleThenTick(c)
     c.swipeUp()
 
     await inner(c).loadConversation()
+    c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBe(0)
+    expect(screenText(c.state).footer).not.toContain('auto')
+  })
+
+  test('the periodic refresh never runs against a pinned reader', () => {
+    // Pinned at a true 0/0 - the position gate would not catch this, so the
+    // refresh has to consult the pin itself.
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
+    c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
+
+    inner(c).lastConvRefresh = 0
+    inner(c).maybeRefreshConversation()
+    // A refresh would have replaced the transcript (with nothing, in here).
+    expect(c.state.conversation.length).toBe(2)
+  })
+
+  test('a swipe that moves nothing pins nothing, and the transcript stays live', () => {
+    // The newest reply fits one page, the wearer swipes down expecting a next
+    // message, and there is none. Pinning that would silently freeze the
+    // transcript on the gesture that used to mean "catch me up".
+    const c = reading()
+    c.state.conversation = [{ role: 'assistant', content: 'fits one page' }] as ConversationMessage[]
+    c.swipeDown()
+    expect(screenText(c.state).footer).toContain('auto')
+
+    inner(c).lastConvRefresh = 0
+    inner(c).maybeRefreshConversation()
+    // The refresh ran: with no server here, the reload empties the transcript.
+    expect(c.state.conversation.length).toBe(0)
+  })
+
+  test('a swipe racing the initial load pins nothing either', () => {
+    const c = reading()
+    c.state.conversation = [] as ConversationMessage[]
+    c.swipeUp()
+    c.swipeDown()
+    expect(screenText(c.state).footer).toContain('auto')
+  })
+
+  test('pinned at the newest message, one double-tap releases and the next one leaves', async () => {
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    // Up then down: both moved, so the pin is held at a true 0/0.
+    c.swipeUp()
+    c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
+    expect(screenText(c.state).footer).not.toContain('auto')
+
+    await c.doubleTap()
+    expect(c.state.mode).toBe('conversation')
+    expect(screenText(c.state).footer).toContain('auto')
+
+    await c.doubleTap()
+    expect(c.state.mode).toBe('session_list')
+  })
+
+  test('the release redraws before the load, and takes the notice back to its first window', async () => {
+    // Every other path that hands the screen back does both. A reader cannot
+    // see which path released it, so one that leaves the notice mid-scroll -
+    // or whose only sign is a word arriving whenever the network does - reads
+    // as a gesture that missed.
+    let renders = 0
+    let rendersWhenLoadBegan = -1
+    const p = platform()
+    p.render = () => { renders++ }
+    const c = new GlassesController(p)
+    c.state.sessions = [{ id: 's1', name: 'one', state: 'idle' }] as GlassesController['state']['sessions']
+    c.state.sessionIndex = 0
+    c.state.mode = 'conversation'
+    // Two short messages, so the up-and-back lands on a true 0/0: paging a long
+    // one leaves `conversationPage` above zero and the double-tap is caught by
+    // the branch above this one, which was never the branch in question.
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.state.conversationOffset = 0
+    c.state.conversationPage = 0
+    inner(c).loadConversation = async () => { rendersWhenLoadBegan = renders }
+
+    c.swipeUp()
+    c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
+    expect(screenText(c.state).footer).not.toContain('auto')
+    // After the swipes, not before: the swipe back to the newest message
+    // clears the window on its way, so a value set at the top would be gone
+    // before the double-tap ever saw it.
+    c.state.noticeWindow = 2
+
+    const before = renders
+    await c.doubleTap()
+    expect(c.state.noticeWindow).toBe(0)
+    expect(rendersWhenLoadBegan).toBeGreaterThan(before)
+  })
+
+  test('a release without a gesture un-rests the clock', () => {
+    // Gestures already clear the rest on their way in (handle() does it), so
+    // only a release nobody's hand triggered can prove resumeAutoAdvance()
+    // clears it: following the phone's focus is one.
+    const c = reading()
+    c.state.sessions = [
+      { id: 's1', name: 'one', state: 'idle' },
+      { id: 's2', name: 'two', state: 'idle' },
+    ] as GlassesController['state']['sessions']
+    idleThenTick(c, 200)
+    expect(inner(c).autoResting).toBe(true)
+
+    c.ws.subscribe = () => {}
+    inner(c).followFocus({ sessionId: 's2' })
     c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
     idleThenTick(c)
     expect(c.state.conversationPage).toBeGreaterThan(0)

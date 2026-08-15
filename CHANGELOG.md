@@ -20,6 +20,58 @@ All notable changes to this project will be documented in this file.
     phone can neither zoom nor close a pane, and closing one of those is a
     product decision for its own change
 
+### Fixed
+- **Handing the screen back from a pinned read now looks like every other way
+  of handing it back.** The release added in 0.3.134 left the notice strip
+  wherever the clock had walked it to, and redrew only after the conversation
+  had reloaded - so the `auto` that says the clock has the view appeared
+  whenever the network got round to it, which reads as a gesture that missed.
+  Both are what the two neighbouring paths already do; a reader cannot see
+  which path released the screen, so they cannot differ
+
+## [0.3.134] - 2026-08-15
+
+### Fixed
+- **A manual scroll owns the conversation on the glasses until an explicit
+  signal returns it** (contributed in #386 by @Chapapon). The auto-advance pin
+  used position as a proxy for attention, and it is a bad one: swiping down to
+  the newest message released it, and so did every conversation reload. A reader
+  catching up by hand had the view move out from under them moments after they
+  arrived, and reading the recap slowly was undone by the agent saying a single
+  line
+  - Any manual scroll pins the screen, in either direction. Only the explicit
+    signals hand it back: opening a conversation, the double-tap home, or
+    answering and speaking. A refresh never touches it
+  - The pin survives suspension as itself rather than being inferred from the
+    offset. A reader holding a later page of the newest message is at offset 0,
+    and the guess handed the clock the screen with no signal from anyone
+  - A scroll that moves *nothing* pins nothing. The newest reply fitting one
+    page, and the wearer swiping down to see whether there is another, would
+    otherwise freeze the transcript for good - on the gesture that until now
+    meant "catch me up", and with no sign on screen that it had happened
+  - The periodic refresh consults the pin rather than the position alone, so a
+    reader pinned at the newest message keeps the text they are reading
+  - The footer's `auto` flag keeps saying which of the two states the screen is
+    in, so a still screen stays accountable
+  - Glasses build: this is `glasses/` code, so it reaches the wearer with the
+    next EVEN Hub release rather than with this server. It is not in 0.0.80
+
+## [0.3.133] - 2026-08-15
+
+### Fixed
+- **The herdr update button works for Homebrew installs.** `herdr update`
+  refuses a brew-managed binary with exit 1 (the reason only in herdr's server
+  log: "available through Homebrew, waiting for explicit install"), so the
+  apply button could never install anything on a brew setup. It now detects the
+  Cellar symlink and runs `brew upgrade herdr` before bouncing the server -
+  panes stay alive through the download, and a brew failure touches nothing.
+- **A failed update no longer strands the server unsupervised.** The self-update
+  sequence stops the supervised server first, so a failure in the middle left
+  the launchd job booted out; hrdle then auto-spawned an unsupervised server
+  and the update button disappeared entirely. A mid-sequence failure now
+  restores the supervisor on the old version, and the error message carries the
+  failing command's last output line instead of the bare exit code.
+
 ## [0.3.132] - 2026-08-15
 
 ### Fixed
