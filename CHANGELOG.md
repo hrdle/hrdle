@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.128] - 2026-08-15
+
 ### Fixed
 - **The three controls that were too small to tap are fixed** (#9). They were
   under the 32px bar when the touch-target check landed and were recorded as a
