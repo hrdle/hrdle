@@ -24,6 +24,20 @@
 		"none": "なし",
 		"showLess": "− 閉じる"
 	},
+	"action": {
+		"sessions": "セッション",
+		"chat": "チャットに切り替え",
+		"terminal": "ターミナルに切り替え",
+		"files": "ファイル",
+		"dashboard": "ダッシュボード",
+		"splitVertically": "左右に分割",
+		"splitHorizontally": "上下に分割",
+		"reload": "再読み込み",
+		"showKeyboard": "キーボードを表示",
+		"hideKeyboard": "キーボードを隠す",
+		"remoteControlOn": "リモートコントロール ON — ターミナルはローカルの herdr が描画",
+		"remoteControlOff": "リモートコントロール OFF"
+	},
 	"session": {
 		"title": "ワークスペース",
 		"list": "ワークスペース一覧",

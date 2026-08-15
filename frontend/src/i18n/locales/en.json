@@ -24,6 +24,20 @@
 		"none": "None",
 		"showLess": "− Show less"
 	},
+	"action": {
+		"sessions": "Sessions",
+		"chat": "Switch to Chat",
+		"terminal": "Switch to Terminal",
+		"files": "Files",
+		"dashboard": "Dashboard",
+		"splitVertically": "Split vertically",
+		"splitHorizontally": "Split horizontally",
+		"reload": "Reload",
+		"showKeyboard": "Show keyboard",
+		"hideKeyboard": "Hide keyboard",
+		"remoteControlOn": "Remote control mode ON - terminal rendered by local herdr",
+		"remoteControlOff": "Remote control mode OFF"
+	},
 	"session": {
 		"title": "Workspaces",
 		"list": "Workspace List",
