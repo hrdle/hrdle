@@ -504,6 +504,9 @@ export class GlassesController {
     this.readerPinned = false
     this.autoPasses = 0
     this.autoResting = false
+    // A fresh dwell too: ticks left over from before the pin would make the
+    // first page turn arrive early.
+    this.autoTicks = 0
   }
 
   private audioChunks: Uint8Array[] = []
