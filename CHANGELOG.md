@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.136] - 2026-08-15
+
+### Fixed
+- Make the pinned glasses reader release before a queued banner dismissal
+  (contributed by @Chapapon).
+- Reset the notice window and redraw before reloading after release
+  (contributed by @Chapapon).
+
 ## [0.3.135] - 2026-08-15
 
 ### Changed
