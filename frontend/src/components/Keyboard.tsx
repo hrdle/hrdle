@@ -460,12 +460,26 @@ export function Keyboard({
 			return undefined;
 		};
 
+		// A finger has to reach these the same way it reaches the letter keys:
+		// through `touchend`, not through the click the browser may synthesize
+		// from it. These sit in a horizontally scrollable strip, so a tap can be
+		// taken for the start of a pan and the click never arrives - and the
+		// keys that go missing are exactly the ones with no other route in
+		// (ESC, TAB, ^C). `touch-none` stops the strip claiming the gesture;
+		// preventDefault on touchend stops the synthesized click arriving after
+		// this has already run, which is how the letter keys avoid firing twice.
+		const handleTouchEnd = (e: React.TouchEvent) => {
+			e.preventDefault();
+			handleClick();
+		};
+
 		return (
 			<button
 				type="button"
 				onClick={handleClick}
+				onTouchEnd={handleTouchEnd}
 				onContextMenu={(e) => e.preventDefault()}
-				className={`${ACTION_SIZE} flex-1 px-2 flex items-center justify-center rounded-md font-medium select-none ${getBgColor()}`}
+				className={`${ACTION_SIZE} flex-1 px-2 flex items-center justify-center rounded-md font-medium select-none touch-none ${getBgColor()}`}
 				data-onboarding={getOnboardingAttr()}
 			>
 				{keyDef.key === "\t" && shiftPressed ? "⇧TAB" : keyDef.label}
