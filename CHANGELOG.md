@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A glasses follow no longer writes a claim it never makes** (#360). The
+  glasses subscribe because the election sent them somewhere, so their
+  subscriptions are its own output - but one still wrote the claim fields and
+  logged `[focus] undeclared claims ... (no device id)`, once for every real
+  claim in the log. What kept it from actually winning anything was
+  `pickClientFocus` reading a different pair of fields, one branch deep
+  - The write is gone rather than merely ignored. Until 0.3.122 the glasses were
+    excluded from the election wholesale; leaving the stale write behind that
+    branch is a trap for whoever next reaches for `focusAt`
+  - Half the lines in the focus log described something that had not happened,
+    and reading that log is now the first step in diagnosing a switch
+  - What the wearer picks still arrives on `glasses-focus` and still wins. That
+    is the one act on a glasses connection that is a person's
+
 ## [0.3.127] - 2026-08-15
 
 ### Fixed

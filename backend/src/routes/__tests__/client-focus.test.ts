@@ -343,3 +343,38 @@ describe('what a client said about itself', () => {
     expect(describeDeclaration({ visible: true })).toBe('visible, reconnected');
   });
 });
+
+/**
+ * The glasses subscribe because the election sent them somewhere, so their
+ * subscriptions are its own output. Until now one still wrote `focusAt` and
+ * logged a claim that never took place - the only thing between that write and
+ * a self-sustaining loop was `pickClientFocus` reading a different pair of
+ * fields. Measured 2026-08-14: every real claim in the log was shadowed a second
+ * later by `[focus] undeclared claims ... (no device id)`, the glasses arriving
+ * where they had just been sent.
+ */
+describe('a glasses subscription is not a claim', () => {
+  test('a follow writes nothing at all', () => {
+    const data = { isGlasses: true, focusSessionId: undefined, focusAt: undefined };
+    applySubscribeFocus(data, { sessionId: 'w4Y' }, 999);
+    expect(data.focusSessionId).toBeUndefined();
+    expect(data.focusAt).toBeUndefined();
+  });
+
+  /** The wearer's own act arrives on `glasses-focus`, and still wins. */
+  test('the ring still claims', () => {
+    const glasses = client({
+      isGlasses: true,
+      glassesFocusSessionId: 'w66',
+      glassesFocusAt: 200,
+    } as Partial<MuxData>);
+    applySubscribeFocus(glasses, { sessionId: 'w4Y' }, 999);
+    expect(pickClientFocus([glasses], NOW)?.sessionId).toBe('w66');
+  });
+
+  test('an ordinary client is unaffected', () => {
+    const data = { focusSessionId: undefined, focusAt: undefined };
+    applySubscribeFocus(data, { sessionId: 'w4Y' }, 999);
+    expect(data).toEqual({ focusSessionId: 'w4Y', focusAt: 999 });
+  });
+});

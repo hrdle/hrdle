@@ -146,13 +146,23 @@ const activeMuxConnections = new Set<ServerWebSocket<MuxData>>();
  * The session itself is recorded either way, so the moment a person does
  * something on that client it is followed, on the session it already had.
  *
+ * The glasses are the exception, and it is not a detail of theirs: they
+ * subscribe *because* the election sent them somewhere, so their subscriptions
+ * are its own output. Reading one as a claim would be the loop the whole
+ * separation exists to prevent, and the only thing that stood between the two
+ * was `pickClientFocus` routing them elsewhere - with the stale write still
+ * happening, and logged as a claim that never took place. What the wearer picks
+ * arrives on `glasses-focus` instead, and nothing else on that connection is a
+ * person's act.
+ *
  * Pure and exported for the tests.
  */
 export function applySubscribeFocus(
-  data: { focusSessionId?: string; focusAt?: number },
+  data: { focusSessionId?: string; focusAt?: number; isGlasses?: boolean },
   msg: { sessionId: string; resumed?: boolean },
   now: number,
 ): void {
+  if (data.isGlasses) return;
   data.focusSessionId = msg.sessionId;
   if (!msg.resumed) data.focusAt = now;
 }
@@ -551,6 +561,12 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     // Marks this connection as a follower, excluding it from the focus
     // election. The simulator follows too, so this is not the device flag.
     ws.data.isGlasses = true;
+    // Anything a subscribe wrote before this arrived is not a claim either. The
+    // app subscribes to the relay first, so today there is nothing to discard;
+    // this keeps the invariant a property of the flag rather than of the order
+    // two messages happen to be sent in.
+    ws.data.focusSessionId = undefined;
+    ws.data.focusAt = undefined;
     // Absent means device: an ehpk predating the field is on a face, while the
     // simulator ships inside the server binary that reads it, so it can never
     // be the older of the two.
