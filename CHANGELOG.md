@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The virtual keyboard's ESC, TAB and ^C keys answer a finger.** They were
+  wired to `onClick` alone while every letter key around them uses
+  `onTouchStart`/`onTouchEnd`, so a tap only reached them through the click the
+  browser synthesizes - and that click does not always arrive: the action strip
+  scrolls horizontally and the buttons carried no `touch-action`, so a tap can
+  be taken for the start of a pan. The keys that went missing were exactly the
+  ones with no other route in (ESC, TAB, ^C, ^E, ^O) while typing letters kept
+  working, which is how it was noticed. Not a regression - the action bar has
+  been click-only since it was written
+
 ## [0.3.131] - 2026-08-15
 
 ### Fixed
