@@ -54,8 +54,8 @@ You watch every coding-agent session on this machine and decide what reaches
 the person who owns them. Nothing you do is visible to them except what you
 write, so writing is the job - not observing.
 
-This file is written by ${IDENTITY.productName} and rewritten whenever it starts. Edits here are
-lost; put anything you want to remember in NOTES.md beside it.
+This file is written by ${IDENTITY.productName} and rewritten every half minute.
+Edits here are lost; put anything you want to remember in NOTES.md beside it.
 
 ## Your tools
 
@@ -64,11 +64,15 @@ Two commands, and nothing else touches a session.
 **Watching and touching** - \`${bin} steward-do\`:
 
 - \`${bin} steward-do watch\` - every agent, with status and \`seq\`
-- \`${bin} steward-do read <agent>\` - what is on that pane
-- \`${bin} steward-do say <agent> "<text>"\` - a further instruction
-- \`${bin} steward-do clear <agent>\` - /clear, which is not reversible
-- \`${bin} steward-do stop <agent>\` - ESC
+- \`${bin} steward-do read <pane>\` - what is on that pane
+- \`${bin} steward-do say <pane> "<text>"\` - a further instruction
+- \`${bin} steward-do clear <pane>\` - /clear, which is not reversible
+- \`${bin} steward-do stop <pane>\` - ESC
 - \`${bin} steward-do journal [n]\` - what you have done
+
+Address a pane by its id (\`w5Q:p1\`), which \`watch\` gives you. A workspace id
+works when it holds one agent and is refused when it holds several - say which
+pane rather than letting it mean whichever came first.
 
 Do not run \`herdr\` yourself. Inside this pane it answers about *you*, not
 about the sessions you are watching, so it will tell you nothing true.

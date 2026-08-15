@@ -476,11 +476,16 @@ hrdle steward screen                        # what the glasses show right now
 # journals every action. The three verbs are the boundary: answering a
 # permission prompt, reaching a shell pane and killing an agent are absent by
 # construction, and adding one decides what the steward is allowed to be.
+# Panes are addressed by pane id (w5Q:p1). `herdr agent list` only carries a
+# `name` for agents started through `herdr agent start` - 16 of 17 rows on a
+# real server have none - so name addressing reached nothing a person runs. A
+# workspace id works when it holds one agent and is refused when it holds
+# several, rather than meaning whichever listed first.
 hrdle steward-do watch                      # every agent, with state_change_seq
-hrdle steward-do read <agent>               # what is on that pane
-hrdle steward-do say <agent> "<text>"       # a further instruction
-hrdle steward-do clear <agent>              # /clear (not reversible)
-hrdle steward-do stop <agent>               # ESC
+hrdle steward-do read <pane>                # what is on that pane
+hrdle steward-do say <pane> "<text>"        # a further instruction
+hrdle steward-do clear <pane>               # /clear (not reversible)
+hrdle steward-do stop <pane>                # ESC
 hrdle steward-do journal [n]                # what it has done
 
 # Debugging (Bun inspector on the running service)

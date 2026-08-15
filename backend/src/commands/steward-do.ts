@@ -97,11 +97,45 @@ async function listAgents(target: StewardTarget): Promise<AgentRow[]> {
   }
 }
 
+export type Resolution =
+  | { ok: true; agent: AgentRow }
+  | { ok: false; reason: 'none' }
+  | { ok: false; reason: 'ambiguous'; panes: string[] };
+
+/**
+ * Which agent pane an address names.
+ *
+ * **Addressed by pane id, never by name.** `agent list` only carries a `name`
+ * for agents started through `herdr agent start <name>`, which is how the
+ * observer is started and how a test fixture gets made - but almost nothing a
+ * person actually runs. Measured on a real server: 16 of 17 rows had no name at
+ * all. Requiring one made every real session unreachable while dev passed.
+ *
+ * A workspace with several agent panes resolves to nothing rather than to
+ * whichever lists first - the same rule this project applies to session
+ * addressing, for the same reason: the address would silently mean a different
+ * pane than the caller meant.
+ */
+export function resolveAgentIn(agents: AgentRow[], address: string): Resolution {
+  for (const exact of [
+    agents.filter((a) => a.pane_id === address),
+    agents.filter((a) => a.name === address),
+  ]) {
+    if (exact.length === 1) return { ok: true, agent: exact[0] };
+  }
+
+  const inWorkspace = agents.filter((a) => a.workspace_id === address);
+  if (inWorkspace.length === 1) return { ok: true, agent: inWorkspace[0] };
+  if (inWorkspace.length > 1) {
+    return { ok: false, reason: 'ambiguous', panes: inWorkspace.map((a) => a.pane_id ?? '?') };
+  }
+  return { ok: false, reason: 'none' };
+}
+
 /** Only panes `agent list` returns are addressable, which is what keeps a shell
  *  pane out of reach. */
-async function resolveAgent(target: StewardTarget, name: string): Promise<AgentRow | null> {
-  const agents = await listAgents(target);
-  return agents.find((a) => a.name === name || a.pane_id === name || a.workspace_id === name) ?? null;
+async function resolveAgent(target: StewardTarget, address: string): Promise<Resolution> {
+  return resolveAgentIn(await listAgents(target), address);
 }
 
 async function journal(entry: Record<string, unknown>): Promise<void> {
@@ -123,6 +157,19 @@ function fail(message: string): never {
   process.exit(1);
 }
 
+/** The pane id herdr is addressed by, or a refusal that says which it was. */
+function paneOf(resolution: Resolution, address: string): string {
+  if (!resolution.ok) {
+    if (resolution.reason === 'ambiguous') {
+      fail(`${address} has more than one agent pane: ${resolution.panes.join(', ')}. Name one.`);
+    }
+    fail(`no agent pane at ${address}`);
+  }
+  const pane = resolution.agent.pane_id;
+  if (!pane) fail(`${address} resolved to an agent with no pane id`);
+  return pane;
+}
+
 export async function runStewardDo(options: StewardDoCliOptions): Promise<void> {
   const verb = options.stewardDoVerb;
   const args = options.stewardDoArgs ?? [];
@@ -141,25 +188,27 @@ export async function runStewardDo(options: StewardDoCliOptions): Promise<void> 
       const agents = await listAgents(target);
       emit({
         watching: target.session ?? 'default',
+        // `pane` leads because it is the handle every verb takes. `name` is
+        // only there for agents started through `herdr agent start`, which is
+        // almost none of them, so it is omitted rather than reported empty.
         agents: agents.map((a) => ({
-          name: a.name,
           pane: a.pane_id,
           workspace: a.workspace_id,
           status: a.agent_status,
           cwd: a.cwd,
           seq: a.state_change_seq,
           agentSessionId: a.agent_session?.value,
+          ...(a.name ? { name: a.name } : {}),
         })),
       });
       return;
     }
 
     case 'read': {
-      const name = args[0];
-      if (!name) fail('usage: hrdle steward-do read <agent>');
-      const agent = await resolveAgent(target, name);
-      if (!agent?.name) fail(`no agent pane called ${name}`);
-      const res = await herdr(target, ['agent', 'read', agent.name]);
+      const address = args[0];
+      if (!address) fail('usage: hrdle steward-do read <pane>');
+      const pane = paneOf(await resolveAgent(target, address), address);
+      const res = await herdr(target, ['agent', 'read', pane]);
       if (!res.ok) fail(res.stderr.trim() || 'read failed');
       // Terminal output, not JSON - a person reads this one too.
       console.log(res.stdout);
@@ -169,10 +218,11 @@ export async function runStewardDo(options: StewardDoCliOptions): Promise<void> 
     case 'clear':
     case 'say':
     case 'stop': {
-      const name = args[0];
-      if (!name) fail(`usage: hrdle steward-do ${verb} <agent>${verb === 'say' ? ' <text>' : ''}`);
-      const agent = await resolveAgent(target, name);
-      if (!agent?.name) fail(`no agent pane called ${name}`);
+      const address = args[0];
+      if (!address) fail(`usage: hrdle steward-do ${verb} <pane>${verb === 'say' ? ' <text>' : ''}`);
+      const resolution = await resolveAgent(target, address);
+      const pane = paneOf(resolution, address);
+      const agent = resolution.ok ? resolution.agent : null;
 
       if (!isAction(verb)) fail(`unknown verb ${verb}`);
       const action = ACTIONS[verb];
@@ -181,26 +231,26 @@ export async function runStewardDo(options: StewardDoCliOptions): Promise<void> 
       let sent: string;
       if (action.keys) {
         sent = action.keys;
-        res = await herdr(target, ['agent', 'send-keys', agent.name, action.keys]);
+        res = await herdr(target, ['agent', 'send-keys', pane, action.keys]);
       } else {
         const text = action.text ?? args.slice(1).join(' ');
-        if (!text) fail(`usage: hrdle steward-do ${verb} <agent> <text>`);
+        if (!text) fail(`usage: hrdle steward-do ${verb} <pane> <text>`);
         sent = text;
-        res = await herdr(target, ['agent', 'prompt', agent.name, text]);
+        res = await herdr(target, ['agent', 'prompt', pane, text]);
       }
 
       await journal({
         at: new Date().toISOString(),
         verb,
-        agent: agent.name,
-        pane: agent.pane_id,
-        workspace: agent.workspace_id,
+        agent: agent?.name,
+        pane,
+        workspace: agent?.workspace_id,
         sent,
         ok: res.ok,
       });
 
       if (!res.ok) fail(res.stderr.trim() || `${verb} failed`);
-      emit({ verb, agent: agent.name, pane: agent.pane_id, sent });
+      emit({ verb, pane, workspace: agent?.workspace_id, sent });
       return;
     }
 

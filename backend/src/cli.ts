@@ -93,8 +93,10 @@ ${t('cli.usage')}
   ${IDENTITY.binaryName} steward-do <verb>   The only way the steward touches a session. Runs
                             against the watched herdr server, not the steward's
                             own, and journals every action.
-                            watch | read <agent> | clear <agent>
-                            say <agent> <text> | stop <agent> | journal [n]
+                            watch | read <pane> | clear <pane>
+                            say <pane> <text> | stop <pane> | journal [n]
+                            Panes are addressed by pane id (w5Q:p1); a
+                            workspace id works only when it holds one agent.
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
                             (session is auto-resolved: cwd → process ancestors)

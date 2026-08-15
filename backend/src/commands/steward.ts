@@ -14,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AuthService } from '../services/auth';
 import { getDataDir } from '../utils/storage';
+import { stewardHomeDir, TARGET_FILE } from '../services/steward-runtime';
 import { IDENTITY } from '../../../shared/identity';
 
 const TOKEN_USER = 'steward';
@@ -64,7 +65,7 @@ async function resolveToken(): Promise<string | null> {
 async function resolvePort(options: StewardCliOptions & { port: number }): Promise<number> {
   if (options.portExplicit) return options.port;
   try {
-    const raw = await readFile(join(getDataDir(), 'steward', 'target.json'), 'utf-8');
+    const raw = await readFile(join(stewardHomeDir(), TARGET_FILE), 'utf-8');
     const target = JSON.parse(raw) as { port?: number };
     if (typeof target.port === 'number') return target.port;
   } catch {

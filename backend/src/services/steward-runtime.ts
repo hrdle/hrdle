@@ -12,7 +12,7 @@
  * accumulates context every tick), so the loop lives here.
  */
 
-import { mkdir } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { addAgentStatusListener } from './herdr-agent-status';
 import { herdrBinaryPath, herdrRpc, herdrSessionName, herdrSocketPath } from './herdr-client';
@@ -140,6 +140,12 @@ interface AgentRow {
 
 interface PaneRow {
   pane_id?: string;
+  workspace_id?: string;
+}
+
+interface WorkspaceRow {
+  workspace_id?: string;
+  label?: string;
 }
 
 /** `herdr status server` exits 0 either way, so the exit code alone reports
@@ -179,9 +185,16 @@ async function findObserver(): Promise<AgentRow | null> {
 }
 
 async function ensureWorkspace(): Promise<string | null> {
-  const panes = parseResult<{ panes?: PaneRow[] }>(await herdrCli(['pane', 'list']));
-  const existing = panes?.panes?.[0]?.pane_id;
-  if (existing) return existing;
+  // Matched by the workspace we labelled, not by "the first pane in the
+  // session": anything a person opens in here would otherwise become the
+  // observer's pane.
+  const ours = parseResult<{ workspaces?: WorkspaceRow[] }>(await herdrCli(['workspace', 'list']))
+    ?.workspaces?.find((w) => w.label === OBSERVER);
+  if (ours?.workspace_id) {
+    const panes = parseResult<{ panes?: PaneRow[] }>(await herdrCli(['pane', 'list']));
+    const existing = panes?.panes?.find((p) => p.workspace_id === ours.workspace_id)?.pane_id;
+    if (existing) return existing;
+  }
 
   const home = stewardHomeDir();
   await mkdir(home, { recursive: true });
@@ -205,8 +218,11 @@ async function ensureWorkspace(): Promise<string | null> {
     console.error(`[steward] could not create the observer workspace: ${created.stderr.trim()}`);
     return null;
   }
-  const after = parseResult<{ panes?: PaneRow[] }>(await herdrCli(['pane', 'list']));
-  return after?.panes?.[0]?.pane_id ?? null;
+  const after = parseResult<{ workspaces?: WorkspaceRow[] }>(await herdrCli(['workspace', 'list']))
+    ?.workspaces?.find((w) => w.label === OBSERVER);
+  if (!after?.workspace_id) return null;
+  const panes = parseResult<{ panes?: PaneRow[] }>(await herdrCli(['pane', 'list']));
+  return panes?.panes?.find((p) => p.workspace_id === after.workspace_id)?.pane_id ?? null;
 }
 
 /**
@@ -313,29 +329,62 @@ export function wakeObserverWith(text: string): void {
   void deliver(text);
 }
 
+/**
+ * Wake-ups that had nowhere to go, replayed on the next successful start.
+ *
+ * Rebuilding on demand is not enough on its own: `ensureSteward` also declines
+ * while another rebuild is in flight or during a failure backoff, and a person
+ * answering inside one of those windows would be dropped with only the thread
+ * to recover it - at the *next* wake, which on a quiet machine never comes.
+ */
+const undelivered: string[] = [];
+const UNDELIVERED_MAX = 20;
+
 async function deliver(text: string): Promise<void> {
   if (!(await findObserver())) {
-    // Rebuild now rather than waiting for the tick. Waking IS the delivery, so
-    // a wake-up dropped here is an answer the owner gave and nobody ever reads
-    // - which is what happened after a herdr restart: the workspace came back
-    // and the agent did not, and the reply that arrived in between was lost.
-    if (runtimePort === null) return;
-    if (!(await ensureSteward(runtimePort))) return;
-    if (!(await findObserver())) return;
+    // Waking IS the delivery, so a wake-up dropped here is an answer the owner
+    // gave and nobody reads - what happened after a herdr restart, which brings
+    // the workspace back without its agent.
+    if (runtimePort === null || !(await ensureSteward(runtimePort)) || !(await findObserver())) {
+      undelivered.push(text);
+      if (undelivered.length > UNDELIVERED_MAX) undelivered.shift();
+      return;
+    }
   }
+
+  for (const held of undelivered.splice(0)) await send(held);
+  await send(text);
+}
+
+/** Held wake-ups, once there is somewhere to put them. Called from the tick so
+ *  a reply given during a rebuild does not wait for the next thing to happen. */
+async function flushUndelivered(): Promise<void> {
+  if (undelivered.length === 0) return;
+  if (!(await findObserver())) return;
+  for (const held of undelivered.splice(0)) await send(held);
+}
+
+async function send(text: string): Promise<void> {
   const res = await herdrCli(['agent', 'prompt', OBSERVER, text]);
   if (!res.ok) console.error(`[steward] wake failed: ${res.stderr.trim()}`);
 }
 
 export function startStewardRuntime(port: number): void {
-  if (!isStewardEnabled()) return;
+  if (!isStewardEnabled()) {
+    // `steward-do` reads the target file and asks no server whether it should
+    // exist - deliberately, so control survives hrdle being down. A file left
+    // behind by an earlier run therefore keeps working after the gate is turned
+    // off, and this is the only place that can clear it.
+    void rm(join(stewardHomeDir(), TARGET_FILE), { force: true }).catch(() => undefined);
+    return;
+  }
   if (superviseTimer) return;
 
   runtimePort = port;
 
   void ensureSteward(port);
   superviseTimer = setInterval(() => {
-    void ensureSteward(port);
+    void ensureSteward(port).then(flushUndelivered);
     void pruneDeadSessions();
   }, SUPERVISE_INTERVAL_MS);
   superviseTimer.unref?.();
@@ -355,5 +404,6 @@ export function stopStewardRuntime(): void {
   wakeTimer = null;
   runtimePort = null;
   pendingReasons = new Set();
+  undelivered.length = 0;
   backoffUntil = 0;
 }

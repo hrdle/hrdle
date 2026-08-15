@@ -30,7 +30,11 @@ All notable changes to this project will be documented in this file.
   three verbs - `clear`, `say`, `stop` - and journals every action, which is
   also how the steward tells its own doing from its owner's. Answering a
   permission prompt, reaching a shell pane and killing an agent are absent by
-  construction, not by instruction.
+  construction, not by instruction. Panes are addressed by **pane id**: only
+  agents started through `herdr agent start` carry a name, which on a real
+  server is one row in seventeen, so name addressing reached nothing anyone
+  runs. A workspace holding several agents is refused rather than resolved to
+  whichever listed first.
 - **The observer's prompt.** Written by hrdle into the steward's working
   directory and rewritten on every start, because it is the specification of
   what the steward is and it changes with the code around it: the tools, the
