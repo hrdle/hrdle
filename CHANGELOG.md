@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The session controls are defined once and rendered by each layout** (#8).
+  Mobile draws its own component tree and desktop/tablet share another, so every
+  control was wired by hand into each - and a new one reached whichever tree the
+  person adding it was looking at. That is the source of "the phone never got
+  it": not carelessness, a structure with nowhere single to put the answer
+  - `SESSION_ACTIONS` names each control, its icon, its label and the layouts it
+    belongs on. A layout supplies only what each one *does*
+  - The responsive e2e now asserts that every action a layout declares is on
+    screen, and that none it does not declare is. Forgetting one of the three
+    bars fails there rather than months later on someone's phone
+  - `availableOn` records where each control is **today**, not where it ought to
+    be. Several gaps look like omissions rather than decisions - split is
+    tablet-only, files and reload never reached the desktop bar - and each is a
+    product change for someone to choose. Writing the current shape down is what
+    makes them visible
+  - The labels moved into i18n on the way past; most were English strings
+    written straight into the markup
+
 ## [0.3.128] - 2026-08-15
 
 ### Fixed

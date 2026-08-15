@@ -2,10 +2,6 @@
 import {
 	BarChart3,
 	ChevronDown,
-	ExternalLink,
-	FileText,
-	MessageSquare,
-	RotateCw,
 	Server,
 	Terminal as TerminalIcon,
 	X as XIcon,
@@ -40,6 +36,7 @@ import {
 import { useAuth } from "./hooks/useAuth";
 import { useWorkspaces } from "./hooks/useWorkspaces";
 import { ServerUnreachableHint } from "./components/ServerUnreachable";
+import { SessionActionBar } from "./components/SessionActionBar";
 import { TerminalPage } from "./pages/TerminalPage";
 import { authFetch, isTransientNetworkError } from "./services/api";
 import {
@@ -1123,82 +1120,41 @@ export function App() {
 				<ChevronDown className="w-3 h-3 text-zinc-500 shrink-0" />
 			</button>
 
-			{/* Right: Core actions */}
-			<div className="flex items-center gap-1 shrink-0">
-				{conversationAvailable &&
-					(showConversation ? (
-						<button
-							type="button"
-							onClick={() => setShowConversation(false)}
-							className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-							title="Switch to terminal"
-							aria-label="Switch to Terminal"
-							data-onboarding="conversation"
-						>
-							<TerminalIcon className="w-5 h-5" />
-						</button>
-					) : (
-						<button
-							type="button"
-							onClick={handleShowConversation}
-							className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-							title="Switch to conversation history"
-							aria-label="Switch to Chat"
-							data-onboarding="conversation"
-						>
-							<MessageSquare className="w-5 h-5" />
-						</button>
-					))}
-				{activeSession?.bridgeSessionId && (
-					<button
-						type="button"
-						onClick={() => {
-							const id = activeSession.bridgeSessionId;
+			{/* Right: Core actions, from the shared definition */}
+			<SessionActionBar
+				variant="mobile"
+				handlers={{
+					chat: {
+						hidden: !conversationAvailable,
+						active: showConversation,
+						onSelect: () =>
+							showConversation
+								? setShowConversation(false)
+								: handleShowConversation(),
+					},
+					"claude-app": {
+						hidden: !activeSession?.bridgeSessionId,
+						onSelect: () => {
+							const id = activeSession?.bridgeSessionId;
 							if (id) openClaudeAppSession(id);
-						}}
-						className="p-3 text-violet-400 hover:text-violet-300 active:text-violet-200 transition-colors"
-						title={t("session.openInClaudeApp")}
-						aria-label={t("session.openInClaudeApp")}
-					>
-						<ExternalLink className="w-5 h-5" />
-					</button>
-				)}
-				<button
-					type="button"
-					onClick={() => {
-						// The composite key itself carries the owning peer — no session
-						// lookup needed even while openSessions is still hydrating.
-						const peerId =
-							activeSession?.peerId ??
-							(activeSessionKey
-								? parseSessionKey(activeSessionKey).peerId
-								: undefined);
-						openFileViewer(activeSession?.currentPath || "/", peerId);
-					}}
-					className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-					title="File browser"
-					data-onboarding="file-browser"
-				>
-					<FileText className="w-5 h-5" />
-				</button>
-				<button
-					type="button"
-					onClick={() => setShowMobileDashboard(true)}
-					className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-					title="Dashboard"
-				>
-					<BarChart3 className="w-5 h-5" />
-				</button>
-				<button
-					type="button"
-					onClick={handleReload}
-					className="p-3 text-zinc-300 hover:text-white active:text-white transition-colors"
-					title="Reload"
-					data-onboarding="reload"
-				>
-					<RotateCw className="w-5 h-5" />
-				</button>
-			</div>
+						},
+					},
+					files: {
+						onSelect: () => {
+							// The composite key itself carries the owning peer - no session
+							// lookup needed even while openSessions is still hydrating.
+							const peerId =
+								activeSession?.peerId ??
+								(activeSessionKey
+									? parseSessionKey(activeSessionKey).peerId
+									: undefined);
+							openFileViewer(activeSession?.currentPath || "/", peerId);
+						},
+					},
+					dashboard: { onSelect: () => setShowMobileDashboard(true) },
+					reload: { onSelect: handleReload },
+				}}
+			/>
 		</div>
 	);
 

@@ -1,14 +1,6 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: depends on refs and setters that React guarantees stable; adding them would cause unintended re-runs */
 import {
-	BarChart3,
 	ChevronDown,
-	FileText,
-	Keyboard,
-	List,
-	RefreshCw,
-	SplitSquareHorizontal,
-	SplitSquareVertical,
-	Unplug,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +15,7 @@ import {
 import { useMultiplexedTerminal } from "../hooks/useMultiplexedTerminal";
 import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
+import { SessionActionBar } from "./SessionActionBar";
 import { sessionFetch } from "../services/peer-fetch";
 import { nukeClientCache } from "../utils/nuke-cache";
 import { shouldFollowSessionDir } from "../utils/file-viewer-follow";
@@ -1689,48 +1682,24 @@ export function DesktopLayout({
 				{/* Header - desktop: minimal icons, tablet: full toolbar */}
 				{!isTablet && (
 					<div className="flex items-center justify-end px-2 py-0.5 bg-[#0a0a0a] border-b border-white/[0.06] shrink-0 select-none">
-						<div className="flex items-center gap-0.5">
-							<button
-								type="button"
-								onClick={() => setShowSessionModal((prev) => !prev)}
-								className={`p-1.5 rounded-md transition-colors ${
-									showSessionModal
-										? "text-blue-400 bg-blue-500/20"
-										: "text-zinc-600 hover:text-zinc-400"
-								}`}
-								title="Sessions (Ctrl+B)"
-							>
-								<List className="w-[18px] h-[18px]" />
-							</button>
-							<button
-								type="button"
-								onClick={() => setShowDashboard((prev) => !prev)}
-								className={`p-1.5 rounded-md transition-colors ${
-									showDashboard
-										? "text-blue-400 bg-blue-500/20"
-										: "text-zinc-600 hover:text-zinc-400"
-								}`}
-								title="Dashboard (Ctrl+Shift+B)"
-							>
-								<BarChart3 className="w-[18px] h-[18px]" />
-							</button>
-							<button
-								type="button"
-								onClick={toggleRemoteControl}
-								className={`p-1.5 rounded-md transition-colors ${
-									remoteControl
-										? "text-amber-400 bg-amber-500/20"
-										: "text-zinc-600 hover:text-zinc-400"
-								}`}
-								title={
-									remoteControl
-										? "Remote control mode ON — terminal rendered by local herdr"
-										: "Remote control mode OFF"
-								}
-							>
-								<Unplug className="w-[18px] h-[18px]" />
-							</button>
-						</div>
+						<SessionActionBar
+							variant="desktop"
+							className="flex items-center gap-0.5"
+							handlers={{
+								sessions: {
+									active: showSessionModal,
+									onSelect: () => setShowSessionModal((prev) => !prev),
+								},
+								dashboard: {
+									active: showDashboard,
+									onSelect: () => setShowDashboard((prev) => !prev),
+								},
+								"remote-control": {
+									active: remoteControl,
+									onSelect: toggleRemoteControl,
+								},
+							}}
+						/>
 					</div>
 				)}
 				{isTablet && (
@@ -1767,78 +1736,30 @@ export function DesktopLayout({
 
 							<div className="flex-1" />
 
-							{/* Right: Action icons */}
-							<div className="flex items-center gap-0.5">
-								<button
-									type="button"
-									onClick={() => {
-										const dir = activeSession?.currentPath;
-										if (dir) openFileViewer(dir, activeSession?.peerId);
-									}}
-									className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-									title="Files"
-								>
-									<FileText className="w-[18px] h-[18px]" />
-								</button>
-								<button
-									type="button"
-									onClick={() => setShowDashboard((prev) => !prev)}
-									className={`p-2 transition-colors ${
-										showDashboard
-											? "text-blue-400"
-											: "text-zinc-500 hover:text-zinc-300 active:text-zinc-200"
-									}`}
-									title="Dashboard"
-								>
-									<BarChart3 className="w-[18px] h-[18px]" />
-								</button>
-
-								{/* Divider */}
-								<div className="w-px h-4 bg-white/[0.06] mx-0.5" />
-
-								{/* Pane operations */}
-								<div className="flex items-center" data-onboarding="split-pane">
-									<button
-										type="button"
-										onClick={() => handleSplit("horizontal")}
-										className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-										title="Split vertically"
-									>
-										<SplitSquareHorizontal className="w-[18px] h-[18px]" />
-									</button>
-									<button
-										type="button"
-										onClick={() => handleSplit("vertical")}
-										className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-										title="Split horizontally"
-									>
-										<SplitSquareVertical className="w-[18px] h-[18px]" />
-									</button>
-								</div>
-
-								<button
-									type="button"
-									onClick={handleGlobalReload}
-									className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-									title="Reload"
-									data-onboarding="reload"
-								>
-									<RefreshCw className="w-[18px] h-[18px]" />
-								</button>
-								<button
-									type="button"
-									onClick={() => setShowKeyboard((prev) => !prev)}
-									className={`p-2 transition-colors ${
-										showKeyboard
-											? "text-blue-400"
-											: "text-zinc-500 hover:text-zinc-300 active:text-zinc-200"
-									}`}
-									title={showKeyboard ? "Hide keyboard" : "Show keyboard"}
-									data-onboarding="keyboard"
-								>
-									<Keyboard className="w-[18px] h-[18px]" />
-								</button>
-							</div>
+							{/* Right: Action icons, from the shared definition */}
+							<SessionActionBar
+								variant="tablet"
+								className="flex items-center gap-0.5"
+								handlers={{
+									files: {
+										onSelect: () => {
+											const dir = activeSession?.currentPath;
+											if (dir) openFileViewer(dir, activeSession?.peerId);
+										},
+									},
+									dashboard: {
+										active: showDashboard,
+										onSelect: () => setShowDashboard((prev) => !prev),
+									},
+									"split-h": { onSelect: () => handleSplit("horizontal") },
+									"split-v": { onSelect: () => handleSplit("vertical") },
+									reload: { onSelect: handleGlobalReload },
+									keyboard: {
+										active: showKeyboard,
+										onSelect: () => setShowKeyboard((prev) => !prev),
+									},
+								}}
+							/>
 						</div>
 					</div>
 				)}
