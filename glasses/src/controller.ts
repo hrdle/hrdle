@@ -498,12 +498,8 @@ export class GlassesController {
   private get readerPinned(): boolean { return this.state.autoAdvance === false }
   private set readerPinned(held: boolean) { this.state.autoAdvance = !held }
 
-  /**
-   * Hand the screen back to the clock. Only the explicit signals call this -
-   * opening a conversation, the double-tap home, answering or speaking - never
-   * a refresh, and never a scroll: a manual scroll in either direction means
-   * someone is operating the screen, and it stays theirs until they say so.
-   */
+  /** Hand the screen back to the clock. Explicit signals only - never a
+   *  refresh, and never a scroll. */
   private resumeAutoAdvance(): void {
     this.readerPinned = false
     this.autoPasses = 0
@@ -899,10 +895,8 @@ export class GlassesController {
       // Offset survives; the page does not, because the conversation may have
       // grown and page N of the old text is not page N of the new.
       st.conversationOffset = Math.min(saved.offset ?? 0, Math.max(0, st.conversation.length - 1))
-      // The pin survives suspension as itself, not as a guess from the offset:
-      // a reader holding a later page of the newest message is at offset 0,
-      // and inferring from position handed the clock the screen without any
-      // explicit signal.
+      // The pin is saved as itself: a reader holding a later page of the
+      // newest message is at offset 0, so position cannot infer it.
       if (saved.pinned) this.readerPinned = true
       this.render()
     } finally {
@@ -1223,9 +1217,10 @@ export class GlassesController {
             st.conversationPage = Math.max(0, this.currentMsgTotalPages() - 1)
           }
         }
-        // A manual scroll, whatever it moved: someone is operating the screen,
-        // and the clock must not fight them for it.
-        this.readerPinned = true
+        // A scroll is a hand on the ring - but only over something to hold: a
+        // gesture racing the initial load has nothing to read, and pinning it
+        // would freeze a screen the wearer has not seen yet.
+        if (st.conversation.length > 0) this.readerPinned = true
         this.render()
         return
       }
@@ -1240,12 +1235,10 @@ export class GlassesController {
           st.conversationPage = 0
           st.noticeWindow = 0
         }
-        // Scrolling down is still a hand on the ring. Reaching the newest
-        // message used to switch the clock back on, and a reader working
-        // forward at their own pace had the view move out from under them
-        // moments after they caught up. Only the explicit signals - the
-        // double-tap home, or speaking - hand the screen back to the clock.
-        this.readerPinned = true
+        // A scroll in either direction is a hand on the ring; the newest
+        // message is where a reader lingers, so arriving there is not a
+        // release.
+        if (st.conversation.length > 0) this.readerPinned = true
         this.render()
         return
       }
@@ -1321,12 +1314,17 @@ export class GlassesController {
           st.conversationOffset = 0
           st.conversationPage = 0
           st.noticeWindow = 0
-          // The double-tap home is one of the two explicit "yours again"
-          // signals (speaking is the other): live updates resume at the top,
-          // and whatever arrived while the reader was back there should be
-          // waiting for them.
           this.resumeAutoAdvance()
           this.render()
+          await this.loadConversation()
+          this.render()
+          return
+        }
+        if (this.readerPinned) {
+          // Pinned at the newest message - the state any down-swipe catch-up
+          // produces. The pin is a level of its own to back out of: one
+          // double-tap hands the screen back, the next one leaves.
+          this.resumeAutoAdvance()
           await this.loadConversation()
           this.render()
           return
@@ -2419,12 +2417,8 @@ export class GlassesController {
    * different conversation resets it — those call sites do it themselves.
    */
   private async loadConversation(): Promise<void> {
-    // Deliberately does not touch the pin. This also runs on the periodic
-    // refresh of a conversation already on screen, and releasing the pin here
-    // meant the agent saying anything handed the screen back to the clock -
-    // mid-recap, out from under the reader. The callers that really discard
-    // the position (opening a conversation, the double-tap home, answering)
-    // say so themselves via resumeAutoAdvance().
+    // Deliberately does not touch the pin - this also runs on the periodic
+    // refresh. Callers that discard the position call resumeAutoAdvance().
     const target = this.conversationTarget()
     if (!target) {
       this.state.conversation = []
@@ -2487,6 +2481,10 @@ export class GlassesController {
     // to the newest message every few seconds. Paging back to the latest
     // resumes live updates.
     if (this.state.conversationOffset > 0 || this.state.conversationPage > 0) return
+    // The pin holds at offset 0 too (any down-swipe catch-up ends there), and
+    // a reload resets the page - swapping the text under a reader the clock
+    // is not allowed to move.
+    if (this.readerPinned) return
     const now = Date.now()
     if (now - this.lastConvRefresh < CONV_REFRESH_INTERVAL) return
     this.lastConvRefresh = now

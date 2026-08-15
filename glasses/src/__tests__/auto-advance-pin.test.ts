@@ -33,7 +33,11 @@ function platform(): GlassesPlatform {
 type Internals = {
   tickAutoAdvance(): void
   lastGestureAt: number
+  lastConvRefresh: number
+  autoResting: boolean
   loadConversation(): Promise<void>
+  maybeRefreshConversation(): void
+  followFocus(focus: { sessionId: string }): boolean
 }
 
 const inner = (c: GlassesController) => c as unknown as Internals
@@ -136,8 +140,6 @@ describe('the auto-advance clock yields to a reader', () => {
   })
 
   test('swiping down to the newest message keeps the screen with the reader', () => {
-    // Catching up by hand used to switch the clock back on, and the view
-    // moved out from under the reader moments after they arrived.
     const c = reading()
     c.state.conversation = [
       { role: 'assistant', content: 'the newest thing said' },
@@ -154,32 +156,68 @@ describe('the auto-advance clock yields to a reader', () => {
     expect(c.state.conversationPage).toBe(0)
   })
 
-  test('a refresh does not take the pin from a reader still holding it', async () => {
-    // The conversation reloads whenever the agent says anything. Releasing on
-    // reload handed the screen back to the clock mid-read - the exact fight
-    // the pin exists to end.
+  test('a reload leaves a held pin alone', async () => {
     const c = reading()
     idleThenTick(c)
     c.swipeUp()
-    const readingAt = c.state.conversationPage
 
     await inner(c).loadConversation()
     c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
     idleThenTick(c)
-    expect(c.state.conversationPage).toBe(readingAt)
+    expect(c.state.conversationPage).toBe(0)
+    expect(screenText(c.state).footer).not.toContain('auto')
   })
 
-  test('the double-tap home hands the screen back to the clock, rested or not', async () => {
+  test('the periodic refresh never runs against a pinned reader', () => {
+    // A reload resets offset and page, and the pin now holds at 0/0 too (any
+    // down-swipe catch-up ends there) - so the refresh has to consult the
+    // pin, not just the position.
     const c = reading()
-    // Walk the clock to its rest (everything shown twice), then read by hand.
-    idleThenTick(c, 200)
+    c.swipeDown()
+    inner(c).lastConvRefresh = 0
+    inner(c).maybeRefreshConversation()
+    // A refresh would have replaced the transcript (with nothing, in here).
+    expect(c.state.conversation.length).toBe(1)
+  })
+
+  test('a swipe over a conversation not yet loaded pins nothing', () => {
+    // A gesture racing the initial load has nothing to read; pinning it would
+    // freeze a screen the wearer has not seen yet, with no release in reach.
+    const c = reading()
+    c.state.conversation = [] as ConversationMessage[]
     c.swipeUp()
+    c.swipeDown()
+    expect(screenText(c.state).footer).toContain('auto')
+  })
+
+  test('pinned at the newest message, one double-tap releases and the next one leaves', async () => {
+    const c = reading()
+    c.swipeDown()
+    expect(screenText(c.state).footer).not.toContain('auto')
 
     await c.doubleTap()
-    expect(c.state.conversationOffset).toBe(0)
-    // The reload emptied the transcript (no server here); put it back.
+    expect(c.state.mode).toBe('conversation')
+    expect(screenText(c.state).footer).toContain('auto')
+
+    await c.doubleTap()
+    expect(c.state.mode).toBe('session_list')
+  })
+
+  test('a release without a gesture un-rests the clock', () => {
+    // Gestures already clear the rest on their way in (handle() does it), so
+    // only a release nobody's hand triggered can prove resumeAutoAdvance()
+    // clears it: following the phone's focus is one.
+    const c = reading()
+    c.state.sessions = [
+      { id: 's1', name: 'one', state: 'idle' },
+      { id: 's2', name: 'two', state: 'idle' },
+    ] as GlassesController['state']['sessions']
+    idleThenTick(c, 200)
+    expect(inner(c).autoResting).toBe(true)
+
+    c.ws.subscribe = () => {}
+    inner(c).followFocus({ sessionId: 's2' })
     c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
-    // The rest state went with the pin: the clock starts over.
     idleThenTick(c)
     expect(c.state.conversationPage).toBeGreaterThan(0)
   })
