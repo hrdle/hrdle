@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.132] - 2026-08-15
+
 ### Fixed
 - **The virtual keyboard's ESC, TAB and ^C keys answer a finger.** They were
   wired to `onClick` alone while every letter key around them uses
