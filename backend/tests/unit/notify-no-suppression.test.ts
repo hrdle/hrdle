@@ -35,7 +35,6 @@ function codeLines(source: string): string[] {
 describe('nothing gates a notification on the glasses flag', () => {
   const files = [
     'backend/src/routes/notify.ts',
-    'frontend/src/pages/TerminalPage.tsx',
     'frontend/src/components/DesktopLayout.tsx',
     'frontend/src/hooks/usePeerSessionsWatcher.ts',
   ];

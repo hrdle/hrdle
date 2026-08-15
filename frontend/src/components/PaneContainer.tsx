@@ -1,6 +1,7 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: depends on refs and setters that React guarantees stable; adding them would cause unintended re-runs */
 /** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: legacy click-on-div UI; keyboard navigation provided via main shortcuts */
 import {
+	ChevronDown,
 	ExternalLink,
 	MessageSquare,
 	Terminal as TerminalIcon,
@@ -12,6 +13,7 @@ import type { LayoutVariant } from "../actions/sessionActions";
 import { storageKey } from "../utils/app-storage";
 import {
 	type AgentProvider,
+	type IndicatorState,
 	type PaneInfo,
 	samePeerId,
 	type SessionState,
@@ -21,6 +23,7 @@ import { openClaudeAppSession } from "../utils/claude-app";
 import { makeSessionKey, parseSessionKey } from "../utils/sessionKey";
 import { toHomeShortPath } from "../utils/path";
 import { ChatView } from "./chat/ChatView";
+import { SessionActionBar } from "./SessionActionBar";
 import type { ControlModeConfig } from "./Terminal";
 import { TerminalComponent, type TerminalRef } from "./Terminal";
 import { soleVisiblePane, visiblePanes } from "../utils/panes";
@@ -69,6 +72,9 @@ interface ExtendedSession {
 	panes?: PaneInfo[];
 	// Multi-server: peer this session lives on. Unset = local Hub.
 	peerId?: string;
+	// Agent-level indicator (hook events / jsonl). `state` only says whether the
+	// herdr workspace is focused, so it cannot stand in for this.
+	indicatorState?: IndicatorState;
 }
 
 // Control mode context passed through the pane tree
@@ -81,7 +87,14 @@ export interface ControlModeContext {
 	onCopyPrompt?: (text: string) => void;
 	setKeyboardVisible?: (visible: boolean) => void;
 	onShowSessions?: () => void;
+	onShowDashboard?: () => void;
 	onOpenFileViewer?: (dir: string, peerId?: string) => void;
+	/** A pane owns whether it is showing its transcript, because that survives
+	 *  the pane being remounted and the layout is not the thing being switched.
+	 *  These two let the layout read that state and ask for it: the phone's file
+	 *  browser has a chat button, and its back gesture closes the transcript. */
+	chatRequest?: { paneId: string; open: boolean; requestId: number } | null;
+	onChatOpenChange?: (paneId: string, open: boolean) => void;
 	/** Remote-control mode (PC only): the xterm area shows a placeholder and
 	 * the local herdr client owns the terminal. */
 	remoteControl?: boolean;
@@ -206,6 +219,7 @@ function TerminalPane({
 }: TerminalPaneProps) {
 	const { t } = useTranslation();
 	const isTablet = variant === "tablet";
+	const isMobile = variant === "mobile";
 	const terminalRef = useRef<TerminalRef>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	// The tree stores composite keys; the wire (WS subscribe, REST paths) only
@@ -259,8 +273,7 @@ function TerminalPane({
 	);
 
 	// Refresh terminal display (force a viewport refresh without remounting)
-	const handleReload = useCallback((e: React.MouseEvent) => {
-		e.stopPropagation();
+	const reloadTerminal = useCallback(() => {
 		if (terminalRef.current?.refreshTerminal) {
 			terminalRef.current.refreshTerminal();
 		} else {
@@ -268,18 +281,28 @@ function TerminalPane({
 			setReloadKey((prev) => prev + 1);
 		}
 	}, []);
+	const handleReload = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			reloadTerminal();
+		},
+		[reloadTerminal],
+	);
 
 	// Open file viewer (hide keyboard while open)
+	const openFileViewer = useCallback(() => {
+		controlModeContext.onOpenFileViewer?.(
+			session?.currentPath || "/",
+			session?.peerId,
+		);
+		controlModeContext.setKeyboardVisible?.(false);
+	}, [controlModeContext, session]);
 	const handleOpenFileViewer = useCallback(
 		(e: React.MouseEvent) => {
 			e.stopPropagation();
-			controlModeContext.onOpenFileViewer?.(
-				session?.currentPath || "/",
-				session?.peerId,
-			);
-			controlModeContext.setKeyboardVisible?.(false);
+			openFileViewer();
 		},
-		[controlModeContext, session],
+		[openFileViewer],
 	);
 
 	// Cleanup confirm close timer on unmount
@@ -359,13 +382,149 @@ function TerminalPane({
 		setShowConversation((prev) => !prev);
 	}, []);
 
+	const { chatRequest, onChatOpenChange } = controlModeContext;
+	const appliedChatRequestRef = useRef(0);
+	useEffect(() => {
+		if (!chatRequest || chatRequest.requestId === appliedChatRequestRef.current)
+			return;
+		appliedChatRequestRef.current = chatRequest.requestId;
+		if (chatRequest.paneId === paneId) setShowConversation(chatRequest.open);
+	}, [chatRequest, paneId, setShowConversation]);
+
+	useEffect(() => {
+		onChatOpenChange?.(paneId, showConversation);
+	}, [onChatOpenChange, paneId, showConversation]);
+	useEffect(() => {
+		return () => onChatOpenChange?.(paneId, false);
+	}, [onChatOpenChange, paneId]);
+
+	// The phone's controls, at the bottom of the screen rather than in a header:
+	// they sit under the thumb, and a strip at the top would cost rows on the
+	// smallest screen there is. `TerminalComponent` places it, so it stays put
+	// while the soft keyboard comes and goes.
+	const bottomBar = isMobile ? (
+		<div className="flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border-b border-white/[0.06]">
+			{/* Session selector. Takes the bar's free space so the name gets every
+			    pixel the action buttons don't need - a fixed cap truncated names
+			    while the bar sat half empty. The action group is shrink-0, so this
+			    only ever grows into real slack. */}
+			<button
+				type="button"
+				onClick={() => controlModeContext.onShowSessions?.()}
+				className="flex flex-1 min-w-0 min-h-10 items-center gap-1.5 px-2 py-1 rounded-md hover:bg-white/[0.06] transition-colors"
+				data-onboarding="session-list"
+			>
+				<div
+					className={`w-2 h-2 rounded-full shrink-0 ${
+						session?.state === "working"
+							? "bg-blue-500"
+							: (
+										session?.state === "waiting_input" ||
+											session?.state === "waiting_permission"
+									)
+								? "bg-amber-400 animate-pulse"
+								: "bg-zinc-600"
+					}`}
+				/>
+				<span className="text-[13px] font-medium text-white truncate min-w-0">
+					{session?.name || "-"}
+				</span>
+				<ChevronDown className="w-3 h-3 text-zinc-500 shrink-0" />
+			</button>
+
+			<SessionActionBar
+				variant="mobile"
+				handlers={{
+					chat: {
+						hidden: !conversationAvailable,
+						active: showConversation,
+						onSelect: handleToggleConversation,
+					},
+					"claude-app": {
+						hidden: !session?.bridgeSessionId,
+						onSelect: () => {
+							const id = session?.bridgeSessionId;
+							if (id) openClaudeAppSession(id);
+						},
+					},
+					files: { onSelect: openFileViewer },
+					dashboard: {
+						onSelect: () => controlModeContext.onShowDashboard?.(),
+					},
+					reload: { onSelect: reloadTerminal },
+				}}
+			/>
+		</div>
+	) : null;
+
+	// The transcript, with the header `ConversationViewer` does not draw when it
+	// is inline: on a phone this replaces the whole screen, so what session is
+	// being read and whether its agent is busy have nowhere else to appear.
+	const mobileChat =
+		isMobile && sessionTarget && conversationAvailable ? (
+			<div className="h-full flex flex-col bg-cv-bg">
+				<div
+					className="flex items-center gap-2 px-3 py-2 border-b border-cv-border shrink-0"
+					style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 8px)" }}
+				>
+					<button
+						type="button"
+						onClick={() => setShowConversation(false)}
+						className="p-1.5 text-cv-text-muted hover:text-cv-text shrink-0"
+						title="Switch to terminal"
+						aria-label="Switch to Terminal"
+					>
+						<TerminalIcon className="w-5 h-5" />
+					</button>
+					<div className="flex-1 min-w-0">
+						<div className="flex items-center gap-2">
+							<h2 className="text-[13px] font-medium text-cv-text truncate">
+								{session?.name || "Conversation"}
+							</h2>
+							{session?.indicatorState === "processing" && (
+								<span className="inline-flex items-center gap-1 text-[10px] text-cv-accent bg-cv-surface px-1.5 py-0.5 rounded shrink-0">
+									<span className="inline-block w-2 h-2 border border-cv-accent border-t-transparent rounded-full animate-spin" />
+									Working
+								</span>
+							)}
+							{session?.indicatorState === "waiting_input" && (
+								<span className="inline-flex items-center gap-1 text-[10px] text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+									Waiting for input
+								</span>
+							)}
+						</div>
+						<p className="text-[11px] text-cv-text-muted truncate">
+							{session?.currentPath ? toHomeShortPath(session.currentPath) : ""}
+						</p>
+					</div>
+				</div>
+				<div className="flex-1 min-h-0">
+					<ChatView
+						sessionId={sessionTarget.id}
+						title={session?.name}
+						subtitle={
+							session?.currentPath
+								? toHomeShortPath(session.currentPath)
+								: undefined
+						}
+						inline
+						enabled
+						agent={activeTmuxPane?.agent}
+						agentSessionId={activeTmuxPane?.agentSessionId}
+					/>
+				</div>
+			</div>
+		) : null;
+
 	return (
 		<div
 			ref={containerRef}
-			className={`h-full flex flex-col bg-th-bg relative select-none ${isActive ? "ring-2 ring-blue-500" : ""}`}
+			className={`h-full flex flex-col bg-th-bg relative select-none ${isActive && !isMobile ? "ring-2 ring-blue-500" : ""}`}
 			onMouseDown={onFocus}
 		>
-			{/* Pane header - overlay on tablet, normal on desktop */}
+			{/* Pane header - overlay on tablet, normal on desktop, none on a phone
+			    (its controls are in the bottom bar) */}
+			{!isMobile && (
 			<div
 				className={`flex items-center px-2 py-1 text-base select-none ${
 					isTablet
@@ -647,10 +806,11 @@ function TerminalPane({
 					)}
 				</div>
 			</div>
+			)}
 
 			{/* Terminal, conversation, or session selector */}
 			<div className="flex-1 min-h-0">
-				{showConversation && sessionTarget && (
+				{showConversation && !isMobile && sessionTarget && (
 					<ChatView
 						sessionId={sessionTarget.id}
 						title={t("conversation.history")}
@@ -662,20 +822,28 @@ function TerminalPane({
 					/>
 				)}
 				{sessionTarget ? (
-					<div className={showConversation ? "hidden" : "h-full"}>
+					<div className={showConversation && !isMobile ? "hidden" : "h-full"}>
 						<TerminalComponent
 							key={`${sessionKey}-${session?.instanceId ?? "legacy"}-${reloadKey}-${globalReloadKey}`}
 							ref={terminalRef}
 							sessionId={sessionTarget.id}
 							peerId={sessionTarget.peerId}
-							hideKeyboard={true}
+							// The phone keeps its InputBar and soft keyboard; the other two
+							// type into the pane directly or through FloatingKeyboard.
+							hideKeyboard={!isMobile}
+							overlayContent={bottomBar}
 							onConnect={handleConnect}
 							onDisconnect={handleDisconnect}
 							theme={session?.theme}
 							controlMode={controlModeContext.getControlConfig(paneId)}
-							hideTerminalArea={!!controlModeContext.remoteControl}
+							hideTerminalArea={
+								!!controlModeContext.remoteControl ||
+								(isMobile && showConversation)
+							}
 							terminalAreaOverlay={
-								controlModeContext.remoteControl ? (
+								isMobile && showConversation ? (
+									mobileChat
+								) : controlModeContext.remoteControl ? (
 									<div className="h-full flex flex-col items-center justify-center gap-2 p-4 text-center select-none">
 										<Unplug className="w-8 h-8 text-zinc-600" aria-hidden />
 										<p className="text-th-text-secondary text-sm font-medium">
