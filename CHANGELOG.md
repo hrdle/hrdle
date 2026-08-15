@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.137] - 2026-08-16
+
 ### Added
 - **The server side of the steward, behind a switch that is off.** The steward
   is a resident agent that watches every workspace and writes what a person
