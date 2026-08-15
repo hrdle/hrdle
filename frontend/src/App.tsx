@@ -1058,7 +1058,7 @@ export function App() {
 					activeSessionKey={activeSessionKey}
 					sessionSwitchRequest={desktopSessionSwitchRequest}
 					onSessionStateChange={updateSessionState}
-					isTablet={true}
+					variant="tablet"
 					keyboardControlRef={keyboardControlRef}
 				/>
 				{showOnboarding && (

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { LayoutVariant } from "../actions/sessionActions";
 import { storageKey } from "../utils/app-storage";
 import {
 	type AgentProvider,
@@ -106,7 +107,7 @@ interface PaneContainerProps {
 	onSplit?: (direction: "horizontal" | "vertical") => void;
 	sessions: ExtendedSession[];
 	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>;
-	isTablet?: boolean;
+	variant?: LayoutVariant;
 	globalReloadKey?: number;
 	controlModeContext: ControlModeContext;
 }
@@ -123,7 +124,7 @@ export function PaneContainer({
 	onSplit,
 	sessions,
 	terminalRefs,
-	isTablet = false,
+	variant = "desktop",
 	globalReloadKey = 0,
 	controlModeContext,
 }: PaneContainerProps) {
@@ -141,7 +142,7 @@ export function PaneContainer({
 				sessions={sessions}
 				terminalRefs={terminalRefs}
 				globalReloadKey={globalReloadKey}
-				isTablet={isTablet}
+				variant={variant}
 				controlModeContext={controlModeContext}
 			/>
 		);
@@ -161,7 +162,7 @@ export function PaneContainer({
 				onSplit={onSplit}
 				sessions={sessions}
 				terminalRefs={terminalRefs}
-				isTablet={isTablet}
+				variant={variant}
 				globalReloadKey={globalReloadKey}
 				controlModeContext={controlModeContext}
 			/>
@@ -184,7 +185,7 @@ interface TerminalPaneProps {
 	sessions: ExtendedSession[];
 	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>;
 	globalReloadKey?: number;
-	isTablet?: boolean;
+	variant?: LayoutVariant;
 	controlModeContext: ControlModeContext;
 }
 
@@ -200,10 +201,11 @@ function TerminalPane({
 	sessions,
 	terminalRefs,
 	globalReloadKey = 0,
-	isTablet = false,
+	variant = "desktop",
 	controlModeContext,
 }: TerminalPaneProps) {
 	const { t } = useTranslation();
+	const isTablet = variant === "tablet";
 	const terminalRef = useRef<TerminalRef>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	// The tree stores composite keys; the wire (WS subscribe, REST paths) only
@@ -763,7 +765,7 @@ interface SplitContainerProps {
 	onSplit?: (direction: "horizontal" | "vertical") => void;
 	sessions: ExtendedSession[];
 	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>;
-	isTablet?: boolean;
+	variant?: LayoutVariant;
 	globalReloadKey?: number;
 	controlModeContext: ControlModeContext;
 }
@@ -780,10 +782,12 @@ function SplitContainer({
 	onSplit,
 	sessions,
 	terminalRefs,
-	isTablet = false,
+	variant = "desktop",
 	globalReloadKey = 0,
 	controlModeContext,
 }: SplitContainerProps) {
+	// Divider hit areas are a touch question, not a tablet one.
+	const isTouch = variant !== "desktop";
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [isDragging, setIsDragging] = useState<number | null>(null);
 	const draggingRef = useRef<number | null>(null);
@@ -953,8 +957,8 @@ function SplitContainer({
 
 	const isHorizontal = node.direction === "horizontal";
 
-	// Divider size: 4px on desktop, 8px on tablet
-	const dividerSize = isTablet ? 8 : 4;
+	// Divider size: 4px on desktop, 8px under a finger
+	const dividerSize = isTouch ? 8 : 4;
 
 	// Build elements array with panes and dividers interleaved
 	const elements: React.ReactNode[] = [];
@@ -982,7 +986,7 @@ function SplitContainer({
 					onSplit={onSplit}
 					sessions={sessions}
 					terminalRefs={terminalRefs}
-					isTablet={isTablet}
+					variant={variant}
 					globalReloadKey={globalReloadKey}
 					controlModeContext={controlModeContext}
 				/>
@@ -1012,8 +1016,8 @@ function SplitContainer({
 						onTouchStart={handleTouchStart(index)}
 						style={{
 							position: "absolute",
-							[isHorizontal ? "left" : "top"]: isTablet ? "-16px" : "-8px",
-							[isHorizontal ? "right" : "bottom"]: isTablet ? "-16px" : "-8px",
+							[isHorizontal ? "left" : "top"]: isTouch ? "-16px" : "-8px",
+							[isHorizontal ? "right" : "bottom"]: isTouch ? "-16px" : "-8px",
 							[isHorizontal ? "top" : "left"]: "0",
 							[isHorizontal ? "bottom" : "right"]: "0",
 							touchAction: "none",

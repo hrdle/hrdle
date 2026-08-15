@@ -12,6 +12,7 @@ import {
 	type SessionTheme,
 	type TmuxLayoutNode,
 } from "../../../shared/types";
+import type { LayoutVariant } from "../actions/sessionActions";
 import { useMultiplexedTerminal } from "../hooks/useMultiplexedTerminal";
 import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
@@ -68,7 +69,9 @@ interface DesktopLayoutProps {
 		requestId: number;
 	} | null;
 	onSessionStateChange: (sessionKey: string, state: SessionState) => void;
-	isTablet?: boolean;
+	/** Which screen this is drawing for. Every layout difference below hangs off
+	 *  this one value rather than off a boolean per difference. */
+	variant?: LayoutVariant;
 	keyboardControlRef?: React.RefObject<{
 		open: () => void;
 		close: () => void;
@@ -376,9 +379,11 @@ export function DesktopLayout({
 	activeSessionKey,
 	sessionSwitchRequest,
 	onSessionStateChange,
-	isTablet = false,
+	variant = "desktop",
 	keyboardControlRef,
 }: DesktopLayoutProps) {
+	const isTablet = variant === "tablet";
+	const isMobile = variant === "mobile";
 	const { t } = useTranslation();
 	const terminalRefs = useRef<Map<string, TerminalRef | null>>(new Map());
 	const floatingKeyboardRef = useRef<FloatingKeyboardRef>(null);
@@ -464,7 +469,7 @@ export function DesktopLayout({
 	// herdr client keeps ownership of the panes. Tablet keeps normal terminals.
 	const { remoteControl: remoteControlFlag, toggleRemoteControl } =
 		useRemoteControlMode();
-	const remoteControl = !isTablet && remoteControlFlag;
+	const remoteControl = variant === "desktop" && remoteControlFlag;
 	const remoteControlRef = useRef(remoteControl);
 	remoteControlRef.current = remoteControl;
 
@@ -782,8 +787,7 @@ export function DesktopLayout({
 		},
 		onConnect: () => {
 			// Declare the device so this client can own the glasses focus.
-			// Mobile does the same from TerminalPage.
-			controlTerminal.sendClientInfo(isTablet ? "tablet" : "desktop");
+			controlTerminal.sendClientInfo(variant);
 			// Send resize with retries for terminal refresh on session switch.
 			// The first resize triggers the backend to emit initial state snapshots.
 			const delays = [100, 300, 600, 1000];
@@ -1673,14 +1677,13 @@ export function DesktopLayout({
 	// e2e matrix asserts on it so a viewport can't silently fall through to the
 	// wrong one.
 	return (
-		<div
-			className="h-full flex bg-th-bg"
-			data-layout={isTablet ? "tablet" : "desktop"}
-		>
+		<div className="h-full flex bg-th-bg" data-layout={variant}>
 			{/* Main content */}
 			<div className="flex-1 flex flex-col min-w-0">
-				{/* Header - desktop: minimal icons, tablet: full toolbar */}
-				{!isTablet && (
+				{/* Header - desktop: minimal icons, tablet: full toolbar. The phone
+				    has none: its bar is at the bottom, under the thumb, and a strip
+				    here would cost rows on the smallest screen there is. */}
+				{variant === "desktop" && (
 					<div className="flex items-center justify-end px-2 py-0.5 bg-[#0a0a0a] border-b border-white/[0.06] shrink-0 select-none">
 						<SessionActionBar
 							variant="desktop"
@@ -1793,7 +1796,7 @@ export function DesktopLayout({
 						sessions={sessions}
 						terminalRefs={terminalRefs}
 						globalReloadKey={terminalGeneration}
-						isTablet={isTablet}
+						variant={variant}
 						controlModeContext={controlModeContext}
 					/>
 				</div>
@@ -1803,7 +1806,7 @@ export function DesktopLayout({
 			<DashboardPanel
 				isOpen={showDashboard}
 				onClose={() => setShowDashboard(false)}
-				isTablet={isTablet}
+				isTablet={variant !== "desktop"}
 			/>
 
 			{/* Session modal */}
@@ -1811,7 +1814,7 @@ export function DesktopLayout({
 				isOpen={showSessionModal}
 				onClose={() => setShowSessionModal(false)}
 				onSelectSession={handleModalSelectSession}
-				isTablet={isTablet}
+				isTablet={variant !== "desktop"}
 			/>
 
 			{/* File Viewer Modal - per-session instances kept mounted */}
