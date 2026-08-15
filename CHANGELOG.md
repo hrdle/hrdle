@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The pane header's controls come from the shared definition too** (#379).
+  #8 put the session bar's controls in one table and left the pane header wired
+  by hand. The two surfaces looked like duplicates of each other and are not:
+  each layout draws a control either in its bar or on its pane header, never in
+  both - the phone carries in its bar what the other two carry on the pane
+  - So the table records `surface` per layout (`bar` / `pane` / nowhere) rather
+    than a plain "is it available", and the pane header reads it instead of
+    carrying conditions of its own
+  - Its buttons carry the shared test id now, so the responsive parity spec
+    checks both surfaces. A control that moves between them by accident fails
+    there, as one that vanishes already did
+  - This records today's shape and changes none of it. The gaps stay gaps: a
+    phone can neither zoom nor close a pane, and closing one of those is a
+    product decision for its own change
+
 ### Fixed
 - **Handing the screen back from a pinned read now looks like every other way
   of handing it back.** The release added in 0.3.134 left the notice strip
