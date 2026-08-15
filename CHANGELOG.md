@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.131] - 2026-08-15
+
 ### Fixed
 - **A phone draws one pane again.** v0.3.130 made "one pane on a phone" wait for
   the server to confirm a zoom, and that wait can end in a split being drawn -
