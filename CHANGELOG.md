@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The herdr update button works for Homebrew installs.** `herdr update`
+  refuses a brew-managed binary with exit 1 (the reason only in herdr's server
+  log: "available through Homebrew, waiting for explicit install"), so the
+  apply button could never install anything on a brew setup. It now detects the
+  Cellar symlink and runs `brew upgrade herdr` before bouncing the server -
+  panes stay alive through the download, and a brew failure touches nothing.
+- **A failed update no longer strands the server unsupervised.** The self-update
+  sequence stops the supervised server first, so a failure in the middle left
+  the launchd job booted out; hrdle then auto-spawned an unsupervised server
+  and the update button disappeared entirely. A mid-sequence failure now
+  restores the supervisor on the old version, and the error message carries the
+  failing command's last output line instead of the bare exit code.
+
 ## [0.3.132] - 2026-08-15
 
 ### Fixed
