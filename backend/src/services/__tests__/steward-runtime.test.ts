@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IDENTITY } from '../../../../shared/identity';
 import { STEWARD_ENV } from '../steward-config';
-import { startStewardRuntime, stewardHomeDir, stewardSessionName, stopStewardRuntime } from '../steward-runtime';
+import { stewardHomeDir } from '../steward-paths';
+import { startStewardRuntime, stewardSessionName, stopStewardRuntime } from '../steward-runtime';
 
 const DATA_DIR_ENV = IDENTITY.dataDirEnv;
 

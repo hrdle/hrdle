@@ -67,6 +67,18 @@ describe('addressing an agent pane', () => {
   test('an unknown address resolves to nothing', () => {
     expect(resolveAgentIn(REAL_ROWS, 'w99:p1').ok).toBe(false);
   });
+
+  // Reachable by starting two agents under one name. Saying "no such pane"
+  // when two exist sends the caller hunting for a typo.
+  test('two agents sharing a name are ambiguous, not missing', () => {
+    const twins = [
+      { agent: 'claude', pane_id: 'wA:p1', workspace_id: 'wA', name: 'twin' },
+      { agent: 'claude', pane_id: 'wB:p1', workspace_id: 'wB', name: 'twin' },
+    ];
+    const r = resolveAgentIn(twins, 'twin');
+    expect(!r.ok && r.reason).toBe('ambiguous');
+    expect(!r.ok && r.reason === 'ambiguous' && r.panes).toEqual(['wA:p1', 'wB:p1']);
+  });
 });
 
 describe('hrdle steward-do argument capture', () => {

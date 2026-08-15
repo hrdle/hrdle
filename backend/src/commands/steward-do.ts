@@ -16,7 +16,7 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { herdrBinaryPath } from '../services/herdr-client';
-import { stewardHomeDir, TARGET_FILE, type StewardTarget } from '../services/steward-runtime';
+import { stewardHomeDir, TARGET_FILE, type StewardTarget } from '../services/steward-paths';
 
 const JOURNAL_FILE = 'journal.jsonl';
 
@@ -117,17 +117,18 @@ export type Resolution =
  * pane than the caller meant.
  */
 export function resolveAgentIn(agents: AgentRow[], address: string): Resolution {
-  for (const exact of [
+  for (const matches of [
     agents.filter((a) => a.pane_id === address),
     agents.filter((a) => a.name === address),
+    agents.filter((a) => a.workspace_id === address),
   ]) {
-    if (exact.length === 1) return { ok: true, agent: exact[0] };
-  }
-
-  const inWorkspace = agents.filter((a) => a.workspace_id === address);
-  if (inWorkspace.length === 1) return { ok: true, agent: inWorkspace[0] };
-  if (inWorkspace.length > 1) {
-    return { ok: false, reason: 'ambiguous', panes: inWorkspace.map((a) => a.pane_id ?? '?') };
+    if (matches.length === 1) return { ok: true, agent: matches[0] };
+    // Reported as ambiguous rather than falling through to the next kind of
+    // match: saying nothing exists when two do sends the caller looking for a
+    // typo instead of at the duplicate.
+    if (matches.length > 1) {
+      return { ok: false, reason: 'ambiguous', panes: matches.map((a) => a.pane_id ?? '?') };
+    }
   }
   return { ok: false, reason: 'none' };
 }

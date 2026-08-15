@@ -14,7 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AuthService } from '../services/auth';
 import { getDataDir } from '../utils/storage';
-import { stewardHomeDir, TARGET_FILE } from '../services/steward-runtime';
+import { stewardHomeDir, TARGET_FILE } from '../services/steward-paths';
 import { IDENTITY } from '../../../shared/identity';
 
 const TOKEN_USER = 'steward';

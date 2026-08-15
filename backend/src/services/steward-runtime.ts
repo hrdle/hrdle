@@ -18,6 +18,7 @@ import { addAgentStatusListener } from './herdr-agent-status';
 import { herdrBinaryPath, herdrRpc, herdrSessionName, herdrSocketPath } from './herdr-client';
 import { getStewardSettings, isStewardEnabled } from './steward-config';
 import { stewardPrompt } from './steward-prompt';
+import { stewardHomeDir, TARGET_FILE, type StewardTarget } from './steward-paths';
 import { pruneToSessions } from './steward-store';
 import { broadcastSteward } from '../routes/terminal-mux';
 import { atomicWriteFile, getDataDir } from '../utils/storage';
@@ -32,29 +33,6 @@ export function stewardSessionName(): string {
   return base ? `${base}-steward` : 'steward';
 }
 
-/** Where the observer runs, and where its own notes live. */
-export function stewardHomeDir(): string {
-  return join(getDataDir(), 'steward');
-}
-
-/**
- * What the observer should be looking at, written where its tools can read it.
- *
- * herdr exports `HERDR_SOCKET_PATH` into every pane, so a bare `herdr agent
- * list` inside the observer's pane enumerates the observer and nothing else
- * (measured). Pointing the workspace at the default socket instead is worse:
- * the agent integration hook then reports the observer's pane id to the very
- * server it is watching.
- */
-export const TARGET_FILE = 'target.json';
-
-export interface StewardTarget {
-  /** The herdr server the steward observes - the default one, i.e. the user's. */
-  socketPath: string;
-  session: string | null;
-  /** Where `hrdle steward` should deliver, so the observer never passes `-p`. */
-  port: number;
-}
 
 async function writeHome(port: number): Promise<void> {
   const target: StewardTarget = {
@@ -366,7 +344,14 @@ async function flushUndelivered(): Promise<void> {
 
 async function send(text: string): Promise<void> {
   const res = await herdrCli(['agent', 'prompt', OBSERVER, text]);
-  if (!res.ok) console.error(`[steward] wake failed: ${res.stderr.trim()}`);
+  if (res.ok) return;
+
+  // Held rather than logged and forgotten. An observer that exists can still
+  // refuse a prompt - a transient CLI failure, or the measured case of a pane
+  // showing a modal - and the text is an answer somebody gave.
+  console.error(`[steward] wake failed, holding for the next tick: ${res.stderr.trim()}`);
+  undelivered.push(text);
+  if (undelivered.length > UNDELIVERED_MAX) undelivered.shift();
 }
 
 export function startStewardRuntime(port: number): void {
