@@ -6,8 +6,11 @@
 // waits for, so the view moves mid-sentence, the reader pages back, and ten
 // seconds later it happens again.
 //
-// Paging back is the one move the clock never makes, so it is what says a
-// reader is here.
+// A manual scroll - either direction - says a reader is here, and the screen
+// is theirs until one of the explicit signals hands it back: the double-tap
+// home, or answering. Arriving at the newest message by swiping is not such a
+// signal (the page a reader spends longest on is often the newest one), and
+// neither is the conversation refreshing underneath them.
 
 import { describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
@@ -77,7 +80,7 @@ describe('the footer says which of the two the screen is in', () => {
     expect(screenText(c.state).footer).not.toContain('auto')
   })
 
-  test('it comes back with the clock', () => {
+  test('it comes back with the double-tap home, not with a down-swipe', async () => {
     const c = reading()
     c.state.conversation = [
       { role: 'assistant', content: 'the newest thing said' },
@@ -86,7 +89,14 @@ describe('the footer says which of the two the screen is in', () => {
     c.swipeUp()
     expect(screenText(c.state).footer).not.toContain('auto')
 
+    // Swiping down is still a hand on the ring.
     c.swipeDown()
+    expect(screenText(c.state).footer).not.toContain('auto')
+
+    // The double-tap home is the explicit signal.
+    c.swipeUp()
+    await c.doubleTap()
+    expect(c.state.conversationOffset).toBe(0)
     expect(screenText(c.state).footer).toContain('auto')
   })
 })
@@ -125,7 +135,9 @@ describe('the auto-advance clock yields to a reader', () => {
     expect(c.state.conversationPage).toBe(0)
   })
 
-  test('swiping back down to the newest message gives the clock the screen', () => {
+  test('swiping down to the newest message keeps the screen with the reader', () => {
+    // Catching up by hand used to switch the clock back on, and the view
+    // moved out from under the reader moments after they arrived.
     const c = reading()
     c.state.conversation = [
       { role: 'assistant', content: 'the newest thing said' },
@@ -139,19 +151,35 @@ describe('the auto-advance clock yields to a reader', () => {
 
     c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
     idleThenTick(c)
-    expect(c.state.conversationPage).toBeGreaterThan(0)
+    expect(c.state.conversationPage).toBe(0)
   })
 
-  test('a reload takes the pin with the position it was holding', async () => {
-    // New messages arriving at the newest edge replace what the reader had
-    // pinned. Held past that, one page back would switch the glance mode off
-    // for the rest of the session.
+  test('a refresh does not take the pin from a reader still holding it', async () => {
+    // The conversation reloads whenever the agent says anything. Releasing on
+    // reload handed the screen back to the clock mid-read - the exact fight
+    // the pin exists to end.
     const c = reading()
     idleThenTick(c)
     c.swipeUp()
+    const readingAt = c.state.conversationPage
 
     await inner(c).loadConversation()
     c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
+    idleThenTick(c)
+    expect(c.state.conversationPage).toBe(readingAt)
+  })
+
+  test('the double-tap home hands the screen back to the clock, rested or not', async () => {
+    const c = reading()
+    // Walk the clock to its rest (everything shown twice), then read by hand.
+    idleThenTick(c, 200)
+    c.swipeUp()
+
+    await c.doubleTap()
+    expect(c.state.conversationOffset).toBe(0)
+    // The reload emptied the transcript (no server here); put it back.
+    c.state.conversation = [{ role: 'assistant', content: LONG }] as ConversationMessage[]
+    // The rest state went with the pin: the clock starts over.
     idleThenTick(c)
     expect(c.state.conversationPage).toBeGreaterThan(0)
   })
