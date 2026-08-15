@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.135] - 2026-08-15
+
+### Changed
+- **The pane header's controls come from the shared definition too** (#379).
+  #8 put the session bar's controls in one table and left the pane header wired
+  by hand. The two surfaces looked like duplicates of each other and are not:
+  each layout draws a control either in its bar or on its pane header, never in
+  both - the phone carries in its bar what the other two carry on the pane
+  - So the table records `surface` per layout (`bar` / `pane` / nowhere) rather
+    than a plain "is it available", and the pane header reads it instead of
+    carrying conditions of its own
+  - Its buttons carry the shared test id now, so the responsive parity spec
+    checks both surfaces. A control that moves between them by accident fails
+    there, as one that vanishes already did
+  - This records today's shape and changes none of it. The gaps stay gaps: a
+    phone can neither zoom nor close a pane, and closing one of those is a
+    product decision for its own change
+
+### Fixed
+- **Handing the screen back from a pinned read now looks like every other way
+  of handing it back.** The release added in 0.3.134 left the notice strip
+  wherever the clock had walked it to, and redrew only after the conversation
+  had reloaded - so the `auto` that says the clock has the view appeared
+  whenever the network got round to it, which reads as a gesture that missed.
+  Both are what the two neighbouring paths already do; a reader cannot see
+  which path released the screen, so they cannot differ
+
+## [0.3.134] - 2026-08-15
+
+### Fixed
+- **A manual scroll owns the conversation on the glasses until an explicit
+  signal returns it** (contributed in #386 by @Chapapon). The auto-advance pin
+  used position as a proxy for attention, and it is a bad one: swiping down to
+  the newest message released it, and so did every conversation reload. A reader
+  catching up by hand had the view move out from under them moments after they
+  arrived, and reading the recap slowly was undone by the agent saying a single
+  line
+  - Any manual scroll pins the screen, in either direction. Only the explicit
+    signals hand it back: opening a conversation, the double-tap home, or
+    answering and speaking. A refresh never touches it
+  - The pin survives suspension as itself rather than being inferred from the
+    offset. A reader holding a later page of the newest message is at offset 0,
+    and the guess handed the clock the screen with no signal from anyone
+  - A scroll that moves *nothing* pins nothing. The newest reply fitting one
+    page, and the wearer swiping down to see whether there is another, would
+    otherwise freeze the transcript for good - on the gesture that until now
+    meant "catch me up", and with no sign on screen that it had happened
+  - The periodic refresh consults the pin rather than the position alone, so a
+    reader pinned at the newest message keeps the text they are reading
+  - The footer's `auto` flag keeps saying which of the two states the screen is
+    in, so a still screen stays accountable
+  - Glasses build: this is `glasses/` code, so it reaches the wearer with the
+    next EVEN Hub release rather than with this server. It is not in 0.0.80
+
 ## [0.3.133] - 2026-08-15
 
 ### Fixed

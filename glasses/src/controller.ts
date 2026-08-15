@@ -1308,13 +1308,20 @@ export class GlassesController {
         return
       }
       case 'doubleTap': {
-        // The pin is the innermost level, so it comes off first - ahead of the
-        // banner dismiss, which would otherwise swallow the gesture for as
-        // long as anything is queued and leave a pinned reader no way back to
-        // a live transcript.
+        // The pin is the innermost level, so it comes off ahead of the banner
+        // dismiss: behind the dismiss, the release was out of reach for as
+        // long as anything stayed queued - and with the refresh honoring the
+        // pin, so was a live transcript. The queued item keeps its turn; it
+        // takes the next double-tap.
         if (this.readerPinned) {
           st.conversationOffset = 0
           st.conversationPage = 0
+          // Handed back the same way every other release does it, because a
+          // reader cannot see which path released the screen: the notice goes
+          // back to its first window rather than sitting where the clock had
+          // walked it to, and the footer redraws before the load rather than
+          // after it - a gesture whose only sign is a word that appears when
+          // the network gets round to it reads as a gesture that missed.
           st.noticeWindow = 0
           this.resumeAutoAdvance()
           this.render()

@@ -234,6 +234,46 @@ describe('the auto-advance clock yields to a reader', () => {
     expect(c.state.mode).toBe('session_list')
   })
 
+  test('the release redraws before the load, and takes the notice back to its first window', async () => {
+    // Every other path that hands the screen back does both. A reader cannot
+    // see which path released it, so one that leaves the notice mid-scroll -
+    // or whose only sign is a word arriving whenever the network does - reads
+    // as a gesture that missed.
+    let renders = 0
+    let rendersWhenLoadBegan = -1
+    const p = platform()
+    p.render = () => { renders++ }
+    const c = new GlassesController(p)
+    c.state.sessions = [{ id: 's1', name: 'one', state: 'idle' }] as GlassesController['state']['sessions']
+    c.state.sessionIndex = 0
+    c.state.mode = 'conversation'
+    // Two short messages, so the up-and-back lands on a true 0/0: paging a long
+    // one leaves `conversationPage` above zero and the double-tap is caught by
+    // the branch above this one, which was never the branch in question.
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.state.conversationOffset = 0
+    c.state.conversationPage = 0
+    inner(c).loadConversation = async () => { rendersWhenLoadBegan = renders }
+
+    c.swipeUp()
+    c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
+    expect(screenText(c.state).footer).not.toContain('auto')
+    // After the swipes, not before: the swipe back to the newest message
+    // clears the window on its way, so a value set at the top would be gone
+    // before the double-tap ever saw it.
+    c.state.noticeWindow = 2
+
+    const before = renders
+    await c.doubleTap()
+    expect(c.state.noticeWindow).toBe(0)
+    expect(rendersWhenLoadBegan).toBeGreaterThan(before)
+  })
+
   test('the release stays in reach while a banner-grade item is queued', async () => {
     // The banner dismiss used to swallow the double-tap ahead of the pin, so
     // a pinned reader had no way back to a live transcript for as long as
@@ -262,20 +302,6 @@ describe('the auto-advance clock yields to a reader', () => {
     expect(c.state.mode).toBe('conversation')
     expect(screenText(c.state).footer).toContain('auto')
     expect(inner(c).queue.topWaiting()?.id).toBe('b1')
-  })
-
-  test('the release clears the notice window with the rest of the position', async () => {
-    const c = reading()
-    c.state.conversation = [
-      { role: 'assistant', content: 'the newest thing said' },
-      { role: 'user', content: 'the one before it' },
-    ] as ConversationMessage[]
-    c.swipeUp()
-    c.swipeDown()
-    c.state.noticeWindow = 3
-
-    await c.doubleTap()
-    expect(c.state.noticeWindow).toBe(0)
   })
 
   test('a release without a gesture un-rests the clock', () => {

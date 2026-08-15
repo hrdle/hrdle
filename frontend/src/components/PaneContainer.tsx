@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { LayoutVariant } from "../actions/sessionActions";
+import {
+	actionSurfaceOf,
+	actionTestId,
+	type LayoutVariant,
+} from "../actions/sessionActions";
 import { storageKey } from "../utils/app-storage";
 import {
 	type AgentProvider,
@@ -220,6 +224,11 @@ function TerminalPane({
 	const { t } = useTranslation();
 	const isTablet = variant === "tablet";
 	const isMobile = variant === "mobile";
+	// Which of this pane's controls this layout draws here rather than in the
+	// session bar. The answer is `SESSION_ACTIONS`, not a condition written at
+	// each button - that is what #8 fixed for the bar and this finishes.
+	const onPane = (id: string) => actionSurfaceOf(id, variant) === "pane";
+
 	const terminalRef = useRef<TerminalRef>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	// The tree stores composite keys; the wire (WS subscribe, REST paths) only
@@ -382,6 +391,9 @@ function TerminalPane({
 		setShowConversation((prev) => !prev);
 	}, []);
 
+	// Nothing to switch to: no agent has been running in this pane.
+	const chatDisabled = !showConversation && !conversationAvailable;
+
 	const { chatRequest, onChatOpenChange } = controlModeContext;
 	const appliedChatRequestRef = useRef(0);
 	useEffect(() => {
@@ -541,18 +553,17 @@ function TerminalPane({
 				)}
 				<div className={`flex items-center ${isTablet ? "gap-0" : "gap-1.5"}`}>
 					{/* Terminal / Chat single-icon toggle — shows the destination mode */}
-					{(() => {
-						const disabled = !showConversation && !conversationAvailable;
-						return (
+					{onPane("chat") && (
 							<button
 								type="button"
+								data-testid={actionTestId("chat")}
 								onClick={(e) => {
 									e.stopPropagation();
-									if (!disabled) handleToggleConversation();
+									if (!chatDisabled) handleToggleConversation();
 								}}
-								disabled={disabled}
+								disabled={chatDisabled}
 								className={`${isTablet ? TABLET_TAP_TARGET : "p-1"} rounded transition-colors ${
-									disabled
+									chatDisabled
 										? "text-white/20 cursor-not-allowed"
 										: "text-white/60 hover:text-th-text hover:bg-white/[0.06]"
 								}`}
@@ -577,12 +588,12 @@ function TerminalPane({
 									/>
 								)}
 							</button>
-						);
-					})()}
+					)}
 					{/* Open the matching Remote Control session in the Claude app */}
-					{session?.bridgeSessionId && (
+					{onPane("claude-app") && session?.bridgeSessionId && (
 						<button
 							type="button"
+							data-testid={actionTestId("claude-app")}
 							onClick={(e) => {
 								e.stopPropagation();
 								const bridgeId = session.bridgeSessionId;
@@ -599,10 +610,11 @@ function TerminalPane({
 						</button>
 					)}
 
-					{/* File browser button (desktop only) */}
-					{!isTablet && session?.currentPath && !showConversation && (
+					{/* File browser */}
+					{onPane("files") && session?.currentPath && !showConversation && (
 						<button
 							type="button"
+							data-testid={actionTestId("files")}
 							onClick={handleOpenFileViewer}
 							className="p-1.5 text-white/50 hover:text-th-text transition-colors"
 							title={t("files.title")}
@@ -624,10 +636,11 @@ function TerminalPane({
 							</svg>
 						</button>
 					)}
-					{/* Reload button (desktop only) */}
-					{!isTablet && sessionKey && !showConversation && (
+					{/* Reload */}
+					{onPane("reload") && sessionKey && !showConversation && (
 						<button
 							type="button"
+							data-testid={actionTestId("reload")}
 							onClick={handleReload}
 							className="p-1.5 text-white/50 hover:text-th-text transition-colors"
 							title={t("files.reload")}
@@ -651,12 +664,14 @@ function TerminalPane({
 					{/* Zoom button — only meaningful when there are multiple panes.
               Counted among the ones on screen: `panes` spans every tab, and
               zooming is about the layout in front of you. */}
-					{sessionKey &&
+					{onPane("zoom") &&
+						sessionKey &&
 						!showConversation &&
 						controlModeContext.zoomPane &&
 						visiblePanes(session).length > 1 && (
 							<button
 								type="button"
+								data-testid={actionTestId("zoom")}
 								onClick={(e) => {
 									e.stopPropagation();
 									controlModeContext.zoomPane?.(paneId);
@@ -701,11 +716,12 @@ function TerminalPane({
 								)}
 							</button>
 						)}
-					{/* Split buttons - desktop only */}
-					{!isTablet && (
+					{/* Split buttons */}
+					{onPane("split-h") && (
 						<div className="flex items-center" data-onboarding="split-pane">
 							<button
 								type="button"
+								data-testid={actionTestId("split-h")}
 								onClick={(e) => {
 									e.stopPropagation();
 									controlModeContext.splitPane(paneId, "h");
@@ -728,6 +744,7 @@ function TerminalPane({
 							</button>
 							<button
 								type="button"
+								data-testid={actionTestId("split-v")}
 								onClick={(e) => {
 									e.stopPropagation();
 									controlModeContext.splitPane(paneId, "v");
@@ -753,9 +770,10 @@ function TerminalPane({
               multiple panes on screen (the backend rejects closing the last
               one). Counting every tab's panes would offer to close the only
               pane the reader can see. */}
-					{visiblePanes(session).length > 1 && (
+					{onPane("close-pane") && visiblePanes(session).length > 1 && (
 						<button
 							type="button"
+							data-testid={actionTestId("close-pane")}
 							onClick={(e) => {
 								e.stopPropagation();
 								if (confirmClose) {
