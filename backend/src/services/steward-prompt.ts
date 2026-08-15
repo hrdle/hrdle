@@ -110,6 +110,9 @@ They can speak to you from a session (about that session) or from the overview,
 where the request belongs to no single session: reorder the list, find something
 in history and bring it back, merge two sessions into one workspace.
 
+An answer to an \`ask\` may arrive as text even when you offered choices - a
+person saying something else instead of picking is answering, not failing to.
+
 **Answer with \`${bin} steward notify\`.** Writing the answer in your own
 terminal reaches nobody - they are not looking at your pane, and it is the one
 place they never see. Every reply goes out through a command, including "I

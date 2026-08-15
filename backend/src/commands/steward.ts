@@ -74,10 +74,19 @@ async function resolvePort(options: StewardCliOptions & { port: number }): Promi
   return options.port;
 }
 
-/** Null when the server does not answer at all - too old, or not there. */
-async function stewardIsEnabled(port: number): Promise<boolean | null> {
+/**
+ * Null when the server does not answer at all - too old, or not there.
+ *
+ * Carries the token: `/enabled` is inside the authenticated glob, so a bare
+ * probe against a password-protected install gets 401 and reads as "no server",
+ * which is exactly the misdiagnosis the probe exists to prevent - on the
+ * configuration where it matters most.
+ */
+async function stewardIsEnabled(port: number, token: string | null): Promise<boolean | null> {
   try {
-    const res = await fetch(`https://localhost:${port}/api/steward/enabled`);
+    const res = await fetch(`https://localhost:${port}/api/steward/enabled`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) return null;
     return ((await res.json()) as { enabled?: boolean }).enabled === true;
   } catch {
@@ -106,7 +115,7 @@ async function api(port: number, method: string, path: string, body?: unknown): 
     // steward is on, so a server that has never heard of it fails here too -
     // and "not enabled" would be exactly the wrong thing to tell someone whose
     // server is simply too old.
-    const enabled = await stewardIsEnabled(port);
+    const enabled = await stewardIsEnabled(port, token);
     if (enabled === null) {
       throw new Error(`no ${IDENTITY.productName} answering on port ${port}, or one too old to have the steward`);
     }

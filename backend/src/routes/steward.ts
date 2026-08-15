@@ -118,7 +118,13 @@ steward.get('/', async (c) => {
   return c.json({ thread, lines });
 });
 
-/** Which model each half runs. Read through `/enabled`; written here. */
+/**
+ * Which model each half runs. Read through `/enabled`; written here.
+ *
+ * `appliesWhen` is in the response because a running observer keeps the model
+ * it was started with - the supervisor only starts one when none is there - so
+ * a settings screen would otherwise look broken.
+ */
 steward.put('/settings', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = z
@@ -128,7 +134,7 @@ steward.put('/settings', async (c) => {
     })
     .safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid settings', detail: parsed.error.issues }, 400);
-  return c.json({ settings: await setStewardSettings(parsed.data) });
+  return c.json({ settings: await setStewardSettings(parsed.data), appliesWhen: 'the observer next starts' });
 });
 
 steward.post('/thread', async (c) => {

@@ -36,7 +36,7 @@ const withLinesLock = createMutationLock();
 const withSessionsLock = createMutationLock();
 
 interface SessionsFile {
-  /** sessionId -> turns, most recently written last. */
+  /** sessionId -> its turns and when they were last written. */
   sessions: Record<string, SessionBucket>;
 }
 
@@ -217,6 +217,9 @@ export async function removeSession(sessionId: string): Promise<boolean> {
  * Filters inside each lock rather than deciding first and deleting after. The
  * two-step version could delete a session created between the caller reading
  * the live list and this running - which is a write the steward had just made.
+ * What remains is the caller's own snapshot: a workspace created after its
+ * `workspace.list` still loses its line here, and gets it back the next time
+ * the steward writes one.
  */
 export async function pruneToSessions(liveSessionIds: string[]): Promise<string[]> {
   const live = new Set(liveSessionIds);
