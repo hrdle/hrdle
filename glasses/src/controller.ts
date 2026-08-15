@@ -1308,6 +1308,20 @@ export class GlassesController {
         return
       }
       case 'doubleTap': {
+        // The pin is the innermost level, so it comes off first - ahead of the
+        // banner dismiss, which would otherwise swallow the gesture for as
+        // long as anything is queued and leave a pinned reader no way back to
+        // a live transcript.
+        if (this.readerPinned) {
+          st.conversationOffset = 0
+          st.conversationPage = 0
+          st.noticeWindow = 0
+          this.resumeAutoAdvance()
+          this.render()
+          await this.loadConversation()
+          this.render()
+          return
+        }
         // Double-tap on the overlay banner = dismiss ("later / on PC").
         const top = this.queue.topWaiting()
         if (top) {
@@ -1324,15 +1338,6 @@ export class GlassesController {
           st.noticeWindow = 0
           this.resumeAutoAdvance()
           this.render()
-          await this.loadConversation()
-          this.render()
-          return
-        }
-        if (this.readerPinned) {
-          // Pinned at the newest message - the state any down-swipe catch-up
-          // produces. The pin is a level of its own to back out of: one
-          // double-tap hands the screen back, the next one leaves.
-          this.resumeAutoAdvance()
           await this.loadConversation()
           this.render()
           return

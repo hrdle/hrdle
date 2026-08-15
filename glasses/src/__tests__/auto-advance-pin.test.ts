@@ -17,6 +17,7 @@ import { GlassesController } from '../controller.ts'
 import type { GlassesPlatform } from '../controller.ts'
 import { screenText } from '../display.ts'
 import type { ConversationMessage } from '../../../shared/types'
+import type { GlassesRelayItem } from '../types.ts'
 
 function platform(): GlassesPlatform {
   return {
@@ -38,6 +39,8 @@ type Internals = {
   loadConversation(): Promise<void>
   maybeRefreshConversation(): void
   followFocus(focus: { sessionId: string }): boolean
+  onRelayUpsert(item: GlassesRelayItem): void
+  queue: { topWaiting(): GlassesRelayItem | undefined }
 }
 
 const inner = (c: GlassesController) => c as unknown as Internals
@@ -229,6 +232,50 @@ describe('the auto-advance clock yields to a reader', () => {
 
     await c.doubleTap()
     expect(c.state.mode).toBe('session_list')
+  })
+
+  test('the release stays in reach while a banner-grade item is queued', async () => {
+    // The banner dismiss used to swallow the double-tap ahead of the pin, so
+    // a pinned reader had no way back to a live transcript for as long as
+    // anything was queued. The pin is the innermost level: it comes off first
+    // and the item stays queued for the next tap.
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
+    c.swipeDown()
+    expect(screenText(c.state).footer).not.toContain('auto')
+    inner(c).onRelayUpsert({
+      id: 'b1',
+      kind: 'waiting',
+      source: 'auto',
+      sessionId: 's1',
+      paneId: '%0',
+      text: 'Which migration?',
+      present: 'banner',
+      createdAt: 1,
+    } as GlassesRelayItem)
+
+    await c.doubleTap()
+    expect(c.state.mode).toBe('conversation')
+    expect(screenText(c.state).footer).toContain('auto')
+    expect(inner(c).queue.topWaiting()?.id).toBe('b1')
+  })
+
+  test('the release clears the notice window with the rest of the position', async () => {
+    const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
+    c.swipeDown()
+    c.state.noticeWindow = 3
+
+    await c.doubleTap()
+    expect(c.state.noticeWindow).toBe(0)
   })
 
   test('a release without a gesture un-rests the clock', () => {
