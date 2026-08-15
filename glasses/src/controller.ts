@@ -1332,7 +1332,16 @@ export class GlassesController {
           // Pinned at the newest message - the state any down-swipe catch-up
           // produces. The pin is a level of its own to back out of: one
           // double-tap hands the screen back, the next one leaves.
+          //
+          // Handed back the same way every other release does it, because a
+          // reader cannot see which path released the screen: the notice goes
+          // back to its first window rather than sitting where the clock had
+          // walked it to, and the footer redraws before the load rather than
+          // after it - a gesture whose only sign is a word that appears when
+          // the network gets round to it reads as a gesture that missed.
+          st.noticeWindow = 0
           this.resumeAutoAdvance()
+          this.render()
           await this.loadConversation()
           this.render()
           return

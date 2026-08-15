@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Handing the screen back from a pinned read now looks like every other way
+  of handing it back.** The release added in 0.3.134 left the notice strip
+  wherever the clock had walked it to, and redrew only after the conversation
+  had reloaded - so the `auto` that says the clock has the view appeared
+  whenever the network got round to it, which reads as a gesture that missed.
+  Both are what the two neighbouring paths already do; a reader cannot see
+  which path released the screen, so they cannot differ
+
 ## [0.3.134] - 2026-08-15
 
 ### Fixed
