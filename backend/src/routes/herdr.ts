@@ -6,13 +6,9 @@ export const herdr = new Hono();
 
 /**
  * Apply a pending herdr update: stop the supervised server, `herdr update`,
- * start it again — in that order, because `herdr update` refuses to replace the
- * binary while a server is answering.
- *
- * Deliberately POST-only and driven by an explicit dashboard click.
- * Restarting herdr re-creates every pane PTY — agent conversations come back
- * via `resume_agents_on_restore`, but running commands do not — so hrdle never
- * triggers this on its own, and never from the `hrdle update --auto` timer.
+ * start again (brew-managed installs instead `brew upgrade herdr` first, then
+ * bounce — `herdr update` refuses them with exit 1). Driven only by an
+ * explicit dashboard click: the restart re-creates every pane PTY.
  */
 herdr.post('/apply-update', async (c) => {
   // Every connected client is about to have its panes pulled out from under it,

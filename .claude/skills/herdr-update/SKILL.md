@@ -31,6 +31,24 @@ Step 6 is the second failure. **Before undoing anything, ask
 `herdr status server` which version the server is on.** If the swap already
 caused a restart, what needs reverting is the decision, not the binary.
 
+## Homebrew installs are their own case
+
+`herdr update` refuses a brew-managed binary outright — exit 1, with the reason
+only in the server log (`available through Homebrew, waiting for explicit
+install`). Measured on 2026-08-15: the dashboard button ran `herdr update`
+against `/opt/homebrew/bin/herdr`, failed between `launchctl bootout` and
+`bootstrap`, and left the launchd job gone — hrdle then auto-spawned an
+*unsupervised* server and the button disappeared (`canApply` needs a
+supervisor). Recovery was `launchctl bootstrap gui/<uid>
+~/Library/LaunchAgents/com.herdr.server.plist` after stopping the stray server.
+
+Since that day `apply-update` detects the Cellar symlink and runs
+`brew upgrade herdr` *before* the bounce instead (brew swaps a symlink and does
+not care about the socket, so panes stay alive through the download and a brew
+failure touches nothing), and a failed self-update restores the supervisor on
+the old version. On an older hrdle, do the same by hand: `brew upgrade herdr`,
+then restart the supervised server.
+
 ## The correct procedure
 
 ### 1. Check the impact, and get agreement if needed

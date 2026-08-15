@@ -3,18 +3,17 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   buildHerdrApplyCommands,
+  buildHerdrRestoreCommand,
   compareVersions,
+  isBrewManagedPath,
   parseHerdrStatus,
   parseLatestManifest,
   planHerdrApply,
 } from '../herdr-update';
 
 /**
- * `herdr update` swaps the binary but leaves the running server on the
- * old version, and hrdle spawns the binary to drive panes. The parser has to
- * catch that skew, but a herdr release that changes the status format must
- * degrade to silence — a false "restart your server" nag costs the user every
- * running command in every pane.
+ * The parser must catch binary-vs-server skew, but an unreadable status format
+ * must degrade to silence — a false restart nag costs every running command.
  */
 describe('parseHerdrStatus', () => {
   // Real `herdr status --json` output (herdr 0.7.3, protocol 16).
@@ -135,9 +134,8 @@ describe('parseHerdrStatus', () => {
 });
 
 /**
- * `--handoff` is banned: the handed-off server escapes systemd/launchd and
- * fights `Restart=always`. Unsupervised herdr gets no button at all, since
- * `systemctl restart` would be a silent no-op there.
+ * `--handoff` is banned (it escapes supervision), and unsupervised herdr gets
+ * no button at all.
  */
 describe('buildHerdrApplyCommands', () => {
   it('stops the systemd unit before updating, then starts it again', () => {
@@ -148,12 +146,7 @@ describe('buildHerdrApplyCommands', () => {
     ]);
   });
 
-  /**
-   * `herdr update` refuses to replace the binary while a server answers
-   * its socket, and refuses by exiting 0. Running it before the stop is why the
-   * apply button could never install anything — it downloaded the release,
-   * discarded it, and restarted every pane PTY while reporting success.
-   */
+  /** `herdr update` refuses (exit 0) while a server answers its socket, so the stop must come first. */
   it('never runs the update while the server is still up', () => {
     for (const supervisor of ['systemd', 'launchd'] as const) {
       const commands =
@@ -215,13 +208,79 @@ describe('buildHerdrApplyCommands', () => {
       }
     }
   });
+
+  /**
+   * `herdr update` refuses brew-managed binaries outright (exit 1), so the
+   * install goes through `brew upgrade` — before anything stops, since brew
+   * does not care about the socket and a brew failure must touch nothing.
+   */
+  it('upgrades a brew-managed install via brew, before the bounce', () => {
+    expect(
+      buildHerdrApplyCommands('launchd', '/opt/homebrew/bin/herdr', 501, 'install', undefined, '/opt/homebrew/bin/brew'),
+    ).toEqual([
+      ['/opt/homebrew/bin/brew', 'upgrade', 'herdr'],
+      ['launchctl', 'kickstart', '-k', 'gui/501/com.herdr.server'],
+    ]);
+    expect(
+      buildHerdrApplyCommands('systemd', '/home/linuxbrew/.linuxbrew/bin/herdr', 1000, 'install', undefined, '/home/linuxbrew/.linuxbrew/bin/brew'),
+    ).toEqual([
+      ['/home/linuxbrew/.linuxbrew/bin/brew', 'upgrade', 'herdr'],
+      ['systemctl', '--user', 'restart', 'herdr'],
+    ]);
+  });
+
+  /** The brew path never runs `herdr update`, so it never boots the job out and needs no plist. */
+  it('needs no launchd plist for a brew install', () => {
+    const commands =
+      buildHerdrApplyCommands('launchd', 'herdr', 501, 'install', undefined, '/opt/homebrew/bin/brew') ?? [];
+    expect(commands.length).toBeGreaterThan(0);
+    expect(commands.flat()).not.toContain('bootout');
+    expect(commands.flat()).not.toContain('update');
+  });
 });
 
 /**
- * with the binary and the server on the same old version there is no skew
- * to detect, so this manifest is the only thing that can say an update exists.
- * A format we cannot read must produce silence rather than a version prompt
- * that would restart every pane on the strength of a misparse.
+ * What apply() runs when a failure mid-sequence left the server stopped, so
+ * the supervisor is not stranded booted-out.
+ */
+describe('buildHerdrRestoreCommand', () => {
+  it('restarts the systemd unit', () => {
+    expect(buildHerdrRestoreCommand('systemd', 1000)).toEqual(['systemctl', '--user', 'start', 'herdr']);
+  });
+
+  it('bootstraps the launchd job from its plist', () => {
+    expect(buildHerdrRestoreCommand('launchd', 501, '/Users/u/Library/LaunchAgents/com.herdr.server.plist')).toEqual([
+      'launchctl',
+      'bootstrap',
+      'gui/501',
+      '/Users/u/Library/LaunchAgents/com.herdr.server.plist',
+    ]);
+  });
+
+  it('has nothing to run without a plist or supervisor', () => {
+    expect(buildHerdrRestoreCommand('launchd', 501)).toBeNull();
+    expect(buildHerdrRestoreCommand('unmanaged', 501)).toBeNull();
+  });
+});
+
+describe('isBrewManagedPath', () => {
+  it('recognizes a binary resolved into a Homebrew Cellar', () => {
+    expect(isBrewManagedPath('/opt/homebrew/Cellar/herdr/0.7.4/bin/herdr')).toBe(true);
+    expect(isBrewManagedPath('/usr/local/Cellar/herdr/0.8.0/bin/herdr')).toBe(true);
+    expect(isBrewManagedPath('/home/linuxbrew/.linuxbrew/Cellar/herdr/0.8.0/bin/herdr')).toBe(true);
+  });
+
+  it('leaves ordinary installs alone', () => {
+    expect(isBrewManagedPath('/home/u/.local/bin/herdr')).toBe(false);
+    expect(isBrewManagedPath('/usr/local/bin/herdr')).toBe(false);
+    // Another formula's Cellar is not herdr's.
+    expect(isBrewManagedPath('/opt/homebrew/Cellar/other/1.0/bin/herdr')).toBe(false);
+  });
+});
+
+/**
+ * The manifest is the only thing that can say an update exists; a format we
+ * cannot read must produce silence, not a misparsed version prompt.
  */
 describe('parseLatestManifest', () => {
   it('reads the version and protocol herdr publishes', () => {
@@ -251,12 +310,7 @@ describe('parseLatestManifest', () => {
   });
 });
 
-/**
- * The decision the old apply never made. It ran the same two commands on every
- * press, so a click with nothing to install still restarted every pane PTY and
- * killed whatever was running in them — measured on 2026-08-10 as fifteen
- * workspaces and eighteen agents restarted to install nothing.
- */
+/** A press with nothing to install must restart nothing. */
 describe('planHerdrApply', () => {
   it('does nothing when the binary is current and the server matches it', () => {
     expect(
@@ -329,12 +383,7 @@ describe('compareVersions', () => {
   });
 });
 
-/**
- * `hrdle update --auto` runs unattended from a timer. Restarting herdr there
- * would silently kill whatever builds/tests/long jobs were running in every
- * pane overnight, so the auto path must never reach herdr — hence this guard
- * on the source itself rather than on behavior.
- */
+/** The unattended timer must never restart herdr; guarded on the source itself. */
 describe('hrdle update timer', () => {
   it('never touches herdr', () => {
     const source = readFileSync(join(import.meta.dir, '../../commands/update.ts'), 'utf-8');
