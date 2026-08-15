@@ -1,17 +1,17 @@
 /** biome-ignore-all lint/correctness/useExhaustiveDependencies: depends on refs and setters that React guarantees stable; adding them would cause unintended re-runs */
-import {
-	ChevronDown,
-} from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	paneIdFromLayout,
+	type PaneInfo,
 	type PaneViewport,
 	samePeerId,
 	type SessionState,
 	type SessionTheme,
 	type TmuxLayoutNode,
 } from "../../../shared/types";
+import type { LayoutVariant } from "../actions/sessionActions";
 import { useMultiplexedTerminal } from "../hooks/useMultiplexedTerminal";
 import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
@@ -29,6 +29,7 @@ import { fireHookNotification } from "../utils/hookNotification";
 import { imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
 import { makePseudoViewport } from "../utils/viewport-pseudo";
+import { MobileDashboard } from "./dashboard/MobileDashboard";
 import { DashboardPanel } from "./DashboardPanel";
 import { FloatingKeyboard, type FloatingKeyboardRef } from "./FloatingKeyboard";
 import { FileViewer } from "./files/FileViewer";
@@ -50,6 +51,7 @@ interface OpenSession {
 	currentPath?: string;
 	ccSessionId?: string;
 	theme?: SessionTheme;
+	panes?: PaneInfo[];
 	// Multi-server: peer this session belongs to. Unset = local Hub.
 	peerId?: string;
 }
@@ -68,11 +70,24 @@ interface DesktopLayoutProps {
 		requestId: number;
 	} | null;
 	onSessionStateChange: (sessionKey: string, state: SessionState) => void;
-	isTablet?: boolean;
+	/** Which screen this is drawing for. Every layout difference below hangs off
+	 *  this one value rather than off a boolean per difference. */
+	variant?: LayoutVariant;
 	keyboardControlRef?: React.RefObject<{
 		open: () => void;
 		close: () => void;
 	} | null>;
+	/** Mobile only: open the app's session list. Which sessions are open and
+	 *  which one is active is the app's state, not the layout's. */
+	onShowSessionList?: () => void;
+	/** Mobile only: whether that list is on screen, so the file browser can get
+	 *  out from under it and the back gesture can close it. */
+	sessionListOpen?: boolean;
+	onCloseSessionList?: () => void;
+	/** Focus one pane of the session being switched to - the session list can
+	 *  name a pane, not just a workspace. Held until the server's tree actually
+	 *  carries that pane, which is several messages after the switch. */
+	paneFocusRequest?: { paneId: string; requestId: number } | null;
 }
 
 // Generate unique ID
@@ -371,14 +386,35 @@ function extractPaneSizes(
 
 const KEYBOARD_VISIBLE_KEY = storageKey("floating-keyboard-visible");
 
+// Agent colour to a Tailwind text class. The names are the server's; the class
+// strings have to be written out because Tailwind scans source text.
+const AGENT_TEXT_COLOR: Record<string, string> = {
+	red: "text-red-400",
+	orange: "text-orange-400",
+	amber: "text-amber-400",
+	green: "text-green-400",
+	teal: "text-teal-400",
+	blue: "text-blue-400",
+	cyan: "text-cyan-400",
+	indigo: "text-indigo-400",
+	purple: "text-purple-400",
+	pink: "text-pink-400",
+};
+
 export function DesktopLayout({
 	sessions: propSessions,
 	activeSessionKey,
 	sessionSwitchRequest,
 	onSessionStateChange,
-	isTablet = false,
+	variant = "desktop",
 	keyboardControlRef,
+	onShowSessionList,
+	sessionListOpen = false,
+	onCloseSessionList,
+	paneFocusRequest,
 }: DesktopLayoutProps) {
+	const isTablet = variant === "tablet";
+	const isMobile = variant === "mobile";
 	const { t } = useTranslation();
 	const terminalRefs = useRef<Map<string, TerminalRef | null>>(new Map());
 	const floatingKeyboardRef = useRef<FloatingKeyboardRef>(null);
@@ -412,6 +448,7 @@ export function DesktopLayout({
 								panes: apiSession.panes,
 								peerId: apiSession.peerId ?? propSession.peerId,
 								bridgeSessionId: apiSession.bridgeSessionId,
+								indicatorState: apiSession.indicatorState,
 							}
 						: {
 								id: apiSession.id,
@@ -427,6 +464,7 @@ export function DesktopLayout({
 								panes: apiSession.panes,
 								peerId: apiSession.peerId,
 								bridgeSessionId: apiSession.bridgeSessionId,
+								indicatorState: apiSession.indicatorState,
 							};
 				})
 			: propSessions;
@@ -460,11 +498,35 @@ export function DesktopLayout({
 	const [showSessionModal, setShowSessionModal] = useState(false);
 	const [showDashboard, setShowDashboard] = useState(false);
 
+	// Which panes are showing a transcript rather than a terminal. The panes own
+	// that state; this is the layout's copy of it, so the file browser's chat
+	// button and the phone's back gesture have something to act on.
+	const [chatOpenPanes, setChatOpenPanes] = useState<Set<string>>(new Set());
+	const handleChatOpenChange = useCallback((paneId: string, open: boolean) => {
+		setChatOpenPanes((prev) => {
+			if (prev.has(paneId) === open) return prev;
+			const next = new Set(prev);
+			if (open) next.add(paneId);
+			else next.delete(paneId);
+			return next;
+		});
+	}, []);
+	const [chatRequest, setChatRequest] = useState<{
+		paneId: string;
+		open: boolean;
+		requestId: number;
+	} | null>(null);
+	const chatRequestIdRef = useRef(0);
+	const requestPaneChat = useCallback((paneId: string, open: boolean) => {
+		chatRequestIdRef.current += 1;
+		setChatRequest({ paneId, open, requestId: chatRequestIdRef.current });
+	}, []);
+
 	// Remote-control mode (PC only): stop the live terminal render so the local
 	// herdr client keeps ownership of the panes. Tablet keeps normal terminals.
 	const { remoteControl: remoteControlFlag, toggleRemoteControl } =
 		useRemoteControlMode();
-	const remoteControl = !isTablet && remoteControlFlag;
+	const remoteControl = variant === "desktop" && remoteControlFlag;
 	const remoteControlRef = useRef(remoteControl);
 	remoteControlRef.current = remoteControl;
 
@@ -482,9 +544,12 @@ export function DesktopLayout({
 	// Keyboard elevation for onboarding (raises z-index above overlay)
 	const [keyboardElevated, setKeyboardElevated] = useState(false);
 
-	// Register keyboard control for onboarding
+	// Register keyboard control for onboarding. Which keyboard that is depends on
+	// the screen: a tablet's floats over the panes, a phone's is the InputBar
+	// inside the one pane it is showing.
 	useEffect(() => {
-		if (keyboardControlRef && isTablet) {
+		if (!keyboardControlRef) return;
+		if (isTablet) {
 			keyboardControlRef.current = {
 				open: () => {
 					setShowKeyboard(true);
@@ -495,13 +560,18 @@ export function DesktopLayout({
 					setKeyboardElevated(false);
 				},
 			};
+		} else if (isMobile) {
+			keyboardControlRef.current = {
+				open: () =>
+					terminalRefs.current.get(activePaneRef.current)?.showKeyboard(),
+				close: () =>
+					terminalRefs.current.get(activePaneRef.current)?.hideKeyboard(),
+			};
 		}
 		return () => {
-			if (keyboardControlRef) {
-				keyboardControlRef.current = null;
-			}
+			keyboardControlRef.current = null;
 		};
-	}, [keyboardControlRef, isTablet]);
+	}, [keyboardControlRef, isTablet, isMobile]);
 
 	// Reload the page to remount every terminal pane from a fresh viewport
 	const handleGlobalReload = useCallback(() => {
@@ -515,8 +585,14 @@ export function DesktopLayout({
 		}
 	}, [showKeyboard, isTablet]);
 
-	// Load/save desktop state.
+	// Load/save the pane tree.
+	//
+	// The phone keeps none of this. Its tree is always the one session the app
+	// says is active, so a remembered tree would only be a second opinion about
+	// that - and it shares a browser (and this key) with the desktop, whose tree
+	// it would overwrite.
 	const [desktopState, setDesktopState] = useState<DesktopState>(() => {
+		if (isMobile) return createInitialState(activeSessionKey);
 		try {
 			const saved = localStorage.getItem(DESKTOP_STATE_KEY);
 			if (saved) {
@@ -533,8 +609,23 @@ export function DesktopLayout({
 
 	// Save state on change
 	useEffect(() => {
+		if (isMobile) return;
 		localStorage.setItem(DESKTOP_STATE_KEY, JSON.stringify(desktopState));
-	}, [desktopState]);
+	}, [desktopState, isMobile]);
+
+	// The phone shows one session, and which one is the app's decision (the
+	// session list, a notification, a restored last session). Desktop and tablet
+	// treat the same prop as an initial value so a persisted tree survives.
+	const appliedMobileSessionKeyRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!isMobile || !activeSessionKey) return;
+		if (appliedMobileSessionKeyRef.current === activeSessionKey) return;
+		appliedMobileSessionKeyRef.current = activeSessionKey;
+		setDesktopState((prev) => ({
+			...prev,
+			root: updateAllSessionKeys(prev.root, activeSessionKey),
+		}));
+	}, [isMobile, activeSessionKey]);
 
 	// Keep activePaneRef in sync
 	useEffect(() => {
@@ -782,8 +873,7 @@ export function DesktopLayout({
 		},
 		onConnect: () => {
 			// Declare the device so this client can own the glasses focus.
-			// Mobile does the same from TerminalPage.
-			controlTerminal.sendClientInfo(isTablet ? "tablet" : "desktop");
+			controlTerminal.sendClientInfo(variant);
 			// Send resize with retries for terminal refresh on session switch.
 			// The first resize triggers the backend to emit initial state snapshots.
 			const delays = [100, 300, 600, 1000];
@@ -872,6 +962,8 @@ export function DesktopLayout({
 		}
 		setControlLayout(null);
 		setZoomedPaneId(null);
+		mobileZoomIntentRef.current = null;
+		followedMobileZoomRef.current = null;
 		lastViewportRef.current.clear();
 		paneOffsetRef.current.clear();
 		// paneCallbacksRef is deliberately NOT cleared: registrations are
@@ -1170,12 +1262,23 @@ export function DesktopLayout({
 			if (isTablet) {
 				setShowKeyboard(true);
 				setTimeout(() => floatingKeyboardRef.current?.setInputText(text), 200);
+			} else if (isMobile) {
+				terminalRefs.current
+					.get(activePaneRef.current)
+					?.setInputText?.(text);
 			} else {
 				navigator.clipboard.writeText(text).catch(() => {});
 			}
 		},
-		onShowSessions: () => setShowSessionModal(true),
+		// The phone's list is the app's own screen: it decides which session is
+		// open, which is more than picking one for a pane.
+		onShowSessions: isMobile
+			? onShowSessionList
+			: () => setShowSessionModal(true),
+		onShowDashboard: () => setShowDashboard(true),
 		onOpenFileViewer: openFileViewer,
+		chatRequest,
+		onChatOpenChange: handleChatOpenChange,
 		remoteControl,
 	};
 
@@ -1516,6 +1619,9 @@ export function DesktopLayout({
 			controlTerminalRef.current.selectPane(paneId);
 		}
 	}, []);
+	// Reached from an effect declared above this point.
+	const handleFocusPaneRef = useRef(handleFocusPane);
+	handleFocusPaneRef.current = handleFocusPane;
 
 	const handleSelectSessionForPane = useCallback(
 		(paneId: string, sessionKey?: string) => {
@@ -1613,6 +1719,63 @@ export function DesktopLayout({
 		return desktopState.root;
 	}, [desktopState.root, zoomedPaneId]);
 
+	// The panes the phone's tab bar offers, in tree order.
+	const mobilePaneIds = useMemo(
+		() => (isMobile ? getAllPaneIds(desktopState.root) : []),
+		[isMobile, desktopState.root],
+	);
+
+	// A phone shows exactly one pane - a split of 393px is two unusable
+	// terminals - and it gets there by zooming, not by rendering one leaf of a
+	// split. The PTY has to be the size of the screen, and only the server's
+	// zoom makes it that: the resize this client sends is the whole window's,
+	// which a split would then divide again.
+	const mobileZoomIntentRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!isMobile) return;
+		const active = desktopState.activePane;
+		if (mobilePaneIds.length <= 1 || !mobilePaneIds.includes(active)) return;
+		if (mobileZoomIntentRef.current === active) return;
+		mobileZoomIntentRef.current = active;
+		if (zoomedPaneId !== active) {
+			controlTerminalRef.current.zoomPane(active, true);
+		}
+	}, [isMobile, desktopState.activePane, mobilePaneIds, zoomedPaneId]);
+
+	const [pendingPaneFocus, setPendingPaneFocus] = useState<string | null>(null);
+	const appliedPaneFocusRef = useRef(0);
+	useEffect(() => {
+		if (
+			!paneFocusRequest ||
+			paneFocusRequest.requestId === appliedPaneFocusRef.current
+		)
+			return;
+		appliedPaneFocusRef.current = paneFocusRequest.requestId;
+		setPendingPaneFocus(paneFocusRequest.paneId);
+	}, [paneFocusRequest]);
+	useEffect(() => {
+		if (!pendingPaneFocus) return;
+		if (!findPaneById(desktopState.root, pendingPaneFocus)) return;
+		setPendingPaneFocus(null);
+		handleFocusPaneRef.current(pendingPaneFocus);
+	}, [pendingPaneFocus, desktopState.root]);
+
+	// A reload restores whatever the server had zoomed. Follow it once so the
+	// tab bar marks the pane that is actually on screen; after that the bar owns
+	// the choice again.
+	const followedMobileZoomRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!isMobile || !zoomedPaneId) return;
+		if (followedMobileZoomRef.current === zoomedPaneId) return;
+		followedMobileZoomRef.current = zoomedPaneId;
+		mobileZoomIntentRef.current = zoomedPaneId;
+		setDesktopState((prev) =>
+			prev.activePane === zoomedPaneId
+				? prev
+				: { ...prev, activePane: zoomedPaneId },
+		);
+	}, [isMobile, zoomedPaneId]);
+
 	// Get active session for file viewer — the pane's composite key carries the
 	// owning peer, so a same-name session on another peer can't match.
 	const activePane = findPaneById(desktopState.root, desktopState.activePane);
@@ -1628,6 +1791,61 @@ export function DesktopLayout({
 					samePeerId(s.peerId, activePaneTarget.peerId),
 			) ?? null)
 		: null;
+
+	// The phone's back gesture closes what is on top rather than leaving the app.
+	// Once something has been opened there is always a history entry to pop, and
+	// the handler pushes a new one each time so the trap stays armed.
+	//
+	// Desktop and tablet are left alone: nothing here ever pushes on those, so
+	// back has always walked out of the app and this would silently change that.
+	const fileViewerVisible = activeFileViewerDir
+		? fileViewerOpenDirs.has(activeFileViewerDir)
+		: false;
+	const chatPaneOnScreen = chatOpenPanes.has(desktopState.activePane)
+		? desktopState.activePane
+		: null;
+	useEffect(() => {
+		if (!isMobile) return;
+		const handlePopState = () => {
+			if (sessionListOpen) {
+				onCloseSessionList?.();
+			} else if (fileViewerVisible) {
+				if (activeFileViewerDir) closeFileViewer(activeFileViewerDir);
+			} else if (chatPaneOnScreen) {
+				requestPaneChat(chatPaneOnScreen, false);
+			}
+			window.history.pushState({ view: "terminal" }, "", window.location.href);
+		};
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, [
+		isMobile,
+		sessionListOpen,
+		onCloseSessionList,
+		fileViewerVisible,
+		activeFileViewerDir,
+		closeFileViewer,
+		chatPaneOnScreen,
+		requestPaneChat,
+	]);
+
+	useEffect(() => {
+		if (!isMobile) return;
+		if (sessionListOpen || fileViewerVisible || chatPaneOnScreen) {
+			window.history.pushState({ view: "overlay" }, "", window.location.href);
+		}
+	}, [isMobile, sessionListOpen, fileViewerVisible, chatPaneOnScreen]);
+
+	// The pane the file browser's chat button would switch, when there is a
+	// transcript to switch to. Mobile only: chat is one of the phone's actions,
+	// and the other two layouts toggle it from the pane header instead.
+	const activeChatPane = (() => {
+		if (!isMobile) return null;
+		const pane = activeSession?.panes?.find(
+			(p) => p.paneId === desktopState.activePane,
+		);
+		return pane?.agent && pane.agentSessionId ? desktopState.activePane : null;
+	})();
 
 	// An open file browser follows the session the pane is showing. Without
 	// this it keeps whichever directory it was opened for while the header
@@ -1673,14 +1891,13 @@ export function DesktopLayout({
 	// e2e matrix asserts on it so a viewport can't silently fall through to the
 	// wrong one.
 	return (
-		<div
-			className="h-full flex bg-th-bg"
-			data-layout={isTablet ? "tablet" : "desktop"}
-		>
+		<div className="h-full flex bg-th-bg" data-layout={variant}>
 			{/* Main content */}
 			<div className="flex-1 flex flex-col min-w-0">
-				{/* Header - desktop: minimal icons, tablet: full toolbar */}
-				{!isTablet && (
+				{/* Header - desktop: minimal icons, tablet: full toolbar. The phone
+				    has none: its bar is at the bottom, under the thumb, and a strip
+				    here would cost rows on the smallest screen there is. */}
+				{variant === "desktop" && (
 					<div className="flex items-center justify-end px-2 py-0.5 bg-[#0a0a0a] border-b border-white/[0.06] shrink-0 select-none">
 						<SessionActionBar
 							variant="desktop"
@@ -1793,26 +2010,68 @@ export function DesktopLayout({
 						sessions={sessions}
 						terminalRefs={terminalRefs}
 						globalReloadKey={terminalGeneration}
-						isTablet={isTablet}
+						variant={variant}
 						controlModeContext={controlModeContext}
 					/>
 				</div>
+
+				{/* Pane tabs - the phone's substitute for a split, shown only when
+				    there is more than one pane to choose between. */}
+				{isMobile && mobilePaneIds.length > 1 && (
+					<div className="flex bg-th-surface border-t border-th-border shrink-0 overflow-x-auto">
+						{mobilePaneIds.map((paneId) => {
+							const isActive = paneId === desktopState.activePane;
+							const apiPane = activeSession?.panes?.find(
+								(p) => p.paneId === paneId,
+							);
+							// Priority: agentName > command > paneId
+							const label =
+								apiPane?.agentName || apiPane?.currentCommand || paneId;
+							const colorCls =
+								apiPane?.agentColor && AGENT_TEXT_COLOR[apiPane.agentColor];
+							return (
+								<button
+									type="button"
+									key={paneId}
+									onClick={() => handleFocusPane(paneId)}
+									className={`px-3 py-1.5 text-xs font-mono whitespace-nowrap transition-colors ${
+										isActive
+											? `${colorCls || "text-th-text"} bg-th-surface-hover border-t-2 border-blue-400`
+											: `${colorCls || "text-th-text-secondary"} hover:text-th-text hover:bg-th-surface-hover/50`
+									}`}
+								>
+									{label}
+								</button>
+							);
+						})}
+					</div>
+				)}
 			</div>
 
-			{/* Dashboard side panel */}
-			<DashboardPanel
-				isOpen={showDashboard}
-				onClose={() => setShowDashboard(false)}
-				isTablet={isTablet}
-			/>
+			{/* Dashboard - a side panel beside the terminal, except on a phone,
+			    where it takes the screen. */}
+			{isMobile ? (
+				showDashboard && (
+					<MobileDashboard onClose={() => setShowDashboard(false)} />
+				)
+			) : (
+				<DashboardPanel
+					isOpen={showDashboard}
+					onClose={() => setShowDashboard(false)}
+					isTablet={variant === "tablet"}
+				/>
+			)}
 
-			{/* Session modal */}
-			<SessionModal
-				isOpen={showSessionModal}
-				onClose={() => setShowSessionModal(false)}
-				onSelectSession={handleModalSelectSession}
-				isTablet={isTablet}
-			/>
+			{/* Session modal. The phone has no use for it - its list is a screen of
+			    the app's own, opened through onShowSessionList. */}
+			{!isMobile && (
+				<SessionModal
+					isOpen={showSessionModal}
+					onClose={() => setShowSessionModal(false)}
+					onSelectSession={handleModalSelectSession}
+					isTablet={variant === "tablet"}
+				/>
+			)}
 
 			{/* File Viewer Modal - per-session instances kept mounted */}
 			{fileViewerDirs.map(({ dir, peerId }) => (
@@ -1824,25 +2083,22 @@ export function DesktopLayout({
 					hidden={
 						!fileViewerOpenDirs.has(dir) ||
 						dir !== activeFileViewerDir ||
-						showSessionModal
+						(isMobile ? sessionListOpen : showSessionModal)
 					}
 					onCopyPrompt={(text) => {
-						if (isTablet) {
-							setShowKeyboard(true);
-							setTimeout(
-								() => floatingKeyboardRef.current?.setInputText(text),
-								200,
-							);
-						} else {
-							navigator.clipboard.writeText(text).catch(() => {});
-						}
+						controlModeContext.onCopyPrompt?.(text);
 						closeFileViewer(dir);
 					}}
 					onShowSessions={() => {
-						setShowSessionModal(true);
+						controlModeContext.onShowSessions?.();
 					}}
 					sessionName={activeSession?.name}
 					sessionStatus={activeSession?.state}
+					onShowConversation={
+						activeChatPane
+							? () => requestPaneChat(activeChatPane, true)
+							: undefined
+					}
 					onShowDashboard={() => setShowDashboard((prev) => !prev)}
 				/>
 			))}

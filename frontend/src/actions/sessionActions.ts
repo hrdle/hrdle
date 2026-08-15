@@ -16,10 +16,8 @@ import type { LucideIcon } from "lucide-react";
 /**
  * The layouts an action can appear on.
  *
- * Mobile renders its own component tree; tablet and desktop share
- * `DesktopLayout` and differ by `isTablet`. Three names rather than two,
- * because what a control should do is a question about the screen, not about
- * which file happens to draw it.
+ * All three share `DesktopLayout` and differ by `variant`. Three names because
+ * what a control should do is a question about the screen.
  */
 export type LayoutVariant = "mobile" | "tablet" | "desktop";
 
@@ -46,11 +44,11 @@ const ALL_LAYOUTS = ["mobile", "tablet", "desktop"] as const;
 /**
  * Every control in a session bar, in one place.
  *
- * Mobile and desktop/tablet are separate component trees, so each action used
- * to be wired by hand into each of them - and a new one reached whichever tree
- * the person adding it happened to be looking at. That is the source of "the
- * phone never got it": not carelessness, but a structure with no single place
- * to put the answer.
+ * Mobile and desktop/tablet used to be separate component trees, so each action
+ * was wired by hand into each of them - and a new one reached whichever tree the
+ * person adding it happened to be looking at. That is the source of "the phone
+ * never got it": not carelessness, but a structure with no single place to put
+ * the answer. The trees are one now; this table is still where the answer goes.
  *
  * `availableOn` records where each action is **today**, not where it ought to
  * be. Several of the gaps below look like omissions rather than decisions -

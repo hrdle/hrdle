@@ -373,7 +373,10 @@ describe('a glasses subscription is not a claim', () => {
   });
 
   test('an ordinary client is unaffected', () => {
-    const data = { focusSessionId: undefined, focusAt: undefined };
+    const data: { focusSessionId?: string; focusAt?: number } = {
+      focusSessionId: undefined,
+      focusAt: undefined,
+    };
     applySubscribeFocus(data, { sessionId: 'w4Y' }, 999);
     expect(data).toEqual({ focusSessionId: 'w4Y', focusAt: 999 });
   });
