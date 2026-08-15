@@ -12,21 +12,15 @@ import { bootApp } from './fixtures';
 const MIN_TOUCH_PX = 32;
 
 /**
- * Controls that were already under the bar when this check landed. They are
- * recorded rather than silently tolerated: the point of this spec is to stop
- * *new* ones, and fixing these three means reflowing session bars that need
- * their own visual pass at every width.
+ * Nothing is exempt.
  *
- * Tracked in #514. Delete entries as they are fixed; never add one.
+ * Three controls were under the bar when this check landed and were recorded
+ * here rather than silently tolerated; all three were fixed in #9. The list
+ * stays as the place a regression is *not* allowed to be parked: an entry here
+ * is a control someone decided was acceptable to leave untappable, which is a
+ * decision this spec exists to prevent.
  */
-const KNOWN_TOO_SMALL = [
-  // mobile: session switcher in the bottom bar
-  'div.h-full.w-full > div.fixed.bottom-0 > div.flex.items-center > button.flex.flex-1',
-  // tablet: session selector in the header
-  'div.flex-1.flex > div.shrink-0.select-none > div.flex.items-center > button.flex.items-center',
-  // tablet: chat/terminal toggle in the pane header
-  'div.h-full.flex > div.flex.items-center > div.flex.items-center > button.p-2.rounded',
-];
+const KNOWN_TOO_SMALL: string[] = [];
 
 test.describe('touch targets', () => {
   test.skip(

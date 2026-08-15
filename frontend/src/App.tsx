@@ -1102,7 +1102,7 @@ export function App() {
 			<button
 				type="button"
 				onClick={() => handleShowSessionList()}
-				className="flex flex-1 min-w-0 items-center gap-1.5 px-2 py-1 rounded-md hover:bg-white/[0.06] transition-colors"
+				className="flex flex-1 min-w-0 min-h-10 items-center gap-1.5 px-2 py-1 rounded-md hover:bg-white/[0.06] transition-colors"
 				data-onboarding="session-list"
 			>
 				<div

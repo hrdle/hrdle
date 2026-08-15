@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **The three controls that were too small to tap are fixed** (#9). They were
+  under the 32px bar when the touch-target check landed and were recorded as a
+  baseline rather than tolerated silently; the allow list is now empty, and an
+  entry in it is once again a decision nobody is allowed to make quietly
+  - The session selector in the phone's bottom bar (243x27), the one in the
+    tablet header (78x27), and the chat/terminal toggle in the tablet pane
+    header (28x28)
+  - Padding could not fix the last of them: the icon is 14px and `p-2` is 7px a
+    side, because the app scales its spacing off a 14px root font rather than
+    16px. A minimum height in the same units is what actually reaches the bar
+  - Both bars grow by 8px, which is the cost the issue was opened to weigh.
+    Checked at phone and tablet widths
+
+### Fixed
 - **A glasses follow no longer writes a claim it never makes** (#360). The
   glasses subscribe because the election sent them somewhere, so their
   subscriptions are its own output - but one still wrote the claim fields and
