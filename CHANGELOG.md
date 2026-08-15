@@ -31,6 +31,12 @@ All notable changes to this project will be documented in this file.
   also how the steward tells its own doing from its owner's. Answering a
   permission prompt, reaching a shell pane and killing an agent are absent by
   construction, not by instruction.
+- **The observer's prompt.** Written by hrdle into the steward's working
+  directory and rewritten on every start, because it is the specification of
+  what the steward is and it changes with the code around it: the tools, the
+  glasses budget, what not to answer on someone's behalf, and clearing its own
+  context so that its accumulated judgement lives in what it has written down
+  rather than in a context window about to be summarised.
 - **`bun run dev:steward`.** An isolated stack for working on it: its own herdr
   server (`--session steward-dev`, which is the only thing that separates
   `session.json` as well as the socket), its own data directory, and the dev

@@ -15,7 +15,9 @@ import { join } from 'node:path';
 import { addAgentStatusListener } from './herdr-agent-status';
 import { herdrBinaryPath, herdrSessionName, herdrSocketPath } from './herdr-client';
 import { getStewardSettings, isStewardEnabled } from './steward-config';
+import { stewardPrompt } from './steward-prompt';
 import { atomicWriteFile, getDataDir } from '../utils/storage';
+import { IDENTITY } from '../../../shared/identity';
 
 const OBSERVER = 'observer';
 
@@ -50,7 +52,7 @@ export interface StewardTarget {
   port: number;
 }
 
-async function writeTarget(port: number): Promise<void> {
+async function writeHome(port: number): Promise<void> {
   const target: StewardTarget = {
     socketPath: herdrSocketPath(),
     session: herdrSessionName(),
@@ -58,6 +60,9 @@ async function writeTarget(port: number): Promise<void> {
   };
   await mkdir(stewardHomeDir(), { recursive: true });
   await atomicWriteFile(join(stewardHomeDir(), TARGET_FILE), JSON.stringify(target, null, 2));
+  // The prompt ships with the code it describes, so it is rewritten rather
+  // than left to drift. An edit made in place does not survive.
+  await atomicWriteFile(join(stewardHomeDir(), 'CLAUDE.md'), stewardPrompt());
 }
 
 const SUPERVISE_INTERVAL_MS = 30_000;
@@ -174,7 +179,22 @@ async function ensureWorkspace(): Promise<string | null> {
 
   const home = stewardHomeDir();
   await mkdir(home, { recursive: true });
-  const created = await herdrCli(['workspace', 'create', '--cwd', home, '--label', OBSERVER, '--no-focus']);
+  // The data directory has to be stated: `hrdle steward-do` inside the pane
+  // reads the target file from it, and a dev server's observer would otherwise
+  // resolve the installed server's directory and drive the wrong machine.
+  // Only this one variable - pointing the workspace at another herdr socket
+  // would make the agent hook report this pane to the watched server.
+  const created = await herdrCli([
+    'workspace',
+    'create',
+    '--cwd',
+    home,
+    '--label',
+    OBSERVER,
+    '--no-focus',
+    '--env',
+    `${IDENTITY.dataDirEnv}=${getDataDir()}`,
+  ]);
   if (!created.ok) {
     console.error(`[steward] could not create the observer workspace: ${created.stderr.trim()}`);
     return null;
@@ -196,7 +216,7 @@ export async function ensureSteward(port: number): Promise<boolean> {
     // Rewritten every tick: the port and the watched socket are this server's,
     // and a stale file would send the observer at the wrong one after a restart
     // on a different port.
-    await writeTarget(port);
+    await writeHome(port);
 
     if (!(await serverIsUp()) && !(await startServer())) {
       console.error('[steward] could not start its herdr session');
