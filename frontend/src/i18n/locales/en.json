@@ -453,6 +453,10 @@
     "answered": "Answered",
     "dismissed": "dismissed",
     "dismiss": "Not now",
-    "originalTitle": "The original"
+    "originalTitle": "The original",
+    "thinking": "Thinking...",
+    "viewToggle": "Steward view",
+    "writingSession": "Reading this session...",
+    "sessionEmpty": "Nothing written yet."
   }
 }

@@ -451,6 +451,10 @@
     "answered": "回答済み",
     "dismissed": "見送り",
     "dismiss": "あとで",
-    "originalTitle": "元の会話"
+    "originalTitle": "元の会話",
+    "thinking": "考えています…",
+    "viewToggle": "スチュワード表示",
+    "writingSession": "スチュワードがこのセッションを読んでいます…",
+    "sessionEmpty": "まだ何も書かれていません。"
   }
 }

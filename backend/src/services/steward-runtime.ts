@@ -162,6 +162,37 @@ async function findObserver(): Promise<AgentRow | null> {
   return result?.agents?.find((a) => a.name === OBSERVER) ?? null;
 }
 
+/**
+ * Whether the steward is thinking, for a screen that has just been spoken to.
+ *
+ * Somebody who has said something and sees nothing cannot tell "it is working"
+ * from "it did not arrive" - and the wake-up is asynchronous by design, so
+ * there is nothing else on screen to say which.
+ *
+ * Cached briefly because answering costs a herdr CLI spawn, and the caller
+ * polls while it waits.
+ */
+let statusCache: { at: number; value: StewardObserverStatus } | null = null;
+const STATUS_TTL_MS = 1_500;
+
+export interface StewardObserverStatus {
+  present: boolean;
+  /** herdr's own word: idle, working, blocked, done, unknown. */
+  status?: string;
+}
+
+export async function observerStatus(): Promise<StewardObserverStatus> {
+  if (!isStewardEnabled()) return { present: false };
+  if (statusCache && Date.now() - statusCache.at < STATUS_TTL_MS) return statusCache.value;
+
+  const observer = await findObserver();
+  const value: StewardObserverStatus = observer
+    ? { present: true, status: observer.agent_status }
+    : { present: false };
+  statusCache = { at: Date.now(), value };
+  return value;
+}
+
 async function ensureWorkspace(): Promise<string | null> {
   // Matched by the workspace we labelled, not by "the first pane in the
   // session": anything a person opens in here would otherwise become the

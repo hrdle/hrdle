@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getLastGlassesScreen, broadcastSteward } from './terminal-mux';
 import { getStewardSettings, isStewardEnabled, setStewardSettings } from '../services/steward-config';
-import { wakeObserverWith } from '../services/steward-runtime';
+import { observerStatus, wakeObserverWith } from '../services/steward-runtime';
 import {
   answerAsk,
   findAsk,
@@ -247,6 +247,32 @@ steward.get('/sessions/:id/turns', async (c) => {
   return c.json({ turns: await getSessionTurns(id.data) });
 });
 
+/**
+ * Ask for a session the steward has not written yet.
+ *
+ * A screen opening a session it has no summary for must get one, not the raw
+ * transcript: falling back means that session is never steward-backed, and
+ * `update_session` writes differences, so the first write is all it takes to
+ * catch up. Writing every session all the time is what this avoids - the
+ * steward writes when a session is read, and when its state moves.
+ */
+steward.post('/sessions/:id/summarise', async (c) => {
+  const id = SessionId.safeParse(c.req.param('id'));
+  if (!id.success) return c.json({ error: 'invalid session id' }, 400);
+
+  const existing = await getSessionTurns(id.data);
+  // Already written: nothing to ask for, and asking anyway would wake the
+  // observer every time somebody opened a session.
+  if (existing.length > 0) return c.json({ turns: existing, asked: false });
+
+  wakeObserverWith(
+    `The owner opened session ${id.data} and it has no history written yet. ` +
+      'Read it and write its turns with `steward turns`, newest work first. ' +
+      'Answer nothing in the thread for this - the session screen is where it goes.',
+  );
+  return c.json({ turns: [], asked: true });
+});
+
 steward.post('/sessions/:id/turns', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
@@ -262,6 +288,9 @@ steward.post('/sessions/:id/turns', async (c) => {
 });
 
 steward.get('/screen', (c) => c.json({ screen: getLastGlassesScreen() }));
+
+/** Whether the steward is thinking. Polled by a screen that has just spoken. */
+steward.get('/observer', async (c) => c.json(await observerStatus()));
 
 /** What a person's answer says, in the words the thread is read in. */
 function answerAsText(

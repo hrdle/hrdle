@@ -29,7 +29,7 @@ interface OpenSource {
  */
 export function StewardView({ onClose }: { onClose: () => void }) {
 	const { t } = useTranslation();
-	const { thread, isLoading, error, reply } = useSteward(true);
+	const { thread, isLoading, error, thinking, reply } = useSteward(true);
 	const [draft, setDraft] = useState("");
 	const [sending, setSending] = useState(false);
 	const [sendError, setSendError] = useState<string | null>(null);
@@ -58,11 +58,12 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 		}
 	}, []);
 
-	// The newest exchange is the one being read; a thread that opens at the top
-	// makes someone scroll past everything they have already answered.
+	// The newest exchange is the one being read - on open, and again whenever
+	// something arrives or the steward starts thinking.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: neither value is read here; their change is the cue to scroll.
 	useEffect(() => {
 		endRef.current?.scrollIntoView({ block: "end" });
-	}, []);
+	}, [thread.length, thinking]);
 
 	const send = async (input: Parameters<typeof reply>[0]) => {
 		setSending(true);
@@ -107,6 +108,14 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 						</li>
 					))}
 				</ul>
+
+				{thinking && (
+					<p className="mt-3 flex items-center gap-2 text-cv-text-muted text-sm">
+						<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
+						{t("steward.thinking", "考えています…")}
+					</p>
+				)}
+
 				<div ref={endRef} />
 			</div>
 

@@ -174,3 +174,57 @@ test.describe('steward mode on a tablet', () => {
     await expect(page.getByTitle('スチュワード')).toHaveCount(0);
   });
 });
+
+/**
+ * The steward view reaches into two screens that already existed, so the case
+ * that matters most is the one where it is off: a build carrying all of this
+ * must render the list and the transcript exactly as it did before.
+ */
+test.describe('with the steward off, nothing changes', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  test('the list shows its own rows, and asks the steward nothing', async ({ page }) => {
+    const asked: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('/api/steward')) asked.push(new URL(r.url()).pathname);
+    });
+
+    await bootApp(page, { steward: { enabled: false } });
+    await page.locator('[data-onboarding="session-list"]').click();
+
+    await expect(page.getByRole('button', { name: 'ワークスペース' })).toBeVisible();
+    await expect(page.getByText('demo')).toBeVisible();
+    await expect(page.getByTitle('スチュワード')).toHaveCount(0);
+
+    // /enabled is the one call allowed: it is how the client learns to show
+    // nothing. Anything else means the off path is doing work.
+    expect([...new Set(asked)]).toEqual(['/api/steward/enabled']);
+  });
+
+  test('the toggle is not in the dashboard', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: false } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    // Two controls carry this title on a phone. The terminal's is behind the
+    // list; the list's own is the one that can be reached.
+    await page.getByTitle('ダッシュボード').last().click();
+
+    await expect(page.getByRole('button', { name: 'スチュワード表示' })).toHaveCount(0);
+  });
+
+  // Enabled on the server but not switched on here: still the old rendering.
+  test('enabled but not switched on leaves the list alone', async ({ page }) => {
+    await bootApp(page, {
+      steward: {
+        enabled: true,
+        lines: [{ sessionId: 'demo', text: 'この行は出てはいけない', at: 1 }],
+      },
+    });
+    await page.locator('[data-onboarding="session-list"]').click();
+
+    await expect(page.getByText('この行は出てはいけない')).toHaveCount(0);
+    // The entry point is still there - the thread does not depend on the view.
+    await expect(page.getByTitle('スチュワード')).toBeVisible();
+  });
+});

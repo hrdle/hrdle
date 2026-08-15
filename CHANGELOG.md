@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **The steward's view is the screens that already exist** (#383, stage 3).
+  A switch in the dashboard turns it on for the workspace list and the Chat
+  mode together - one state ("see it through the steward"), not a setting per
+  screen. With it on, a row carries the line the steward wrote and Chat carries
+  the turns it wrote, with the raw transcript one tap behind each. No new mode,
+  no new screen: this is already where someone comes to read what happened, so
+  what changes is the reading. Off, or without a steward on the server, both
+  render exactly as before - pinned by tests, because the switch reaches into
+  two screens that were working.
+- **Opening a session the steward has not written asks it to write one.**
+  Falling back to the raw transcript would mean that session is never
+  steward-backed; `update_session` writes differences, so the first write is
+  all it takes to catch up. The screen says it is being read while it waits.
 - **The steward has a screen on a phone** (#383, stage 3). Its thread, with a
   composer - unlike the read-only chat view, this is the only place to type, so
   the two-inputs ambiguity does not arise, and an `ask` with nowhere to answer
