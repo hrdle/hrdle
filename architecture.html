@@ -121,7 +121,7 @@
   <div id="loading" class="loading">Loading architecture.json...</div>
   <script type="application/json" id="arch-data">{
   "name": "Hrdle",
-  "version": "0.3.129",
+  "version": "0.3.130",
   "generated": "2026-08-15",
   "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi, OpenCode). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones, plus a companion app for the EVEN G2 glasses",
   "stack": {
@@ -1199,7 +1199,7 @@
       {
         "name": "App",
         "file": "frontend/src/App.tsx",
-        "summary": "The root component. Switches layout on a mobile / tablet / desktop device check, and ties together auth, session management, the file viewer and the chat view",
+        "summary": "The root component. Renders one layout for every screen (DesktopLayout with a variant chosen by a mobile / tablet / desktop device check) and ties together auth, session management, the session list and onboarding",
         "hooks": [
           "useAuth",
           "useWorkspaces",
@@ -1210,24 +1210,13 @@
       {
         "name": "DesktopLayout",
         "file": "frontend/src/components/DesktopLayout.tsx",
-        "summary": "The main layout for desktop and tablet: terminal control, the pane tree and keyboard shortcuts",
+        "summary": "The layout, for all three screens. variant (desktop / tablet / mobile) is what differs; terminal control, the pane tree and the keyboard shortcuts are shared. A phone gets no header (its bar is at the bottom), one pane at a time from a tab bar, and a full-screen dashboard",
         "hooks": [
           "useMultiplexedTerminal",
           "usePeerConnection",
           "useWorkspaces",
           "usePeers",
           "useRemoteControlMode"
-        ],
-        "parents": [
-          "App"
-        ]
-      },
-      {
-        "name": "TerminalPage",
-        "file": "frontend/src/pages/TerminalPage.tsx",
-        "summary": "The mobile terminal page: a single pane plus a pane tab bar, switching between the InputBar and ChatView",
-        "hooks": [
-          "useMultiplexedTerminal"
         ],
         "parents": [
           "App"
@@ -1251,8 +1240,7 @@
           "useSelectionMode"
         ],
         "parents": [
-          "PaneContainer",
-          "TerminalPage"
+          "PaneContainer"
         ]
       },
       {
@@ -1374,8 +1362,7 @@
           "useAgentConversation"
         ],
         "parents": [
-          "DesktopLayout",
-          "TerminalPage"
+          "DesktopLayout"
         ]
       },
       {
@@ -1384,8 +1371,7 @@
         "summary": "The persistent input bar above the terminal: prompt history, the slash-command picker and image upload",
         "hooks": [],
         "parents": [
-          "DesktopLayout",
-          "TerminalPage"
+          "DesktopLayout"
         ]
       },
       {
@@ -1403,8 +1389,7 @@
         "summary": "The virtual keyboard for mobile. Long press for symbols, and a JA toggle for the IME",
         "hooks": [],
         "parents": [
-          "InputBar",
-          "TerminalPage"
+          "InputBar"
         ]
       },
       {
@@ -1535,6 +1520,16 @@
         "hooks": [],
         "parents": [
           "DesktopLayout"
+        ]
+      },
+      {
+        "name": "MobileDashboard",
+        "file": "frontend/src/components/dashboard/MobileDashboard.tsx",
+        "summary": "The dashboard on a phone: the whole screen rather than a side panel, with Dashboard and Servers tabs. Opened from the session bar and from the session list's own header",
+        "hooks": [],
+        "parents": [
+          "DesktopLayout",
+          "App"
         ]
       },
       {

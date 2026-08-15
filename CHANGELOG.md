@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.130] - 2026-08-15
+
 ### Changed
 - **One layout draws the phone, the tablet and the PC** (#7). The phone had a
   component tree of its own - 305 lines at the bottom of `App.tsx` plus a second
