@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The conversation footer says what a double-tap will do while a read is
+  pinned.** The pin's release moved above the banner dismiss and the back-out
+  in #398, so the gesture goes there whatever else is true - but the label
+  still described the branches underneath it. With an item queued it read
+  `dbl:later` and handed the screen back instead of clearing the banner; at the
+  newest message it read `dbl:back` and stayed in the session. Both now read
+  `dbl:top`, which is what the release does: position back to the newest, the
+  clock back on
+  - `dbl:back` over a pin was wrong before #398 too. `dbl:later` is the half
+    that gesture order introduced
+
 ## [0.3.137] - 2026-08-16
 
 ### Added
