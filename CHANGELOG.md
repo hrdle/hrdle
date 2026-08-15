@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A phone draws one pane again.** v0.3.130 made "one pane on a phone" wait for
+  the server to confirm a zoom, and that wait can end in a split being drawn -
+  `zoom-pane` is dropped without error when the socket is not open, and the zoom
+  is server state any other client can change. On a phone the session bar and
+  the InputBar belong to the pane that draws them, so two panes on screen are
+  two bars stacked on top of each other
+  - The tree is narrowed on the client now, with no path back to a split: a pane
+    id that is not in the tree resolves to the first leaf rather than to the
+    whole tree, because that id goes stale for a render or two every time the
+    tree is replaced
+  - Sizing still needs the server to agree the pane is the whole window, so the
+    zoom is re-asserted until it lands rather than asked for once, and no window
+    size is reported while the two disagree
+
 ## [0.3.130] - 2026-08-15
 
 ### Changed
