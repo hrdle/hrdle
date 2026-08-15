@@ -5,8 +5,24 @@
  * default client size when no interactive client is attached), so in herdr
  * mode Hrdle owns the split geometry itself: a binary split tree with
  * ratios, rendered to tmux-convention rects (siblings separated by one
- * cell, children partition the parent). The frontend keeps consuming
- * `TmuxLayoutNode` unchanged.
+ * cell, children partition the parent).
+ *
+ * **The wire carries cells, not the ratios, and that is the design.** A pane's
+ * PTY has a whole-number size, xterm.js has to be set to exactly that size, and
+ * both ends have to agree on it - so somebody has to round, and rounding twice
+ * from the same ratios is how they stop agreeing. Doing it here, once, and
+ * shipping the result is what makes the two agree by construction. Every client
+ * wants the answer rather than the input: the desktop sizes each xterm from
+ * these rects, and the phone reads a leaf's width and height for the one pane
+ * it shows.
+ *
+ * The ratios that travel back are re-derived from these rects, which is lossy,
+ * and the loss buys the frontend's ±3-cell tolerance. That tolerance has a
+ * second cause a ratio wire would not remove - a CSS box divided by a
+ * percentage does not land on a cell boundary either - and the other three
+ * guards around it (last-write-wins, the layout-pending suppression, the
+ * force-resize hatch) are about several clients and about React's render
+ * timing, not about this. Measured before deciding not to migrate.
  */
 
 import type { HerdrLayoutNode } from './herdr-client';
