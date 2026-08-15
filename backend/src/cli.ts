@@ -24,7 +24,7 @@ const VERSION = pkg.version;
 const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface CliOptions {
-  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address' | 'stt-prompt';
+  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address' | 'stt-prompt' | 'steward';
   port: number;
   host: string;
   password?: string;
@@ -45,7 +45,15 @@ interface CliOptions {
   peekTarget?: string;
   glassesText?: string;
   glassesKind?: 'waiting' | 'info';
-  glassesChoices?: string[];
+  /** `--choices`, shared by `glasses` and `steward ask`. */
+  choices?: string[];
+  stewardVerb?: 'notify' | 'ask' | 'report' | 'line' | 'turns' | 'screen';
+  /** Positional words after the verb, in order. */
+  stewardArgs?: string[];
+  stewardDetail?: string;
+  stewardMode?: 'single' | 'multi' | 'freeText';
+  stewardStep?: { index: number; total: number };
+  stewardFile?: string;
   /** `--session`, shared by every command that addresses one. */
   session?: string;
   sttPromptText?: string;
@@ -68,6 +76,15 @@ ${t('cli.usage')}
                             address for the glasses app's Connect step, and the
                             URL for a browser
   ${IDENTITY.binaryName} notify              Send hook event (reads JSON from stdin)
+  ${IDENTITY.binaryName} steward <verb>      How the steward reaches its owner. Prints JSON.
+                            notify <text> [--detail <md>]
+                            ask <text> [--choices "a,b"] [--mode single|multi|freeText]
+                                       [--step 2/3] [--detail <md>]   -> ask_id
+                            report <heading> --file <rows>  (one row per line)
+                            line <session> <text>
+                            turns <session> --file <json>
+                            screen
+                            Fails unless the steward is enabled on the server.
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
                             (session is auto-resolved: cwd → process ancestors)
@@ -139,6 +156,21 @@ export function parseArgs(args: string[]): CliOptions {
   while (i < args.length) {
     const arg = args[i];
 
+    // Once `steward` has been seen, every bare word after it belongs to it.
+    // Its verbs and its text are arbitrary words, and several of them are also
+    // command names - `steward notify "..."` was being re-read as the `notify`
+    // command, and any message containing `update` or `status` would be too.
+    if (options.command === 'steward' && !arg.startsWith('-')) {
+      if (!options.stewardVerb) {
+        options.stewardVerb = arg as CliOptions['stewardVerb'];
+      } else {
+        if (!options.stewardArgs) options.stewardArgs = [];
+        options.stewardArgs.push(arg);
+      }
+      i++;
+      continue;
+    }
+
     switch (arg) {
       case 'setup':
         options.command = 'setup';
@@ -157,6 +189,45 @@ export function parseArgs(args: string[]): CliOptions {
         break;
       case 'notify':
         options.command = 'notify';
+        break;
+      case 'steward':
+        options.command = 'steward';
+        break;
+      case '--detail':
+        i++;
+        options.stewardDetail = args[i];
+        if (options.stewardDetail === undefined) {
+          console.error('--detail takes markdown text');
+          process.exit(1);
+        }
+        break;
+      case '--mode': {
+        i++;
+        const mode = args[i];
+        if (mode !== 'single' && mode !== 'multi' && mode !== 'freeText') {
+          console.error('--mode takes single, multi or freeText');
+          process.exit(1);
+        }
+        options.stewardMode = mode;
+        break;
+      }
+      case '--step': {
+        i++;
+        const step = (args[i] ?? '').match(/^(\d+)\/(\d+)$/);
+        if (!step) {
+          console.error('--step looks like 2/3');
+          process.exit(1);
+        }
+        options.stewardStep = { index: Number(step[1]), total: Number(step[2]) };
+        break;
+      }
+      case '--file':
+        i++;
+        options.stewardFile = args[i];
+        if (!options.stewardFile) {
+          console.error('--file takes a path');
+          process.exit(1);
+        }
         break;
       case 'glasses': {
         options.command = 'glasses';
@@ -183,7 +254,7 @@ export function parseArgs(args: string[]): CliOptions {
           console.error('--choices takes a comma-separated list of choices');
           process.exit(1);
         }
-        options.glassesChoices = args[i].split(',').map((c) => c.trim()).filter((c) => c.length > 0);
+        options.choices = args[i].split(',').map((c) => c.trim()).filter((c) => c.length > 0);
         break;
       case '--session':
         i++;
@@ -384,6 +455,10 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
       await runNotify(options);
       return 'exit';
 
+    case 'steward':
+      await runStewardCommand(options);
+      return 'exit';
+
     case 'glasses':
       await runGlasses(options);
       return 'exit';
@@ -407,6 +482,11 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
     case 'serve':
       return 'serve';
   }
+}
+
+async function runStewardCommand(options: CliOptions): Promise<void> {
+  const { runSteward } = await import('./commands/steward');
+  await runSteward({ ...options, stewardChoices: options.choices });
 }
 
 async function runSetup(options: CliOptions): Promise<void> {
@@ -433,8 +513,8 @@ async function runGlasses(options: CliOptions): Promise<void> {
   const { runGlasses: impl } = await import('./commands/glasses');
   await impl({
     text: options.glassesText,
-    kind: options.glassesKind ?? (options.glassesChoices?.length ? 'waiting' : 'info'),
-    choices: options.glassesChoices,
+    kind: options.glassesKind ?? (options.choices?.length ? 'waiting' : 'info'),
+    choices: options.choices,
     session: options.session,
     port: options.port,
   });

@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The server side of the steward, behind a switch that is off.** The steward
+  is a resident agent that watches every workspace and writes what a person
+  should see, so the glasses and the phone read words that are already there
+  rather than waiting for an agent to start thinking (#383). This release adds
+  only the container it writes into: a thread, one overview line per session,
+  and a per-session history of turns, all persisted so they outlive both the
+  steward and a server restart. It writes through `hrdle steward <verb>`
+  (`notify`, `ask`, `report`, `line`, `turns`, `screen`), each printing JSON so
+  it can read back what it wrote. Nothing appears until `HRDLE_STEWARD=1` -
+  with the switch off the
+  API 404s and the commands say so, because hiding a feature in the client
+  leaves its endpoints serving.
+- **`bun run dev:steward`.** An isolated stack for working on it: its own herdr
+  server (`--session steward-dev`, which is the only thing that separates
+  `session.json` as well as the socket), its own data directory, and the dev
+  port. Without all three, developing a thing that drives every workspace means
+  driving the user's own.
+
 ## [0.3.136] - 2026-08-15
 
 ### Fixed

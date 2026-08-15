@@ -14,6 +14,7 @@ import { shortTailscaleIp, startDiscoveryServer } from './services/discovery';
 import { migrateSessionIds } from './services/session-id-migration';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
+import { steward } from './routes/steward';
 import { glassesRelay } from './routes/glasses-relay';
 import { push } from './routes/push';
 import { muxOpen, muxMessage, muxClose, type MuxData } from './routes/terminal-mux';
@@ -194,6 +195,8 @@ app.use('/api/glasses/*', (c, next) => {
   if (c.req.path.startsWith('/api/glasses/relay')) return next();
   return conditionalAuthMiddleware(c, next);
 });
+app.use('/api/steward', conditionalAuthMiddleware);
+app.use('/api/steward/*', conditionalAuthMiddleware);
 
 app.route('/api/logs', logs);
 app.route('/api/sessions', sessions);
@@ -208,6 +211,7 @@ app.route('/api/herdr', herdr);
 app.route('/api/push', push);
 app.route('/api/glasses/relay', glassesRelay);
 app.route('/api/glasses', glasses);
+app.route('/api/steward', steward);
 
 // Static files handling
 const staticRoot = process.env.STATIC_ROOT || '../frontend/dist';
