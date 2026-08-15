@@ -59,11 +59,14 @@ export function MobileDashboard({ onClose }: MobileDashboardProps) {
 			</div>
 			{/* Dashboard brings its own scroller; nesting a second one here made a
 			    flick land on whichever the finger happened to be over. */}
+			{/* The scrolling end needs room for the same reason the list does
+			    (.scroll-bottom-room in index.css). Only here: the side panel on a
+			    PC or tablet does not end at the edge of the screen. */}
 			<div className="flex-1 min-h-0 flex flex-col">
 				{tab === "dashboard" ? (
-					<Dashboard className="flex-1 min-h-0" />
+					<Dashboard className="flex-1 min-h-0 scroll-bottom-room" />
 				) : (
-					<div className="flex-1 min-h-0 overflow-y-auto">
+					<div className="flex-1 min-h-0 overflow-y-auto scroll-bottom-room">
 						<PeerManager />
 					</div>
 				)}

@@ -23,6 +23,96 @@ All notable changes to this project will be documented in this file.
   - Not a regression: the same overlap measures on v0.3.129, before the layouts
     were merged
 
+## [0.3.139] - 2026-08-16
+
+### Fixed
+- **A full-screen dialog no longer opens under the status bar, and the phone's
+  lists reach their last row.** The escape from the status bar and the Dynamic
+  Island was two paddings written on two screens, and content padding does not
+  move a `position: fixed` element at all - so the 19 full-screen overlays in
+  the app rendered under the bar when it was launched from the home screen. It
+  is now held once, by `#root`, which moves the app down by the inset and
+  shortens it by the same amount, so every screen and every overlay clears the
+  bar together. A test keeps it in one place, because adding it screen by
+  screen was tried three times and each round left a different screen under the
+  bar. Separately, iOS Safari's bottom toolbar overlaps the visible area
+  without reporting it through `safe-area`, so the phone's session list and its
+  dashboard and servers panes end in room a thumb can reach - only where the
+  scrolling surface is the whole screen, so the desktop picker is unchanged.
+  Thanks to @Chapapon (#403)
+
+## [0.3.138] - 2026-08-16
+
+### Fixed
+- **Touch scrolling moves the text as far as the finger, not twice as far.**
+  Drag distance became lines through a fixed 8px step, while a row is about
+  18px at the default font size - so a finger travelling one visible row
+  scrolled a little over two, and the gap widened with the font size. Both the
+  drag and the momentum that follows it now divide by the row height the
+  renderer actually measured, which is the same figure the touch hit-testing
+  already reads, so a tap and a drag agree on what a row is. Thanks to
+  @Chapapon (#402)
+- **The conversation footer says what a double-tap will do while a read is
+  pinned.** The pin's release moved above the banner dismiss and the back-out
+  in #398, so the gesture goes there whatever else is true - but the label
+  still described the branches underneath it. With an item queued it read
+  `dbl:later` and handed the screen back instead of clearing the banner; at the
+  newest message it read `dbl:back` and stayed in the session. Both now read
+  `dbl:top`, which is what the release does: position back to the newest, the
+  clock back on
+  - `dbl:back` over a pin was wrong before #398 too. `dbl:later` is the half
+    that gesture order introduced
+
+## [0.3.137] - 2026-08-16
+
+### Added
+- **The server side of the steward, behind a switch that is off.** The steward
+  is a resident agent that watches every workspace and writes what a person
+  should see, so the glasses and the phone read words that are already there
+  rather than waiting for an agent to start thinking (#383). This release adds
+  only the container it writes into: a thread, one overview line per session,
+  and a per-session history of turns, all persisted so they outlive both the
+  steward and a server restart. It writes through `hrdle steward <verb>`
+  (`notify`, `ask`, `report`, `line`, `turns`, `screen`), each printing JSON so
+  it can read back what it wrote. Nothing appears until `HRDLE_STEWARD=1` -
+  with the switch off the
+  API 404s and the commands say so, because hiding a feature in the client
+  leaves its endpoints serving.
+- **The steward is started, supervised and woken by hrdle.** It lives in its own
+  herdr session, derived from the one being watched, so a dev build cannot drive
+  the installed one's observer. A Claude Code session does not run on its own,
+  so the loop lives in hrdle: it wakes the observer when a pane changes state,
+  and again when a person writes into the steward thread - that second wake-up
+  carries the answer rather than announcing one exists, which is what lets `ask`
+  return immediately and never poll.
+- **`hrdle steward-do <verb>` is the only way the steward touches a session.**
+  It runs against the watched herdr server rather than the steward's own (a bare
+  `herdr` inside the observer's pane can only see the observer), holds exactly
+  three verbs - `clear`, `say`, `stop` - and journals every action, which is
+  also how the steward tells its own doing from its owner's. Answering a
+  permission prompt, reaching a shell pane and killing an agent are absent by
+  construction, not by instruction. Panes are addressed by **pane id**: only
+  agents started through `herdr agent start` carry a name, which on a real
+  server is one row in seventeen, so name addressing reached nothing anyone
+  runs. A workspace holding several agents is refused rather than resolved to
+  whichever listed first.
+- **The observer's prompt.** Written by hrdle into the steward's working
+  directory and rewritten on every start, because it is the specification of
+  what the steward is and it changes with the code around it: the tools, the
+  glasses budget, what not to answer on someone's behalf, and clearing its own
+  context so that its accumulated judgement lives in what it has written down
+  rather than in a context window about to be summarised. It writes in the
+  **speech-to-text language**, not the host's `LANG` - measured on a machine
+  whose locale is English while everything spoken to it is Japanese.
+- **`hrdle steward thread [n]`.** The steward can read its own conversation.
+  A wake-up carries what caused it, so anything said while the observer was
+  down or mid-turn existed nowhere it could reach.
+- **`bun run dev:steward`.** An isolated stack for working on it: its own herdr
+  server (`--session steward-dev`, which is the only thing that separates
+  `session.json` as well as the socket), its own data directory, and the dev
+  port. Without all three, developing a thing that drives every workspace means
+  driving the user's own.
+
 ## [0.3.136] - 2026-08-15
 
 ### Fixed

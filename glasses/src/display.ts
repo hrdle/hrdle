@@ -1341,11 +1341,19 @@ function conversationContent(state: AppState): {
   // tap = respond/jump, double-tap = dismiss ("later / on PC").
   // Read some way back, the double-tap returns to the newest message rather
   // than leaving the session, so the label has to say which one it will do.
+  // A held pin is the innermost level, so the double-tap is its release
+  // whatever else is true - the branch sits above both the banner dismiss and
+  // the back-out. Said here because the label is the only thing that can say
+  // it: `dbl:later` over a pinned read promised to clear the banner and handed
+  // the screen back instead, and `dbl:back` promised to leave a session it was
+  // not going to leave.
+  const pinned = state.autoAdvance === false
   const scrolled = state.conversationOffset > 0 || state.conversationPage > 0
-  const back = scrolled ? 'dbl:top' : 'dbl:back'
-  const action = state.relayWaiting.length > 0
+  const back = pinned || scrolled ? 'dbl:top' : 'dbl:back'
+  const answerable = state.relayWaiting.length > 0 || waiting
+  const action = !pinned && state.relayWaiting.length > 0
     ? 'tap:respond  dbl:later'
-    : waiting ? `tap:respond  ${back}` : back
+    : answerable ? `tap:respond  ${back}` : back
   // Who is speaking is in the body — the user's turn carries `$` and the
   // agent's carries nothing — so repeating it here said nothing twice. The
   // message counter went with it: its denominator was the number of messages

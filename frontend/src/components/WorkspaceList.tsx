@@ -167,6 +167,11 @@ interface SessionListProps {
 	isOnboarding?: boolean; // Show dummy session for onboarding
 	onToggleDashboard?: () => void; // Show a dashboard toggle in the header when provided
 	dashboardOpen?: boolean; // Active state for the dashboard toggle button
+	// Whether this list is the whole screen. It is what decides the bottom
+	// room: the browser toolbar overlaps the viewport itself, so a list ending
+	// at the bottom edge loses its last row. Inside the desktop picker the
+	// list ends at the modal's edge, which nothing overlaps.
+	fullScreen?: boolean;
 }
 
 // Session menu dialog (color change + title edit + delete)
@@ -1783,6 +1788,7 @@ export function WorkspaceList({
 	isOnboarding = false,
 	onToggleDashboard,
 	dashboardOpen = false,
+	fullScreen = false,
 }: SessionListProps) {
 	const { t } = useTranslation();
 	const {
@@ -2388,7 +2394,7 @@ export function WorkspaceList({
 				>
 					{activeTab === "sessions" && (
 						<div className="h-full overflow-y-auto overscroll-contain">
-							<div className="px-3 py-3">
+							<div className={fullScreen ? "px-3 pt-3 scroll-bottom-room" : "px-3 py-3"}>
 								{/* The list below is whatever last arrived. The server is not
 								    answering now, so say so before any of it is acted on. */}
 								{serverReachable === false && <ServerUnreachableBanner />}

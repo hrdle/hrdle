@@ -686,6 +686,7 @@ export function App() {
 		deviceType === "mobile" && showSessionList ? (
 			<div className="fixed inset-0 z-[60]">
 				<WorkspaceList
+					fullScreen
 					onSelectSession={handleSelectSession}
 					onSelectPane={handleSelectPane}
 					onBack={openSessions.length > 0 ? handleBackFromList : undefined}

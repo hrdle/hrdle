@@ -666,6 +666,19 @@ export const TerminalComponent = memo(
 
 			let stoppedMomentum = false;
 
+			/**
+			 * A row's actual height in px, for turning finger travel into lines.
+			 * A fixed step drifts as soon as the font size changes: at 8px against
+			 * a default row of ~18px, the text moved more than twice as fast as
+			 * the finger (measured 2026-08-08).
+			 */
+			const cellHeightPx = (): number => {
+				// biome-ignore lint/suspicious/noExplicitAny: xterm.js exposes cell dimensions via undocumented _core API
+				const core = (term as any)._core;
+				const h = core?._renderService?.dimensions?.css?.cell?.height;
+				return typeof h === "number" && h > 0 ? h : 18;
+			};
+
 			const touchToCell = (
 				clientX: number,
 				clientY: number,
@@ -859,9 +872,10 @@ export const TerminalComponent = memo(
 					if (scrollRafId === null) {
 						scrollRafId = requestAnimationFrame(() => {
 							scrollRafId = null;
-							const lines = Math.round(accumulatedDelta / 8);
+							const step = cellHeightPx();
+							const lines = Math.round(accumulatedDelta / step);
 							if (lines !== 0) {
-								accumulatedDelta = accumulatedDelta % 8;
+								accumulatedDelta = accumulatedDelta % step;
 								scrollTerminal(lines);
 								updateScrollIndicator();
 							}
@@ -929,9 +943,10 @@ export const TerminalComponent = memo(
 								return;
 							}
 							residual += vel * dt;
-							const lines = Math.trunc(residual / 8);
+							const step = cellHeightPx();
+							const lines = Math.trunc(residual / step);
 							if (lines !== 0) {
-								residual -= lines * 8;
+								residual -= lines * step;
 								scrollTerminal(lines);
 								updateScrollIndicator();
 							}

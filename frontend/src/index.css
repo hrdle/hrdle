@@ -150,12 +150,34 @@ body {
 }
 
 #root {
-	transform: translateY(var(--vv-top, 0px));
+	/* The top escape (status bar / Dynamic Island) lives here and nowhere else.
+	   Adding padding screen by screen was tried three times and each round left
+	   a different screen under the bar - and a full-screen overlay (position:
+	   fixed) does not take content padding at all, so some screens cannot be
+	   fixed that way. */
+	transform: translateY(calc(var(--vv-top, 0px) + env(safe-area-inset-top, 0px)));
 	height: 100%;
-	height: var(--vh, 100dvh);
+	/* Shortened by what it was moved down, or the bottom runs off the screen. */
+	height: calc(var(--vh, 100dvh) - env(safe-area-inset-top, 0px));
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
+}
+
+/* Room at the end of a scrolling list. iOS's bottom toolbar overlaps the visible
+   area and is not reported through safe-area (the inset reads 0 in the browser),
+   so the measured part is added here and only the home indicator comes from
+   env(). Unlike the top escape this does not shrink the whole app: the problem
+   is not a screen sitting under something, it is the last row of a list being
+   out of reach - so only the scrolling surface takes it, and only where that
+   surface is the whole screen (inside a modal the list ends at the modal's
+   edge, which nothing overlaps).
+
+   96px is the toolbar. The 48px in VirtualizedHistoryList is the home
+   indicator on a nested scroller - a smaller escape from a different
+   obstruction, not a second answer to this one. */
+.scroll-bottom-room {
+	padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
 }
 
 /* On desktop (mouse pointer), allow text selection inside terminal panes.

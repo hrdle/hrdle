@@ -150,3 +150,12 @@ describe('the screen mirror carries the build that drew it', () => {
     expect(MuxClientMessageSchema.parse(frame())).toMatchObject({ screen: { mode: 'conversation' } });
   });
 });
+
+describe('MuxClientMessageSchema — steward', () => {
+  // No sessionId: one subscription carries the thread and every session's line
+  // and turns, so a schema requiring one would drop every subscribe.
+  test('subscribe/unsubscribe-steward take no fields', () => {
+    expect(MuxClientMessageSchema.safeParse({ type: 'subscribe-steward' }).success).toBe(true);
+    expect(MuxClientMessageSchema.safeParse({ type: 'unsubscribe-steward' }).success).toBe(true);
+  });
+});

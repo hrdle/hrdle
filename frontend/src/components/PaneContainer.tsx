@@ -185,6 +185,7 @@ export function PaneContainer({
 				sessions={sessions}
 				terminalRefs={terminalRefs}
 				variant={variant}
+				paneTabs={paneTabs}
 				globalReloadKey={globalReloadKey}
 				controlModeContext={controlModeContext}
 			/>
@@ -482,10 +483,7 @@ function TerminalPane({
 	const mobileChat =
 		isMobile && sessionTarget && conversationAvailable ? (
 			<div className="h-full flex flex-col bg-cv-bg">
-				<div
-					className="flex items-center gap-2 px-3 py-2 border-b border-cv-border shrink-0"
-					style={{ paddingTop: "max(env(safe-area-inset-top, 0px), 8px)" }}
-				>
+				<div className="flex items-center gap-2 px-3 py-2 border-b border-cv-border shrink-0">
 					<button
 						type="button"
 						onClick={() => setShowConversation(false)}
