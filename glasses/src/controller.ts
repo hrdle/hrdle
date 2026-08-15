@@ -1203,6 +1203,7 @@ export class GlassesController {
     const st = this.state
     switch (action) {
       case 'swipeUp': {
+        const wasAt = [st.conversationOffset, st.conversationPage, st.noticeWindow ?? 0]
         // Page up within message, then previous message(s)
         if (st.conversationPage > 0) {
           st.conversationPage--
@@ -1220,14 +1221,17 @@ export class GlassesController {
             st.conversationPage = Math.max(0, this.currentMsgTotalPages() - 1)
           }
         }
-        // A scroll is a hand on the ring - but only over something to hold: a
-        // gesture racing the initial load has nothing to read, and pinning it
-        // would freeze a screen the wearer has not seen yet.
-        if (st.conversation.length > 0) this.readerPinned = true
+        // A scroll that moved something is a hand on the ring. One that moved
+        // nothing is not reading - pinning it would silently freeze the
+        // transcript, on the gesture that used to mean "catch me up".
+        if (st.conversationOffset !== wasAt[0] || st.conversationPage !== wasAt[1] || (st.noticeWindow ?? 0) !== wasAt[2]) {
+          this.readerPinned = true
+        }
         this.render()
         return
       }
       case 'swipeDown': {
+        const wasAt = [st.conversationOffset, st.conversationPage, st.noticeWindow ?? 0]
         // Page down within message, then next message(s)
         const totalPages = this.currentMsgTotalPages()
         if (st.conversationPage < totalPages - 1) {
@@ -1238,10 +1242,11 @@ export class GlassesController {
           st.conversationPage = 0
           st.noticeWindow = 0
         }
-        // A scroll in either direction is a hand on the ring; the newest
-        // message is where a reader lingers, so arriving there is not a
-        // release.
-        if (st.conversation.length > 0) this.readerPinned = true
+        // Same movement check both ways; the newest message is where a reader
+        // lingers, so arriving there by hand is not a release either.
+        if (st.conversationOffset !== wasAt[0] || st.conversationPage !== wasAt[1] || (st.noticeWindow ?? 0) !== wasAt[2]) {
+          this.readerPinned = true
+        }
         this.render()
         return
       }

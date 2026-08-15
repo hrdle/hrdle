@@ -169,20 +169,40 @@ describe('the auto-advance clock yields to a reader', () => {
   })
 
   test('the periodic refresh never runs against a pinned reader', () => {
-    // A reload resets offset and page, and the pin now holds at 0/0 too (any
-    // down-swipe catch-up ends there) - so the refresh has to consult the
-    // pin, not just the position.
+    // Pinned at a true 0/0 - the position gate would not catch this, so the
+    // refresh has to consult the pin itself.
     const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    c.swipeUp()
     c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
+
     inner(c).lastConvRefresh = 0
     inner(c).maybeRefreshConversation()
     // A refresh would have replaced the transcript (with nothing, in here).
-    expect(c.state.conversation.length).toBe(1)
+    expect(c.state.conversation.length).toBe(2)
   })
 
-  test('a swipe over a conversation not yet loaded pins nothing', () => {
-    // A gesture racing the initial load has nothing to read; pinning it would
-    // freeze a screen the wearer has not seen yet, with no release in reach.
+  test('a swipe that moves nothing pins nothing, and the transcript stays live', () => {
+    // The newest reply fits one page, the wearer swipes down expecting a next
+    // message, and there is none. Pinning that would silently freeze the
+    // transcript on the gesture that used to mean "catch me up".
+    const c = reading()
+    c.state.conversation = [{ role: 'assistant', content: 'fits one page' }] as ConversationMessage[]
+    c.swipeDown()
+    expect(screenText(c.state).footer).toContain('auto')
+
+    inner(c).lastConvRefresh = 0
+    inner(c).maybeRefreshConversation()
+    // The refresh ran: with no server here, the reload empties the transcript.
+    expect(c.state.conversation.length).toBe(0)
+  })
+
+  test('a swipe racing the initial load pins nothing either', () => {
     const c = reading()
     c.state.conversation = [] as ConversationMessage[]
     c.swipeUp()
@@ -192,7 +212,15 @@ describe('the auto-advance clock yields to a reader', () => {
 
   test('pinned at the newest message, one double-tap releases and the next one leaves', async () => {
     const c = reading()
+    c.state.conversation = [
+      { role: 'assistant', content: 'the newest thing said' },
+      { role: 'user', content: 'the one before it' },
+    ] as ConversationMessage[]
+    // Up then down: both moved, so the pin is held at a true 0/0.
+    c.swipeUp()
     c.swipeDown()
+    expect(c.state.conversationOffset).toBe(0)
+    expect(c.state.conversationPage).toBe(0)
     expect(screenText(c.state).footer).not.toContain('auto')
 
     await c.doubleTap()
