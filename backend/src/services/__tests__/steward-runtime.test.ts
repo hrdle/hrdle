@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { IDENTITY } from '../../../../shared/identity';
 import { STEWARD_ENV } from '../steward-config';
@@ -40,8 +41,9 @@ describe('where the steward lives', () => {
   });
 
   it('keeps its home under the data directory, so a dev run is separated with it', () => {
-    process.env[DATA_DIR_ENV] = '/tmp/hrdle-test-home';
-    expect(stewardHomeDir()).toBe(join('/tmp/hrdle-test-home', 'steward'));
+    const scratch = join(tmpdir(), 'steward-home-test');
+    process.env[DATA_DIR_ENV] = scratch;
+    expect(stewardHomeDir()).toBe(join(scratch, 'steward'));
   });
 });
 
@@ -51,7 +53,7 @@ describe('the gate', () => {
     // Nothing to assert on directly - what matters is that it neither throws
     // nor spawns herdr. A started supervisor would keep the loop alive and the
     // test process would not exit.
-    expect(() => startStewardRuntime()).not.toThrow();
+    expect(() => startStewardRuntime(3457)).not.toThrow();
     expect(() => stopStewardRuntime()).not.toThrow();
   });
 });

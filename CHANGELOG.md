@@ -17,6 +17,20 @@ All notable changes to this project will be documented in this file.
   with the switch off the
   API 404s and the commands say so, because hiding a feature in the client
   leaves its endpoints serving.
+- **The steward is started, supervised and woken by hrdle.** It lives in its own
+  herdr session, derived from the one being watched, so a dev build cannot drive
+  the installed one's observer. A Claude Code session does not run on its own,
+  so the loop lives in hrdle: it wakes the observer when a pane changes state,
+  and again when a person writes into the steward thread - that second wake-up
+  carries the answer rather than announcing one exists, which is what lets `ask`
+  return immediately and never poll.
+- **`hrdle steward-do <verb>` is the only way the steward touches a session.**
+  It runs against the watched herdr server rather than the steward's own (a bare
+  `herdr` inside the observer's pane can only see the observer), holds exactly
+  three verbs - `clear`, `say`, `stop` - and journals every action, which is
+  also how the steward tells its own doing from its owner's. Answering a
+  permission prompt, reaching a shell pane and killing an agent are absent by
+  construction, not by instruction.
 - **`bun run dev:steward`.** An isolated stack for working on it: its own herdr
   server (`--session steward-dev`, which is the only thing that separates
   `session.json` as well as the socket), its own data directory, and the dev

@@ -24,7 +24,7 @@ const VERSION = pkg.version;
 const DEFAULT_PORT = IDENTITY.defaultPort;
 
 interface CliOptions {
-  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address' | 'stt-prompt' | 'steward';
+  command: 'serve' | 'setup' | 'uninstall' | 'update' | 'status' | 'notify' | 'help' | 'version' | 'debug' | 'send' | 'peek' | 'glasses' | 'address' | 'stt-prompt' | 'steward' | 'steward-do';
   port: number;
   host: string;
   password?: string;
@@ -54,6 +54,8 @@ interface CliOptions {
   stewardMode?: 'single' | 'multi' | 'freeText';
   stewardStep?: { index: number; total: number };
   stewardFile?: string;
+  stewardDoVerb?: string;
+  stewardDoArgs?: string[];
   /** `--session`, shared by every command that addresses one. */
   session?: string;
   sttPromptText?: string;
@@ -85,6 +87,11 @@ ${t('cli.usage')}
                             turns <session> --file <json>
                             screen
                             Fails unless the steward is enabled on the server.
+  ${IDENTITY.binaryName} steward-do <verb>   The only way the steward touches a session. Runs
+                            against the watched herdr server, not the steward's
+                            own, and journals every action.
+                            watch | read <agent> | clear <agent>
+                            say <agent> <text> | stop <agent> | journal [n]
   ${IDENTITY.binaryName} glasses <text>      Post a self-note to the G2 glasses relay channel
                             [--kind waiting|info] [--choices "a,b"] [--session <id>]
                             (session is auto-resolved: cwd → process ancestors)
@@ -156,6 +163,17 @@ export function parseArgs(args: string[]): CliOptions {
   while (i < args.length) {
     const arg = args[i];
 
+    if (options.command === 'steward-do' && !arg.startsWith('-')) {
+      if (!options.stewardDoVerb) {
+        options.stewardDoVerb = arg;
+      } else {
+        if (!options.stewardDoArgs) options.stewardDoArgs = [];
+        options.stewardDoArgs.push(arg);
+      }
+      i++;
+      continue;
+    }
+
     // Once `steward` has been seen, every bare word after it belongs to it.
     // Its verbs and its text are arbitrary words, and several of them are also
     // command names - `steward notify "..."` was being re-read as the `notify`
@@ -192,6 +210,9 @@ export function parseArgs(args: string[]): CliOptions {
         break;
       case 'steward':
         options.command = 'steward';
+        break;
+      case 'steward-do':
+        options.command = 'steward-do';
         break;
       case '--detail':
         i++;
@@ -458,6 +479,12 @@ export async function runCli(options: CliOptions): Promise<'serve' | 'exit'> {
     case 'steward':
       await runStewardCommand(options);
       return 'exit';
+
+    case 'steward-do': {
+      const { runStewardDo } = await import('./commands/steward-do');
+      await runStewardDo(options);
+      return 'exit';
+    }
 
     case 'glasses':
       await runGlasses(options);

@@ -630,7 +630,7 @@ if (discovery) {
 // The steward runs whether or not anyone has a screen open — that is the point
 // of it — so it starts here rather than off the first client connecting. A no-op
 // unless the gate is on.
-startStewardRuntime();
+startStewardRuntime(port);
 
 // Build the dashboard payload once in the background so the first client to ask
 // is served from cache like every one after it. Everything downstream of this

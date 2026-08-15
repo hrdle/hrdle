@@ -1,36 +1,26 @@
 /**
  * Starting the steward, keeping it up, and waking it.
  *
- * The steward lives in its own herdr session, which is what makes it invisible
- * to itself: it watches the default server's `agent list`, and it is not on
- * that server, so there is no exclusion list to write and keep correct.
+ * Its own herdr session is what makes it invisible to itself: it watches the
+ * default server's `agent list` and is not on that server, so there is no
+ * exclusion list to maintain. That is also why nothing here uses `herdrRpc` -
+ * this process resolves one socket and it is the wrong one.
  *
- * That separation is also why nothing here goes through `herdrRpc` - this
- * process resolves exactly one socket, and it is the wrong one. Reaching the
- * steward's session means the herdr CLI with an explicit `--session`.
- *
- * A Claude Code session does not run on its own: turns end, and a polling loop
- * in bash would pile context up on every tick. So the loop lives here - hrdle
- * already watches herdr's events, and wakes the observer when something moved.
- * Between events this costs nothing.
+ * A Claude Code session does not run on its own (turns end; a bash poll loop
+ * accumulates context every tick), so the loop lives here.
  */
 
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { addAgentStatusListener } from './herdr-agent-status';
-import { herdrBinaryPath, herdrSessionName } from './herdr-client';
+import { herdrBinaryPath, herdrSessionName, herdrSocketPath } from './herdr-client';
 import { getStewardSettings, isStewardEnabled } from './steward-config';
-import { getDataDir } from '../utils/storage';
+import { atomicWriteFile, getDataDir } from '../utils/storage';
 
 const OBSERVER = 'observer';
 
-/**
- * The steward's session name, derived from ours.
- *
- * A dev build runs against its own named server, and a fixed name here would
- * put its steward in the same session as the installed one - two hrdles
- * driving one observer.
- */
+/** Derived from ours: a fixed name would put a dev build's steward in the same
+ *  session as the installed one, and two hrdles would drive one observer. */
 export function stewardSessionName(): string {
   const base = herdrSessionName();
   return base ? `${base}-steward` : 'steward';
@@ -41,13 +31,38 @@ export function stewardHomeDir(): string {
   return join(getDataDir(), 'steward');
 }
 
-const SUPERVISE_INTERVAL_MS = 30_000;
 /**
- * Pane transitions arrive in bursts - one agent finishing a turn moves several
- * panes - and each wake-up costs the observer a re-read of its own context.
- * Collapsing a burst into one wake-up is the difference between the observer
- * being cheap and being the most expensive thing running.
+ * What the observer should be looking at, written where its tools can read it.
+ *
+ * herdr exports `HERDR_SOCKET_PATH` into every pane, so a bare `herdr agent
+ * list` inside the observer's pane enumerates the observer and nothing else
+ * (measured). Pointing the workspace at the default socket instead is worse:
+ * the agent integration hook then reports the observer's pane id to the very
+ * server it is watching.
  */
+export const TARGET_FILE = 'target.json';
+
+export interface StewardTarget {
+  /** The herdr server the steward observes - the default one, i.e. the user's. */
+  socketPath: string;
+  session: string | null;
+  /** Where `hrdle steward` should deliver, so the observer never passes `-p`. */
+  port: number;
+}
+
+async function writeTarget(port: number): Promise<void> {
+  const target: StewardTarget = {
+    socketPath: herdrSocketPath(),
+    session: herdrSessionName(),
+    port,
+  };
+  await mkdir(stewardHomeDir(), { recursive: true });
+  await atomicWriteFile(join(stewardHomeDir(), TARGET_FILE), JSON.stringify(target, null, 2));
+}
+
+const SUPERVISE_INTERVAL_MS = 30_000;
+/** Transitions arrive in bursts and each wake-up costs the observer a re-read
+ *  of its context, so a burst has to collapse into one. */
 const WAKE_DEBOUNCE_MS = 3_000;
 
 let superviseTimer: ReturnType<typeof setInterval> | null = null;
@@ -116,12 +131,8 @@ interface PaneRow {
   pane_id?: string;
 }
 
-/**
- * `herdr status server` exits 0 whether or not the server is up - a missing one
- * is "status: not_running" on stdout, not a failure - so the exit code alone
- * reports every session as running and the first real command then fails with
- * `server_not_running`.
- */
+/** `herdr status server` exits 0 either way, so the exit code alone reports
+ *  every session as running and the next command fails with server_not_running. */
 async function serverIsUp(): Promise<boolean> {
   const res = await herdrCli(['status', 'server', '--json'], 5_000);
   if (!res.ok) return false;
@@ -172,13 +183,9 @@ async function ensureWorkspace(): Promise<string | null> {
   return after?.panes?.[0]?.pane_id ?? null;
 }
 
-/**
- * Bring the session, the workspace and the observer up to where they should be.
- *
- * Written to be run repeatedly: each step checks before it acts, so this is
- * both the start-up path and the supervisor tick.
- */
-export async function ensureSteward(): Promise<boolean> {
+/** Each step checks before it acts, so this is both the start-up path and the
+ *  supervisor tick. */
+export async function ensureSteward(port: number): Promise<boolean> {
   if (!isStewardEnabled()) return false;
   if (starting) return false;
   if (Date.now() < backoffUntil) return false;
@@ -186,6 +193,10 @@ export async function ensureSteward(): Promise<boolean> {
   starting = true;
   try {
     if (!herdrBinaryPath()) return false;
+    // Rewritten every tick: the port and the watched socket are this server's,
+    // and a stale file would send the observer at the wrong one after a restart
+    // on a different port.
+    await writeTarget(port);
 
     if (!(await serverIsUp()) && !(await startServer())) {
       console.error('[steward] could not start its herdr session');
@@ -229,11 +240,10 @@ export async function ensureSteward(): Promise<boolean> {
 /**
  * Wake the observer, collapsing a burst of reasons into one prompt.
  *
- * Measured on herdr 0.8.0: a prompt submitted while the agent is working is
- * queued and runs when that turn finishes, so a wake-up arriving mid-turn is
- * not lost. It is dropped, though, when the pane is showing a modal - the text
- * lands in the input field unsubmitted - which is one more reason the observer
- * must never be in a position to be asked for permission.
+ * Measured on herdr 0.8.0: a prompt sent while the agent is working is queued
+ * and runs when that turn ends. It is dropped when the pane shows a modal (the
+ * text sits in the input field unsubmitted), which is one more reason the
+ * observer must never be in a position to be asked for permission.
  */
 export function wakeObserver(reason: string): void {
   if (!isStewardEnabled()) return;
@@ -248,35 +258,26 @@ export function wakeObserver(reason: string): void {
   }, WAKE_DEBOUNCE_MS);
 }
 
-/**
- * Wake the observer with a message that is the point of waking it.
- *
- * A human's answer travels this way rather than through a tool the observer
- * has to call: waking it and delivering the answer are the same act, so there
- * is nothing to poll and nothing to miss.
- */
+/** A human's answer travels this way rather than through something the observer
+ *  has to call: waking and delivering are one act, so there is nothing to poll. */
 export function wakeObserverWith(text: string): void {
   if (!isStewardEnabled()) return;
   void deliver(text);
 }
 
 async function deliver(text: string): Promise<void> {
-  const observer = await findObserver();
-  if (!observer) {
-    // Nothing to wake. The supervisor tick will notice and rebuild it.
-    void ensureSteward();
-    return;
-  }
+  // Nothing to wake; the supervisor tick will notice and rebuild it.
+  if (!(await findObserver())) return;
   const res = await herdrCli(['agent', 'prompt', OBSERVER, text]);
   if (!res.ok) console.error(`[steward] wake failed: ${res.stderr.trim()}`);
 }
 
-export function startStewardRuntime(): void {
+export function startStewardRuntime(port: number): void {
   if (!isStewardEnabled()) return;
   if (superviseTimer) return;
 
-  void ensureSteward();
-  superviseTimer = setInterval(() => void ensureSteward(), SUPERVISE_INTERVAL_MS);
+  void ensureSteward(port);
+  superviseTimer = setInterval(() => void ensureSteward(port), SUPERVISE_INTERVAL_MS);
   superviseTimer.unref?.();
 
   // Its own listener rather than riding the session push: that one stops when
