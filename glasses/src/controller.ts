@@ -1206,7 +1206,6 @@ export class GlassesController {
     const st = this.state
     switch (action) {
       case 'swipeUp': {
-        const wasAt = [st.conversationOffset, st.conversationPage]
         // Page up within message, then previous message(s)
         if (st.conversationPage > 0) {
           st.conversationPage--
