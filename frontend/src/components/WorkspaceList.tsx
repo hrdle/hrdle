@@ -2388,7 +2388,7 @@ export function WorkspaceList({
 				>
 					{activeTab === "sessions" && (
 						<div className="h-full overflow-y-auto overscroll-contain">
-							<div className="px-3 py-3">
+							<div className="px-3 pt-3 scroll-bottom-room">
 								{/* The list below is whatever last arrived. The server is not
 								    answering now, so say so before any of it is acted on. */}
 								{serverReachable === false && <ServerUnreachableBanner />}
