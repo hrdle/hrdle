@@ -14,6 +14,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AuthService } from '../services/auth';
 import { getDataDir } from '../utils/storage';
+import { IDENTITY } from '../../../shared/identity';
 
 const TOKEN_USER = 'steward';
 
@@ -27,7 +28,6 @@ export interface StewardCliOptions {
   stewardMode?: 'single' | 'multi' | 'freeText';
   stewardStep?: { index: number; total: number };
   stewardFile?: string;
-  stewardStdin?: boolean;
   port: number;
 }
 
@@ -73,6 +73,17 @@ async function resolvePort(options: StewardCliOptions & { port: number }): Promi
   return options.port;
 }
 
+/** Null when the server does not answer at all - too old, or not there. */
+async function stewardIsEnabled(port: number): Promise<boolean | null> {
+  try {
+    const res = await fetch(`https://localhost:${port}/api/steward/enabled`);
+    if (!res.ok) return null;
+    return ((await res.json()) as { enabled?: boolean }).enabled === true;
+  } catch {
+    return null;
+  }
+}
+
 async function api(port: number, method: string, path: string, body?: unknown): Promise<unknown> {
   // HTTPS even on loopback: the server serves nothing in the clear, and its
   // Tailscale cert does not match `localhost` - same TLS skip as notify.ts.
@@ -90,13 +101,31 @@ async function api(port: number, method: string, path: string, body?: unknown): 
   const text = await res.text();
 
   if (res.status === 404) {
-    throw new Error('the steward is not enabled on this server');
-  }
-  if (res.status === 401 && !token) {
+    // Ask which kind of 404 this is. `/enabled` answers whether or not the
+    // steward is on, so a server that has never heard of it fails here too -
+    // and "not enabled" would be exactly the wrong thing to tell someone whose
+    // server is simply too old.
+    const enabled = await stewardIsEnabled(port);
+    if (enabled === null) {
+      throw new Error(`no ${IDENTITY.productName} answering on port ${port}, or one too old to have the steward`);
+    }
     throw new Error(
-      'this server requires authentication but no signing secret was readable. An install ' +
-        `keeping JWT_SECRET in the environment never writes ${join(getDataDir(), 'jwt-secret')}; ` +
-        'export the same JWT_SECRET here.',
+      enabled
+        ? `${method} ${path} -> 404 (the steward is enabled; this route is not there)`
+        : 'the steward is not enabled on this server',
+    );
+  }
+  if (res.status === 401) {
+    // Both directions of the same trap: a server keeping its secret in
+    // JWT_SECRET never writes the file, and a file left over from an earlier
+    // run signs a token that server will reject.
+    throw new Error(
+      token
+        ? `signed a token the server rejected. ${join(getDataDir(), 'jwt-secret')} may be stale - ` +
+          'a server running JWT_SECRET from its environment does not use that file. Export the same value here.'
+        : 'this server requires authentication but no signing secret was readable. An install ' +
+          `keeping JWT_SECRET in the environment never writes ${join(getDataDir(), 'jwt-secret')}; ` +
+          'export the same JWT_SECRET here.',
     );
   }
   if (!res.ok) throw new Error(`${method} ${path} -> ${res.status} ${text.slice(0, 400)}`);
@@ -159,7 +188,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
 
       case 'report': {
         const text = args[0];
-        if (!text) throw new Error('usage: hrdle steward report <heading> --rows-stdin | --file <json>');
+        if (!text) throw new Error('usage: hrdle steward report <heading> --file <rows>, or rows on stdin');
         // Rows are one per line rather than a flag: a report is a list, and a
         // comma-separated flag cannot hold a line with a comma in it.
         const raw = options.stewardFile
@@ -186,7 +215,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
 
       case 'turns': {
         const session = args[0];
-        if (!session) throw new Error('usage: hrdle steward turns <session> --file <json> | --stdin');
+        if (!session) throw new Error('usage: hrdle steward turns <session> --file <json>, or JSON on stdin');
         const payload = await readPayload(options);
         // Both shapes accepted: the array is what a caller naturally writes,
         // and the object is what the endpoint takes.

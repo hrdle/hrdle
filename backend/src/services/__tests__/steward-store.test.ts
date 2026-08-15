@@ -128,6 +128,21 @@ describe('session turns', () => {
     expect(await getSessionTurns('w0')).toEqual([]);
     expect(await getSessionTurns('w31')).toHaveLength(1);
   });
+
+  // Recency is stored, not inferred from key order: an integer-like key is
+  // ordered ahead of every other key whatever the write order, so a numeric id
+  // would always be evicted first however recently it was written.
+  it('evicts by when it was written, even for a numeric session id', async () => {
+    for (let i = 0; i < 30; i++) {
+      await appendSessionTurns(`w${i}`, [turn('t1', 'x')]);
+    }
+    // Written last, so it is the one to keep. Under key order it would be the
+    // one to go: an integer-like key sorts ahead of every other key.
+    await appendSessionTurns('9', [turn('t1', 'newest')]);
+
+    expect(await getSessionTurns('9')).toHaveLength(1);
+    expect(await getSessionTurns('w0')).toEqual([]);
+  });
 });
 
 describe('cleanup', () => {

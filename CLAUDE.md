@@ -244,6 +244,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `PUT /sessions/:id/line` - The overview row for one session
 - `GET`/`POST /sessions/:id/turns` - That session's glasses-side history; POST upserts by turn id
 - `GET /screen` - What the glasses are showing right now (the mirror's last frame, or null)
+- `PUT /settings` - Which model each half runs (read back through `/enabled`)
 
 **Terminal WebSocket** (`/ws/mux`):
 - Multiplexed WebSocket — single connection serves all sessions
@@ -251,7 +252,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - Client messages (`MuxClientMessage`): `subscribe`, `unsubscribe`, `subscribe-conversation`, `unsubscribe-conversation`, then per-session (`ControlClientMessage`): `input`, `resize`, `split`, `close-pane`, `resize-pane`, `select-pane`, `adjust-pane`, `equalize-panes`, `zoom-pane`, `request-viewport`, `select-tab`, `create-tab`, `close-tab`, `ping`, `client-info`
 - Server messages (`MuxServerMessage`): `subscribed`, `unsubscribed`, `sessions-updated`, `conversation-subscribed`, `conversation-unsubscribed`, `initial-conversation`, `conversation-update`, then per-session (`ControlServerMessage`): `layout`, `viewport`, `ready`, `pong`, `error`, `hook-event`
 - Server periodically pushes `sessions-updated` (5s interval) with full session list
-- `subscribe-steward` / `unsubscribe-steward` carry no sessionId: one subscription delivers the thread, every session's line and every session's turns (`steward-snapshot`, `steward-thread`, `steward-line`, `steward-turns`, `steward-session-removed`), because the overview needs all of them at once
+- `subscribe-steward` / `unsubscribe-steward` carry no sessionId: one subscription covers the thread and every session's line and turns, because the overview needs all of them at once. The **snapshot on subscribe carries the thread and the lines only** — turns arrive as live `steward-turns` pushes, or from `GET /api/steward/sessions/:id/turns` when a client opens one
 
 **Other**:
 - `GET /api/dashboard` - Dashboard data (usage limits, statistics, cost estimates, system metrics, usage history, herdr version skew)

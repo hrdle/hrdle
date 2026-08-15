@@ -3,8 +3,10 @@
  *
  * Its own herdr session is what makes it invisible to itself: it watches the
  * default server's `agent list` and is not on that server, so there is no
- * exclusion list to maintain. That is also why nothing here uses `herdrRpc` -
- * this process resolves one socket and it is the wrong one.
+ * exclusion list to maintain. Two servers are therefore in play - the steward's
+ * own, reached by the herdr CLI with an explicit `--session` because this
+ * process resolves only one socket, and the watched one, which is that socket
+ * and so reachable through `herdrRpc`.
  *
  * A Claude Code session does not run on its own (turns end; a bash poll loop
  * accumulates context every tick), so the loop lives here.
@@ -13,9 +15,11 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { addAgentStatusListener } from './herdr-agent-status';
-import { herdrBinaryPath, herdrSessionName, herdrSocketPath } from './herdr-client';
+import { herdrBinaryPath, herdrRpc, herdrSessionName, herdrSocketPath } from './herdr-client';
 import { getStewardSettings, isStewardEnabled } from './steward-config';
 import { stewardPrompt } from './steward-prompt';
+import { pruneToSessions } from './steward-store';
+import { broadcastSteward } from '../routes/terminal-mux';
 import { atomicWriteFile, getDataDir } from '../utils/storage';
 import { IDENTITY } from '../../../shared/identity';
 
@@ -205,6 +209,28 @@ async function ensureWorkspace(): Promise<string | null> {
   return after?.panes?.[0]?.pane_id ?? null;
 }
 
+/**
+ * Forget what the steward wrote about workspaces that no longer exist.
+ *
+ * Driven off the live set rather than a delete event, because a workspace can
+ * also go away while this server is down. Reads the *watched* server, which is
+ * the default socket - the one `herdrRpc` already resolves.
+ */
+async function pruneDeadSessions(): Promise<void> {
+  try {
+    const result = await herdrRpc<{ workspaces?: { workspace_id?: string }[] }>('workspace.list', {});
+    const live = (result.workspaces ?? []).map((w) => w.workspace_id).filter((id): id is string => !!id);
+    // An empty answer is more likely a bad read than every workspace vanishing,
+    // and acting on it would erase the whole store.
+    if (live.length === 0) return;
+    for (const id of await pruneToSessions(live)) {
+      broadcastSteward({ type: 'steward-session-removed', sessionId: id });
+    }
+  } catch {
+    // The watched server is unreachable; the next tick tries again.
+  }
+}
+
 /** Each step checks before it acts, so this is both the start-up path and the
  *  supervisor tick. */
 export async function ensureSteward(port: number): Promise<boolean> {
@@ -308,7 +334,10 @@ export function startStewardRuntime(port: number): void {
   runtimePort = port;
 
   void ensureSteward(port);
-  superviseTimer = setInterval(() => void ensureSteward(port), SUPERVISE_INTERVAL_MS);
+  superviseTimer = setInterval(() => {
+    void ensureSteward(port);
+    void pruneDeadSessions();
+  }, SUPERVISE_INTERVAL_MS);
   superviseTimer.unref?.();
 
   // Its own listener rather than riding the session push: that one stops when

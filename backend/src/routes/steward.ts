@@ -2,20 +2,22 @@
  * `/api/steward/*` - what the steward writes and the screens read.
  *
  * Authenticated, unlike the relay's local-trust endpoint: this surface can
- * rewrite history and answer questions on someone's behalf. `hrdle mcp` signs
- * its own token rather than being given a hole.
+ * rewrite history and answer questions on someone's behalf. `hrdle steward`
+ * signs its own token rather than being given a hole.
  *
- * Every route 404s with the gate off. `/enabled` is the exception - the MCP
- * process asks it at startup, and a 404 there reads as an older server.
+ * Every route 404s with the gate off. `/enabled` is the exception, and it is
+ * what the CLI asks after a 404 so it can tell "switched off" apart from a
+ * server too old to have any of this.
  */
 
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { getLastGlassesScreen, broadcastSteward } from './terminal-mux';
-import { getStewardSettings, isStewardEnabled } from '../services/steward-config';
+import { getStewardSettings, isStewardEnabled, setStewardSettings } from '../services/steward-config';
 import { wakeObserverWith } from '../services/steward-runtime';
 import {
   answerAsk,
+  findAsk,
   appendSessionTurns,
   appendThreadItem,
   getLines,
@@ -116,6 +118,19 @@ steward.get('/', async (c) => {
   return c.json({ thread, lines });
 });
 
+/** Which model each half runs. Read through `/enabled`; written here. */
+steward.put('/settings', async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = z
+    .object({
+      observerModel: z.string().min(1).max(100).optional(),
+      workerModel: z.string().min(1).max(100).optional(),
+    })
+    .safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid settings', detail: parsed.error.issues }, 400);
+  return c.json({ settings: await setStewardSettings(parsed.data) });
+});
+
 steward.post('/thread', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = ThreadPostSchema.safeParse(body);
@@ -158,10 +173,33 @@ steward.post('/thread/reply', async (c) => {
   const { askId, answer, text } = parsed.data;
 
   if (askId && !answer) return c.json({ error: 'answer is required when askId is given' }, 400);
+  // An answer with nothing to answer is a caller bug, and accepting it would
+  // record the reply while silently dropping the choice it carried.
+  if (!askId && answer) return c.json({ error: 'askId is required when an answer is given' }, 400);
   if (!askId && !text) return c.json({ error: 'text is required when there is no askId' }, 400);
 
   let updatedAsk: StewardThreadItem | null = null;
   if (askId && answer) {
+    const target = await findAsk(askId);
+    if (target?.kind !== 'ask') return c.json({ error: 'no such ask' }, 404);
+
+    // Checked against the question itself, not just its own shape. The steward
+    // reads `ask.answer` as the record of what was decided, so an index nobody
+    // was offered becomes a decision nobody made.
+    if (answer.kind === 'choice') {
+      const { choices, mode } = target.ask;
+      const outOfRange = answer.indices.filter((i) => i >= choices.length);
+      if (outOfRange.length > 0) {
+        return c.json({ error: `no such choice: ${outOfRange.join(', ')}` }, 400);
+      }
+      if (mode === 'single' && answer.indices.length > 1) {
+        return c.json({ error: 'this question takes one answer' }, 400);
+      }
+      if (mode === 'freeText') {
+        return c.json({ error: 'this question takes text, not a choice' }, 400);
+      }
+    }
+
     updatedAsk = await answerAsk(askId, answer);
     if (!updatedAsk) return c.json({ error: 'no such ask' }, 404);
     broadcastSteward({ type: 'steward-thread', item: updatedAsk });

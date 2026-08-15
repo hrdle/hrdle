@@ -37,7 +37,21 @@ const withSessionsLock = createMutationLock();
 
 interface SessionsFile {
   /** sessionId -> turns, most recently written last. */
-  sessions: Record<string, StewardTurn[]>;
+  sessions: Record<string, SessionBucket>;
+}
+
+/**
+ * `at` rather than relying on key insertion order for eviction.
+ *
+ * Object keys that look like integers are ordered ahead of every other key,
+ * whatever the write order - so a numeric-only session id (which the id pattern
+ * allows) would always be the first evicted, regardless of how recently it was
+ * written. herdr does not issue such ids today, which is exactly what would
+ * keep this invisible.
+ */
+interface SessionBucket {
+  at: number;
+  turns: StewardTurn[];
 }
 
 async function filePath(name: string): Promise<string> {
@@ -135,7 +149,7 @@ export async function setLine(sessionId: string, text: string): Promise<StewardS
 
 export async function getSessionTurns(sessionId: string): Promise<StewardTurn[]> {
   const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
-  return file.sessions?.[sessionId] ?? [];
+  return file.sessions?.[sessionId]?.turns ?? [];
 }
 
 /** Upsert by id rather than replace-all: the steward writes only the
@@ -148,7 +162,7 @@ export async function appendSessionTurns(
   return withSessionsLock(async () => {
     const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
     const sessions = file.sessions ?? {};
-    const existing = sessions[sessionId] ?? [];
+    const existing = sessions[sessionId]?.turns ?? [];
 
     for (const turn of turns) {
       const index = existing.findIndex((t) => t.id === turn.id);
@@ -156,14 +170,10 @@ export async function appendSessionTurns(
       else existing[index] = turn;
     }
     const trimmed = existing.slice(-TURNS_PER_SESSION_MAX);
+    sessions[sessionId] = { at: Date.now(), turns: trimmed };
 
-    // Re-inserted at the end so insertion order tracks recency, which is what
-    // the session cap below evicts by.
-    delete sessions[sessionId];
-    sessions[sessionId] = trimmed;
-
-    const ids = Object.keys(sessions);
-    for (const stale of ids.slice(0, Math.max(0, ids.length - SESSIONS_MAX))) {
+    const byAge = Object.entries(sessions).sort((a, b) => a[1].at - b[1].at);
+    for (const [stale] of byAge.slice(0, Math.max(0, byAge.length - SESSIONS_MAX))) {
       delete sessions[stale];
     }
 
@@ -200,17 +210,38 @@ export async function removeSession(sessionId: string): Promise<boolean> {
   return removed;
 }
 
-/** Takes the live set rather than reacting to a delete event: a workspace can
- *  also go away while this server is down, and nothing replays that. */
+/**
+ * Takes the live set rather than reacting to a delete event: a workspace can
+ * also go away while this server is down, and nothing replays that.
+ *
+ * Filters inside each lock rather than deciding first and deleting after. The
+ * two-step version could delete a session created between the caller reading
+ * the live list and this running - which is a write the steward had just made.
+ */
 export async function pruneToSessions(liveSessionIds: string[]): Promise<string[]> {
   const live = new Set(liveSessionIds);
-  const lines = await getLines();
-  const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
+  const removed = new Set<string>();
 
-  const stale = new Set<string>();
-  for (const line of lines) if (!live.has(line.sessionId)) stale.add(line.sessionId);
-  for (const id of Object.keys(file.sessions ?? {})) if (!live.has(id)) stale.add(id);
+  await withLinesLock(async () => {
+    const lines = await getLines();
+    const kept = lines.filter((l) => live.has(l.sessionId));
+    if (kept.length === lines.length) return;
+    for (const l of lines) if (!live.has(l.sessionId)) removed.add(l.sessionId);
+    await writeJson(LINES_FILE, kept);
+  });
 
-  for (const id of stale) await removeSession(id);
-  return [...stale];
+  await withSessionsLock(async () => {
+    const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
+    const sessions = file.sessions ?? {};
+    let changed = false;
+    for (const id of Object.keys(sessions)) {
+      if (live.has(id)) continue;
+      delete sessions[id];
+      removed.add(id);
+      changed = true;
+    }
+    if (changed) await writeJson(SESSIONS_FILE, { sessions });
+  });
+
+  return [...removed];
 }

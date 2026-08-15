@@ -3,7 +3,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
-import { IDENTITY } from '../../../../shared/identity';
+import { IDENTITY, PASSWORD_ENV } from '../../../../shared/identity';
+import { AuthService } from '../../services/auth';
+import { conditionalAuthMiddleware, getJwtSecret, initJwtSecret } from '../../middleware/auth';
 import { STEWARD_ENV } from '../../services/steward-config';
 import { steward } from '../steward';
 
@@ -13,7 +15,13 @@ let dataDir: string;
 let savedDataDir: string | undefined;
 let savedGate: string | undefined;
 
-const app = new Hono().route('/api/steward', steward);
+/** Mirrors index.ts, middleware included: mounting the router bare would leave
+ *  the self-signed-token invariant untested, and a reordering there would break
+ *  it in silence. */
+const app = new Hono()
+  .use('/api/steward', conditionalAuthMiddleware)
+  .use('/api/steward/*', conditionalAuthMiddleware)
+  .route('/api/steward', steward);
 
 function post(path: string, body: unknown) {
   return app.request(path, {
@@ -104,6 +112,86 @@ describe('the thread', () => {
 
   test('rejects an unknown kind', async () => {
     expect((await post('/api/steward/thread', { kind: 'shout', text: 'x' })).status).toBe(400);
+  });
+});
+
+describe('answers are checked against the question', () => {
+  async function ask(choices: string[], mode = 'single') {
+    const body = (await (
+      await post('/api/steward/thread', { kind: 'ask', text: 'pick', choices, mode })
+    ).json()) as { askId: string };
+    return body.askId;
+  }
+
+  // The steward reads ask.answer as the record of what was decided, so an index
+  // nobody was offered would become a decision nobody made.
+  test('rejects a choice that was never offered', async () => {
+    const askId = await ask(['yes', 'no']);
+    const res = await post('/api/steward/thread/reply', {
+      askId,
+      answer: { kind: 'choice', indices: [5] },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects several answers to a single-answer question', async () => {
+    const askId = await ask(['a', 'b', 'c']);
+    const res = await post('/api/steward/thread/reply', {
+      askId,
+      answer: { kind: 'choice', indices: [0, 1] },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('accepts several on a multi-answer question', async () => {
+    const askId = await ask(['a', 'b', 'c'], 'multi');
+    const res = await post('/api/steward/thread/reply', {
+      askId,
+      answer: { kind: 'choice', indices: [0, 2] },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test('rejects a choice against a free-text question', async () => {
+    const askId = await ask([], 'freeText');
+    const res = await post('/api/steward/thread/reply', {
+      askId,
+      answer: { kind: 'choice', indices: [0] },
+    });
+    expect(res.status).toBe(400);
+  });
+
+  // Accepting it would record the reply and drop the choice it carried.
+  test('rejects an answer with no question', async () => {
+    const res = await post('/api/steward/thread/reply', { answer: { kind: 'dismissed' } });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('authentication', () => {
+  // The CLI signs its own token from <dataDir>/jwt-secret. Nothing else proves
+  // the server actually accepts one.
+  test('a self-signed token is accepted, and no token is not', async () => {
+    process.env[PASSWORD_ENV] = 'a-password';
+    try {
+      // Asked for rather than read from the file the CLI reads: the secret is
+      // resolved once per process, so in a full run another test file may have
+      // initialised it first and the file here would be the wrong one.
+      await initJwtSecret();
+      const token = await new AuthService(dataDir, getJwtSecret()).generateTokenForUser('steward');
+
+      const withToken = await app.request('/api/steward', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(withToken.status).toBe(200);
+
+      expect((await app.request('/api/steward')).status).toBe(401);
+      expect(
+        (await app.request('/api/steward', { headers: { Authorization: 'Bearer nonsense' } })).status,
+      ).toBe(401);
+    } finally {
+      delete process.env[PASSWORD_ENV];
+    }
   });
 });
 
