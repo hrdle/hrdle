@@ -169,7 +169,13 @@ body {
    so the measured part is added here and only the home indicator comes from
    env(). Unlike the top escape this does not shrink the whole app: the problem
    is not a screen sitting under something, it is the last row of a list being
-   out of reach - only the scrolling surface needs it. */
+   out of reach - so only the scrolling surface takes it, and only where that
+   surface is the whole screen (inside a modal the list ends at the modal's
+   edge, which nothing overlaps).
+
+   96px is the toolbar. The 48px in VirtualizedHistoryList is the home
+   indicator on a nested scroller - a smaller escape from a different
+   obstruction, not a second answer to this one. */
 .scroll-bottom-room {
 	padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
 }
