@@ -29,6 +29,7 @@ import { fireHookNotification } from "../utils/hookNotification";
 import { imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
 import { displayedPaneRoot, findPaneById } from "../utils/pane-display";
+import { visiblePanes } from "../utils/panes";
 import { makePseudoViewport } from "../utils/viewport-pseudo";
 import { MobileDashboard } from "./dashboard/MobileDashboard";
 import { DashboardPanel } from "./DashboardPanel";
@@ -1908,6 +1909,48 @@ export function DesktopLayout({
 		[handleSelectSessionForPane],
 	);
 
+	// The phone's substitute for a split, shown only when there is more than one
+	// pane to choose between.
+	//
+	// It is handed to the pane rather than drawn here, because the two things
+	// that want the bottom of a phone's screen have to be stacked by someone who
+	// can see both. Drawn here it sat in the layout's flow while the session bar
+	// was `fixed bottom-0` over the top of it - and a fixed element consumes no
+	// height, so the tab bar had no way to know it was covered. It was, whole:
+	// 27px of it inside the bar's 51, unreachable by any tap (#406).
+	// Listed from the session rather than from the rendered tree. The tree is the
+	// layout this client has been sent, and it can carry one pane while the
+	// workspace has two - which is exactly when the tabs are needed. The session
+	// list is where their labels already came from.
+	const mobileTabPanes = isMobile ? visiblePanes(activeSession) : [];
+	const mobilePaneTabs =
+		isMobile && mobileTabPanes.length > 1 ? (
+			<div className="flex bg-th-surface border-t border-th-border shrink-0 overflow-x-auto">
+				{mobileTabPanes.map((apiPane) => {
+					const paneId = apiPane.paneId;
+					const isActive = paneId === desktopState.activePane;
+					// Priority: agentName > command > paneId
+					const label = apiPane.agentName || apiPane.currentCommand || paneId;
+					const colorCls =
+						apiPane.agentColor && AGENT_TEXT_COLOR[apiPane.agentColor];
+					return (
+						<button
+							type="button"
+							key={paneId}
+							onClick={() => handleFocusPane(paneId)}
+							className={`px-3 min-h-10 text-xs font-mono whitespace-nowrap transition-colors ${
+								isActive
+									? `${colorCls || "text-th-text"} bg-th-surface-hover border-t-2 border-blue-400`
+									: `${colorCls || "text-th-text-secondary"} hover:text-th-text hover:bg-th-surface-hover/50`
+							}`}
+						>
+							{label}
+						</button>
+					);
+				})}
+			</div>
+		) : null;
+
 	// data-layout pins which of the three layout trees rendered; the responsive
 	// e2e matrix asserts on it so a viewport can't silently fall through to the
 	// wrong one.
@@ -2032,41 +2075,11 @@ export function DesktopLayout({
 						terminalRefs={terminalRefs}
 						globalReloadKey={terminalGeneration}
 						variant={variant}
+						paneTabs={mobilePaneTabs}
 						controlModeContext={controlModeContext}
 					/>
 				</div>
 
-				{/* Pane tabs - the phone's substitute for a split, shown only when
-				    there is more than one pane to choose between. */}
-				{isMobile && mobilePaneIds.length > 1 && (
-					<div className="flex bg-th-surface border-t border-th-border shrink-0 overflow-x-auto">
-						{mobilePaneIds.map((paneId) => {
-							const isActive = paneId === desktopState.activePane;
-							const apiPane = activeSession?.panes?.find(
-								(p) => p.paneId === paneId,
-							);
-							// Priority: agentName > command > paneId
-							const label =
-								apiPane?.agentName || apiPane?.currentCommand || paneId;
-							const colorCls =
-								apiPane?.agentColor && AGENT_TEXT_COLOR[apiPane.agentColor];
-							return (
-								<button
-									type="button"
-									key={paneId}
-									onClick={() => handleFocusPane(paneId)}
-									className={`px-3 py-1.5 text-xs font-mono whitespace-nowrap transition-colors ${
-										isActive
-											? `${colorCls || "text-th-text"} bg-th-surface-hover border-t-2 border-blue-400`
-											: `${colorCls || "text-th-text-secondary"} hover:text-th-text hover:bg-th-surface-hover/50`
-									}`}
-								>
-									{label}
-								</button>
-							);
-						})}
-					</div>
-				)}
 			</div>
 
 			{/* Dashboard - a side panel beside the terminal, except on a phone,

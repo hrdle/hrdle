@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The phone's pane tabs can be tapped** (#406). With more than one pane, the
+  tab bar sat entirely inside the session bar: measured on a 393x851 viewport,
+  the bar occupied 800-851 and the tabs 825-851, and `elementFromPoint` at a
+  tab's own centre returned the bar. There was no way to switch panes on a
+  phone unless you knew to open the input bar first, which moves the session
+  bar out of `fixed` and into the flow
+  - Two things wanted the bottom of the screen and neither could see the other:
+    the session bar is drawn `fixed bottom-0` by `Terminal.tsx`, the tabs sat in
+    the layout's flow, and a fixed element consumes no height. They are stacked
+    together now, by the pane that draws that corner of the screen
+  - The tabs are listed from the session rather than from the rendered tree. The
+    tree is the layout this client was sent and can carry one pane while the
+    workspace has two - which is exactly when the tabs are wanted
+  - Their rows are 35px, over the 32px the touch-target check asks for. They
+    were 27px, which nothing had caught because nothing could reach them
+  - Not a regression: the same overlap measures on v0.3.129, before the layouts
+    were merged
+
 ## [0.3.136] - 2026-08-15
 
 ### Fixed
