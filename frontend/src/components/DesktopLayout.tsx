@@ -28,6 +28,7 @@ import {
 import { fireHookNotification } from "../utils/hookNotification";
 import { imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
+import { displayedPaneRoot, findPaneById } from "../utils/pane-display";
 import { makePseudoViewport } from "../utils/viewport-pseudo";
 import { MobileDashboard } from "./dashboard/MobileDashboard";
 import { DashboardPanel } from "./DashboardPanel";
@@ -103,18 +104,6 @@ function createInitialState(sessionKey: string | null): DesktopState {
 		root: { type: "terminal", sessionKey, id: paneId },
 		activePane: paneId,
 	};
-}
-
-// Find pane by ID in the tree
-function findPaneById(node: PaneNode, id: string): PaneNode | null {
-	if (node.id === id) return node;
-	if (node.type === "split") {
-		for (const child of node.children) {
-			const found = findPaneById(child, id);
-			if (found) return found;
-		}
-	}
-	return null;
 }
 
 // First terminal (leaf) pane id under a node, in depth-first order.
@@ -415,6 +404,8 @@ export function DesktopLayout({
 }: DesktopLayoutProps) {
 	const isTablet = variant === "tablet";
 	const isMobile = variant === "mobile";
+	const isMobileRef = useRef(isMobile);
+	isMobileRef.current = isMobile;
 	const { t } = useTranslation();
 	const terminalRefs = useRef<Map<string, TerminalRef | null>>(new Map());
 	const floatingKeyboardRef = useRef<FloatingKeyboardRef>(null);
@@ -962,7 +953,6 @@ export function DesktopLayout({
 		}
 		setControlLayout(null);
 		setZoomedPaneId(null);
-		mobileZoomIntentRef.current = null;
 		followedMobileZoomRef.current = null;
 		lastViewportRef.current.clear();
 		paneOffsetRef.current.clear();
@@ -1020,6 +1010,25 @@ export function DesktopLayout({
 			// When zoomed, compute size from the zoomed pane only (it fills the screen).
 			// When not zoomed, compute from the full tree.
 			const zoomedId = zoomedPaneIdRef.current;
+			// A phone draws its one pane before the server has zoomed it, so
+			// between those two moments the pane on screen is not the whole
+			// window. Sending its size as the window's would have the server
+			// divide it again; saying nothing leaves the pane at its last size
+			// until the zoom lands, which is the recoverable half of the trade.
+			if (isMobileRef.current) {
+				const shown = displayedPaneRoot(desktopStateRef.current.root, {
+					activePane: desktopStateRef.current.activePane,
+					zoomedPaneId: zoomedId,
+					isMobile: true,
+				});
+				if (
+					getAllPaneIds(desktopStateRef.current.root).length > 1 &&
+					zoomedId !== shown.id
+				) {
+					console.log("[Resize] Skipped: mobile zoom not confirmed");
+					return;
+				}
+			}
 			const root = zoomedId
 				? findPaneById(desktopStateRef.current.root, zoomedId) ||
 					desktopStateRef.current.root
@@ -1705,19 +1714,17 @@ export function DesktopLayout({
 		[],
 	);
 
-	// Compute the display root: when zoomed, show only the zoomed pane full-screen.
-	// The server keeps sending the full tree while zoomed; zoomedPaneId mirrors
-	// the server's zoom and overrides the rendered tree here.
-	const displayRoot = useMemo(() => {
-		if (zoomedPaneId) {
-			const zoomedPane = findPaneById(desktopState.root, zoomedPaneId);
-			if (zoomedPane) {
-				return zoomedPane;
-			}
-			// Zoomed pane no longer exists (was closed) - fall back to full tree
-		}
-		return desktopState.root;
-	}, [desktopState.root, zoomedPaneId]);
+	// What is actually on screen. The rule, and the reason a phone does not wait
+	// for the server's zoom to narrow it, are in `utils/pane-display.ts`.
+	const displayRoot = useMemo(
+		() =>
+			displayedPaneRoot(desktopState.root, {
+				activePane: desktopState.activePane,
+				zoomedPaneId,
+				isMobile,
+			}),
+		[desktopState.root, desktopState.activePane, zoomedPaneId, isMobile],
+	);
 
 	// The panes the phone's tab bar offers, in tree order.
 	const mobilePaneIds = useMemo(
@@ -1725,22 +1732,37 @@ export function DesktopLayout({
 		[isMobile, desktopState.root],
 	);
 
-	// A phone shows exactly one pane - a split of 393px is two unusable
-	// terminals - and it gets there by zooming, not by rendering one leaf of a
-	// split. The PTY has to be the size of the screen, and only the server's
-	// zoom makes it that: the resize this client sends is the whole window's,
-	// which a split would then divide again.
-	const mobileZoomIntentRef = useRef<string | null>(null);
+	// The pane on screen is drawn at the size of the whole window, so the server
+	// has to agree that it *is* the whole window - which is what the zoom asks
+	// for. The rendering does not wait for that answer (see `pane-display.ts`);
+	// this keeps asking until it arrives.
+	//
+	// It has to keep asking rather than ask once. `zoom-pane` is dropped without
+	// error when the socket is not open, and the zoom is server state any other
+	// client can change - a desktop on the same workspace unzooms, and this
+	// phone is left sized for a pane it no longer has. Neither surfaces as an
+	// error, only as a terminal wrapping at the wrong width, so checking and
+	// re-asserting is the only way to notice.
 	useEffect(() => {
-		if (!isMobile) return;
-		const active = desktopState.activePane;
-		if (mobilePaneIds.length <= 1 || !mobilePaneIds.includes(active)) return;
-		if (mobileZoomIntentRef.current === active) return;
-		mobileZoomIntentRef.current = active;
-		if (zoomedPaneId !== active) {
-			controlTerminalRef.current.zoomPane(active, true);
-		}
-	}, [isMobile, desktopState.activePane, mobilePaneIds, zoomedPaneId]);
+		if (!isMobile || !controlTerminal.isConnected) return;
+		if (mobilePaneIds.length <= 1) return;
+		// The pane the tree actually draws, which is not always the focused one:
+		// a stale id resolves to the first leaf rather than to a split.
+		const shown = displayRoot.id;
+		if (zoomedPaneId === shown) return;
+		controlTerminalRef.current.zoomPane(shown, true);
+		const timer = window.setInterval(() => {
+			if (zoomedPaneIdRef.current === shown) return;
+			controlTerminalRef.current.zoomPane(shown, true);
+		}, 2000);
+		return () => window.clearInterval(timer);
+	}, [
+		isMobile,
+		displayRoot,
+		mobilePaneIds,
+		zoomedPaneId,
+		controlTerminal.isConnected,
+	]);
 
 	const [pendingPaneFocus, setPendingPaneFocus] = useState<string | null>(null);
 	const appliedPaneFocusRef = useRef(0);
@@ -1768,7 +1790,6 @@ export function DesktopLayout({
 		if (!isMobile || !zoomedPaneId) return;
 		if (followedMobileZoomRef.current === zoomedPaneId) return;
 		followedMobileZoomRef.current = zoomedPaneId;
-		mobileZoomIntentRef.current = zoomedPaneId;
 		setDesktopState((prev) =>
 			prev.activePane === zoomedPaneId
 				? prev
