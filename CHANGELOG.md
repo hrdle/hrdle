@@ -4,6 +4,54 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The server side of the steward, behind a switch that is off.** The steward
+  is a resident agent that watches every workspace and writes what a person
+  should see, so the glasses and the phone read words that are already there
+  rather than waiting for an agent to start thinking (#383). This release adds
+  only the container it writes into: a thread, one overview line per session,
+  and a per-session history of turns, all persisted so they outlive both the
+  steward and a server restart. It writes through `hrdle steward <verb>`
+  (`notify`, `ask`, `report`, `line`, `turns`, `screen`), each printing JSON so
+  it can read back what it wrote. Nothing appears until `HRDLE_STEWARD=1` -
+  with the switch off the
+  API 404s and the commands say so, because hiding a feature in the client
+  leaves its endpoints serving.
+- **The steward is started, supervised and woken by hrdle.** It lives in its own
+  herdr session, derived from the one being watched, so a dev build cannot drive
+  the installed one's observer. A Claude Code session does not run on its own,
+  so the loop lives in hrdle: it wakes the observer when a pane changes state,
+  and again when a person writes into the steward thread - that second wake-up
+  carries the answer rather than announcing one exists, which is what lets `ask`
+  return immediately and never poll.
+- **`hrdle steward-do <verb>` is the only way the steward touches a session.**
+  It runs against the watched herdr server rather than the steward's own (a bare
+  `herdr` inside the observer's pane can only see the observer), holds exactly
+  three verbs - `clear`, `say`, `stop` - and journals every action, which is
+  also how the steward tells its own doing from its owner's. Answering a
+  permission prompt, reaching a shell pane and killing an agent are absent by
+  construction, not by instruction. Panes are addressed by **pane id**: only
+  agents started through `herdr agent start` carry a name, which on a real
+  server is one row in seventeen, so name addressing reached nothing anyone
+  runs. A workspace holding several agents is refused rather than resolved to
+  whichever listed first.
+- **The observer's prompt.** Written by hrdle into the steward's working
+  directory and rewritten on every start, because it is the specification of
+  what the steward is and it changes with the code around it: the tools, the
+  glasses budget, what not to answer on someone's behalf, and clearing its own
+  context so that its accumulated judgement lives in what it has written down
+  rather than in a context window about to be summarised. It writes in the
+  **speech-to-text language**, not the host's `LANG` - measured on a machine
+  whose locale is English while everything spoken to it is Japanese.
+- **`hrdle steward thread [n]`.** The steward can read its own conversation.
+  A wake-up carries what caused it, so anything said while the observer was
+  down or mid-turn existed nowhere it could reach.
+- **`bun run dev:steward`.** An isolated stack for working on it: its own herdr
+  server (`--session steward-dev`, which is the only thing that separates
+  `session.json` as well as the socket), its own data directory, and the dev
+  port. Without all three, developing a thing that drives every workspace means
+  driving the user's own.
+
 ## [0.3.136] - 2026-08-15
 
 ### Fixed

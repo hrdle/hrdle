@@ -13,12 +13,15 @@ import {
   unsubscribeGlassesRelay,
 } from '../services/glasses-relay';
 import { recordGlassesFocus, recordGlassesInput, recordGlassesScreen } from '../services/glasses-screen-recorder';
+import { isStewardEnabled } from '../services/steward-config';
+import { getLines, getThread } from '../services/steward-store';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
   ControlClientMessage,
   GlassesScreen,
   MuxClientMessage,
+  MuxServerMessage,
   ConversationMessage,
   SessionResponse,
 } from '../../../shared/types';
@@ -92,6 +95,8 @@ export interface MuxData {
   glassesFocusAt?: number;
   /** Set by `subscribe-glasses-screen`: this connection watches the mirror. */
   watchesGlassesScreen?: boolean;
+  /** Set by `subscribe-steward`: this connection reads what the steward writes. */
+  watchesSteward?: boolean;
   /** Last `client-info` this connection was logged as saying, so a page
    *  re-declaring the same thing on every session switch is logged once. */
   lastDeclaration?: string;
@@ -106,6 +111,12 @@ export interface MuxData {
 
 let lastGlassesScreen: GlassesScreen | null = null;
 let glassesScreenPublisher: ServerWebSocket<MuxData> | null = null;
+
+/** What `read_screen` answers with. The mirror rather than a query to the app:
+ *  it already holds what the wearer is looking at. */
+export function getLastGlassesScreen(): GlassesScreen | null {
+  return lastGlassesScreen;
+}
 
 function sendGlassesScreen(ws: ServerWebSocket<MuxData>, screen: GlassesScreen | null) {
   try { ws.send(JSON.stringify({ type: 'glasses-screen', screen })); } catch { /* disconnected */ }
@@ -489,6 +500,21 @@ export function getConnectedClientCount(): number {
   return devices.size;
 }
 
+/**
+ * Send steward output to the clients that asked for it.
+ *
+ * Never a plain broadcast: the overview, the thread and every session's turns
+ * go out on one subscription, and a client that has not opted in has no use for
+ * any of it.
+ */
+export function broadcastSteward(msg: Extract<MuxServerMessage, { type: `steward-${string}` }>) {
+  const payload = JSON.stringify(msg);
+  for (const ws of activeMuxConnections) {
+    if (!ws.data.watchesSteward) continue;
+    try { ws.send(payload); } catch { /* disconnected */ }
+  }
+}
+
 export function broadcastToMuxClients(msg: Record<string, unknown>) {
   const payload = JSON.stringify(msg);
   for (const ws of activeMuxConnections) {
@@ -625,6 +651,24 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
 
   if (msg.type === 'unsubscribe-glasses-screen') {
     ws.data.watchesGlassesScreen = false;
+    return;
+  }
+
+  // The steward's output. Gated the same way its REST routes are: with the
+  // feature off there is nothing to subscribe to, and a client that asks is
+  // simply left unsubscribed rather than told a store exists.
+  if (msg.type === 'subscribe-steward') {
+    if (!isStewardEnabled()) return;
+    ws.data.watchesSteward = true;
+    try {
+      const [thread, lines] = await Promise.all([getThread(), getLines()]);
+      ws.send(JSON.stringify({ type: 'steward-snapshot', thread, lines }));
+    } catch { /* the store is unreadable; live updates still arrive */ }
+    return;
+  }
+
+  if (msg.type === 'unsubscribe-steward') {
+    ws.data.watchesSteward = false;
     return;
   }
 

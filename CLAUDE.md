@@ -94,6 +94,12 @@ bun run dev
 bun run dev:backend   # Backend only (port 3457)
 bun run dev:frontend  # Frontend only (port 5174)
 
+# Steward work: isolated herdr server + data directory + the gate on.
+# All three, or a thing that drives every workspace drives the user's own.
+bun run dev:steward
+bash scripts/dev-steward.sh --env    # to eval in a shell running herdr commands
+bash scripts/dev-steward.sh --stop   # stop its herdr server
+
 # Testing and linting
 bun run test          # Run all tests
 bun run test:e2e      # E2E tests (frontend only)
@@ -158,6 +164,9 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **SttRequestResolver** (`services/stt-request.ts`) - The one place that decides what a transcription carries: `resolveSttRequest({ sessionId, lang })` returns the model, the language, the vocabulary prompt, each value's source and how the prompt was composed. `routes/glasses.ts` calls it once for `/stt` and serves it verbatim from `/stt-preview`, so the settings screen, the simulator and the terminal all read the object the transcription itself uses. Composition stays in `stt-prompt.ts`; the key stays out of the return value, because it is write-only
 - **OpenRouterPricingService / OpenRouterAccountService** (`services/openrouter.ts`) - Pay-as-you-go cost reporting: list prices from the public `/api/v1/models` (no auth, 24h cache) drive *estimated* per-window costs, while `/api/v1/key` + `/api/v1/credits` (keyed, 60s cache, 5min failure backoff) report OpenRouter's *billed* daily/weekly/monthly spend and credit balance. Estimates use rolling windows, OpenRouter's are calendar windows, so the two never match exactly
 - **ConversationWatcher** (`services/conversation-watcher.ts`) - Watches Claude Code / Codex `.jsonl` files and emits conversation updates to subscribed WebSocket clients
+- **StewardStore** (`services/steward-store.ts`) - What the resident steward agent writes for a person to read (#383): its own thread, one overview line per session, and a per-session history of turns. **Written ahead of being read** - a wearer opening the overview must not wait for an agent to start thinking, so the screens read this store and never learn whether the steward is alive. On disk (`SessionMetadataService`'s pattern: `<dataDir>` JSON + mutation lock + atomicWrite) because the thread is promised to outlive the steward and the server restarts every release. Three files, because a line moves on every state change while a thread item only moves when a person is addressed. Turns upsert by id so the steward writes differences rather than rebuilding history; caps and `pruneToSessions` keep it bounded
+- **StewardRuntime** (`services/steward-runtime.ts`) - Starts the steward, keeps it up, wakes it. It runs in **its own herdr session** (`steward`, or `<name>-steward` when hrdle runs against a named server), which is what makes it invisible to itself: it watches the default server's `agent list` and is not on it. Nothing here uses `herdrRpc` — this process resolves one socket and it is the wrong one. **A Claude Code session does not run on its own** (turns end; a bash poll loop accumulates context every tick), so the loop lives here, on two signals: a pane changing state, and a person writing into the steward thread — which moves no pane, so the first cannot see it. Measured on herdr 0.8.0: a prompt sent while an agent is working is **queued** until that turn ends, but **dropped when the pane shows a modal** (text sits unsubmitted in the input field), so the observer must never be in a position to be asked for permission. Writes `<dataDir>/steward/target.json` (watched socket, this server's port) because herdr exports `HERDR_SOCKET_PATH` into every pane, and a bare `herdr agent list` inside the observer's pane returns only the observer
+- **StewardConfig** (`services/steward-config.ts`) - The gate (`HRDLE_STEWARD`, off by default) and the observer / worker models (default Sonnet, separately settable so a worker's long write-up can go somewhere heavier without slowing the observer). Gated on the server rather than in localStorage: hiding a mode in the client leaves its endpoints serving. **CLAUDE.md's one-week migration expiry does not apply** - this is a switch keeping an immature feature off screens, and it is deleted once the feature has reached everyone
 - **HookStatusService** (`services/hook-status.ts`) - Reports whether the hooks Hrdle still needs are installed (`Stop` for notification text, `PostToolUse`/`AskUserQuestion` for the question's tool name). Indicator transitions come from herdr, not hooks
 - **HerdrAgentStatusWatcher** (`services/herdr-agent-status.ts`) - Subscribes to herdr's per-pane `pane.agent_status_changed` (plus pane lifecycle events, which re-subscribe the pane set) and triggers an immediate sessions push. Decides *when* to rebuild the list, never what's in it — a dropped event costs latency, not correctness
 - **AuthService** (`services/auth.ts`) - Password-based authentication with session tokens
@@ -227,12 +236,23 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /history/:peerId/resume` - Resume a session on a peer
 - `GET /:peerId/files/browse`, `POST /:peerId/files/mkdir`, `POST /:peerId/upload/image`, `GET /:peerId/dashboard` - Proxied peer operations
 
+**Steward** (`/api/steward`) — behind `HRDLE_STEWARD`; every route below 404s when it is off:
+- `GET /enabled` - **Answers either way.** The CLI asks it to tell "switched off" apart from "server too old", which a 404 cannot say
+- `GET /` - Snapshot: the thread and every session's overview line
+- `POST /thread` - The steward writes (`kind: notify | ask | report`). An `ask` gets the thread item's own id back as its `ask_id`
+- `POST /thread/reply` - A person answers (`askId` + `answer`, where `dismissed` is one of the answers) or simply says something (`text`)
+- `PUT /sessions/:id/line` - The overview row for one session
+- `GET`/`POST /sessions/:id/turns` - That session's glasses-side history; POST upserts by turn id
+- `GET /screen` - What the glasses are showing right now (the mirror's last frame, or null)
+- `PUT /settings` - Which model each half runs (read back through `/enabled`)
+
 **Terminal WebSocket** (`/ws/mux`):
 - Multiplexed WebSocket — single connection serves all sessions
 - Client subscribes/unsubscribes per session via JSON messages
 - Client messages (`MuxClientMessage`): `subscribe`, `unsubscribe`, `subscribe-conversation`, `unsubscribe-conversation`, then per-session (`ControlClientMessage`): `input`, `resize`, `split`, `close-pane`, `resize-pane`, `select-pane`, `adjust-pane`, `equalize-panes`, `zoom-pane`, `request-viewport`, `select-tab`, `create-tab`, `close-tab`, `ping`, `client-info`
 - Server messages (`MuxServerMessage`): `subscribed`, `unsubscribed`, `sessions-updated`, `conversation-subscribed`, `conversation-unsubscribed`, `initial-conversation`, `conversation-update`, then per-session (`ControlServerMessage`): `layout`, `viewport`, `ready`, `pong`, `error`, `hook-event`
 - Server periodically pushes `sessions-updated` (5s interval) with full session list
+- `subscribe-steward` / `unsubscribe-steward` carry no sessionId: one subscription covers the thread and every session's line and turns, because the overview needs all of them at once. The **snapshot on subscribe carries the thread and the lines only** — turns arrive as live `steward-turns` pushes, or from `GET /api/steward/sessions/:id/turns` when a client opens one
 
 **Other**:
 - `GET /api/dashboard` - Dashboard data (usage limits, statistics, cost estimates, system metrics, usage history, herdr version skew)
@@ -441,6 +461,32 @@ hrdle stt-prompt --no-glossary             # This workspace speaks none of this
                                            # product's words: drop the glossary
                                            # and take the whole budget
 hrdle stt-prompt --glossary                # Take it again
+
+# How the steward reaches its owner (#383). Every verb prints JSON, so it can
+# read back what it wrote. Requires HRDLE_STEWARD=1 on the server.
+hrdle steward notify "ビルドが通りました" --detail "3 files changed"
+hrdle steward ask "デプロイしますか" --choices "はい,いいえ" --step 1/2   # -> ask_id
+hrdle steward report "3 セッションが止まっています" --file rows.txt      # 1 行 1 row
+hrdle steward line w5Q "レビュー待ち 12分"   # the overview row for one session
+hrdle steward turns w5Q --file turns.json   # append/amend that session's history
+hrdle steward screen                        # what the glasses show right now
+
+# The only way the steward touches a session. Runs against the *watched* herdr
+# server (not its own), refuses anything that is not an agent pane, and
+# journals every action. The three verbs are the boundary: answering a
+# permission prompt, reaching a shell pane and killing an agent are absent by
+# construction, and adding one decides what the steward is allowed to be.
+# Panes are addressed by pane id (w5Q:p1). `herdr agent list` only carries a
+# `name` for agents started through `herdr agent start` - 16 of 17 rows on a
+# real server have none - so name addressing reached nothing a person runs. A
+# workspace id works when it holds one agent and is refused when it holds
+# several, rather than meaning whichever listed first.
+hrdle steward-do watch                      # every agent, with state_change_seq
+hrdle steward-do read <pane>                # what is on that pane
+hrdle steward-do say <pane> "<text>"        # a further instruction
+hrdle steward-do clear <pane>               # /clear (not reversible)
+hrdle steward-do stop <pane>                # ESC
+hrdle steward-do journal [n]                # what it has done
 
 # Debugging (Bun inspector on the running service)
 hrdle debug status      # Show inspector state

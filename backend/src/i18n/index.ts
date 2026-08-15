@@ -250,6 +250,11 @@ function detectLanguage(): string {
 
 const currentLanguage = detectLanguage();
 
+/** Which language this host speaks, for text composed rather than looked up. */
+export function currentLocale(): string {
+  return currentLanguage;
+}
+
 // Get nested value from object using dot notation
 function getNestedValue(obj: Translations, key: string): string | undefined {
   const parts = key.split('.');
