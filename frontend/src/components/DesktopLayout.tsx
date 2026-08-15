@@ -1941,10 +1941,7 @@ export function DesktopLayout({
 					</div>
 				)}
 				{isTablet && (
-					<div
-						className="shrink-0 select-none bg-[#0a0a0a] border-b border-white/[0.06]"
-						style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-					>
+					<div className="shrink-0 select-none bg-[#0a0a0a] border-b border-white/[0.06]">
 						{/* Top bar: session selector + core actions */}
 						<div className="flex items-center gap-2 px-3 py-1.5">
 							{/* Left: Session selector */}
