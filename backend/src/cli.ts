@@ -47,7 +47,7 @@ interface CliOptions {
   glassesKind?: 'waiting' | 'info';
   /** `--choices`, shared by `glasses` and `steward ask`. */
   choices?: string[];
-  stewardVerb?: 'notify' | 'ask' | 'report' | 'line' | 'turns' | 'screen';
+  stewardVerb?: 'notify' | 'ask' | 'report' | 'line' | 'turns' | 'screen' | 'thread';
   /** Positional words after the verb, in order. */
   stewardArgs?: string[];
   stewardDetail?: string;
@@ -56,6 +56,9 @@ interface CliOptions {
   stewardFile?: string;
   stewardDoVerb?: string;
   stewardDoArgs?: string[];
+  /** Whether `-p` was actually given. `port` always holds a number, so without
+   *  this a command cannot tell a chosen port from the default. */
+  portExplicit?: boolean;
   /** `--session`, shared by every command that addresses one. */
   session?: string;
   sttPromptText?: string;
@@ -85,7 +88,7 @@ ${t('cli.usage')}
                             report <heading> --file <rows>  (one row per line)
                             line <session> <text>
                             turns <session> --file <json>
-                            screen
+                            screen | thread [n]
                             Fails unless the steward is enabled on the server.
   ${IDENTITY.binaryName} steward-do <verb>   The only way the steward touches a session. Runs
                             against the watched herdr server, not the steward's
@@ -396,6 +399,7 @@ export function parseArgs(args: string[]): CliOptions {
           console.error(`${t('cli.errorInvalidPort')}`);
           process.exit(1);
         }
+        options.portExplicit = true;
         break;
       case '-H':
       case '--host':

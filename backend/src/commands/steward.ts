@@ -18,7 +18,8 @@ import { getDataDir } from '../utils/storage';
 const TOKEN_USER = 'steward';
 
 export interface StewardCliOptions {
-  stewardVerb?: 'notify' | 'ask' | 'report' | 'line' | 'turns' | 'screen';
+  portExplicit?: boolean;
+  stewardVerb?: 'notify' | 'ask' | 'report' | 'line' | 'turns' | 'screen' | 'thread';
   /** Positional words after the verb, in order. */
   stewardArgs?: string[];
   stewardDetail?: string;
@@ -50,6 +51,26 @@ async function resolveToken(): Promise<string | null> {
   }
   if (!secret) return null;
   return new AuthService(getDataDir(), secret).generateTokenForUser(TOKEN_USER);
+}
+
+/**
+ * Which server to deliver to.
+ *
+ * The steward never passes `-p`: it is told where to write by the server that
+ * started it. Without this the observer's every message went to the default
+ * port, where the steward is not enabled, and came back "not enabled on this
+ * server" - found by watching it try.
+ */
+async function resolvePort(options: StewardCliOptions & { port: number }): Promise<number> {
+  if (options.portExplicit) return options.port;
+  try {
+    const raw = await readFile(join(getDataDir(), 'steward', 'target.json'), 'utf-8');
+    const target = JSON.parse(raw) as { port?: number };
+    if (typeof target.port === 'number') return target.port;
+  } catch {
+    // No target file: not running inside the steward, so the default is right.
+  }
+  return options.port;
 }
 
 async function api(port: number, method: string, path: string, body?: unknown): Promise<unknown> {
@@ -101,12 +122,13 @@ async function readPayload(options: StewardCliOptions): Promise<unknown> {
 export async function runSteward(options: StewardCliOptions): Promise<void> {
   const args = options.stewardArgs ?? [];
   try {
+    const port = await resolvePort(options);
     switch (options.stewardVerb) {
       case 'notify': {
         const text = args[0];
         if (!text) throw new Error('usage: hrdle steward notify <text> [--detail <markdown>]');
         emit(
-          await api(options.port, 'POST', '/api/steward/thread', {
+          await api(port, 'POST', '/api/steward/thread', {
             kind: 'notify',
             text,
             detail: options.stewardDetail,
@@ -123,7 +145,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
           );
         }
         emit(
-          await api(options.port, 'POST', '/api/steward/thread', {
+          await api(port, 'POST', '/api/steward/thread', {
             kind: 'ask',
             text,
             choices: options.stewardChoices ?? [],
@@ -145,7 +167,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
           : await Bun.stdin.text();
         const rows = raw.split('\n').map((r) => r.trimEnd()).filter(Boolean);
         emit(
-          await api(options.port, 'POST', '/api/steward/thread', {
+          await api(port, 'POST', '/api/steward/thread', {
             kind: 'report',
             text,
             rows,
@@ -158,7 +180,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
       case 'line': {
         const [session, text] = args;
         if (!session || text === undefined) throw new Error('usage: hrdle steward line <session> <text>');
-        emit(await api(options.port, 'PUT', `/api/steward/sessions/${encodeURIComponent(session)}/line`, { text }));
+        emit(await api(port, 'PUT', `/api/steward/sessions/${encodeURIComponent(session)}/line`, { text }));
         return;
       }
 
@@ -169,16 +191,26 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
         // Both shapes accepted: the array is what a caller naturally writes,
         // and the object is what the endpoint takes.
         const turns = Array.isArray(payload) ? payload : (payload as { turns?: unknown }).turns;
-        emit(await api(options.port, 'POST', `/api/steward/sessions/${encodeURIComponent(session)}/turns`, { turns }));
+        emit(await api(port, 'POST', `/api/steward/sessions/${encodeURIComponent(session)}/turns`, { turns }));
         return;
       }
 
       case 'screen':
-        emit(await api(options.port, 'GET', '/api/steward/screen'));
+        emit(await api(port, 'GET', '/api/steward/screen'));
         return;
 
+      // Its own conversation, which it cannot otherwise see: a wake-up carries
+      // the answer that triggered it, so anything said while the observer was
+      // down or mid-turn is only here.
+      case 'thread': {
+        const snapshot = (await api(port, 'GET', '/api/steward')) as { thread?: unknown[] };
+        const limit = Number(args[0]) || 20;
+        emit({ thread: (snapshot.thread ?? []).slice(-limit) });
+        return;
+      }
+
       default:
-        console.error('usage: hrdle steward <notify|ask|report|line|turns|screen> ...');
+        console.error('usage: hrdle steward <notify|ask|report|line|turns|screen|thread> ...');
         process.exit(1);
     }
   } catch (err) {

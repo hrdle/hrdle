@@ -10,13 +10,43 @@
 
 import { IDENTITY } from '../../../shared/identity';
 import { currentLocale } from '../i18n';
+import { resolveSttLang } from './glasses-settings';
 
 /** The glasses hold one page: seven lines, 189 Japanese characters. */
 const GLASSES_BUDGET = 189;
 
-export function stewardPrompt(): string {
-  const bin = IDENTITY.binaryName;
-  const writeIn = currentLocale() === 'ja' ? 'Japanese' : 'English';
+/**
+ * How the observer should invoke us.
+ *
+ * Not the bare name: a hook or a pane started from a service has a PATH that
+ * does not include `~/.local/bin`, and a checkout has no installed binary
+ * carrying these subcommands at all. Under `bun run` argv is
+ * `[bun, script.ts]`; a compiled binary is argv[0] alone.
+ */
+export function stewardInvocation(): string {
+  const [exe, script] = process.argv;
+  if (script?.endsWith('.ts')) return `${exe} run ${script}`;
+  return exe || IDENTITY.binaryName;
+}
+
+/**
+ * Which language the steward writes in.
+ *
+ * The speech-to-text language, not the host's `LANG`. The two disagree in
+ * practice - measured on a machine whose locale is `en_US.UTF-8` while every
+ * word spoken to it is Japanese - and the steward writes for whoever is
+ * speaking, not for whoever configured the shell. `auto` has nothing to say
+ * about the person, so the locale answers there.
+ */
+async function outputLanguage(): Promise<string> {
+  const { lang } = await resolveSttLang();
+  const resolved = lang === 'auto' ? currentLocale() : lang;
+  return resolved.startsWith('ja') ? 'Japanese' : 'English';
+}
+
+export async function stewardPrompt(): Promise<string> {
+  const bin = stewardInvocation();
+  const writeIn = await outputLanguage();
 
   return `# The steward
 
@@ -24,7 +54,7 @@ You watch every coding-agent session on this machine and decide what reaches
 the person who owns them. Nothing you do is visible to them except what you
 write, so writing is the job - not observing.
 
-This file is written by ${bin} and rewritten whenever it starts. Edits here are
+This file is written by ${IDENTITY.productName} and rewritten whenever it starts. Edits here are
 lost; put anything you want to remember in NOTES.md beside it.
 
 ## Your tools
@@ -51,12 +81,16 @@ about the sessions you are watching, so it will tell you nothing true.
 - \`${bin} steward ask "<text>" --choices "a,b"\` - ask; prints an ask_id and returns
 - \`${bin} steward report "<heading>" --file <rows>\` - what is stuck, across sessions
 - \`${bin} steward screen\` - what the glasses are showing right now
+- \`${bin} steward thread [n]\` - your own conversation with them
 
 ## When you are woken
 
 You do not run a loop. ${IDENTITY.productName} wakes you when something moved,
 and the wake-up says what. Each time:
 
+0. \`steward thread\` when you have just started or just cleared. A wake-up
+   carries what caused it, but anything said while you were down or mid-turn is
+   only in the thread - and an unanswered question there is someone waiting.
 1. \`steward-do watch\` and compare \`seq\` per pane against your last reading.
    A pane whose \`seq\` is **lower** than you remember means herdr restarted and
    the counters reset - re-baseline everything and fire nothing that round.
@@ -72,8 +106,14 @@ They can speak to you from a session (about that session) or from the overview,
 where the request belongs to no single session: reorder the list, find something
 in history and bring it back, merge two sessions into one workspace.
 
-**You cannot do those yet.** Say so plainly and say what you can do instead -
-do not improvise with the verbs you have, and do not silently drop the request.
+**Answer with \`${bin} steward notify\`.** Writing the answer in your own
+terminal reaches nobody - they are not looking at your pane, and it is the one
+place they never see. Every reply goes out through a command, including "I
+cannot do that".
+
+**The overview requests you cannot do yet** are reordering, reviving from
+history and merging. Say so plainly and say what you can do instead - do not
+improvise with the verbs you have, and do not drop the request in silence.
 
 ## What to write
 

@@ -62,7 +62,7 @@ async function writeHome(port: number): Promise<void> {
   await atomicWriteFile(join(stewardHomeDir(), TARGET_FILE), JSON.stringify(target, null, 2));
   // The prompt ships with the code it describes, so it is rewritten rather
   // than left to drift. An edit made in place does not survive.
-  await atomicWriteFile(join(stewardHomeDir(), 'CLAUDE.md'), stewardPrompt());
+  await atomicWriteFile(join(stewardHomeDir(), 'CLAUDE.md'), await stewardPrompt());
 }
 
 const SUPERVISE_INTERVAL_MS = 30_000;
@@ -71,6 +71,8 @@ const SUPERVISE_INTERVAL_MS = 30_000;
 const WAKE_DEBOUNCE_MS = 3_000;
 
 let superviseTimer: ReturnType<typeof setInterval> | null = null;
+/** This server's port, so a wake-up can rebuild the observer before delivering. */
+let runtimePort: number | null = null;
 let removeStatusListener: (() => void) | null = null;
 let wakeTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingReasons = new Set<string>();
@@ -286,8 +288,15 @@ export function wakeObserverWith(text: string): void {
 }
 
 async function deliver(text: string): Promise<void> {
-  // Nothing to wake; the supervisor tick will notice and rebuild it.
-  if (!(await findObserver())) return;
+  if (!(await findObserver())) {
+    // Rebuild now rather than waiting for the tick. Waking IS the delivery, so
+    // a wake-up dropped here is an answer the owner gave and nobody ever reads
+    // - which is what happened after a herdr restart: the workspace came back
+    // and the agent did not, and the reply that arrived in between was lost.
+    if (runtimePort === null) return;
+    if (!(await ensureSteward(runtimePort))) return;
+    if (!(await findObserver())) return;
+  }
   const res = await herdrCli(['agent', 'prompt', OBSERVER, text]);
   if (!res.ok) console.error(`[steward] wake failed: ${res.stderr.trim()}`);
 }
@@ -295,6 +304,8 @@ async function deliver(text: string): Promise<void> {
 export function startStewardRuntime(port: number): void {
   if (!isStewardEnabled()) return;
   if (superviseTimer) return;
+
+  runtimePort = port;
 
   void ensureSteward(port);
   superviseTimer = setInterval(() => void ensureSteward(port), SUPERVISE_INTERVAL_MS);
@@ -313,6 +324,7 @@ export function stopStewardRuntime(): void {
   removeStatusListener = null;
   superviseTimer = null;
   wakeTimer = null;
+  runtimePort = null;
   pendingReasons = new Set();
   backoffUntil = 0;
 }

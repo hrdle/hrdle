@@ -36,7 +36,12 @@ All notable changes to this project will be documented in this file.
   what the steward is and it changes with the code around it: the tools, the
   glasses budget, what not to answer on someone's behalf, and clearing its own
   context so that its accumulated judgement lives in what it has written down
-  rather than in a context window about to be summarised.
+  rather than in a context window about to be summarised. It writes in the
+  **speech-to-text language**, not the host's `LANG` - measured on a machine
+  whose locale is English while everything spoken to it is Japanese.
+- **`hrdle steward thread [n]`.** The steward can read its own conversation.
+  A wake-up carries what caused it, so anything said while the observer was
+  down or mid-turn existed nowhere it could reach.
 - **`bun run dev:steward`.** An isolated stack for working on it: its own herdr
   server (`--session steward-dev`, which is the only thing that separates
   `session.json` as well as the socket), its own data directory, and the dev
