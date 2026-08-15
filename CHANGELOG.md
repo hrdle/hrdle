@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.139] - 2026-08-16
+
+### Fixed
+- **A full-screen dialog no longer opens under the status bar, and the phone's
+  lists reach their last row.** The escape from the status bar and the Dynamic
+  Island was two paddings written on two screens, and content padding does not
+  move a `position: fixed` element at all - so the 19 full-screen overlays in
+  the app rendered under the bar when it was launched from the home screen. It
+  is now held once, by `#root`, which moves the app down by the inset and
+  shortens it by the same amount, so every screen and every overlay clears the
+  bar together. A test keeps it in one place, because adding it screen by
+  screen was tried three times and each round left a different screen under the
+  bar. Separately, iOS Safari's bottom toolbar overlaps the visible area
+  without reporting it through `safe-area`, so the phone's session list and its
+  dashboard and servers panes end in room a thumb can reach - only where the
+  scrolling surface is the whole screen, so the desktop picker is unchanged.
+  Thanks to @Chapapon (#403)
+
 ## [0.3.138] - 2026-08-16
 
 ### Fixed
