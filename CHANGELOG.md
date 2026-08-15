@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.129] - 2026-08-15
+
 ### Changed
 - **The session controls are defined once and rendered by each layout** (#8).
   Mobile draws its own component tree and desktop/tablet share another, so every
