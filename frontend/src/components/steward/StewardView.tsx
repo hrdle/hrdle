@@ -8,7 +8,8 @@ import type {
 } from "../../../../shared/types";
 import { useSteward } from "../../hooks/useSteward";
 import { authFetch } from "../../services/api";
-import { ConversationViewer, Markdown } from "../ConversationViewer";
+import { ConversationViewer } from "../ConversationViewer";
+import { TurnDetail } from "./TurnDetail";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -188,12 +189,7 @@ function ThreadItem({
 					</ul>
 				)}
 
-				{/* The half the glasses could not carry. */}
-				{item.detail && (
-					<div className="mt-2 border-cv-border border-t pt-2 text-cv-text-secondary">
-						<Markdown content={item.detail} />
-					</div>
-				)}
+				{item.detail && <TurnDetail detail={item.detail} />}
 
 				{item.kind === "ask" && <AskControls ask={item.ask} onAnswer={onAnswer} />}
 

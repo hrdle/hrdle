@@ -205,10 +205,24 @@ describe('session writes', () => {
     expect(res.status).toBe(400);
   });
 
-  test('does not clamp text to a G2 page - fitting the glasses is the writer job', async () => {
+  test('a text past one page keeps its overflow, in detail', async () => {
     const long = 'あ'.repeat(400);
     const res = await post('/api/steward/thread', { kind: 'notify', text: long });
-    const body = (await res.json()) as { item: { text: string } };
-    expect(body.item.text).toHaveLength(400);
+    const body = (await res.json()) as { item: { text: string; detail?: string }; fitted?: string };
+    expect(body.item.text.length).toBeLessThan(400);
+    expect(`${body.item.text}${body.item.detail}`.replace('…', '')).toBe(long);
+    // Said out loud: the writer has to know its split was overridden.
+    expect(body.fitted).toBeTruthy();
+  });
+
+  test('turns are fitted the same way', async () => {
+    const long = 'あ'.repeat(400);
+    const res = await post('/api/steward/sessions/w5Q/turns', {
+      turns: [{ id: 't1', role: 'agent', text: long }],
+    });
+    const body = (await res.json()) as { turns: { text: string; detail?: string }[]; fitted?: string };
+    expect(body.turns[0]?.text.length).toBeLessThan(400);
+    expect(body.turns[0]?.detail).toBeTruthy();
+    expect(body.fitted).toBeTruthy();
   });
 });
