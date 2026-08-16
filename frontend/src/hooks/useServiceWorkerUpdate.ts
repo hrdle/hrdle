@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { registerSW } from "virtual:pwa-register";
+import { setUpdateChecker } from "../services/build-version";
 
 // How often to re-check sw.js while a tab stays open. Tablets are often left on
 // the same page for hours, so a release would otherwise go unnoticed until the
@@ -41,6 +42,11 @@ const updateServiceWorker = registerSW({
 				// Offline or the worker is gone — the next check retries.
 			});
 		};
+		// Also driven by the server's own version, which rides on a push that
+		// arrives every five seconds - the schedule below is visibility changes
+		// and a half-hourly timer, so a phone left open on one screen missed a
+		// release for up to that long.
+		setUpdateChecker(check);
 		document.addEventListener("visibilitychange", check);
 		window.setInterval(check, UPDATE_CHECK_INTERVAL_MS);
 	},

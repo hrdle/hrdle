@@ -18,6 +18,7 @@ import type {
 	StewardThreadItem,
 	StewardTurn,
 } from "../../../shared/types";
+import { noteServerVersion } from "../services/build-version";
 import { storageKey } from "../utils/app-storage";
 import { appendWsToken } from "./peer-ws";
 
@@ -68,6 +69,9 @@ function upsertThread(item: StewardThreadItem) {
 }
 
 function apply(msg: MuxServerMessage) {
+	// Rides on a message that already arrives every five seconds.
+	if (msg.type === "sessions-updated") return noteServerVersion(msg.version);
+
 	switch (msg.type) {
 		case "steward-snapshot":
 			state.thread = msg.thread;
