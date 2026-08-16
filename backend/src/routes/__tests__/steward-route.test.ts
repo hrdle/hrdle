@@ -215,6 +215,62 @@ describe('session writes', () => {
     expect(body.fitted).toBeTruthy();
   });
 
+  test('an entry about a session lands on that session too', async () => {
+    const res = await post('/api/steward/thread', {
+      kind: 'notify',
+      text: 'レビューが7件返っています',
+      sessionId: 'w5Q',
+    });
+    const { item } = (await res.json()) as { item: { id: string; sessionId?: string } };
+    expect(item.sessionId).toBe('w5Q');
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { id: string; text: string }[];
+    };
+    // Same id both places: the mirror is an upsert, not a second entry.
+    expect(turns.turns).toHaveLength(1);
+    expect(turns.turns[0]?.id).toBe(item.id);
+  });
+
+  test('a reply written from a session lands there as the person said it', async () => {
+    await post('/api/steward/thread/reply', { text: 'あとどのくらい', sessionId: 'w5Q' });
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { role: string; text: string }[];
+    };
+    expect(turns.turns).toEqual([
+      expect.objectContaining({ role: 'user', text: 'あとどのくらい' }),
+    ]);
+  });
+
+  test('an entry naming no session touches no session history', async () => {
+    await post('/api/steward/thread', { kind: 'notify', text: '3件が止まっています' });
+    await post('/api/steward/thread/reply', { text: 'どれ' });
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: unknown[];
+    };
+    expect(turns.turns).toEqual([]);
+  });
+
+  test('an answer inherits the session its question was about', async () => {
+    const asked = await post('/api/steward/thread', {
+      kind: 'ask',
+      text: '巻き戻しますか',
+      choices: ['はい', 'いいえ'],
+      sessionId: 'w5Q',
+    });
+    const { askId } = (await asked.json()) as { askId: string };
+
+    await post('/api/steward/thread/reply', { askId, answer: { kind: 'choice', indices: [0] } });
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { role: string; text: string }[];
+    };
+    // The question and the answer, both on the screen it was asked from.
+    expect(turns.turns.map((t) => t.text)).toEqual(['巻き戻しますか', 'はい']);
+  });
+
   test('turns are fitted the same way', async () => {
     const long = 'あ'.repeat(400);
     const res = await post('/api/steward/sessions/w5Q/turns', {
