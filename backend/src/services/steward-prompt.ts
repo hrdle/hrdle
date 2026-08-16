@@ -18,15 +18,20 @@ const GLASSES_BUDGET = 189;
 /**
  * How the observer should invoke us.
  *
- * Not the bare name: a hook or a pane started from a service has a PATH that
- * does not include `~/.local/bin`, and a checkout has no installed binary
- * carrying these subcommands at all. Under `bun run` argv is
- * `[bun, script.ts]`; a compiled binary is argv[0] alone.
+ * Not the bare name: a pane started from a service has a PATH that does not
+ * include `~/.local/bin`, and a checkout has no installed binary carrying
+ * these subcommands at all.
+ *
+ * `execPath`, not `argv[0]`. Measured on Bun 1.3: a compiled binary reports
+ * argv[0] as the literal string "bun" and argv[1] as a `/$bunfs/` path, so
+ * argv[0] wrote `bun steward-do watch` into the prompt and the observer went
+ * looking for a command that does not exist. `execPath` is the binary itself
+ * there, and bun itself under `bun run`.
  */
 export function stewardInvocation(): string {
-  const [exe, script] = process.argv;
-  if (script?.endsWith('.ts')) return `${exe} run ${script}`;
-  return exe || IDENTITY.binaryName;
+  const script = process.argv[1];
+  if (script?.endsWith('.ts')) return `${process.execPath} run ${script}`;
+  return process.execPath || IDENTITY.binaryName;
 }
 
 /**

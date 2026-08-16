@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The steward's prompt named a command that does not exist.** It carried an
+  absolute path so a pane with a thin PATH could still run it, and took that
+  path from `argv[0]` - which a compiled Bun binary reports as the literal
+  string "bun". A released build therefore told the observer to type
+  `bun steward-do watch`, and it spent its turn hunting for the command.
+  `execPath` is the binary itself there, and bun under `bun run`. Only ever
+  wrong in a compiled build, which is why every check up to now passed.
+
 ## [0.3.140] - 2026-08-16
 
 ### Added
