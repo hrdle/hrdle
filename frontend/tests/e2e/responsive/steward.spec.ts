@@ -410,6 +410,35 @@ test.describe('a session in steward mode', () => {
     });
   });
 
+  // A URL that is only text has to be selected and copied by hand, which on a
+  // touch keyboard nobody does.
+  test('a URL in a message is a link', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: {
+        enabled: true,
+        view: true,
+        turns: [
+          {
+            id: 'u1',
+            at: 1,
+            role: 'agent',
+            text: 'リリースしました: https://github.com/hrdle/hrdle/releases/tag/v0.3.157 を見てください',
+          },
+        ],
+      },
+    });
+
+    const link = page.getByRole('link', {
+      name: 'https://github.com/hrdle/hrdle/releases/tag/v0.3.157',
+    });
+    await expect(link).toBeVisible();
+    expect(await link.getAttribute('target')).toBe('_blank');
+    expect(await link.getAttribute('rel')).toContain('noopener');
+    // The prose either side stays prose.
+    await expect(page.getByText('を見てください')).toBeVisible();
+  });
+
   test('the terminal is in the menu, not beside the summary', async ({ page }) => {
     await boot(page);
 

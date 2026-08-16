@@ -75,7 +75,7 @@ const URL_RUN = new RegExp(`^[${URL_BODY}]+`);
  * Drop punctuation a terminal line ends with rather than the URL: prose
  * periods, and a closing bracket with no opener inside the URL itself.
  */
-function trimTrailingPunctuation(url: string): string {
+export function trimTrailingPunctuation(url: string): string {
 	let out = url;
 	for (;;) {
 		const last = out.at(-1);
@@ -154,4 +154,31 @@ export function extractViewportUrls(
 		}
 	}
 	return found;
+}
+
+/** One piece of a message: prose, or a link. */
+export type TextPart = { text: string } | { url: string };
+
+/**
+ * Split prose into text and links.
+ *
+ * Here rather than in a component, and on the same definition of a URL the
+ * terminal uses: two answers to "where does this URL end" is how one of them
+ * gets it wrong. Multibyte characters are outside `URL_BODY`, so a link
+ * written straight against Japanese ends where the Japanese starts.
+ */
+export function splitLinks(text: string): TextPart[] {
+	const parts: TextPart[] = [];
+	let at = 0;
+	const re = new RegExp(URL_MATCH.source, "g");
+	for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+		const url = trimTrailingPunctuation(m[0]);
+		// "https://" alone is a scheme, not a link.
+		if (url.length <= 8) continue;
+		if (m.index > at) parts.push({ text: text.slice(at, m.index) });
+		parts.push({ url });
+		at = m.index + url.length;
+	}
+	if (at < text.length) parts.push({ text: text.slice(at) });
+	return parts;
 }
