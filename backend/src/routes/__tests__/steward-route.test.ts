@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Hono } from 'hono';
-import { IDENTITY, PASSWORD_ENV } from '../../../../shared/identity';
+import { IDENTITY, PASSWORD_ENV, TMP_PATHS } from '../../../../shared/identity';
 import { AuthService } from '../../services/auth';
 import { conditionalAuthMiddleware, getJwtSecret, initJwtSecret } from '../../middleware/auth';
 import { STEWARD_ENV } from '../../services/steward-config';
@@ -230,6 +230,24 @@ describe('session writes', () => {
     // Same id both places: the mirror is an upsert, not a second entry.
     expect(turns.turns).toHaveLength(1);
     expect(turns.turns[0]?.id).toBe(item.id);
+  });
+
+  test('an attached image travels with the reply', async () => {
+    // Through TMP_PATHS: a literal here would be a second copy of the upload
+    // directory's name, and stop matching the day the identity changes.
+    const shot = join(TMP_PATHS.imagesDir, 'a.jpg');
+    const res = await post('/api/steward/thread/reply', {
+      text: '狭いです',
+      images: [shot],
+      sessionId: 'w5Q',
+    });
+    const { item } = (await res.json()) as { item: { images?: string[] } };
+    expect(item.images).toEqual([shot]);
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { images?: string[] }[];
+    };
+    expect(turns.turns[0]?.images).toEqual([shot]);
   });
 
   test('a reply written from a session lands there as the person said it', async () => {

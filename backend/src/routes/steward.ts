@@ -252,11 +252,18 @@ steward.post('/thread/reply', async (c) => {
   // The wake-up carries the answer rather than announcing that one exists:
   // waking and delivering are the same act, so there is nothing to poll.
   const said = askId ? `The owner answered ask ${askId}: ${replyText}` : `The owner said: ${replyText}`;
+  // The paths, in the wake-up itself. They are on the entry either way, but a
+  // wake-up that only says what was typed is all the observer reads - so an
+  // attached screenshot reached nobody, and the relay to the agent was a
+  // paraphrase of a picture it had never seen.
+  const withImages = images?.length
+    ? `${said}\nThey attached: ${images.join(', ')}. Pass the path itself on - an agent can open the file, and your description of an image you cannot see is not the report.`
+    : said;
   wakeObserverWith(
     about
-      ? `${said}\nThey were reading session ${about}, so this is about that session unless they say otherwise. ` +
+      ? `${withImages}\nThey were reading session ${about}, so this is about that session unless they say otherwise. ` +
           `Answer with \`steward notify --session ${about}\` so it reaches the screen they are on.`
-      : said,
+      : withImages,
   );
 
   return c.json({ item, ask: updatedAsk });

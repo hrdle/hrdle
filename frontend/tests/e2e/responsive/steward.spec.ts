@@ -451,7 +451,7 @@ test.describe('a session in steward mode', () => {
   // A path pasted into the sentence has no break opportunity, so the text ran
   // straight out of the bubble and read as a message with no bubble at all.
   test('a long path in the text stays inside its bubble', async ({ page }) => {
-    const path = '/tmp/hrdle-images/1786883216806-049e24d2b9d09412.jpg';
+    const path = '/tmp/shots/1786883216806-049e24d2b9d09412.jpg';
     await bootApp(page, {
       withAgentPane: true,
       steward: {
@@ -480,7 +480,7 @@ test.describe('a session in steward mode', () => {
         enabled: true,
         view: true,
         turns: [
-          { id: 'p2', at: 1, role: 'user', text: 'ここも画像出て欲しい', images: ['/tmp/hrdle-images/a.jpg'] },
+          { id: 'p2', at: 1, role: 'user', text: 'ここも画像出て欲しい', images: ['/tmp/shots/a.jpg'] },
         ],
       },
     });
@@ -493,7 +493,7 @@ test.describe('a session in steward mode', () => {
     );
 
     await expect(page.getByRole('img', { name: 'a.jpg' })).toBeVisible();
-    await expect(page.getByText('/tmp/hrdle-images/a.jpg')).toHaveCount(0);
+    await expect(page.getByText('/tmp/shots/a.jpg')).toHaveCount(0);
   });
 
   test('an attached image can be taken off again', async ({ page }) => {

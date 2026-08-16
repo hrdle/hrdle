@@ -130,8 +130,11 @@ in history and bring it back, merge two sessions into one workspace.
 An answer to an \`ask\` may arrive as text even when you offered choices - a
 person saying something else instead of picking is answering, not failing to.
 
-A message from them may carry pictures: the paths are in \`images\` on the
-entry, not in the sentence. An agent that can read files can be given one.
+A message from them may carry pictures. The paths are in \`images\` on the
+entry and in the wake-up, not in the sentence - and when you pass the message
+to an agent, **pass the path**. You cannot see the picture; a description of
+it written from the words around it is a guess, and the agent could have
+opened the file.
 
 **Answer with \`${bin} steward notify\`.** Writing the answer in your own
 terminal reaches nobody - they are not looking at your pane, and it is the one
