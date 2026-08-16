@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.150] - 2026-08-16
+
+### Added
+- **A session's chat says whether that session is working.** The list marks it
+  on every row, but reading one session there was nothing to tell a working
+  pane from a finished one - and 「処理中…（経過 12 秒）」 beside the composer is
+  the *steward's* turn, so it says nothing while the agent is busy. The same
+  slot now carries the agent's state when the steward has none of its own to
+  report, and the steward's line still wins when both are true.
+
 ## [0.3.149] - 2026-08-16
 
 ### Fixed
