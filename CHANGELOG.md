@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.156] - 2026-08-17
+
+### Changed
+- **A mobile pass over the steward's screens**, measured on a phone against a
+  real session: "see the original" was on all 60 bubbles (32px each, a quarter
+  of the reading area) and is now only on turns that name a source, as an
+  icon; the chat header repeated the bottom bar's session name and state and
+  is gone; the newest message sat 178px below the fold and the view now sticks
+  to the bottom until the reader scrolls away; and each list card carried two
+  summaries - the raw recap truncated mid-word in the agent's own English, and
+  the steward's line saying the same thing - so the line replaces it and moves
+  under the title. The same exchange goes from four visible messages to six.
+
+### Fixed
+- **An answered question left nothing behind.** Keeping an ask and its answer
+  out of the session history made sense while the controls were only in the
+  thread; once the choices moved above that session's composer, the decision
+  was recorded nowhere the person could see. A waiting question still stays
+  out, and an answered one joins with its answer.
+- **A picture on its way rendered nothing at all**, so a message appeared with
+  no sign that images were coming - and on a phone they are seconds apart. It
+  leaves a box while it loads.
+
 ## [0.3.155] - 2026-08-17
 
 ### Fixed
