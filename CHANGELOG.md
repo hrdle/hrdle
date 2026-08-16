@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.155] - 2026-08-17
+
+### Fixed
+- **The steward's composer was a bare text field**, so Chrome read it as a
+  form and put its password / card / address strip above the keyboard - the
+  difference from the terminal, whose input bar is a textarea carrying
+  `autocomplete="off"` and a 16px font (anything smaller makes iOS zoom the
+  page on focus). Same element and attributes now, which also makes it
+  multi-line: Enter sends, Shift+Enter breaks, and Enter while a Japanese IME
+  is choosing a candidate confirms the candidate instead of posting a
+  half-typed word.
+- **The steward said the same thing three times.** An identical line is no
+  longer written twice in a row, and the prompt says an acknowledgement is not
+  a report. The same sentence again after something else is kept - that is a
+  report, not a repeat.
+
 ## [0.3.154] - 2026-08-16
 
 ### Fixed
