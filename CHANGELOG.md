@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.157] - 2026-08-17
+
+### Fixed
+- **A release took up to half an hour to be noticed.** The service worker
+  checks on a visibility change and a half-hourly timer, so a phone left open
+  on one screen learned about a new build when one of those fired - and the
+  fix that had just shipped read as a fix that had not worked. The server's
+  version now rides on `sessions-updated`, which already arrives every five
+  seconds, and a mismatch makes the worker check immediately. It does not
+  claim an update: the prompt's reload needs a worker that has precached the
+  new build, so the ordinary path still reports it when there is one.
+
 ## [0.3.156] - 2026-08-17
 
 ### Changed
