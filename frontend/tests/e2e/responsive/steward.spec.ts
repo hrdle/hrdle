@@ -396,12 +396,61 @@ test.describe('a session in steward mode', () => {
     await page.getByPlaceholder('スチュワードに話しかける').fill('これを見て');
     await page.getByRole('button', { name: 'Send' }).click();
 
-    // The path travels in the message: what the steward can pass on is a
-    // filename an agent can open.
+    // A field, not a path in the sentence: a screen can draw the picture from
+    // it and the steward can still hand the path to an agent.
     expect(JSON.parse((await posted).postData() ?? '{}')).toEqual({
-      text: 'これを見て\n/tmp/shot.png',
+      text: 'これを見て',
+      images: ['/tmp/shot.png'],
       sessionId: 'demo',
     });
+  });
+
+  // A path pasted into the sentence has no break opportunity, so the text ran
+  // straight out of the bubble and read as a message with no bubble at all.
+  test('a long path in the text stays inside its bubble', async ({ page }) => {
+    const path = '/tmp/hrdle-images/1786883216806-049e24d2b9d09412.jpg';
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: {
+        enabled: true,
+        view: true,
+        turns: [
+          { id: 'p1', at: 1, role: 'user', text: `レイアウト壊れました？\n${path}` },
+        ],
+      },
+    });
+
+    const bubble = page.getByText(path);
+    await expect(bubble).toBeVisible();
+    const overflow = await bubble.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const parent = (el.parentElement as HTMLElement).getBoundingClientRect();
+      return box.right - parent.right;
+    });
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+
+  test('an image attached to a turn is drawn, not written out as a path', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: {
+        enabled: true,
+        view: true,
+        turns: [
+          { id: 'p2', at: 1, role: 'user', text: 'ここも画像出て欲しい', images: ['/tmp/hrdle-images/a.jpg'] },
+        ],
+      },
+    });
+    await page.route('**/api/files/images/a.jpg', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'image/jpeg',
+        body: Buffer.from('ffd8ffdb', 'hex'),
+      }),
+    );
+
+    await expect(page.getByRole('img', { name: 'a.jpg' })).toBeVisible();
+    await expect(page.getByText('/tmp/hrdle-images/a.jpg')).toHaveCount(0);
   });
 
   test('an attached image can be taken off again', async ({ page }) => {

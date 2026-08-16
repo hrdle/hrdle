@@ -1802,6 +1802,13 @@ export interface StewardTurn {
   role: 'agent' | 'user' | 'steward';
   text: string;
   detail?: string;
+  /**
+   * Image paths on the host, attached to this entry rather than written into
+   * the sentence. A path pasted into the text is a wall of characters on a
+   * phone and a picture nowhere; as a field a screen can draw it and the
+   * steward can still hand the path to an agent that opens files.
+   */
+  images?: string[];
   refs?: { file?: string; line?: number; url?: string };
   /** Where in the real transcript this was summarised from, so the mobile view
    *  can offer "see the original". The glasses have nowhere to open it. */

@@ -11,6 +11,7 @@ import { ConversationViewer } from "../ConversationViewer";
 import { AskControls } from "./AskControls";
 import { StewardSessionComposer } from "./StewardSessionComposer";
 import { TurnDetail } from "./TurnDetail";
+import { TurnImages } from "./TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -181,7 +182,9 @@ function ThreadItem({
 					<p className="mb-1 font-medium text-[11px] text-cv-text-muted">{item.sessionId}</p>
 				)}
 
-				<p className="whitespace-pre-wrap">{item.text}</p>
+				<p className="whitespace-pre-wrap break-words">{item.text}</p>
+
+					{item.images && <TurnImages paths={item.images} />}
 
 				{item.kind === "report" && item.rows.length > 0 && (
 					<ul className="mt-2 flex flex-col gap-0.5 font-mono text-cv-text-secondary text-xs">

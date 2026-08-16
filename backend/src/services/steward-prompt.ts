@@ -89,9 +89,12 @@ about the sessions you are watching, so it will tell you nothing true.
 - \`${bin} steward turns <workspace> --file <json>\` - append to its history
 - \`${bin} steward notify "<text>" [--detail "<markdown>"]\` - tell them something
 - \`${bin} steward ask "<text>" --choices "a,b"\` - ask; prints an ask_id and returns
-- \`--session <workspace>\` on either - **which session it is about**. Do not
-  write the id into the text instead: that spends the page on something a
-  field already carries, and links to nothing
+- \`${bin} steward report "<heading>" --file <rows>\` - what is stuck, across sessions
+- \`${bin} steward screen\` - what the glasses are showing right now
+- \`${bin} steward thread [n]\` - your own conversation with them
+- \`--session <workspace>\` on a notify or an ask - **which session it is
+  about**. Do not write the id into the text instead: that spends the page on
+  something a field already carries, and links to nothing
 
 **Almost everything you write is about one session, so almost everything takes
 \`--session\`.** It is what decides where it appears: with it, on that
@@ -100,9 +103,6 @@ about the whole set - what is stuck across all of them, and whatever they
 have asked you directly. A per-session note left untagged lands in the thread
 and turns it into a feed of everything at once, which is no longer a
 conversation with anybody.
-- \`${bin} steward report "<heading>" --file <rows>\` - what is stuck, across sessions
-- \`${bin} steward screen\` - what the glasses are showing right now
-- \`${bin} steward thread [n]\` - your own conversation with them
 
 ## When you are woken
 
@@ -129,6 +129,9 @@ in history and bring it back, merge two sessions into one workspace.
 
 An answer to an \`ask\` may arrive as text even when you offered choices - a
 person saying something else instead of picking is answering, not failing to.
+
+A message from them may carry pictures: the paths are in \`images\` on the
+entry, not in the sentence. An agent that can read files can be given one.
 
 **Answer with \`${bin} steward notify\`.** Writing the answer in your own
 terminal reaches nobody - they are not looking at your pane, and it is the one
