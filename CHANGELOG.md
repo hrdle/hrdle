@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.142] - 2026-08-16
+
+### Fixed
+- **A steward turn ran to whatever length the observer wrote.** `text` is one
+  G2 page and `detail` is the phone's half with no limit, but measured on the
+  first sessions written for real the observer used only the first: turns of
+  512 and 649 characters with `detail` empty on every one, rendered whole in
+  the mobile session view. What runs past the page now moves into `detail` on
+  the way in - cut at a sentence end where there is one - so nothing is lost
+  and both screens read the same fitted string. The response says the split
+  was overridden, and the prompt says so too.
+
+### Changed
+- **A turn's detail sits behind a tap** in the thread and the session view.
+  Rendered open it is the glance plus everything the glance was meant to
+  spare them, which is the wall the pair exists to prevent.
+
 ## [0.3.141] - 2026-08-16
 
 ### Fixed
