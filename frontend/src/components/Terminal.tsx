@@ -177,6 +177,22 @@ export const TerminalComponent = memo(
 		 * something else on screen owns the typing, which is steward mode.
 		 */
 		const [bottomInset, setBottomInset] = useState(0);
+		/** How tall the fixed bottom bar is, so an overlay can leave room for it.
+		 *  Measured rather than assumed: the steward's composer grows with a
+		 *  thumbnail row, a question and a progress line. */
+		const barRef = useRef<HTMLDivElement>(null);
+		const [barHeight, setBarHeight] = useState(0);
+		useEffect(() => {
+			const el = barRef.current;
+			if (!el) {
+				setBarHeight(0);
+				return;
+			}
+			const observer = new ResizeObserver(() => setBarHeight(el.offsetHeight));
+			observer.observe(el);
+			setBarHeight(el.offsetHeight);
+			return () => observer.disconnect();
+		});
 		useEffect(() => {
 			const vv = window.visualViewport;
 			if (!vv) return;
@@ -1489,7 +1505,15 @@ export const TerminalComponent = memo(
 					{terminalAreaOverlay && (
 						<div
 							className="absolute inset-0 z-20 bg-[#0a0a0a]"
-							style={{ display: hideTerminalArea ? "block" : "none" }}
+							style={{
+								display: hideTerminalArea ? "block" : "none",
+								// The bottom bar is fixed and floats over this. The xterm
+								// underneath has always lived with that - a row or two of
+								// scrollback behind the bar - but an overlay anchored to its
+								// own bottom puts the newest message there, and the control
+								// on it cannot be tapped.
+								paddingBottom: barHeight || undefined,
+							}}
 						>
 							{terminalAreaOverlay}
 						</div>
@@ -1641,6 +1665,7 @@ export const TerminalComponent = memo(
 				{/* Bottom overlay when keyboard is hidden (mobile only) */}
 				{!hideKeyboard && effectiveInputMode === "hidden" && overlayContent && (
 					<div
+						ref={barRef}
 						className="fixed bottom-0 left-0 right-0 z-40 bg-th-bg border-t border-th-border"
 						style={bottomInset > 0 ? { bottom: bottomInset } : undefined}
 					>

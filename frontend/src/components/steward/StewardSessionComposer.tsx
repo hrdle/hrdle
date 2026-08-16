@@ -124,8 +124,11 @@ export function StewardSessionComposer({
 	};
 
 	return (
+		// The column owns its own layout: a caller passing `items-end` for the
+		// old single-row form aligned every child to the right instead, which
+		// shrank the text field to its content and pushed it into the corner.
 		<form
-			className={`flex flex-col ${className ?? "border-cv-border border-t bg-cv-bg p-2"}`}
+			className={`flex flex-col items-stretch ${className ?? "border-cv-border border-t bg-cv-bg p-2"}`}
 			onSubmit={(e) => {
 				e.preventDefault();
 				void send();
@@ -157,7 +160,7 @@ export function StewardSessionComposer({
 				</div>
 			)}
 
-			<div className="flex items-end gap-1">
+			<div className="flex w-full items-end gap-1">
 			<input
 				type="file"
 				accept="image/png,image/jpeg,image/gif,image/webp"

@@ -68,8 +68,11 @@ export function StewardSessionView({
 			{/* 4xl rather than 2xl: at the app's 14px root, 2xl is 588px, so a
 			    tablet gave the conversation just over half its width and the rest
 			    to margins. A phone is narrower than either, so nothing moves there. */}
-			<div className="flex-1 overflow-y-auto px-3 py-3">
-				<div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+			<div className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+				{/* Anchored to the bottom: a handful of turns sitting at the top of a
+				    tall screen with the composer far below did not read as a
+				    conversation. */}
+				<div className="mx-auto mt-auto flex w-full max-w-4xl flex-col gap-3">
 					{turns.map((turn) => (
 						<TurnCard key={turn.id} turn={turn} fallbackSession={agentSessionId} onOpenSource={openSource} />
 					))}
@@ -100,7 +103,7 @@ export function StewardSessionView({
 				<StewardSessionComposer
 					sessionId={sessionId}
 					agentState={agentState}
-					className="mx-auto flex w-full max-w-4xl items-end gap-2 border-cv-border border-t p-2"
+					className="mx-auto w-full max-w-4xl border-cv-border border-t p-2"
 				/>
 			)}
 
