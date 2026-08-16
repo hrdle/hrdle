@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.153] - 2026-08-16
+
+### Fixed
+- **The update prompt covered the control it was asking about.** It was a
+  bottom sheet, and every layout keeps something it needs at the bottom edge -
+  the phone's session bar, the steward's composer - so reaching that control
+  meant waving the prompt away, which also cleared the detection flag and left
+  nothing saying the page was on an old build. The next release's fix then
+  looked like a fix that had not worked. It sits at the top now, and a
+  dismissal leaves a small "更新あり" pill that reloads on a tap.
+
 ## [0.3.152] - 2026-08-16
 
 ### Fixed
