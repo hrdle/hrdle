@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.144] - 2026-08-16
+
+### Added
+- **A thread entry says which session it is about.** `sessionId` on a notify,
+  an ask or a reply, `--session` on the CLI; an entry that carries one is
+  mirrored into that session's own history under the same id. Without the
+  field the steward wrote the workspace id into the sentence ("w4H: ..."),
+  which spends the page budget on it and links to nothing.
+- **A session in steward mode is a conversation with the steward.** It opens
+  onto what the steward wrote, and the composer there addresses the steward
+  about that session. The pane's own input bar is locked shut while it is up:
+  it was sitting under the summary reaching the agent, so what someone typed
+  went somewhere they could not see.
+- **The overview can speak to the steward without opening the thread first**,
+  for the requests that belong to no single session. Sending opens the thread,
+  because that is where the answer lands.
+
+### Changed
+- **In steward mode the phone's terminal moves into the bar's menu**, with the
+  files, dashboard and reload controls. It is a place to go into and come back
+  from rather than the summary's peer.
+
+All of it is behind the steward view switch. With the switch off a session
+still opens onto its terminal, the chat toggle is where it was, nothing moved
+into a menu and neither screen has a composer - pinned by tests, because this
+reaches into screens that were working.
+
 ## [0.3.143] - 2026-08-16
 
 ### Fixed
