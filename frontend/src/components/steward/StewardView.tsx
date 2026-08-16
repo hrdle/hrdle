@@ -86,6 +86,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 		endRef.current?.scrollIntoView({ block: "end" });
 	}, [shown.length, thinking]);
 
+
 	// Answering an ask, which the composer cannot express.
 	const send = async (input: Parameters<typeof reply>[0]) => {
 		setSendError(null);
@@ -126,13 +127,6 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 						</li>
 					))}
 				</ul>
-
-				{thinking && (
-					<p className="mt-3 flex items-center gap-2 text-cv-text-muted text-sm">
-						<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
-						{t("steward.thinking", "考えています…")}
-					</p>
-				)}
 
 				<div ref={endRef} />
 			</div>

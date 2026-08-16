@@ -462,6 +462,7 @@
     "detailShow": "Detail",
     "detailHide": "Hide detail",
     "attachImage": "Attach image",
-    "removeImage": "Remove image"
+    "removeImage": "Remove image",
+    "working": "Working... ({{seconds}}s)"
   }
 }

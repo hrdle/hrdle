@@ -9,6 +9,11 @@ import {
 	SAID_EVENT,
 	overviewSayPending,
 } from "../components/steward/StewardSessionComposer";
+import {
+	clearThinking,
+	markThinking,
+	useThinkingSince,
+} from "../components/steward/thinking";
 import { authFetch } from "../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -87,7 +92,7 @@ export function useSteward(enabled: boolean): UseStewardReturn {
 	const [lines, setLines] = useState<StewardSessionLine[]>([]);
 	const [isLoading, setIsLoading] = useState(enabled);
 	const [error, setError] = useState<string | null>(null);
-	const [thinking, setThinking] = useState(false);
+	const thinking = useThinkingSince("") !== null;
 
 	const refetch = useCallback(async () => {
 		if (!enabled) return;
@@ -119,8 +124,7 @@ export function useSteward(enabled: boolean): UseStewardReturn {
 		if (!enabled) return;
 		const watch = () => {
 			void refetch();
-			setThinking(true);
-			void watchForAnswer(refetch, setThinking);
+			void watchForAnswer("", refetch);
 		};
 		// Said a moment ago, from the screen that opened this one.
 		if (overviewSayPending()) watch();
@@ -151,8 +155,7 @@ export function useSteward(enabled: boolean): UseStewardReturn {
 			await refetch();
 			// Waking is asynchronous, so the answer arrives on its own clock. Watch
 			// for it rather than leaving the screen looking like nothing happened.
-			setThinking(true);
-			void watchForAnswer(refetch, setThinking);
+			void watchForAnswer(input.sessionId ?? "", refetch);
 		},
 		[refetch],
 	);
@@ -168,10 +171,11 @@ export function useSteward(enabled: boolean): UseStewardReturn {
  * someone is actually waiting for a reply.
  */
 async function watchForAnswer(
+	key: string,
 	refetch: () => Promise<void>,
-	setThinking: (value: boolean) => void,
 ): Promise<void> {
 	const deadline = Date.now() + 120_000;
+	markThinking(key);
 	try {
 		// A moment for the wake-up to be delivered before deciding it is idle:
 		// the observer is woken through a subprocess, so `idle` right after a
@@ -187,7 +191,7 @@ async function watchForAnswer(
 	} catch {
 		// The indicator is not worth an error message of its own.
 	} finally {
-		setThinking(false);
+		clearThinking(key);
 	}
 }
 
@@ -238,7 +242,7 @@ export function useStewardView(): [boolean, (on: boolean) => void] {
 export function useStewardSession(sessionId: string | null, active: boolean) {
 	const [turns, setTurns] = useState<StewardTurn[]>([]);
 	const [waiting, setWaiting] = useState(false);
-	const [thinking, setThinking] = useState(false);
+	const thinking = useThinkingSince(sessionId ?? "") !== null;
 
 	const load = useCallback(async (): Promise<StewardTurn[]> => {
 		if (!sessionId) return [];
@@ -297,8 +301,7 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 			if ((e as CustomEvent<{ sessionId?: string }>).detail?.sessionId !== sessionId) return;
 			void (async () => {
 				setTurns(await load());
-				setThinking(true);
-				void watchForAnswer(async () => setTurns(await load()), setThinking);
+				void watchForAnswer(sessionId, async () => setTurns(await load()));
 			})();
 		};
 		window.addEventListener(SAID_EVENT, onSaid);

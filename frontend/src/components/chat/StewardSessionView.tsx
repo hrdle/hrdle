@@ -73,13 +73,6 @@ export function StewardSessionView({
 						</p>
 					)}
 
-					{thinking && (
-						<p className="flex items-center gap-2 text-cv-text-muted text-sm">
-							<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
-							{t("steward.thinking", "考えています…")}
-						</p>
-					)}
-
 					{!waiting && turns.length === 0 && (
 						<p className="text-cv-text-muted text-sm">
 							{t("steward.sessionEmpty", "まだ何も書かれていません。")}

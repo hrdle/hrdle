@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../../services/api";
 import { uploadImage } from "../../utils/upload-image";
+import { StewardThinking } from "./StewardThinking";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -120,6 +121,8 @@ export function StewardSessionComposer({
 				void send();
 			}}
 		>
+			<StewardThinking sessionId={sessionId} />
+
 			{attachments.length > 0 && (
 				<div className="mb-2 flex flex-wrap gap-2">
 					{attachments.map((a) => (
