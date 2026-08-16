@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.145] - 2026-08-16
+
+### Changed
+- **A spoken instruction is built out of phrases instead of one shot at it.** A
+  recording was a single attempt at a sentence: nothing appeared until it
+  ended, a second and a half of quiet ended it, thirty seconds capped it, and
+  one misspoken word meant saying the whole thing again. A pause now closes a
+  **phrase** rather than the recording - the phrase goes off to be transcribed
+  while the microphone stays open, so the words appear as they are spoken and
+  the last phrase is a unit the wearer can take back with a swipe. The
+  recording ends when they tap; what ends on its own is a microphone nobody is
+  speaking into. The server is untouched, the same endpoint being called once
+  per phrase instead of once per recording. Thanks to @Chapapon (#418)
+  - The speech bar is set from what a voice measures on this microphone rather
+    than from what is audible. At merely audible it never fell below a
+    television down the hall or a car idling outside, so in a room like that no
+    pause was ever detected. A meter on the recording screen draws the bar as a
+    divider, and a recording that produced nothing now says nothing loud enough
+    was heard rather than blaming the recognition
+  - A pause short of ten seconds is treated as part of the phrase, because Groq
+    bills a ten-second minimum per request whatever the audio measures - so a
+    minute of dictation costs about a minute of billed audio rather than two
+    and a half. A phrase that never crossed the speech bar is not uploaded at
+    all, so a noisy room cannot spend a request
+  - **This release does not carry a glasses build.** The change reaches the G2
+    with the next ehpk, not with the server
+
 ## [0.3.144] - 2026-08-16
 
 ### Added
