@@ -11,6 +11,7 @@ import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
+import { Linkified } from "../steward/Linkified";
 import { TurnDetail } from "../steward/TurnDetail";
 import { TurnImages } from "../steward/TurnImages";
 
@@ -162,7 +163,9 @@ function TurnCard({
 					</button>
 				)}
 
-				<p className="whitespace-pre-wrap break-words">{turn.text}</p>
+				<p className="whitespace-pre-wrap break-words">
+					<Linkified text={turn.text} />
+				</p>
 
 					{turn.images && <TurnImages paths={turn.images} onLoad={onGrow} />}
 

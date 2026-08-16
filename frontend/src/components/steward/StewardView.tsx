@@ -10,6 +10,7 @@ import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { AskControls } from "./AskControls";
 import { StewardSessionComposer } from "./StewardSessionComposer";
+import { Linkified } from "./Linkified";
 import { TurnDetail } from "./TurnDetail";
 import { TurnImages } from "./TurnImages";
 
@@ -199,7 +200,9 @@ function ThreadItem({
 					</button>
 				)}
 
-				<p className="whitespace-pre-wrap break-words">{item.text}</p>
+				<p className="whitespace-pre-wrap break-words">
+					<Linkified text={item.text} />
+				</p>
 
 					{item.images && <TurnImages paths={item.images} />}
 
