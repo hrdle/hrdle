@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.146] - 2026-08-16
+
+### Fixed
+- **"See the original" looked disconnected.** It was connected, but it opened
+  at row 0 of a several-thousand-message transcript - the `/clear` at the top
+  of the log, from days ago. A turn that names no message means "show me this
+  conversation", so it opens at its newest end.
+- **An image could not be attached in steward mode.** The pane's own input bar
+  carried that, and steward mode locks it shut; the steward's composer has it
+  now - in the session chat, the thread and the overview - and it inserts the
+  uploaded path, because what the steward can pass on is a filename an agent
+  can open.
+- **The thread was unreadable as a conversation.** The steward wrote the
+  owner's own sentence back at them ("the owner says X"), addressed to
+  somebody else; the session label was repeated on their own words, where it
+  is noise; and arriving there from the overview showed no sign the answer was
+  being worked on, because that screen mounts after the event which would have
+  said so.
+
 ## [0.3.145] - 2026-08-16
 
 ### Changed
