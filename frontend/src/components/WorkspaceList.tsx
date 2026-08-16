@@ -112,7 +112,11 @@ function formatTokenCount(n: number): string {
 
 import { useHistoryV2Flag } from "../hooks/useHistoryV2Flag";
 import { useSessionHistory } from "../hooks/useSessionHistory";
-import { useStewardLines, useStewardView } from "../hooks/useSteward";
+import {
+	useStewardEnabled,
+	useStewardLines,
+	useStewardView,
+} from "../hooks/useSteward";
 import { StewardSessionComposer } from "./steward/StewardSessionComposer";
 import { authFetch } from "../services/api";
 import { ConversationViewer } from "./ConversationViewer";
@@ -1409,6 +1413,12 @@ function SessionItem({
 	// Use customTitle if set, otherwise use session name
 	const displayTitle = session.customTitle ? session.customTitle : session.name;
 	const stewardLine = useContext(StewardLinesContext).get(session.id);
+	// Where this card actually goes. In steward mode a session opens onto what
+	// the steward wrote, so a button promising a terminal is naming the wrong
+	// screen - the destination was already right, the word was not.
+	const stewardAvailable = useStewardEnabled();
+	const [stewardViewOn] = useStewardView();
+	const opensChat = stewardAvailable && stewardViewOn;
 
 	// Show resume button only when no agent is currently running and we have a
 	// conversation id we can resume from (Claude → ccSessionId, Codex → agentSessionId).
@@ -1696,7 +1706,7 @@ function SessionItem({
 						className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-[13px] text-zinc-200 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
 					>
 						<ArrowRight className="w-3.5 h-3.5 text-zinc-400" />
-						{t("session.goToTerminal")}
+						{opensChat ? t("session.goToChat") : t("session.goToTerminal")}
 					</button>
 					<button
 						type="button"

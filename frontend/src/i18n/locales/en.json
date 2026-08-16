@@ -66,6 +66,7 @@
     "resuming": "Resuming...",
     "navigate": "Go to",
     "goToTerminal": "Go to this terminal",
+    "goToChat": "Go to this chat",
     "openInClaudeApp": "Open in Claude app",
     "colorTheme": "Color Theme",
     "workspaceName": "Workspace name",
@@ -460,6 +461,7 @@
     "sessionEmpty": "Nothing written yet.",
     "detailShow": "Detail",
     "detailHide": "Hide detail",
-    "attachImage": "Attach image"
+    "attachImage": "Attach image",
+    "removeImage": "Remove image"
   }
 }
