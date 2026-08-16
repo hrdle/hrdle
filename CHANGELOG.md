@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.154] - 2026-08-16
+
+### Fixed
+- **Opening the soft keyboard threw the bottom bar to the top of the screen**,
+  over the header. Introduced in 0.3.148: `#root` is already exactly the area
+  above the keyboard - `--vh` is the visual viewport's height and its
+  transform is what a `position: fixed` child is positioned against - so
+  measuring the keyboard again subtracted it twice. The compensation is gone,
+  and a test pins the mechanism so the next person does not add another.
+
 ## [0.3.153] - 2026-08-16
 
 ### Fixed
