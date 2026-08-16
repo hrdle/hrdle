@@ -8,8 +8,19 @@
 // every long recording on a slow link into the first message.
 
 import { describe, expect, test } from 'bun:test'
-import { GlassesController, type GlassesPlatform } from '../controller.ts'
+import { GlassesController, MIC_SAMPLE_RATE, type GlassesPlatform } from '../controller.ts'
 import { screenText } from '../display.ts'
+
+/** A second of ordinary speech, so the recording has a phrase in it to send. */
+function speech(): Uint8Array {
+  const out = new Uint8Array(MIC_SAMPLE_RATE * 2)
+  for (let i = 0; i < MIC_SAMPLE_RATE; i++) {
+    const v = i % 2 === 0 ? 4000 : -4000
+    out[i * 2] = v & 0xff
+    out[i * 2 + 1] = (v >> 8) & 0xff
+  }
+  return out
+}
 
 function platform(transcribe: () => Promise<string>): GlassesPlatform {
   const p = {
@@ -31,10 +42,15 @@ async function record(transcribe: () => Promise<string>) {
   const c = new GlassesController(platform(transcribe))
   const inner = c as unknown as {
     startVoice(target: { sessionId: string }): Promise<void>
+    onAudioData(pcm: Uint8Array): void
     stopAndTranscribe(): Promise<void>
   }
   await inner.startVoice({ sessionId: 'w1' })
+  inner.onAudioData(speech())
   await inner.stopAndTranscribe()
+  // The phrase is transcribed after the recording has been stopped, so the
+  // screen it produces is one turn behind the stop.
+  await new Promise((r) => setTimeout(r, 0))
   return c.state
 }
 
@@ -72,7 +88,9 @@ describe('a transcription that did not come back', () => {
     c.state.voiceFailed = true
     await inner.startVoice({ sessionId: 'w1' })
     expect(c.state.voiceFailed).toBe(false)
+    ;(inner as unknown as { onAudioData(pcm: Uint8Array): void }).onAudioData(speech())
     await inner.stopAndTranscribe()
+    await new Promise((r) => setTimeout(r, 0))
     expect(c.state.voiceFailed).toBe(false)
   })
 })

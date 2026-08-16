@@ -1,8 +1,8 @@
-// A recording ends when the sentence does.
+// A phrase ends when the sentence does.
 //
-// The 30-second limit closes a microphone nobody closed; this closes one that
-// has finished being spoken into, which is the ordinary case. Both end the same
-// way - transcribe what was collected - so there is only one path to be right.
+// The detector itself: what counts as quiet, when a pause is the end of a
+// phrase, and what it must not mistake for one. What happens to a phrase once
+// it closes is live-dictation.test.ts.
 //
 // Silence is counted in samples rather than milliseconds, so these tests feed
 // chunks and never touch a clock.
@@ -65,15 +65,14 @@ describe('pcmRms', () => {
   })
 })
 
-describe('a recording that has finished being spoken into', () => {
-  test('stops after the speech is followed by quiet', async () => {
+describe('a phrase that has finished being spoken', () => {
+  test('closes on the quiet that follows it, and its words reach the draft', async () => {
     const counters = { transcribes: 0, sent: [] as number[] }
     const c = new GlassesController(platform(counters))
     const d = driver(c)
     await d.startVoice({ sessionId: 'w1' })
 
-    d.onAudioData(pcm(CHUNK, SPEECH))
-    d.onAudioData(pcm(CHUNK, SPEECH))
+    for (let i = 0; i < 40; i++) d.onAudioData(pcm(CHUNK, SPEECH)) // ten seconds
     expect(counters.transcribes).toBe(0)
 
     // 1.5s of quiet, a quarter-second at a time.
@@ -81,19 +80,20 @@ describe('a recording that has finished being spoken into', () => {
     await new Promise((r) => setTimeout(r, 0))
 
     expect(counters.transcribes).toBe(1)
-    expect(c.state.voicePhase).toBe('confirm')
     expect(c.state.voiceText).toBe('リリースして')
   })
 
-  test('the audio sent includes the speech, not only the tail', async () => {
+  test('the audio sent is the speech, with the quiet either side of it gone', async () => {
     const counters = { transcribes: 0, sent: [] as number[] }
     const c = new GlassesController(platform(counters))
     const d = driver(c)
     await d.startVoice({ sessionId: 'w1' })
-    d.onAudioData(pcm(CHUNK, SPEECH))
+    for (let i = 0; i < 4; i++) d.onAudioData(pcm(CHUNK, QUIET))
+    for (let i = 0; i < 40; i++) d.onAudioData(pcm(CHUNK, SPEECH))
     for (let i = 0; i < 6; i++) d.onAudioData(pcm(CHUNK, QUIET))
     await new Promise((r) => setTimeout(r, 0))
-    expect(counters.sent[0]).toBe(CHUNK * 2 * 7)
+    // The ten seconds of speech, plus the quarter-second margin kept each side.
+    expect(counters.sent[0]).toBe(CHUNK * 2 * 42)
   })
 
   test('a pause mid-sentence does not end it', async () => {

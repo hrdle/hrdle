@@ -710,9 +710,13 @@ export function startDebugUI(): void {
     // Typed text short-circuits the transcription, which is handy for driving
     // the confirm/send flow without speaking. Left empty, the recording is
     // sent to Groq exactly as the glasses would send it.
+    //
+    // One phrase's worth: a recording is several requests now, and text left in
+    // the field would answer all of them with the same sentence over and over.
     transcribeAudio: async (pcm, sessionId) => {
       const scripted = sttInput.value.trim()
       if (scripted) {
+        sttInput.value = ''
         setVoiceStatus(`Using the text from the STT field: ${scripted}`)
         return scripted
       }
