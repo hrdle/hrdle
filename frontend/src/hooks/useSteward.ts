@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import type {
 	StewardAskAnswer,
 	StewardSessionLine,
@@ -15,8 +21,18 @@ import {
 	useThinkingSince,
 } from "../components/steward/thinking";
 import { authFetch } from "../services/api";
+import {
+	getStewardSnapshot,
+	seedStewardThread,
+	seedStewardTurns,
+	subscribeSteward,
+} from "../services/steward-socket";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+
+/** One frozen empty array, so a session with nothing written does not hand a
+ *  new identity to every render. */
+const EMPTY_TURNS: StewardTurn[] = [];
 
 /**
  * Whether this server has a steward at all.
@@ -60,6 +76,24 @@ export function useStewardEnabled(): boolean {
 	return enabled;
 }
 
+/**
+ * The live store, while this screen wants it.
+ *
+ * `useSyncExternalStore` rather than an effect: the snapshot is module state
+ * that can change between render and subscribe, and a missed frame here is a
+ * message that never appears.
+ */
+function useStewardLive(enabled: boolean) {
+	return useSyncExternalStore(
+		useCallback(
+			(onChange: () => void) => (enabled ? subscribeSteward(onChange) : () => {}),
+			[enabled],
+		),
+		getStewardSnapshot,
+		getStewardSnapshot,
+	);
+}
+
 export interface UseStewardReturn {
 	thread: StewardThreadItem[];
 	lines: StewardSessionLine[];
@@ -82,34 +116,36 @@ export interface UseStewardReturn {
 /**
  * The steward thread and the overview lines.
  *
- * Reads over REST and follows over the mux WebSocket, which the terminal
- * already holds open - `subscribe-steward` carries the thread, every session's
- * line and every session's turns on one subscription, because the overview
- * needs all of them at once.
+ * Followed over `subscribe-steward`, which carries the thread, every session's
+ * line and every session's turns on one subscription - the overview needs all
+ * of them at once, and two devices open at the same time have to see each
+ * other's messages.
  */
 export function useSteward(enabled: boolean): UseStewardReturn {
-	const [thread, setThread] = useState<StewardThreadItem[]>([]);
-	const [lines, setLines] = useState<StewardSessionLine[]>([]);
-	const [isLoading, setIsLoading] = useState(enabled);
+	const live = useStewardLive(enabled);
 	const [error, setError] = useState<string | null>(null);
 	const thinking = useThinkingSince("") !== null;
+	const thread = live.thread;
+	const lines = live.lines;
+	// The socket's first frame is the whole thread, so "loading" is "nothing
+	// has arrived yet" rather than a request in flight.
+	const isLoading = enabled && live.revision === 0;
 
+	// The socket carries what changes; this seeds the first paint and answers
+	// the moments a caller wants the state now rather than on the next frame.
 	const refetch = useCallback(async () => {
 		if (!enabled) return;
 		try {
 			const res = await authFetch(`${API_BASE}/api/steward`);
 			if (!res.ok) throw new Error(`steward: ${res.status}`);
 			const body = (await res.json()) as {
-				thread: StewardThreadItem[];
-				lines: StewardSessionLine[];
+				thread?: StewardThreadItem[];
+				lines?: StewardSessionLine[];
 			};
-			setThread(body.thread ?? []);
-			setLines(body.lines ?? []);
+			seedStewardThread(body.thread ?? [], body.lines ?? []);
 			setError(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setIsLoading(false);
 		}
 	}, [enabled]);
 
@@ -240,28 +276,31 @@ export function useStewardView(): [boolean, (on: boolean) => void] {
  * agent and shows nothing here, which read as the message having gone nowhere.
  */
 export function useStewardSession(sessionId: string | null, active: boolean) {
-	const [turns, setTurns] = useState<StewardTurn[]>([]);
+	const live = useStewardLive(active && !!sessionId);
 	const [waiting, setWaiting] = useState(false);
 	const thinking = useThinkingSince(sessionId ?? "") !== null;
+	const turns = (sessionId ? live.turns.get(sessionId) : undefined) ?? EMPTY_TURNS;
 
-	const load = useCallback(async (): Promise<StewardTurn[]> => {
-		if (!sessionId) return [];
-		const res = await authFetch(
-			`${API_BASE}/api/steward/sessions/${encodeURIComponent(sessionId)}/turns`,
-		);
-		if (!res.ok) return [];
-		return ((await res.json()) as { turns?: StewardTurn[] }).turns ?? [];
-	}, [sessionId]);
-
+	// The snapshot on subscribe carries the thread and the lines only, so the
+	// first read of a session's turns is still REST; every later change arrives
+	// as a push, including one made from another device.
 	useEffect(() => {
 		if (!active || !sessionId) return;
 		let alive = true;
 
+		const load = async (): Promise<StewardTurn[]> => {
+			const res = await authFetch(
+				`${API_BASE}/api/steward/sessions/${encodeURIComponent(sessionId)}/turns`,
+			);
+			if (!res.ok) return [];
+			const next = ((await res.json()) as { turns?: StewardTurn[] }).turns ?? [];
+			if (alive) seedStewardTurns(sessionId, next);
+			return next;
+		};
+
 		void (async () => {
 			const first = await load();
-			if (!alive) return;
-			setTurns(first);
-			if (first.length > 0) return;
+			if (!alive || first.length > 0) return;
 
 			// Nothing written yet: ask, then watch for it rather than showing the
 			// raw transcript, which would leave this session never summarised.
@@ -274,12 +313,7 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 				const deadline = Date.now() + 120_000;
 				while (alive && Date.now() < deadline) {
 					await new Promise((r) => setTimeout(r, 2500));
-					const next = await load();
-					if (!alive) return;
-					if (next.length > 0) {
-						setTurns(next);
-						return;
-					}
+					if ((await load()).length > 0) return;
 				}
 			} finally {
 				if (alive) setWaiting(false);
@@ -289,24 +323,20 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 		return () => {
 			alive = false;
 		};
-	}, [sessionId, active, load]);
+	}, [sessionId, active]);
 
-	// The composer is not always in this subtree - on a phone it is in the fixed
-	// bottom bar - so the cue to catch up is an event rather than a callback.
-	// The server mirrors the reply into this session, so the echo is one read
-	// away rather than something a screen has to invent and reconcile.
+	// Saying something is the one moment worth not waiting a frame for, and the
+	// composer is not always in this subtree - on a phone it is in the fixed
+	// bottom bar - so the cue is an event rather than a callback.
 	useEffect(() => {
 		if (!active || !sessionId) return;
 		const onSaid = (e: Event) => {
 			if ((e as CustomEvent<{ sessionId?: string }>).detail?.sessionId !== sessionId) return;
-			void (async () => {
-				setTurns(await load());
-				void watchForAnswer(sessionId, async () => setTurns(await load()));
-			})();
+			void watchForAnswer(sessionId, async () => {});
 		};
 		window.addEventListener(SAID_EVENT, onSaid);
 		return () => window.removeEventListener(SAID_EVENT, onSaid);
-	}, [active, sessionId, load]);
+	}, [active, sessionId]);
 
 	return { turns, waiting, thinking };
 }
@@ -321,34 +351,13 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 export function useStewardLines(): Map<string, string> {
 	const enabled = useStewardEnabled();
 	const [view] = useStewardView();
-	const [lines, setLines] = useState<Map<string, string>>(new Map());
+	const live = useStewardLive(enabled && view);
 
-	useEffect(() => {
-		if (!enabled || !view) {
-			setLines(new Map());
-			return;
-		}
-		let alive = true;
-		const load = async () => {
-			try {
-				const res = await authFetch(`${API_BASE}/api/steward`);
-				if (!res.ok) return;
-				const body = (await res.json()) as { lines?: StewardSessionLine[] };
-				if (!alive) return;
-				setLines(new Map((body.lines ?? []).map((l) => [l.sessionId, l.text])));
-			} catch {
-				// The list is fine without them.
-			}
-		};
-		void load();
-		// The list itself refreshes on a 5s push; matching that keeps a row and
-		// its line from disagreeing for long.
-		const timer = setInterval(load, 5000);
-		return () => {
-			alive = false;
-			clearInterval(timer);
-		};
-	}, [enabled, view]);
-
-	return lines;
+	return useMemo(
+		() =>
+			enabled && view
+				? new Map(live.lines.map((l) => [l.sessionId, l.text]))
+				: new Map<string, string>(),
+		[enabled, view, live.lines],
+	);
 }
