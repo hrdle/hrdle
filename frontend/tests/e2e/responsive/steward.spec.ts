@@ -118,6 +118,37 @@ test.describe('steward mode', () => {
     await expect(page.getByText('答え済みの質問')).toHaveCount(0);
   });
 
+  // Two devices open at once: the phone's message has to appear on the tablet
+  // without the tablet doing anything. Nothing subscribed to the server's
+  // `steward-*` broadcast until now, so it never did.
+  test('follows what another device says, with nothing done here', async ({ page }) => {
+    await page.routeWebSocket(/\/ws\/mux/, (server) => {
+      server.onMessage((raw) => {
+        const msg = JSON.parse(String(raw)) as { type?: string };
+        if (msg.type !== 'subscribe-steward') return;
+        server.send(JSON.stringify({ type: 'steward-snapshot', thread: THREAD, lines: [] }));
+        server.send(
+          JSON.stringify({
+            type: 'steward-thread',
+            item: {
+              id: 'elsewhere',
+              at: 1_760_000_009_000,
+              role: 'user',
+              kind: 'reply',
+              text: 'タブレットから言いました',
+            },
+          }),
+        );
+      });
+    });
+
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('タブレットから言いました')).toBeVisible();
+  });
+
   test('a question offers its choices, and a way to walk away', async ({ page }) => {
     await bootApp(page, { steward: { enabled: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
