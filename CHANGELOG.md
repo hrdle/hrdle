@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.151] - 2026-08-16
+
+### Fixed
+- **Two devices open at once did not see each other's messages.** The server
+  has broadcast `steward-*` over `/ws/mux` since the store existed and nothing
+  ever subscribed - the hook's own comment said it followed the socket, and it
+  read over REST and only when something on that screen made it. The client
+  end is now a connection of its own (`services/steward-socket.ts`); REST
+  still seeds the first paint, so a blocked socket costs liveness rather than
+  the screen, and the list's 5s poll is gone.
+- **An attached image never reached the agent.** The path is a field on the
+  entry, but the wake-up carried only the typed text - which is all the
+  observer reads - so it relayed a description of a picture it had never seen.
+  The wake-up carries the paths now, and says to pass the path rather than
+  describe the image.
+
+### Changed
+- **The conversation uses more of a tablet's width.** At the app's 14px root
+  `max-w-2xl` is 588px, so just over half the screen was margin.
+
 ## [0.3.150] - 2026-08-16
 
 ### Added
