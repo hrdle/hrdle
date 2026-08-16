@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.152] - 2026-08-16
+
+### Fixed
+- **The steward's composer collapsed into the corner.** Making it a column
+  left the callers' `items-end` on the same element, which in a column aligns
+  every child to the end - so the text field shrank to its content and sat
+  against the right edge instead of filling the row.
+- **A session's chat sat at the top of the screen** with the composer far
+  below, which does not read as a conversation. It is anchored to the bottom,
+  and the overlay now leaves room for the phone's fixed bar - measured, since
+  the composer grows with a thumbnail row, a question and a progress line.
+
 ## [0.3.151] - 2026-08-16
 
 ### Fixed
