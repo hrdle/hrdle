@@ -1,3 +1,4 @@
+import { openExternal } from "../../utils/external-link";
 import { splitLinks } from "../../utils/terminal-links";
 
 /**
@@ -22,6 +23,12 @@ export function Linkified({ text }: { text: string }) {
 						href={part.url}
 						target="_blank"
 						rel="noopener noreferrer"
+						// The href stays the plain URL so long-press still offers copy
+						// and open-in-new-tab; only the tap is redirected, and only
+						// from an installed Android PWA.
+						onClick={(e) => {
+							if (openExternal(part.url)) e.preventDefault();
+						}}
 						className="text-sky-300 underline underline-offset-2"
 					>
 						{part.url}
