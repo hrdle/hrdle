@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../../services/api";
 import { uploadImage } from "../../utils/upload-image";
+import { StewardPendingAsk } from "./StewardPendingAsk";
 import { StewardThinking } from "./StewardThinking";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -61,17 +62,22 @@ export function StewardSessionComposer({
 	}, [attachments]);
 
 	const send = async () => {
-		const typed = draft.trim();
-		if ((!typed && attachments.length === 0) || sending) return;
-		// The paths travel in the message: what the steward can pass on is a
-		// filename an agent can open, not a picture it could look at.
-		const text = [typed, ...attachments.map((a) => a.path)].filter(Boolean).join("\n");
+		const text = draft.trim();
+		if ((!text && attachments.length === 0) || sending) return;
+		// A field, not a path pasted into the sentence: a screen can draw the
+		// picture from it, and the steward can still hand the path to an agent
+		// that opens files.
+		const images = attachments.map((a) => a.path);
 		setSending(true);
 		try {
 			const res = await authFetch(`${API_BASE}/api/steward/thread/reply`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(sessionId ? { text, sessionId } : { text }),
+				body: JSON.stringify({
+					text,
+					...(images.length > 0 ? { images } : {}),
+					...(sessionId ? { sessionId } : {}),
+				}),
 			});
 			if (!res.ok) return;
 			setDraft("");
@@ -121,6 +127,8 @@ export function StewardSessionComposer({
 				void send();
 			}}
 		>
+			{sessionId && <StewardPendingAsk sessionId={sessionId} />}
+
 			<StewardThinking sessionId={sessionId} />
 
 			{attachments.length > 0 && (

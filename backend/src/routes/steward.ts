@@ -47,12 +47,15 @@ const SourceSchema = z.object({
   messageIds: z.array(z.string().min(1).max(200)).max(200).optional(),
 });
 
+const ImagesSchema = z.array(z.string().min(1).max(1000)).max(10);
+
 const TurnSchema = z.object({
   id: z.string().min(1).max(200),
   at: z.number().optional(),
   role: z.enum(['agent', 'user', 'steward']),
   text: z.string().max(TEXT_MAX),
   detail: z.string().max(DETAIL_MAX).optional(),
+  images: ImagesSchema.optional(),
   refs: RefsSchema.optional(),
   source: SourceSchema.optional(),
 });
@@ -68,6 +71,7 @@ const ThreadPostSchema = z.discriminatedUnion('kind', [
     kind: z.literal('notify'),
     text: z.string().min(1).max(TEXT_MAX),
     detail: z.string().max(DETAIL_MAX).optional(),
+    images: ImagesSchema.optional(),
     refs: RefsSchema.optional(),
     source: SourceSchema.optional(),
     sessionId: SessionId.optional(),
@@ -100,6 +104,7 @@ const ReplySchema = z.object({
   askId: z.string().min(1).max(200).optional(),
   answer: AskAnswerSchema.optional(),
   text: z.string().max(TEXT_MAX).optional(),
+  images: ImagesSchema.optional(),
   /** Set when it was written from a session's own screen. */
   sessionId: SessionId.optional(),
 });
@@ -153,6 +158,7 @@ steward.post('/thread', async (c) => {
     role: 'steward' as const,
     text: fitted.text,
     detail: fitted.detail,
+    images: input.kind === 'notify' ? input.images : undefined,
     refs: input.refs,
   };
 
@@ -188,13 +194,15 @@ steward.post('/thread/reply', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = ReplySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid reply', detail: parsed.error.issues }, 400);
-  const { askId, answer, text, sessionId } = parsed.data;
+  const { askId, answer, text, images, sessionId } = parsed.data;
 
   if (askId && !answer) return c.json({ error: 'answer is required when askId is given' }, 400);
   // An answer with nothing to answer is a caller bug, and accepting it would
   // record the reply while silently dropping the choice it carried.
   if (!askId && answer) return c.json({ error: 'askId is required when an answer is given' }, 400);
-  if (!askId && !text) return c.json({ error: 'text is required when there is no askId' }, 400);
+  if (!askId && !text && !images?.length) {
+    return c.json({ error: 'text is required when there is no askId' }, 400);
+  }
 
   let updatedAsk: StewardThreadItem | null = null;
   if (askId && answer) {
@@ -234,6 +242,7 @@ steward.post('/thread/reply', async (c) => {
     askId,
     role: 'user',
     text: replyText,
+    images,
     sessionId: about,
   });
   broadcastSteward({ type: 'steward-thread', item });
@@ -319,6 +328,24 @@ steward.post('/sessions/:id/turns', async (c) => {
   });
 });
 
+/**
+ * Questions still waiting, newest last.
+ *
+ * Its own endpoint rather than a filter over `GET /`: the screen that needs it
+ * most is a session's chat, which has no reason to hold the whole thread, and
+ * a question is the one thing there that a person has to act on.
+ */
+steward.get('/asks', async (c) => {
+  const session = c.req.query('session');
+  if (session !== undefined && !SessionId.safeParse(session).success) {
+    return c.json({ error: 'invalid session id' }, 400);
+  }
+  const asks = (await getThread()).filter(
+    (i) => i.kind === 'ask' && !i.ask.answer && (session === undefined || i.sessionId === session),
+  );
+  return c.json({ asks });
+});
+
 steward.get('/screen', (c) => c.json({ screen: getLastGlassesScreen() }));
 
 /** Whether the steward is thinking. Polled by a screen that has just spoken. */
@@ -345,6 +372,7 @@ async function mirrorToSession(item: StewardThreadItem): Promise<void> {
     role: item.role,
     text: item.text,
     detail: item.detail,
+    images: item.images,
     refs: item.refs,
     source: item.source,
   };
