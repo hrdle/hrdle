@@ -166,17 +166,6 @@ export const TerminalComponent = memo(
 		const effectiveInputMode: InputMode = lockInputHidden ? "hidden" : inputMode;
 		const [fontSize, setFontSize] = useState(() => loadFontSize(sessionId));
 		const [keyboardOffset, setKeyboardOffset] = useState(0);
-		/**
-		 * How far the soft keyboard covers the bottom of the layout viewport.
-		 *
-		 * The viewport meta does not ask for `interactive-widget=resizes-content`,
-		 * so the layout viewport does not shrink when the keyboard opens and a
-		 * `fixed bottom-0` bar stays underneath it. The browser scrolls a focused
-		 * element into view, which is why the pane's own input bar - in normal
-		 * flow - has never needed this; the fixed bar only meets a keyboard when
-		 * something else on screen owns the typing, which is steward mode.
-		 */
-		const [bottomInset, setBottomInset] = useState(0);
 		/** How tall the fixed bottom bar is, so an overlay can leave room for it.
 		 *  Measured rather than assumed: the steward's composer grows with a
 		 *  thumbnail row, a question and a progress line. */
@@ -193,21 +182,6 @@ export const TerminalComponent = memo(
 			setBarHeight(el.offsetHeight);
 			return () => observer.disconnect();
 		});
-		useEffect(() => {
-			const vv = window.visualViewport;
-			if (!vv) return;
-			const update = () => {
-				const covered = window.innerHeight - (vv.height + vv.offsetTop);
-				setBottomInset(covered > 1 ? covered : 0);
-			};
-			vv.addEventListener("resize", update);
-			vv.addEventListener("scroll", update);
-			update();
-			return () => {
-				vv.removeEventListener("resize", update);
-				vv.removeEventListener("scroll", update);
-			};
-		}, []);
 		const [showFontSizeIndicator, setShowFontSizeIndicator] = useState(false);
 		const [scrollIndicator, setScrollIndicator] = useState<{
 			text: string;
@@ -1663,11 +1637,16 @@ export const TerminalComponent = memo(
 				/>
 
 				{/* Bottom overlay when keyboard is hidden (mobile only) */}
+				{/* No keyboard compensation here, and do not add one: `#root` is
+				    already exactly the visible area (`--vh` is the *visual*
+				    viewport's height, and its transform is what a fixed child is
+				    positioned against), so a second correction moved this bar up by
+				    a whole keyboard and parked it over the header. Measured on an
+				    Android phone in 0.3.148. */}
 				{!hideKeyboard && effectiveInputMode === "hidden" && overlayContent && (
 					<div
 						ref={barRef}
 						className="fixed bottom-0 left-0 right-0 z-40 bg-th-bg border-t border-th-border"
-						style={bottomInset > 0 ? { bottom: bottomInset } : undefined}
 					>
 						{overlayContent}
 						{!showOverlay && onOverlayTap && (
