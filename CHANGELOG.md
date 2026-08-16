@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.161] - 2026-08-17
+
+### Fixed
+- **A link in a message opened inside the installed app.** The manifest is
+  `display: standalone`, so on Android `target="_blank"` to another origin
+  gets a Custom Tab within the app rather than the browser the person has tabs
+  open in. It now goes out through an `intent://` URL, which Android resolves
+  through the intent system - only on Android and only while standalone, since
+  a browser tab is already right and iOS has no equivalent. The `href` stays
+  the plain URL, so long-press still offers copy and open-in-new-tab.
+
 ## [0.3.160] - 2026-08-17
 
 ### Fixed
