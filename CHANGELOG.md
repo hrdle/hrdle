@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.143] - 2026-08-16
+
 ### Fixed
 - **The phone's pane tabs can be tapped** (#406). With more than one pane, the
   tab bar sat entirely inside the session bar: measured on a 393x851 viewport,
