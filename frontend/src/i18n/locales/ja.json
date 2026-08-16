@@ -460,6 +460,7 @@
     "detailShow": "詳細",
     "detailHide": "詳細を閉じる",
     "attachImage": "画像を添付",
-    "removeImage": "画像を外す"
+    "removeImage": "画像を外す",
+    "working": "処理中…（経過 {{seconds}} 秒）"
   }
 }

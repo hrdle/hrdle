@@ -272,6 +272,17 @@ test.describe('a session in steward mode', () => {
     });
   });
 
+  // A still indicator a screen away cannot be told from a screen that has
+  // stopped updating, which is what someone waiting actually suspects.
+  test('says it is working, with the seconds counting, beside the composer', async ({ page }) => {
+    await boot(page);
+
+    await page.getByPlaceholder('スチュワードに話しかける').fill('あとどのくらい');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(page.getByText(/処理中…（経過 \d+ 秒）/)).toBeVisible();
+  });
+
   test('the terminal is in the menu, not beside the summary', async ({ page }) => {
     await boot(page);
 
@@ -382,7 +393,7 @@ test.describe('a session in steward mode', () => {
     // is working - landing on your own sentence with no sign of life is what
     // made this screen read as broken.
     await expect(page.getByText('スチュワード', { exact: true })).toBeVisible();
-    await expect(page.getByText('考えています…')).toBeVisible();
+    await expect(page.getByText(/処理中…/)).toBeVisible();
   });
 
   // A question from a session is the one thing the thread still carries from
