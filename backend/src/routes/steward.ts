@@ -229,6 +229,9 @@ steward.post('/thread/reply', async (c) => {
     updatedAsk = await answerAsk(askId, answer);
     if (!updatedAsk) return c.json({ error: 'no such ask' }, 404);
     broadcastSteward({ type: 'steward-thread', item: updatedAsk });
+    // The question joins the history now that it has an answer, so the reply
+    // below is not a word on its own.
+    await mirrorToSession(updatedAsk);
   }
 
   // Its own entry even when it answered a question: the ask holds the
@@ -368,11 +371,11 @@ steward.get('/observer', async (c) => c.json(await observerStatus()));
  */
 async function mirrorToSession(item: StewardThreadItem): Promise<void> {
   if (!item.sessionId) return;
-  // A question is answered in the thread, where the controls are. A copy on
-  // the session screen would be a question with no way to answer it, which is
-  // worse than not showing it - and the outcome is a notify of its own.
-  if (item.kind === 'ask') return;
-  if (item.kind === 'reply' && item.askId) return;
+  // A question still waiting is above the composer, not in the history: a copy
+  // there would be a question with no way to answer it. Once it has an answer
+  // the pair is exactly what the history is for - and answering from the
+  // session's own screen used to leave nothing behind at all.
+  if (item.kind === 'ask' && !item.ask.answer) return;
   const turn: StewardTurn = {
     id: item.id,
     at: item.at,

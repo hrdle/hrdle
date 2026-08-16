@@ -532,6 +532,31 @@ test.describe('a session in steward mode', () => {
     await expect(page.getByText('/tmp/shots/a.jpg')).toHaveCount(0);
   });
 
+  // Rendering nothing while it arrives read as a message sent without its
+  // pictures: on a phone over LTE the two are seconds apart.
+  test('a picture on its way leaves a space, not a gap', async ({ page }) => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: {
+        enabled: true,
+        view: true,
+        turns: [{ id: 'p3', at: 1, role: 'user', text: '見てください', images: ['/tmp/shots/b.jpg'] }],
+      },
+    });
+    await page.route('**/api/files/images/b.jpg', async (route) => {
+      await held;
+      await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from('ffd8ffdb', 'hex') });
+    });
+
+    await expect(page.locator('[aria-busy="true"]')).toBeVisible();
+    release?.();
+    await expect(page.getByRole('img', { name: 'b.jpg' })).toBeVisible();
+  });
+
   test('an attached image can be taken off again', async ({ page }) => {
     await boot(page);
     await page.route('**/api/upload/image', (route) =>

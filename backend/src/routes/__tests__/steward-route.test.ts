@@ -307,7 +307,7 @@ describe('session writes', () => {
     expect(turns.turns).toEqual([]);
   });
 
-  test('a question and its answer stay in the thread, not on the session', async () => {
+  test('a question and its answer join the session once it is answered', async () => {
     const asked = await post('/api/steward/thread', {
       kind: 'ask',
       text: '巻き戻しますか',
@@ -318,8 +318,22 @@ describe('session writes', () => {
 
     await post('/api/steward/thread/reply', { askId, answer: { kind: 'choice', indices: [0] } });
 
-    // A copy on the session screen would be a question with no way to answer
-    // it - the controls are in the thread.
+    // Answered from that session's own screen, the decision has to be left
+    // behind - and the answer alone would be a word with no question.
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { role: string; text: string }[];
+    };
+    expect(turns.turns.map((t) => t.text)).toEqual(['巻き戻しますか', 'はい']);
+  });
+
+  test('a question still waiting stays out of the session history', async () => {
+    await post('/api/steward/thread', {
+      kind: 'ask',
+      text: 'まだ答えていない質問',
+      choices: ['はい'],
+      sessionId: 'w5Q',
+    });
+
     const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
       turns: unknown[];
     };

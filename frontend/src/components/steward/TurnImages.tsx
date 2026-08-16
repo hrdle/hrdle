@@ -30,7 +30,19 @@ function TurnImage({ path, onLoad }: { path: string; onLoad?: () => void }) {
 	);
 
 	if (!ok) return <p className="break-all font-mono text-cv-text-muted text-xs">{path}</p>;
-	if (!src) return null;
+
+	// A box while it arrives. Rendering nothing meant a message appeared with no
+	// sign a picture was coming, and on a phone over LTE these are seconds
+	// apart - 460KB of screenshots at the ~100KB/s the status bar was showing.
+	// The message read as one that had been sent without its images.
+	if (!src) {
+		return (
+			<div
+				aria-busy="true"
+				className="h-24 w-32 animate-pulse rounded-md bg-cv-surface-hover"
+			/>
+		);
+	}
 
 	return (
 		<button
