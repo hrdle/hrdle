@@ -157,7 +157,12 @@ body {
 	   fixed that way. */
 	transform: translateY(calc(var(--vv-top, 0px) + env(safe-area-inset-top, 0px)));
 	height: 100%;
-	/* Shortened by what it was moved down, or the bottom runs off the screen. */
+	/* Shortened by what it was moved down, or the bottom runs off the screen.
+	   --vh is the *visual* viewport, so this box is already the area above the
+	   soft keyboard - and the transform above is what a position:fixed child is
+	   positioned against. Nothing else may compensate for the keyboard: doing
+	   it twice moved a fixed bottom bar up by a whole keyboard and parked it
+	   over the header. */
 	height: calc(var(--vh, 100dvh) - env(safe-area-inset-top, 0px));
 	display: flex;
 	flex-direction: column;
