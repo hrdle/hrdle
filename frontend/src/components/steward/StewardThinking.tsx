@@ -37,10 +37,16 @@ export function StewardThinking({
 	}, [since]);
 
 	// The steward's own turn takes precedence: it is the answer being waited on.
+	// 13px, not `text-xs`. The app's root font is 14px, so `text-xs` renders at
+	// 10.5px - readable at a desk and not at arm's length on a phone, which is
+	// where this line is for.
+	const row = "flex items-center gap-2 px-1 pt-0.5 pb-1.5 text-[13px]";
+	const dot = "inline-block h-2 w-2 shrink-0 rounded-full";
+
 	if (since !== null) {
 		return (
-			<p className="flex items-center gap-2 px-1 pb-1 text-cv-text-muted text-xs">
-				<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
+			<p className={`${row} text-cv-text-muted`}>
+				<span className={`${dot} animate-pulse bg-cv-text-muted`} />
 				{t("steward.working", "処理中…（経過 {{seconds}} 秒）", { seconds: elapsed })}
 			</p>
 		);
@@ -48,13 +54,13 @@ export function StewardThinking({
 
 	if (agentState === "processing") {
 		return (
-			<p className="flex items-center gap-2 px-1 pb-1 text-cv-accent text-xs">
-				<span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-cv-accent" />
+			<p className={`${row} text-cv-accent`}>
+				<span className={`${dot} animate-pulse bg-cv-accent`} />
 				{activity ? (
 					<span className="min-w-0 truncate">
-						<span className="font-medium">{activity.tool}</span>
+						<span className="font-semibold">{activity.tool}</span>
 						{activity.target && (
-							<span className="ml-1.5 font-mono text-cv-text-muted">{activity.target}</span>
+							<span className="ml-2 font-mono text-cv-text-secondary">{activity.target}</span>
 						)}
 					</span>
 				) : (
@@ -66,8 +72,8 @@ export function StewardThinking({
 
 	if (agentState === "waiting_input") {
 		return (
-			<p className="flex items-center gap-2 px-1 pb-1 text-amber-500 text-xs">
-				<span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+			<p className={`${row} text-amber-500`}>
+				<span className={`${dot} bg-amber-500`} />
 				{t("steward.agentWaiting", "このセッションは入力を待っています")}
 			</p>
 		);
