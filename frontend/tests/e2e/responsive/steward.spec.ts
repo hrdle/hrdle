@@ -374,6 +374,34 @@ test.describe('a session in steward mode', () => {
     await expect(page.getByText('このセッションは作業中です')).toBeVisible();
   });
 
+  // Chrome reads a plain text field as a form and puts its password / card /
+  // address strip above the keyboard, and a font under 16px makes iOS zoom the
+  // page on focus. The pane's own input bar has carried both of these for as
+  // long as it has existed.
+  test('the composer is typed into the way the pane is', async ({ page }) => {
+    await boot(page);
+    const composer = page.getByPlaceholder('スチュワードに話しかける');
+
+    expect(await composer.evaluate((el) => el.tagName)).toBe('TEXTAREA');
+    expect(
+      await composer.evaluate((el) => ({
+        autocomplete: el.getAttribute('autocomplete'),
+        size: getComputedStyle(el).fontSize,
+      })),
+    ).toEqual({ autocomplete: 'off', size: '16px' });
+
+    // Enter sends, so the send button is not the only way out on a phone.
+    const posted = page.waitForRequest(
+      (req) => req.url().includes('/api/steward/thread/reply') && req.method() === 'POST',
+    );
+    await composer.fill('あとどのくらい');
+    await composer.press('Enter');
+    expect(JSON.parse((await posted).postData() ?? '{}')).toEqual({
+      text: 'あとどのくらい',
+      sessionId: 'demo',
+    });
+  });
+
   test('the terminal is in the menu, not beside the summary', async ({ page }) => {
     await boot(page);
 

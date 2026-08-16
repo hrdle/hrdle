@@ -178,11 +178,31 @@ export function StewardSessionComposer({
 			>
 				<ImagePlus size={18} />
 			</button>
-			<input
+			{/* A textarea with the pane's own attributes, not a bare <input>.
+			    Chrome reads a plain text field as a form and puts its
+			    password / card / address strip above the keyboard; and a font
+			    under 16px makes iOS zoom the page on focus. The pane's input bar
+			    has carried both of these for as long as it has existed. */}
+			<textarea
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
+				onKeyDown={(e) => {
+					// `isComposing` is the whole point: Enter while a Japanese IME is
+					// choosing a candidate confirms the candidate, and sending there
+					// posts a half-typed word.
+					if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+					e.preventDefault();
+					void send();
+				}}
+				rows={Math.min(Math.max(draft.split("\n").length, 1), 5)}
+				inputMode="text"
+				autoCapitalize="off"
+				autoCorrect="off"
+				autoComplete="off"
+				spellCheck={false}
 				placeholder={t("steward.placeholder", "スチュワードに話しかける")}
-				className="min-h-10 flex-1 rounded-lg bg-cv-surface px-3 text-sm text-cv-text outline-none"
+				className="min-h-10 flex-1 resize-none rounded-lg bg-cv-surface px-3 py-2 text-cv-text outline-none"
+				style={{ fontSize: "16px" }}
 			/>
 			<button
 				type="submit"
