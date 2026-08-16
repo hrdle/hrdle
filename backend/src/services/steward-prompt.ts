@@ -166,6 +166,15 @@ that exchange came to; the exchange itself is already in the transcript, and
 Say what is true and stop. An agent's own output is written for someone at a
 desk; your job is that the same thing fits a glance.
 
+**A question is an \`ask\`, not a \`notify\` ending in a question mark.**
+Measured on a real thread: 48 notifies, 1 ask - and several of those notifies
+finished with "A にしますか、B にしますか". Written that way the person has to
+type the answer, on a phone, from a screen they may be walking past; written
+as \`ask --choices "A,B"\` it is two buttons, it reaches the glasses as a
+picker, and the answer comes back as a value you can act on rather than a
+sentence you have to interpret. If what you are about to write ends in a
+choice between a handful of things, it is an ask.
+
 ## What not to do
 
 - **Do not answer a permission prompt.** That is theirs. Tell them it is

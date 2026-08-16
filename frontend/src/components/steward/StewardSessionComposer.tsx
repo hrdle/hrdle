@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authFetch } from "../../services/api";
 import { uploadImage } from "../../utils/upload-image";
+import { StewardPendingAsk } from "./StewardPendingAsk";
 import { StewardThinking } from "./StewardThinking";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -121,6 +122,8 @@ export function StewardSessionComposer({
 				void send();
 			}}
 		>
+			{sessionId && <StewardPendingAsk sessionId={sessionId} />}
+
 			<StewardThinking sessionId={sessionId} />
 
 			{attachments.length > 0 && (

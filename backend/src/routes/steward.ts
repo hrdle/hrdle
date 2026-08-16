@@ -319,6 +319,24 @@ steward.post('/sessions/:id/turns', async (c) => {
   });
 });
 
+/**
+ * Questions still waiting, newest last.
+ *
+ * Its own endpoint rather than a filter over `GET /`: the screen that needs it
+ * most is a session's chat, which has no reason to hold the whole thread, and
+ * a question is the one thing there that a person has to act on.
+ */
+steward.get('/asks', async (c) => {
+  const session = c.req.query('session');
+  if (session !== undefined && !SessionId.safeParse(session).success) {
+    return c.json({ error: 'invalid session id' }, 400);
+  }
+  const asks = (await getThread()).filter(
+    (i) => i.kind === 'ask' && !i.ask.answer && (session === undefined || i.sessionId === session),
+  );
+  return c.json({ asks });
+});
+
 steward.get('/screen', (c) => c.json({ screen: getLastGlassesScreen() }));
 
 /** Whether the steward is thinking. Polled by a screen that has just spoken. */

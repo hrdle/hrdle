@@ -355,6 +355,7 @@ export const FloatingKeyboard = forwardRef<
 		return (
 			<div
 				ref={containerRef}
+				data-testid="floating-keyboard"
 				className={`fixed ${elevated ? "z-[10002]" : "z-[60]"}`}
 				style={{ left: position.x, top: position.y }}
 			>
@@ -432,6 +433,7 @@ export const FloatingKeyboard = forwardRef<
 	return (
 		<div
 			ref={containerRef}
+			data-testid="floating-keyboard"
 			className={`fixed ${elevated ? "z-[10002]" : "z-[60]"} border border-white/[0.08] rounded-lg shadow-2xl overflow-hidden`}
 			style={{
 				left: position.x,

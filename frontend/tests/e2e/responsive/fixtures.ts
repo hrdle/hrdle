@@ -53,6 +53,8 @@ export interface BootOptions {
     lines?: unknown[];
     /** What `demo` has written about it. */
     turns?: unknown[];
+    /** Questions still waiting, as `GET /asks` answers them. */
+    asks?: unknown[];
     /** Set the localStorage view switch before the app boots. */
     view?: boolean;
   };
@@ -88,6 +90,7 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
     [/\/api\/steward\/enabled$/, { enabled: steward.enabled }],
     [/\/api\/steward$/, { thread: steward.thread ?? [], lines: steward.lines ?? [] }],
     [/\/api\/steward\/sessions\/[^/]+\/turns$/, { turns: steward.turns ?? [] }],
+    [/\/api\/steward\/asks/, { asks: steward.asks ?? [] }],
     [/\/api\/steward\/observer$/, { present: true, status: 'idle' }],
     [/\/api\/workspaces$/, { sessions }],
     [/\/api\/sessions$/, { sessions }],
