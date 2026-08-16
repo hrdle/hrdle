@@ -70,7 +70,10 @@ test.describe('steward mode', () => {
     await page.getByTitle('スチュワード').click();
 
     await expect(page.getByText('レビューが7件返っています')).toBeVisible();
-    // The half the glasses could not carry.
+    // The half the glasses could not carry, behind a tap: open, the card is the
+    // glance plus everything the glance was meant to spare them.
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
+    await page.getByRole('button', { name: '詳細', exact: true }).click();
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
   });
 
@@ -164,6 +167,16 @@ test.describe('steward mode on a tablet', () => {
 
     await page.getByTitle('スチュワード').click();
     await expect(page.getByText('レビューが7件返っています')).toBeVisible();
+  });
+
+  test('a detail is behind a tap here too', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
+    await page.getByRole('button', { name: '詳細', exact: true }).click();
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
   });
 
   test('is absent when the server has no steward', async ({ page }) => {
