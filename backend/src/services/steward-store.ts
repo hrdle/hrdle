@@ -84,6 +84,22 @@ export async function getThread(): Promise<StewardThreadItem[]> {
 type OmitFromEach<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 export type NewThreadItem = OmitFromEach<StewardThreadItem, 'id' | 'at'> & { id?: string; at?: number };
 
+/**
+ * The same sentence twice in a row, from the same side.
+ *
+ * "Do not repeat yourself" has been in the steward's instructions from the
+ * start and it says it anyway - three identical "I have passed the path on"
+ * in one session, which is what a person sees as the screen being stuck. A
+ * repeat is never the news, so it is dropped here rather than trusted to a
+ * rule. Only *consecutive*: saying the same thing an hour apart is a report.
+ */
+function repeatsTheLast(
+  previous: { role: string; text: string } | undefined,
+  next: { role: string; text: string },
+): boolean {
+  return previous !== undefined && previous.role === next.role && previous.text === next.text;
+}
+
 export async function appendThreadItem(input: NewThreadItem): Promise<StewardThreadItem> {
   return withThreadLock(async () => {
     const items = await getThread();
@@ -92,6 +108,10 @@ export async function appendThreadItem(input: NewThreadItem): Promise<StewardThr
       id: input.id ?? randomUUID(),
       at: input.at ?? Date.now(),
     } as StewardThreadItem;
+    // Returned rather than stored: the caller gets the entry it wrote, so
+    // nothing has to learn that a write can vanish.
+    const last = items[items.length - 1];
+    if (repeatsTheLast(last, item)) return last as StewardThreadItem;
     items.push(item);
     await writeJson(THREAD_FILE, items.slice(-THREAD_MAX));
     return item;
@@ -166,8 +186,12 @@ export async function appendSessionTurns(
 
     for (const turn of turns) {
       const index = existing.findIndex((t) => t.id === turn.id);
-      if (index === -1) existing.push(turn);
-      else existing[index] = turn;
+      if (index !== -1) {
+        existing[index] = turn;
+        continue;
+      }
+      if (repeatsTheLast(existing[existing.length - 1], turn)) continue;
+      existing.push(turn);
     }
     const trimmed = existing.slice(-TURNS_PER_SESSION_MAX);
     sessions[sessionId] = { at: Date.now(), turns: trimmed };
