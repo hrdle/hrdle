@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.140] - 2026-08-16
+
 ### Added
 - **The steward's view is the screens that already exist** (#383, stage 3).
   A switch in the dashboard turns it on for the workspace list and the Chat
