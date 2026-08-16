@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.148] - 2026-08-16
+
+### Fixed
+- **The steward's composer went behind the soft keyboard.** The viewport meta
+  does not ask for `interactive-widget=resizes-content`, so the layout
+  viewport does not shrink and a `fixed bottom-0` bar stays underneath it. The
+  pane's own input bar never hit this - it is in normal flow, and the browser
+  scrolls a focused element into view; the fixed bar only meets a keyboard
+  when something else on screen owns the typing. It now sits on the visual
+  viewport's bottom edge, and outside steward mode nothing changes because the
+  bar and the keyboard never appear together there.
+
+### Changed
+- **Waiting says how long it has been waiting.** 「処理中…（経過 12 秒）」 beside
+  the composer, counting, rather than a motionless line at the end of a list
+  that has been scrolled away - which cannot be told from a screen that has
+  stopped updating.
+
 ## [0.3.147] - 2026-08-16
 
 ### Fixed
