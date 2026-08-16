@@ -112,7 +112,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 				<h2 className="font-medium text-sm">{t("steward.title", "Steward")}</h2>
 			</header>
 
-			<div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-3 py-3">
+			<div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-3 py-3">
 				{isLoading && <p className="text-cv-text-muted text-sm">{t("common.loading", "Loading...")}</p>}
 				{error && <p className="text-sm text-red-400">{error}</p>}
 				{!isLoading && !error && shown.length === 0 && (
@@ -121,7 +121,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 					</p>
 				)}
 
-				<ul className="flex flex-col gap-3">
+				<ul className="mt-auto flex flex-col gap-3">
 					{shown.map((item) => (
 						<li key={item.id}>
 							<ThreadItem item={item} onAnswer={send} onOpenSource={openSource} />
@@ -136,7 +136,7 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 
 			{/* The same composer the session screens use, so an image can be
 			    attached here too and there is one place that knows how. */}
-			<StewardSessionComposer className="mx-auto flex w-full max-w-4xl items-end gap-1 border-cv-border border-t p-2" />
+			<StewardSessionComposer className="mx-auto w-full max-w-4xl border-cv-border border-t p-2" />
 
 			{source && (
 				<ConversationViewer

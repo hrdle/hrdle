@@ -2766,7 +2766,7 @@ export function WorkspaceList({
 			{onToggleSteward && stewardViewOn && activeTab === "sessions" && !stewardOpen && (
 				<StewardSessionComposer
 					onSent={onToggleSteward}
-					className="shrink-0 flex items-end gap-1 border-white/[0.06] border-t bg-[#0a0a0a] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+					className="shrink-0 border-white/[0.06] border-t bg-[#0a0a0a] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
 				/>
 			)}
 		</div>
