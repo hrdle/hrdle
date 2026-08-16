@@ -525,6 +525,10 @@ function TerminalPane({
 	const mobileChat =
 		isMobile && sessionTarget && conversationAvailable ? (
 			<div className="h-full flex flex-col bg-cv-bg">
+				{/* Steward mode drops this: the bar at the bottom already carries the
+				    session's name, its state and the way to switch - so the phone was
+				    showing both twice, for 51px of a 852px screen. */}
+				{!stewardMode && (
 				<div className="flex items-center gap-2 px-3 py-2 border-b border-cv-border shrink-0">
 					{/* Steward mode keeps the terminal in the bar's menu instead - here
 					    it sat next to the summary as its equal. */}
@@ -561,6 +565,8 @@ function TerminalPane({
 						</p>
 					</div>
 				</div>
+				)}
+
 				<div className="flex-1 min-h-0">
 					<ChatView
 						sessionId={sessionTarget.id}

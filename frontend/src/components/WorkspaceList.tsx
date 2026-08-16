@@ -1596,10 +1596,19 @@ function SessionItem({
 					)}
 				</div>
 
+				{/* What the steward wrote, where the recap was: it is the summary
+				    of this card, so it reads under the title rather than below the
+				    badges as a footnote to them. */}
+				{stewardLine && (
+					<p className="mt-1 line-clamp-2 text-[12px] text-sky-200 leading-relaxed">
+						{stewardLine}
+					</p>
+				)}
+
 				{/* Auto recap (away_summary) — timestamp shown inline at the tail.
 				    For a multi-pane/multi-tab workspace it moves to the per-pane
 				    rows (like model/ctx/mem), so hide the header copy there. */}
-				{!isMultiWorkspace && extSession.ccRecap && (
+				{!isMultiWorkspace && !stewardLine && extSession.ccRecap && (
 					<p className="mt-1 text-[12px] text-amber-200 leading-relaxed line-clamp-3">
 						{extSession.ccRecap}
 						{extSession.ccRecapAt && (
@@ -1612,7 +1621,8 @@ function SessionItem({
 
 				{/* Last prompt / summary — hide when a recap is present (the recap
 				    already covers it), including the lead pane's own recap below. */}
-				{!extSession.ccRecap &&
+				{!stewardLine &&
+					!extSession.ccRecap &&
 					!collapsedLead?.recap &&
 					(extSession.ccSummary || extSession.ccFirstPrompt) && (
 						<p className="mt-1.5 text-[12px] text-zinc-600 leading-relaxed line-clamp-2">
@@ -1664,12 +1674,11 @@ function SessionItem({
 
 				{/* What the steward wrote about this workspace. It speaks for the
 				    whole card - the recaps below it are per pane - so it takes the
-				    place of the collapsed summary rather than sitting beside it. */}
-				{stewardLine ? (
-					<p className="mt-1 line-clamp-2 text-[12px] text-sky-200 leading-relaxed">
-						{stewardLine}
-					</p>
-				) : (
+				    place of every other summary on the card rather than sitting
+				    under them: with the raw recap left in, each card carried the
+				    same thing twice, once truncated mid-word in the agent's own
+				    English, and ran to 174px on a phone. */}
+				{stewardLine ? null : (
 					collapsedLead && (
 						<CollapsedWorkspaceSummary
 							lead={collapsedLead}

@@ -279,7 +279,15 @@ test.describe('steward mode on a tablet', () => {
  * what someone typed there went somewhere they could not see.
  */
 const TURNS = [
-  { id: 't1', at: 1_760_000_000_000, role: 'agent', text: 'テストを直しています' },
+  {
+    id: 't1',
+    at: 1_760_000_000_000,
+    role: 'agent',
+    text: 'テストを直しています',
+    // A source with no message id: the turn says which conversation it came
+    // from and not where in it, which is the ordinary case.
+    source: { agentSessionId: 'sess-1' },
+  },
 ];
 
 test.describe('a session in steward mode', () => {
