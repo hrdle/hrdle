@@ -459,6 +459,7 @@
     "writingSession": "Reading this session...",
     "sessionEmpty": "Nothing written yet.",
     "detailShow": "Detail",
-    "detailHide": "Hide detail"
+    "detailHide": "Hide detail",
+    "attachImage": "Attach image"
   }
 }

@@ -107,6 +107,10 @@ export function StewardSessionView({
 					isLoading={sourceLoading}
 					onClose={() => setSource(null)}
 					anchorId={source.messageId}
+					// No anchor means "show me this session's real conversation", and
+					// the top of it is a /clear from days ago - which is what "the link
+					// is not connected" looked like.
+					scrollToBottom={!source.messageId}
 				/>
 			)}
 		</div>

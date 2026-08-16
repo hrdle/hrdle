@@ -1,4 +1,4 @@
-import { ArrowLeft, CornerDownLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -9,6 +9,7 @@ import type {
 import { useSteward } from "../../hooks/useSteward";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
+import { StewardSessionComposer } from "./StewardSessionComposer";
 import { TurnDetail } from "./TurnDetail";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -31,8 +32,6 @@ interface OpenSource {
 export function StewardView({ onClose }: { onClose: () => void }) {
 	const { t } = useTranslation();
 	const { thread, isLoading, error, thinking, reply } = useSteward(true);
-	const [draft, setDraft] = useState("");
-	const [sending, setSending] = useState(false);
 	const [sendError, setSendError] = useState<string | null>(null);
 	const endRef = useRef<HTMLDivElement>(null);
 
@@ -66,16 +65,13 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 		endRef.current?.scrollIntoView({ block: "end" });
 	}, [thread.length, thinking]);
 
+	// Answering an ask, which the composer cannot express.
 	const send = async (input: Parameters<typeof reply>[0]) => {
-		setSending(true);
 		setSendError(null);
 		try {
 			await reply(input);
-			setDraft("");
 		} catch (err) {
 			setSendError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setSending(false);
 		}
 	};
 
@@ -122,30 +118,9 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 
 			{sendError && <p className="px-3 pb-1 text-red-400 text-xs">{sendError}</p>}
 
-			<form
-				className="mx-auto flex w-full max-w-2xl items-end gap-2 border-cv-border border-t p-2"
-				onSubmit={(e) => {
-					e.preventDefault();
-					const text = draft.trim();
-					if (text) void send({ text });
-				}}
-			>
-				<textarea
-					value={draft}
-					onChange={(e) => setDraft(e.target.value)}
-					rows={1}
-					placeholder={t("steward.placeholder", "Say something to the steward")}
-					className="min-h-[40px] flex-1 resize-none rounded-lg bg-cv-surface px-3 py-2 text-sm outline-none"
-				/>
-				<button
-					type="submit"
-					disabled={sending || !draft.trim()}
-					className="rounded-lg bg-cv-surface px-3 py-2 disabled:opacity-40"
-					aria-label={t("common.send", "Send")}
-				>
-					<CornerDownLeft size={18} />
-				</button>
-			</form>
+			{/* The same composer the session screens use, so an image can be
+			    attached here too and there is one place that knows how. */}
+			<StewardSessionComposer className="mx-auto flex w-full max-w-2xl items-end gap-1 border-cv-border border-t p-2" />
 
 			{source && (
 				<ConversationViewer
@@ -154,6 +129,10 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 					isLoading={sourceLoading}
 					onClose={() => setSource(null)}
 					anchorId={source.messageId}
+					// No anchor means "show me this session's real conversation", and
+					// the top of it is a /clear from days ago - which is what "the link
+					// is not connected" looked like.
+					scrollToBottom={!source.messageId}
 				/>
 			)}
 		</div>
@@ -181,8 +160,9 @@ function ThreadItem({
 			>
 				{/* Which session this is about. The thread is global and read out of
 				    context, and the steward used to spend page budget writing the id
-				    into the sentence. */}
-				{item.sessionId && (
+				    into the sentence. Not on the person's own words: they know what
+				    they just said and where, and the label there only read as noise. */}
+				{item.sessionId && !mine && (
 					<p className="mb-1 font-medium text-[11px] text-cv-text-muted">{item.sessionId}</p>
 				)}
 

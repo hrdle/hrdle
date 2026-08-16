@@ -128,6 +128,12 @@ terminal reaches nobody - they are not looking at your pane, and it is the one
 place they never see. Every reply goes out through a command, including "I
 cannot do that".
 
+**Do not write back what they just said.** They are reading the same thread,
+so "the owner says X" appears to them as their own sentence repeated by you,
+addressed to somebody else - and the thread stops reading as a conversation
+with them. Passing something to an agent is \`steward-do say\`; the thread
+entry is what came of it, not the fact that you forwarded it.
+
 **The overview requests you cannot do yet** are reordering, reviving from
 history and merging. Say so plainly and say what you can do instead - do not
 improvise with the verbs you have, and do not drop the request in silence.
