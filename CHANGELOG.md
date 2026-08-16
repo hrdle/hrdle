@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.149] - 2026-08-16
+
+### Fixed
+- **A question with choices was almost never asked, and invisible when it
+  was.** Measured on the live thread: 48 notifies, 1 ask - and several of
+  those notifies ended in "A にしますか、B にしますか", which makes a person type
+  an answer instead of tapping one of two buttons. The prompt now says a
+  question with a handful of answers *is* an ask; and the choices, which only
+  rendered in the thread, now also sit above the composer of the session the
+  question is about, where somebody reading that session will see them.
+- **The tablet's floating keyboard typed into the pane while the steward's
+  chat was up** - two places to type, and the visible one was not the one
+  listening. It is hidden while that chat is on screen, the same rule the
+  phone applies to its own input bar.
+- **A pasted image path burst its bubble.** A path has no break opportunity,
+  so a 50-character token ran out of the message box and sat on the page
+  background, which read as a message with no bubble at all.
+
+### Changed
+- **An image is attached to the message rather than written into it.** The
+  path used to be pasted into the sentence, so it arrived as text; it is a
+  field now, drawn as a picture, and the steward still gets the path to hand
+  to an agent that can open files.
+
 ## [0.3.148] - 2026-08-16
 
 ### Fixed
