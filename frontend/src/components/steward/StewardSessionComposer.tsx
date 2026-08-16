@@ -1,6 +1,7 @@
 import { CornerDownLeft, ImagePlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { IndicatorState } from "../../../../shared/types";
 import { authFetch } from "../../services/api";
 import { uploadImage } from "../../utils/upload-image";
 import { StewardPendingAsk } from "./StewardPendingAsk";
@@ -38,6 +39,7 @@ export function StewardSessionComposer({
 	peerId,
 	className,
 	onSent,
+	agentState,
 }: {
 	/** Unset on the overview, where what is said belongs to no session. */
 	sessionId?: string;
@@ -46,6 +48,8 @@ export function StewardSessionComposer({
 	className?: string;
 	/** The overview uses this to open the thread, where the answer lands. */
 	onSent?: () => void;
+	/** What the agent in this session is doing, shown beside the composer. */
+	agentState?: IndicatorState;
 }) {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
@@ -129,7 +133,7 @@ export function StewardSessionComposer({
 		>
 			{sessionId && <StewardPendingAsk sessionId={sessionId} />}
 
-			<StewardThinking sessionId={sessionId} />
+			<StewardThinking sessionId={sessionId} agentState={agentState} />
 
 			{attachments.length > 0 && (
 				<div className="mb-2 flex flex-wrap gap-2">

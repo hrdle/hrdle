@@ -58,6 +58,8 @@ export interface BootOptions {
     /** Set the localStorage view switch before the app boots. */
     view?: boolean;
   };
+  /** What `demo`'s agent is doing, as the sessions list reports it. */
+  indicatorState?: 'processing' | 'waiting_input' | 'idle' | 'completed';
   /** Give `demo` a pane with an agent in it, which is what chat mode needs.
    *  Opt-in: with panes present a row renders differently, and the specs that
    *  measure the row were written without them. */
@@ -83,9 +85,13 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
   }, view);
 
   const steward = options.steward ?? { enabled: false };
+  const first = {
+    ...SESSIONS[0],
+    ...(options.indicatorState ? { indicatorState: options.indicatorState } : {}),
+  };
   const sessions = options.withAgentPane
-    ? [{ ...SESSIONS[0], agentSessionId: 'sess-1', panes: [AGENT_PANE] }, ...SESSIONS.slice(1)]
-    : SESSIONS;
+    ? [{ ...first, agentSessionId: 'sess-1', panes: [AGENT_PANE] }, ...SESSIONS.slice(1)]
+    : [first, ...SESSIONS.slice(1)];
   const stewardRoutes: Array<[RegExp, unknown]> = [
     [/\/api\/steward\/enabled$/, { enabled: steward.enabled }],
     [/\/api\/steward$/, { thread: steward.thread ?? [], lines: steward.lines ?? [] }],

@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import type { AgentProvider } from "../../../../shared/types";
+import type { AgentProvider, IndicatorState } from "../../../../shared/types";
 import { useAgentConversation } from "../../hooks/useAgentConversation";
 import { useStewardEnabled, useStewardView } from "../../hooks/useSteward";
 import { ConversationViewer } from "../ConversationViewer";
@@ -19,6 +19,8 @@ interface ChatViewProps {
 	/** Steward mode on a phone: the composer belongs to the fixed bottom bar,
 	 *  which the soft keyboard cannot push off the screen. */
 	composerInBar?: boolean;
+	/** What the agent in this session is doing, for the steward's chat. */
+	agentState?: IndicatorState;
 }
 
 /**
@@ -36,6 +38,7 @@ export function ChatView({
 	agent,
 	agentSessionId,
 	composerInBar,
+	agentState,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const stewardAvailable = useStewardEnabled();
@@ -58,6 +61,7 @@ export function ChatView({
 				sessionId={sessionId}
 				agentSessionId={agentSessionId}
 				composerInBar={composerInBar}
+				agentState={agentState}
 			/>
 		);
 	}

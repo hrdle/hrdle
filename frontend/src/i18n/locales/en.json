@@ -463,6 +463,8 @@
     "detailHide": "Hide detail",
     "attachImage": "Attach image",
     "removeImage": "Remove image",
-    "working": "Working... ({{seconds}}s)"
+    "working": "Working... ({{seconds}}s)",
+    "agentWorking": "This session is working",
+    "agentWaiting": "This session is waiting for you"
   }
 }

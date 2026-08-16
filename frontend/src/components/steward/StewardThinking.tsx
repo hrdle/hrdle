@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { IndicatorState } from "../../../../shared/types";
 import { useThinkingSince } from "./thinking";
 
 /**
@@ -9,7 +10,16 @@ import { useThinkingSince } from "./thinking";
  * a still "考えています…" a screen away is indistinguishable from a screen
  * that has stopped updating, which is what someone waiting actually suspects.
  */
-export function StewardThinking({ sessionId }: { sessionId?: string }) {
+export function StewardThinking({
+	sessionId,
+	agentState,
+}: {
+	sessionId?: string;
+	/** What the agent in this session is doing. The list shows it on every row;
+	 *  reading one session there was nothing to tell a working pane from a
+	 *  finished one. */
+	agentState?: IndicatorState;
+}) {
 	const { t } = useTranslation();
 	const since = useThinkingSince(sessionId ?? "");
 	const [elapsed, setElapsed] = useState(0);
@@ -22,12 +32,33 @@ export function StewardThinking({ sessionId }: { sessionId?: string }) {
 		return () => clearInterval(timer);
 	}, [since]);
 
-	if (since === null) return null;
+	// The steward's own turn takes precedence: it is the answer being waited on.
+	if (since !== null) {
+		return (
+			<p className="flex items-center gap-2 px-1 pb-1 text-cv-text-muted text-xs">
+				<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
+				{t("steward.working", "処理中…（経過 {{seconds}} 秒）", { seconds: elapsed })}
+			</p>
+		);
+	}
 
-	return (
-		<p className="flex items-center gap-2 px-1 pb-1 text-cv-text-muted text-xs">
-			<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
-			{t("steward.working", "処理中…（経過 {{seconds}} 秒）", { seconds: elapsed })}
-		</p>
-	);
+	if (agentState === "processing") {
+		return (
+			<p className="flex items-center gap-2 px-1 pb-1 text-cv-accent text-xs">
+				<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-accent" />
+				{t("steward.agentWorking", "このセッションは作業中です")}
+			</p>
+		);
+	}
+
+	if (agentState === "waiting_input") {
+		return (
+			<p className="flex items-center gap-2 px-1 pb-1 text-amber-500 text-xs">
+				<span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+				{t("steward.agentWaiting", "このセッションは入力を待っています")}
+			</p>
+		);
+	}
+
+	return null;
 }
