@@ -110,6 +110,8 @@ interface OpenSession {
 	theme?: SessionTheme;
 	panes?: PaneInfo[];
 	indicatorState?: IndicatorState;
+	/** The tool call the agent is on, while it is on one. */
+	activity?: { tool: string; target?: string };
 	// Multi-server: the peer this session lives on. Unset = local Hub.
 	peerId?: string;
 }
@@ -129,6 +131,7 @@ function apiToOpenSession(s: ExtendedSessionResponse): OpenSession {
 		theme: s.theme,
 		panes: s.panes,
 		indicatorState: s.indicatorState,
+		activity: s.activity,
 		peerId: s.peerId,
 	};
 }
@@ -310,6 +313,7 @@ export function App() {
 					agentSessionId: apiSession.agentSessionId,
 					panes: apiSession.panes,
 					indicatorState: apiSession.indicatorState,
+					activity: apiSession.activity,
 				};
 				// Skip update if nothing actually changed (avoid extra renders)
 				if (

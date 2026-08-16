@@ -439,6 +439,21 @@ test.describe('a session in steward mode', () => {
     await expect(page.getByText('を見てください')).toBeVisible();
   });
 
+  // "Working" on its own reads the same as a screen that has stopped updating.
+  test('says what it is doing, not just that it is', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      indicatorState: 'processing',
+      activity: { tool: 'Edit', target: 'StewardView.tsx' },
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+
+    await expect(page.getByText('Edit')).toBeVisible();
+    await expect(page.getByText('StewardView.tsx')).toBeVisible();
+    // The bare line is what is shown when the transcript says nothing.
+    await expect(page.getByText('このセッションは作業中です')).toHaveCount(0);
+  });
+
   test('the terminal is in the menu, not beside the summary', async ({ page }) => {
     await boot(page);
 

@@ -40,6 +40,7 @@ export function StewardSessionComposer({
 	className,
 	onSent,
 	agentState,
+	activity,
 }: {
 	/** Unset on the overview, where what is said belongs to no session. */
 	sessionId?: string;
@@ -50,6 +51,7 @@ export function StewardSessionComposer({
 	onSent?: () => void;
 	/** What the agent in this session is doing, shown beside the composer. */
 	agentState?: IndicatorState;
+	activity?: { tool: string; target?: string };
 }) {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
@@ -136,7 +138,7 @@ export function StewardSessionComposer({
 		>
 			{sessionId && <StewardPendingAsk sessionId={sessionId} />}
 
-			<StewardThinking sessionId={sessionId} agentState={agentState} />
+			<StewardThinking sessionId={sessionId} agentState={agentState} activity={activity} />
 
 			{attachments.length > 0 && (
 				<div className="mb-2 flex flex-wrap gap-2">

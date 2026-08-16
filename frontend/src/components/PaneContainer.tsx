@@ -86,6 +86,7 @@ interface ExtendedSession {
 	// Agent-level indicator (hook events / jsonl). `state` only says whether the
 	// herdr workspace is focused, so it cannot stand in for this.
 	indicatorState?: IndicatorState;
+	activity?: { tool: string; target?: string };
 }
 
 // Control mode context passed through the pane tree
@@ -449,6 +450,7 @@ function TerminalPane({
 				sessionId={sessionTarget.id}
 				peerId={sessionTarget.peerId}
 				agentState={session?.indicatorState}
+				activity={session?.activity}
 			/>
 		)}
 		<div className="flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border-b border-white/[0.06]">
@@ -572,6 +574,7 @@ function TerminalPane({
 						sessionId={sessionTarget.id}
 						composerInBar={stewardMode}
 						agentState={session?.indicatorState}
+						activity={session?.activity}
 						title={session?.name}
 						subtitle={
 							session?.currentPath
@@ -897,6 +900,7 @@ function TerminalPane({
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
 						agentState={session?.indicatorState}
+						activity={session?.activity}
 					/>
 				)}
 				{sessionTarget ? (

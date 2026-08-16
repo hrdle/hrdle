@@ -30,12 +30,14 @@ export function StewardSessionView({
 	agentSessionId,
 	composerInBar = false,
 	agentState,
+	activity,
 }: {
 	sessionId: string;
 	agentSessionId?: string | null;
 	/** The phone puts it in the bottom bar instead. */
 	composerInBar?: boolean;
 	agentState?: IndicatorState;
+	activity?: { tool: string; target?: string };
 }) {
 	const { t } = useTranslation();
 	const { turns, waiting, thinking } = useStewardSession(sessionId, true);
@@ -106,6 +108,7 @@ export function StewardSessionView({
 				<StewardSessionComposer
 					sessionId={sessionId}
 					agentState={agentState}
+					activity={activity}
 					className="mx-auto w-full max-w-4xl border-cv-border border-t p-2"
 				/>
 			)}

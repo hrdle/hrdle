@@ -21,6 +21,7 @@ interface ChatViewProps {
 	composerInBar?: boolean;
 	/** What the agent in this session is doing, for the steward's chat. */
 	agentState?: IndicatorState;
+	activity?: { tool: string; target?: string };
 }
 
 /**
@@ -39,6 +40,7 @@ export function ChatView({
 	agentSessionId,
 	composerInBar,
 	agentState,
+	activity,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const stewardAvailable = useStewardEnabled();
@@ -62,6 +64,7 @@ export function ChatView({
 				agentSessionId={agentSessionId}
 				composerInBar={composerInBar}
 				agentState={agentState}
+				activity={activity}
 			/>
 		);
 	}

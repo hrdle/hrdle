@@ -60,6 +60,8 @@ export interface BootOptions {
   };
   /** What `demo`'s agent is doing, as the sessions list reports it. */
   indicatorState?: 'processing' | 'waiting_input' | 'idle' | 'completed';
+  /** The tool call it is on, as `claudeActivity` reads it from the transcript. */
+  activity?: { tool: string; target?: string };
   /** Give `demo` a pane with an agent in it, which is what chat mode needs.
    *  Opt-in: with panes present a row renders differently, and the specs that
    *  measure the row were written without them. */
@@ -88,6 +90,7 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
   const first = {
     ...SESSIONS[0],
     ...(options.indicatorState ? { indicatorState: options.indicatorState } : {}),
+    ...(options.activity ? { activity: options.activity } : {}),
   };
   const sessions = options.withAgentPane
     ? [{ ...first, agentSessionId: 'sess-1', panes: [AGENT_PANE] }, ...SESSIONS.slice(1)]
