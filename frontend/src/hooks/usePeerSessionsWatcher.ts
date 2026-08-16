@@ -14,6 +14,7 @@ import {
 	type SessionResponse,
 } from "../../../shared/types";
 import { appendWsToken, peerHttpUrlToWsUrl } from "../services/peer-ws";
+import { noteServerVersion } from "../services/build-version";
 import { fireHookNotification } from "../utils/hookNotification";
 import { storageKey } from "../utils/app-storage";
 
@@ -199,6 +200,10 @@ function openWatcher(peer: PeerClientView) {
 			}
 
 			if (msg.type !== "sessions-updated") return;
+
+			// The hub's own build, on a message that already arrives every five
+			// seconds. A peer's version says nothing about the page's.
+			if (peer.id === LOCAL_PEER_ID) noteServerVersion(msg.version);
 
 			// Per-peer dedup: backend already filters identical payloads, but a
 			// second listener registering would otherwise re-stringify the same

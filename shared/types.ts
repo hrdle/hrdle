@@ -1749,7 +1749,14 @@ export type MuxServerMessage =
   | { type: 'unsubscribed'; sessionId: string }
   // `focus` rides along so the glasses can follow the phone/tablet in hand
   //; absent when every client is hidden. Ordinary clients ignore it.
-  | { type: 'sessions-updated'; sessions: SessionResponse[]; focus?: ClientFocus }
+  /**
+   * `version` is the server's, so a page can tell it is running an older build
+   * than the host it is talking to. It rides here because this already arrives
+   * every five seconds - the service worker's own check is on visibility and a
+   * half-hourly timer, so a phone left open missed a release for up to that
+   * long and the fix looked like a fix that had not worked.
+   */
+  | { type: 'sessions-updated'; sessions: SessionResponse[]; focus?: ClientFocus; version?: string }
   // Every one echoes the `agentSessionId` it was subscribed with, so a client
   // showing two panes of one workspace can tell whose conversation arrived.
   | { type: 'conversation-subscribed'; sessionId: string; agentSessionId?: string; ccSessionId: string | null }

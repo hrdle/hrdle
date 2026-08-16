@@ -15,6 +15,7 @@ import {
 import { recordGlassesFocus, recordGlassesInput, recordGlassesScreen } from '../services/glasses-screen-recorder';
 import { isStewardEnabled } from '../services/steward-config';
 import { getLines, getThread } from '../services/steward-store';
+import { VERSION } from '../cli';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
@@ -409,7 +410,12 @@ function sessionsUpdatedPayload(sessions: SessionResponse[]): string {
   // one place the demo recording learns which session the user is
   // working in. The recorder dedups; unchanged focus costs nothing.
   recordGlassesFocus(focus);
-  return JSON.stringify({ type: 'sessions-updated', sessions, ...(focus ? { focus } : {}) });
+  return JSON.stringify({
+    type: 'sessions-updated',
+    sessions,
+    version: VERSION,
+    ...(focus ? { focus } : {}),
+  });
 }
 
 // Zombie detection: if no client ping for 60s, assume connection is dead.
