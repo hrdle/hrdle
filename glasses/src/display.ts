@@ -1831,13 +1831,19 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
             ? '(the microphone did not open)\n\nNothing was listening, so there is nothing to send'
             : state.voiceFailed
               ? '(the transcription did not come back)\n\nSay it again - the recording was not the problem'
-              : state.voiceHeardSpeech
+              : state.voicePhrases?.length
                 ? '(nothing was recognized)\n\nDouble-tap to speak again'
-                : '(nothing loud enough was heard)\n\nDouble-tap and speak up, or move the microphone closer',
-        // The swipes are promised only when there is somewhere for them to go.
+                : state.voiceHeardSpeech
+                  ? '(taken back)\n\nDouble-tap to speak again'
+                  : '(nothing loud enough was heard)\n\nDouble-tap and speak up, or move the microphone closer',
+        // The swipes are promised only when there is somewhere for them to go,
+        // and a microphone that will not open is the one failure trying again
+        // cannot answer - that screen promises the way out instead.
         footerText: asked
           ? `tap:send  dbl:say more${pages > 1 ? '  swipe:scroll' : ''}`
-          : 'dbl:try again',
+          : state.voiceMicFailed
+            ? 'dbl:back'
+            : 'dbl:try again',
       }
     }
   }

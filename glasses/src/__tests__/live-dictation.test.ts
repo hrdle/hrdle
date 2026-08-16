@@ -452,6 +452,24 @@ describe('the screen', () => {
     expect(body).toContain(c.state.voiceText as string)
   })
 
+  test('says the draft was taken back rather than never recognized', async () => {
+    // It was recognised. Undoing every phrase and being told nothing was
+    // recognised sends the wearer to check the microphone they were heard on.
+    const { platform: p, rec } = platform()
+    const c = new GlassesController(p)
+    const d = driver(c)
+    await d.startVoice({ sessionId: 'w1' })
+    speak(d, TEN_SECONDS)
+    pause(d)
+    await flush()
+    await rec.answer(0, 'やっぱりやめる')
+    c.swipeUp()
+    await flush()
+    await d.stopAndTranscribe()
+
+    expect(screenText(c.state).body).toContain('taken back')
+  })
+
   test('does not tell a wearer who took every phrase back to speak up', async () => {
     // They were heard perfectly well. Speaking louder is the one thing that
     // would not help, and it is what the too-quiet screen asks for.
@@ -1106,6 +1124,23 @@ describe('a microphone that would not open', () => {
     // Nothing was listening, so the loudness bar was never consulted - and
     // speaking louder is the one thing that cannot help.
     expect(body).not.toContain('loud enough')
+  })
+
+  test('lets the wearer out, because a double tap cannot answer a permission', async () => {
+    // This screen is reached without passing through a recording, so the step
+    // the usual escape is made of does not exist here: a double tap that means
+    // "back to the microphone" only retries the open that just failed, and the
+    // host refuses this capability silently and for good.
+    const { platform: p } = platform()
+    ;(p as unknown as { startMicCapture(): Promise<boolean> }).startMicCapture = async () => false
+    const c = new GlassesController(p)
+    await driver(c).startVoice({ sessionId: 'w1' })
+    expect(screenText(c.state).footer).toContain('dbl:back')
+
+    c.doubleTap()
+    await flush()
+
+    expect(c.state.mode).toBe('conversation')
   })
 })
 

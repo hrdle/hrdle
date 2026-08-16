@@ -1837,9 +1837,19 @@ export class GlassesController {
       // from rather than the way out entirely. Double-tapping again from there
       // is what abandons it - the same "leave" this gesture means everywhere,
       // arrived at one step at a time.
+      //
+      // Except when the microphone is what failed. That screen is reached
+      // without passing through a recording, so the step this escape is made of
+      // does not exist there and the gesture would only retry the open. A
+      // permission does not change between two double-taps - the host refuses
+      // this capability outright and silently - so the way out of that one is
+      // out.
       case 'doubleTap':
-        if (this.state.voicePhase === 'confirm') await this.resumeVoice()
-        else await this.cancelVoice()
+        if (this.state.voicePhase === 'confirm' && !this.state.voiceMicFailed) {
+          await this.resumeVoice()
+        } else {
+          await this.cancelVoice()
+        }
         return
       // Up goes back, down goes on - the direction every other screen already
       // reads that way (the conversation swipes up into older messages, the
