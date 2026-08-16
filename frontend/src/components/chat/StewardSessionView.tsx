@@ -65,8 +65,11 @@ export function StewardSessionView({
 
 	return (
 		<div className="flex h-full flex-col bg-cv-bg text-cv-text">
+			{/* 4xl rather than 2xl: at the app's 14px root, 2xl is 588px, so a
+			    tablet gave the conversation just over half its width and the rest
+			    to margins. A phone is narrower than either, so nothing moves there. */}
 			<div className="flex-1 overflow-y-auto px-3 py-3">
-				<div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
+				<div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
 					{turns.map((turn) => (
 						<TurnCard key={turn.id} turn={turn} fallbackSession={agentSessionId} onOpenSource={openSource} />
 					))}
@@ -97,7 +100,7 @@ export function StewardSessionView({
 				<StewardSessionComposer
 					sessionId={sessionId}
 					agentState={agentState}
-					className="mx-auto flex w-full max-w-2xl items-end gap-2 border-cv-border border-t p-2"
+					className="mx-auto flex w-full max-w-4xl items-end gap-2 border-cv-border border-t p-2"
 				/>
 			)}
 
@@ -134,7 +137,7 @@ function TurnCard({
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
-			<div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
+			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
 				<p className="whitespace-pre-wrap break-words">{turn.text}</p>
 
 					{turn.images && <TurnImages paths={turn.images} />}
