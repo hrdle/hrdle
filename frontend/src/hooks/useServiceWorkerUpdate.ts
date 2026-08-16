@@ -10,12 +10,22 @@ const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 // so the worker is picked up whether or not React has mounted yet, and a worker
 // that is already waiting from a previous visit is reported immediately.
 let updateDetected = false;
+/**
+ * Whether the full prompt has been waved away.
+ *
+ * Separate from `updateDetected`, which used to be cleared by dismissing: the
+ * page was then on the old build with nothing left saying so, and the next
+ * release's fix looked like a fix that had not worked. A dismissal hides the
+ * card, not the fact.
+ */
+let updateDismissed = false;
 const listeners = new Set<() => void>();
 
 const updateServiceWorker = registerSW({
 	onNeedRefresh() {
 		console.log("[Hrdle] SW: new version waiting, prompting for reload");
 		updateDetected = true;
+		updateDismissed = false;
 		for (const listener of listeners) listener();
 	},
 	onRegisterError(error) {
@@ -39,7 +49,9 @@ const updateServiceWorker = registerSW({
 interface ServiceWorkerUpdate {
 	/** A newer build has been precached and its worker is waiting to take over. */
 	updateAvailable: boolean;
-	/** Hide the prompt; it reappears only if another release is detected. */
+	/** The card has been waved away. The update itself has not gone anywhere,
+	 *  so what is left is a marker rather than nothing. */
+	dismissed: boolean;
 	dismiss: () => void;
 	/** Activate the waiting worker and reload onto the new build. */
 	reload: () => void;
@@ -56,9 +68,13 @@ interface ServiceWorkerUpdate {
  */
 export function useServiceWorkerUpdate(): ServiceWorkerUpdate {
 	const [updateAvailable, setUpdateAvailable] = useState(updateDetected);
+	const [dismissed, setDismissed] = useState(updateDismissed);
 
 	useEffect(() => {
-		const onUpdate = () => setUpdateAvailable(true);
+		const onUpdate = () => {
+			setUpdateAvailable(true);
+			setDismissed(updateDismissed);
+		};
 		listeners.add(onUpdate);
 		// The worker may have started waiting between render and this effect.
 		if (updateDetected) setUpdateAvailable(true);
@@ -68,12 +84,12 @@ export function useServiceWorkerUpdate(): ServiceWorkerUpdate {
 	}, []);
 
 	const dismiss = useCallback(() => {
-		updateDetected = false;
-		setUpdateAvailable(false);
+		updateDismissed = true;
+		setDismissed(true);
 	}, []);
 	const reload = useCallback(() => {
 		void updateServiceWorker(true);
 	}, []);
 
-	return { updateAvailable, dismiss, reload };
+	return { updateAvailable, dismissed, dismiss, reload };
 }

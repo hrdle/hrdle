@@ -444,7 +444,8 @@
     "available": "A new version is available",
     "description": "Reloading switches to the latest version. Anything you are in the middle of typing may be lost.",
     "reload": "Reload",
-    "later": "Later"
+    "later": "Later",
+    "pending": "Update ready"
   },
   "steward": {
     "title": "Steward",
