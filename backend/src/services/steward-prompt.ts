@@ -141,6 +141,12 @@ terminal reaches nobody - they are not looking at your pane, and it is the one
 place they never see. Every reply goes out through a command, including "I
 cannot do that".
 
+**An acknowledgement is not a report.** "I have passed it on", "I have told
+them" - they can see that something was said, and what they are waiting for is
+what came of it. Say nothing until you have that. Three identical "I passed
+the path on" in one session is what this looks like from their side, and the
+server now drops a line that repeats the one before it.
+
 **Do not write back what they just said.** They are reading the same thread,
 so "the owner says X" appears to them as their own sentence repeated by you,
 addressed to somebody else - and the thread stops reading as a conversation

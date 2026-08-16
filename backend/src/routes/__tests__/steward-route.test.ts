@@ -261,6 +261,42 @@ describe('session writes', () => {
     ]);
   });
 
+  test('the same line twice in a row is written once', async () => {
+    const say = () =>
+      post('/api/steward/thread', {
+        kind: 'notify',
+        text: '画像パスを渡しました',
+        sessionId: 'w5Q',
+      });
+    await say();
+    await say();
+
+    const thread = (await (await app.request('/api/steward')).json()) as {
+      thread: { text: string }[];
+    };
+    expect(thread.thread.filter((i) => i.text === '画像パスを渡しました')).toHaveLength(1);
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: unknown[];
+    };
+    expect(turns.turns).toHaveLength(1);
+  });
+
+  test('the same line again after something else is a report, not a repeat', async () => {
+    await post('/api/steward/thread', { kind: 'notify', text: 'まだ動いています', sessionId: 'w5Q' });
+    await post('/api/steward/thread', { kind: 'notify', text: '一件終わりました', sessionId: 'w5Q' });
+    await post('/api/steward/thread', { kind: 'notify', text: 'まだ動いています', sessionId: 'w5Q' });
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { text: string }[];
+    };
+    expect(turns.turns.map((t) => t.text)).toEqual([
+      'まだ動いています',
+      '一件終わりました',
+      'まだ動いています',
+    ]);
+  });
+
   test('an entry naming no session touches no session history', async () => {
     await post('/api/steward/thread', { kind: 'notify', text: '3件が止まっています' });
     await post('/api/steward/thread/reply', { text: 'どれ' });
