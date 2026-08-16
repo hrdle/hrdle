@@ -444,6 +444,7 @@ export function DesktopLayout({
 								peerId: apiSession.peerId ?? propSession.peerId,
 								bridgeSessionId: apiSession.bridgeSessionId,
 								indicatorState: apiSession.indicatorState,
+								activity: apiSession.activity,
 							}
 						: {
 								id: apiSession.id,
@@ -460,6 +461,7 @@ export function DesktopLayout({
 								peerId: apiSession.peerId,
 								bridgeSessionId: apiSession.bridgeSessionId,
 								indicatorState: apiSession.indicatorState,
+								activity: apiSession.activity,
 							};
 				})
 			: propSessions;

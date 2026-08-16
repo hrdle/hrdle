@@ -24,6 +24,7 @@ import { PromptHistoryService } from '../services/prompt-history';
 import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, addSessionSttTerms, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
 import { STT_PROMPT_MAX_CHARS, seedWorkspaceVocabulary, sessionPromptTerms } from '../services/stt-prompt';
 import { computeSessionMetrics } from '../services/session-metrics';
+import { claudeActivity } from '../services/agent-activity';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
 import { detectPaneState, stripAnsi, type DetectedPaneState } from '../services/pane-state';
@@ -376,6 +377,12 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         ? (ccSession?.lastRecap ? 'summary' : undefined)
         : (agentThread?.recap ? 'last-message' : undefined)) as 'summary' | 'last-message' | undefined,
       indicatorState: sessionIndicatorState,
+      // Only while it is working, and only for Claude: this is a tail read of
+      // its transcript, and a pane that has stopped has nothing to report.
+      activity:
+        includeClaudeInfo && sessionIndicatorState === 'processing' && s.agentSessionId
+          ? await claudeActivity(s.agentSessionId)
+          : undefined,
       ccSessionId: includeClaudeInfo ? s.agentSessionId : undefined,
       bridgeSessionId:
         includeClaudeInfo && s.agentSessionId
@@ -461,6 +468,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       ccRecapAt: undefined,
       ccRecapKind: undefined,
       indicatorState: undefined,
+      activity: undefined,
       ccSessionId: lost.ccSessionId,
       bridgeSessionId: undefined,
       agentSessionId: lost.agentSessionId,

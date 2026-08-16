@@ -936,6 +936,15 @@ export interface DashboardResponse {
 
 export interface ExtendedSessionResponse extends SessionResponse {
   indicatorState?: IndicatorState;
+  /**
+   * What the agent is doing right now, while it is doing it.
+   *
+   * "Working" says only that the pane has not stopped, which from a phone is
+   * indistinguishable from a screen that has frozen. The newest tool call
+   * names the file being edited or the command being run. Present only while
+   * the pane is processing.
+   */
+  activity?: { tool: string; target?: string };
   ccSessionId?: string;
   /**
    * Remote Control bridge session id (`session_…`) read from

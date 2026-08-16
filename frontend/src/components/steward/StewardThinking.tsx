@@ -13,12 +13,16 @@ import { useThinkingSince } from "./thinking";
 export function StewardThinking({
 	sessionId,
 	agentState,
+	activity,
 }: {
 	sessionId?: string;
 	/** What the agent in this session is doing. The list shows it on every row;
 	 *  reading one session there was nothing to tell a working pane from a
 	 *  finished one. */
 	agentState?: IndicatorState;
+	/** The tool call it is on, when there is one. "Working" alone reads the
+	 *  same as a screen that has stopped updating. */
+	activity?: { tool: string; target?: string };
 }) {
 	const { t } = useTranslation();
 	const since = useThinkingSince(sessionId ?? "");
@@ -45,8 +49,17 @@ export function StewardThinking({
 	if (agentState === "processing") {
 		return (
 			<p className="flex items-center gap-2 px-1 pb-1 text-cv-accent text-xs">
-				<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-accent" />
-				{t("steward.agentWorking", "このセッションは作業中です")}
+				<span className="inline-block h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-cv-accent" />
+				{activity ? (
+					<span className="min-w-0 truncate">
+						<span className="font-medium">{activity.tool}</span>
+						{activity.target && (
+							<span className="ml-1.5 font-mono text-cv-text-muted">{activity.target}</span>
+						)}
+					</span>
+				) : (
+					t("steward.agentWorking", "このセッションは作業中です")
+				)}
 			</p>
 		);
 	}
