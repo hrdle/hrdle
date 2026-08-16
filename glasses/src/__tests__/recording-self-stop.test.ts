@@ -1,16 +1,16 @@
-// A recording stops itself after MAX_RECORDING_MS.
+// A microphone nobody is speaking into closes itself after IDLE_STOP_MS.
 //
-// Spoken instructions to an agent are a sentence or two, so an open microphone
-// is far more likely to be one somebody forgot to stop than one still being
-// spoken into - and left open it spends battery, upload and Groq quota to
-// produce a transcript with a minute of room noise on the end.
+// The recording itself is not capped: a long instruction, or a pause to think
+// in the middle of one, must not be the thing that ends it. What is capped is
+// silence, because an open microphone left running spends the wearer's battery
+// and the upload to collect room noise.
 //
 // The timer is caught rather than waited for: half a minute of real time per
 // assertion is not a test anyone runs.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { GlassesController, type GlassesPlatform } from '../controller.ts'
-import { MAX_RECORDING_MS, screenText } from '../display.ts'
+import { GlassesController, MIC_SAMPLE_RATE, type GlassesPlatform } from '../controller.ts'
+import { IDLE_STOP_MS, screenText } from '../display.ts'
 
 const realSetTimeout = globalThis.setTimeout
 
@@ -18,16 +18,23 @@ afterEach(() => {
   globalThis.setTimeout = realSetTimeout
 })
 
-/** Hold the self-stop callback instead of scheduling it. */
-function catchRecordTimer(): { fire(): void; armed(): boolean; cleared(): boolean } {
+/** Hold the idle-stop callback instead of scheduling it. */
+function catchRecordTimer(): {
+  fire(): void
+  armed(): boolean
+  cleared(): boolean
+  arms(): number
+} {
   let pending: (() => void) | null = null
   let handle = 0
   let clearedHandle = false
+  let armCount = 0
   const realClear = globalThis.clearTimeout
   globalThis.setTimeout = ((fn: () => void, ms?: number) => {
-    if (ms === MAX_RECORDING_MS) {
+    if (ms === IDLE_STOP_MS) {
       pending = fn
       handle = 12345
+      armCount++
       return handle
     }
     return realSetTimeout(fn, ms)
@@ -40,7 +47,19 @@ function catchRecordTimer(): { fire(): void; armed(): boolean; cleared(): boolea
     fire: () => pending?.(),
     armed: () => pending !== null,
     cleared: () => clearedHandle,
+    arms: () => armCount,
   }
+}
+
+/** A second of ordinary speech. */
+function speech(): Uint8Array {
+  const out = new Uint8Array(MIC_SAMPLE_RATE * 2)
+  for (let i = 0; i < MIC_SAMPLE_RATE; i++) {
+    const v = i % 2 === 0 ? 4000 : -4000
+    out[i * 2] = v & 0xff
+    out[i * 2 + 1] = (v >> 8) & 0xff
+  }
+  return out
 }
 
 function platform(counters: { transcribes: number; micStops: number }): GlassesPlatform {
@@ -66,18 +85,20 @@ function platform(counters: { transcribes: number; micStops: number }): GlassesP
 function driver(c: GlassesController) {
   return c as unknown as {
     startVoice(target: { sessionId: string }): Promise<void>
+    onAudioData(pcm: Uint8Array): void
     stopAndTranscribe(): Promise<void>
     cancelVoice(): Promise<void>
     shutdown(): void
   }
 }
 
-describe('a recording nobody stopped', () => {
-  test('stops itself and transcribes what it has', async () => {
+describe('a microphone nobody is speaking into', () => {
+  test('closes itself and transcribes what was said', async () => {
     const counters = { transcribes: 0, micStops: 0 }
     const timer = catchRecordTimer()
     const c = new GlassesController(platform(counters))
     await driver(c).startVoice({ sessionId: 'w1' })
+    driver(c).onAudioData(speech())
     expect(timer.armed()).toBe(true)
     expect(counters.transcribes).toBe(0)
 
@@ -91,7 +112,23 @@ describe('a recording nobody stopped', () => {
     expect(c.state.voiceText).toBe('リリースして')
   })
 
-  test('the screen says it will, rather than counting down to it', () => {
+  test('starts its wait again on every word', async () => {
+    // Otherwise the wait would be a cap on the recording after all, and a
+    // dictated instruction longer than it would be cut off mid-sentence.
+    const counters = { transcribes: 0, micStops: 0 }
+    const timer = catchRecordTimer()
+    const c = new GlassesController(platform(counters))
+    await driver(c).startVoice({ sessionId: 'w1' })
+    expect(timer.arms()).toBe(1)
+
+    driver(c).onAudioData(speech())
+    driver(c).onAudioData(speech())
+
+    expect(timer.arms()).toBe(3)
+    expect(timer.armed()).toBe(true)
+  })
+
+  test('the screen says the number rather than counting down to it', () => {
     // A countdown means redrawing the panel over BLE every second for the whole
     // recording, which is what the slow spinner exists to avoid.
     const body = screenText({
@@ -104,12 +141,13 @@ describe('a recording nobody stopped', () => {
   })
 })
 
-describe('the self-stop is disarmed by everything that ends a recording', () => {
+describe('the idle stop is disarmed by everything that ends a recording', () => {
   test('a manual stop', async () => {
     const counters = { transcribes: 0, micStops: 0 }
     const timer = catchRecordTimer()
     const c = new GlassesController(platform(counters))
     await driver(c).startVoice({ sessionId: 'w1' })
+    driver(c).onAudioData(speech())
     await driver(c).stopAndTranscribe()
     expect(timer.cleared()).toBe(true)
     // Firing a stale timer must not transcribe a second time.

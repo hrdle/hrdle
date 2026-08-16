@@ -27,7 +27,7 @@
 
 import { getConversation, getGlassesSettings, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, MAX_RECORDING_MS, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, IDLE_STOP_MS, SOUND_RMS, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -314,19 +314,31 @@ interface ReplyTarget {
  */
 export const MIC_SAMPLE_RATE = 16000
 
-/**
- * How quiet counts as quiet, as RMS of 16-bit samples (full scale 32768).
- *
- * Deliberately low. Getting it wrong in one direction means a recording that
- * does not stop itself, and the 30-second limit catches that. Getting it wrong
- * in the other means cutting somebody off mid-sentence, which is the failure
- * nobody forgives. So the bar to clear is "louder than a quiet room", not
- * "clearly speech".
- */
-const SPEECH_RMS = 600
-
-/** Quiet for this long after speech, and the recording is over. */
+/** Quiet for this long after speech, and the phrase is over. */
 const SILENCE_TAIL_SAMPLES = Math.round(MIC_SAMPLE_RATE * 1.5)
+
+/**
+ * The shortest phrase worth a request of its own.
+ *
+ * Groq bills a minimum of ten seconds per transcription whatever the audio
+ * actually measures, so a phrase closed at three seconds spends exactly what a
+ * ten-second one does. Under this a pause is treated as part of the phrase
+ * rather than as the end of it, which keeps a minute of dictation at roughly a
+ * minute of billed audio instead of two and a half.
+ *
+ * A tap is not subject to it: the wearer has said they are finished, and the
+ * floor exists to stop a request being spent early rather than to refuse one.
+ */
+const MIN_PHRASE_SAMPLES = MIC_SAMPLE_RATE * 10
+
+/** One phrase of the draft. `text` is null until the transcription answers. */
+interface DraftPhrase {
+  text: string | null
+  failed: boolean
+}
+
+/** The shortest gap between two header redraws of the level meter. */
+const LEVEL_REDRAW_MS = 250
 
 /**
  * Loudness of one chunk, as RMS.
@@ -344,6 +356,90 @@ export function pcmRms(pcm: Uint8Array): number {
     sum += v * v
   }
   return Math.sqrt(sum / n)
+}
+
+/**
+ * Drop the quiet at both ends of a phrase.
+ *
+ * The tail is quiet by construction - a pause is what closed the phrase - and
+ * silence is what Whisper answers with an invented sign-off rather than with
+ * nothing. A quarter-second margin stays either side so the first and last
+ * consonants are not clipped, which is the failure that would be blamed on the
+ * microphone.
+ */
+export function trimSilence(pcm: Uint8Array, sampleRate = MIC_SAMPLE_RATE): Uint8Array {
+  const window = sampleRate >> 3
+  const margin = sampleRate >> 2
+  const total = pcm.length >> 1
+  if (total <= window) return pcm
+  let first = -1
+  let last = -1
+  for (let at = 0; at + window <= total; at += window) {
+    if (pcmRms(pcm.subarray(at * 2, (at + window) * 2)) < SPEECH_RMS) continue
+    if (first < 0) first = at
+    last = at + window
+  }
+  if (first < 0) return pcm
+  const from = Math.max(0, first - margin)
+  const to = Math.min(total, last + margin)
+  return pcm.subarray(from * 2, to * 2)
+}
+
+/**
+ * The phrases as the one string the agent is sent.
+ *
+ * A space joins two Latin phrases and nothing joins two Japanese ones: the
+ * transcripts arrive trimmed, so without this the halves of an English
+ * sentence run together into one word.
+ *
+ * The screen shows the same phrases one to a line, which is a different job -
+ * a line break is how a wearer sees where an undo would cut, and is not
+ * something to send to an agent as part of the instruction.
+ */
+export function joinPhrases(phrases: string[]): string {
+  let out = ''
+  for (const phrase of phrases) {
+    if (!phrase) continue
+    if (out && needsSpace(out, phrase)) out += ' '
+    out += phrase
+  }
+  return out
+}
+
+/**
+ * Japanese, and the full-width punctuation that ends a Japanese sentence.
+ *
+ * `。` and `、` matter as much as the kana do: a transcript ends on one far
+ * more often than on a character, so a rule that only looked at letters would
+ * put a space after every sentence.
+ */
+const CJK = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/
+
+/**
+ * Whether two phrases need a space between them.
+ *
+ * Everything but Japanese meeting Japanese: transcripts arrive trimmed, and a
+ * sentence ending in a full stop followed by the next one gave
+ * `the tests.and push` - which is what the wearer would have sent, since this
+ * builds the instruction rather than only the screen.
+ *
+ * The nearest *letter* decides, not the nearest character. A transcript ends on
+ * punctuation far more often than on a letter, and the punctuation it ends on
+ * is not reliably the full-width kind - `…`, an ASCII question mark and a
+ * curly quotation mark all turn up after Japanese. Classifying the character
+ * itself put a Latin space into the middle of a Japanese sentence for every one
+ * of them.
+ */
+function needsSpace(before: string, after: string): boolean {
+  return !(CJK.test(lastLetter(before)) && CJK.test(firstLetter(after)))
+}
+
+function lastLetter(text: string): string {
+  return text.match(/[\p{L}\p{N}](?=[^\p{L}\p{N}]*$)/u)?.[0] ?? ''
+}
+
+function firstLetter(text: string): string {
+  return text.match(/[\p{L}\p{N}]/u)?.[0] ?? ''
 }
 
 /** Concatenate collected PCM chunks into one contiguous buffer. */
@@ -445,7 +541,7 @@ export class GlassesController {
   private autoTimer: ReturnType<typeof setInterval> | null = null
   /** The gap between saying the run is closing and closing it. */
   private exitTimer: ReturnType<typeof setTimeout> | null = null
-  /** Stops a recording nobody stopped (`MAX_RECORDING_MS`); null when idle. */
+  /** Closes a microphone nobody is speaking into (`IDLE_STOP_MS`); null when idle. */
   private recordTimer: ReturnType<typeof setTimeout> | null = null
   /** Torn down by the host. Nothing draws, nothing reconnects, nothing ticks. */
   private stopped = false
@@ -510,11 +606,49 @@ export class GlassesController {
   }
 
   private audioChunks: Uint8Array[] = []
+  /**
+   * Whether the wearer is in a recording - not whether the device is listening.
+   *
+   * The two are different for as long as a host call takes to answer, and every
+   * gesture reads this one: a tap to finish that arrived while the microphone
+   * was still opening was being dropped, and a recording interrupted by the
+   * glasses showing something else was left running, both because the flag they
+   * read only became true once the host had answered.
+   */
   private recording = false
-  /** Whether anything above `SPEECH_RMS` has been heard in this recording. */
+  /**
+   * Whether the microphone this run opened is open.
+   *
+   * Audio needs both: the previous capture's microphone is still running until
+   * its stop reaches the host, and its chunks would otherwise be collected as
+   * this recording's and uploaded under a session nobody spoke them to.
+   */
+  private micOpen = false
+  /** Whether anything above `SPEECH_RMS` has been heard in this phrase. */
   private heardSpeech = false
   /** Samples of quiet since the last thing that was not quiet. */
   private silentSamples = 0
+  /** Samples collected into the phrase being spoken now. */
+  private phraseSamples = 0
+  /** The draft, oldest phrase first. Identity matters: a transcription that
+   *  answers after its phrase was taken back has nowhere to put its words. */
+  private phrases: DraftPhrase[] = []
+  /** When the level meter last went out, so it cannot go out on every chunk. */
+  private lastLevelDrawAt = 0
+  /**
+   * Bumped by everything that starts or ends a capture.
+   *
+   * Opening and closing the microphone are host calls, and a gesture can land
+   * while one is still in flight - a tap to finish, a double tap to leave and
+   * a tap to start again all fit inside one `stopMicCapture`. The continuation
+   * would then be acting for a recording that is over, on the buffers of the
+   * one that replaced it. Nothing here can make the host faster, so instead
+   * each continuation carries the number its run had and stands down when it
+   * no longer matches.
+   */
+  private voiceRun = 0
+  /** Microphone calls, one after another. See `micOp`. */
+  private micChain: Promise<void> = Promise.resolve()
   private lastConvRefresh = 0
 
   constructor(platform: GlassesPlatform) {
@@ -1023,10 +1157,14 @@ export class GlassesController {
     // wake a dead controller up to transcribe and draw.
     this.clearRecordTimer()
     this.clearNoticeTimer()
+    this.voiceRun++
     this.recording = false
+    this.micOpen = false
     this.audioChunks = []
     this.heardSpeech = false
     this.silentSamples = 0
+    this.phraseSamples = 0
+    this.phrases = []
     // Unconditional: `recording` says whether the PCM was being collected, not
     // whether the microphone is open — `startVoice` opens it before anything
     // sets that flag, and a failed open leaves it false. `audioControl(false)`
@@ -1044,30 +1182,43 @@ export class GlassesController {
   swipeDown(): void { void this.handle('swipeDown') }
 
   /**
-   * A chunk of microphone audio, and the decision of whether the sentence is
-   * over.
+   * A chunk of microphone audio, and the decision of whether a phrase is over.
+   *
+   * A pause ends a phrase, not the recording: the phrase goes off to be
+   * transcribed and the microphone stays open, so the words appear while the
+   * wearer is still talking and the last phrase is a unit they can take back.
+   * The recording ends when they say so.
    *
    * Counting quiet **samples** rather than elapsed milliseconds is what makes
    * this testable: the same chunks always produce the same decision, with no
    * clock to stub. It is also the more honest measure - what matters is how
    * much silence was recorded, not how long the host took to deliver it.
    *
-   * Nothing happens until something has been said. Someone who taps and then
-   * takes a moment to think would otherwise be cut off before their first
-   * word, which is worse than the open microphone this exists to close.
+   * Quiet before the first word is not counted at all. Someone who taps and
+   * then takes a moment to think would otherwise open with an empty phrase.
    */
   onAudioData(pcm: Uint8Array): void {
-    if (!this.recording) return
+    if (!this.recording || !this.micOpen) return
     this.audioChunks.push(pcm)
+    this.phraseSamples += pcm.length >> 1
 
-    if (pcmRms(pcm) >= SPEECH_RMS) {
+    const rms = pcmRms(pcm)
+    this.showMicLevel(rms)
+    // Any sound at all puts the idle stop back to the full wait. Keyed on the
+    // speech bar instead, a wearer talking under it would have the recording
+    // close in the middle of their sentence - and be told they were too quiet
+    // by a screen that arrived while they were still speaking.
+    if (rms >= SOUND_RMS) this.armIdleStop()
+    if (rms >= SPEECH_RMS) {
       this.heardSpeech = true
       this.silentSamples = 0
       return
     }
     if (!this.heardSpeech) return
     this.silentSamples += pcm.length >> 1
-    if (this.silentSamples >= SILENCE_TAIL_SAMPLES) void this.stopAndTranscribe()
+    if (this.silentSamples < SILENCE_TAIL_SAMPLES) return
+    if (this.phraseSamples < MIN_PHRASE_SAMPLES) return
+    this.closePhrase()
   }
 
   /** Explicit state machine dispatch: (mode, action) → transition. */
@@ -1682,43 +1833,150 @@ export class GlassesController {
           await this.sendVoice()
         }
         return
+      // Back one screen, which from a finished draft is the microphone it came
+      // from rather than the way out entirely. Double-tapping again from there
+      // is what abandons it - the same "leave" this gesture means everywhere,
+      // arrived at one step at a time.
       case 'doubleTap':
-        await this.cancelVoice()
+        if (this.state.voicePhase === 'confirm') await this.resumeVoice()
+        else await this.cancelVoice()
         return
-      default:
+      // Up goes back, down goes on - the direction every other screen already
+      // reads that way (the conversation swipes up into older messages, the
+      // picker up towards the first row). A draft is the same shape: its
+      // beginning is up, and its newest phrase is the one at the end.
+      case 'swipeUp':
+        if (this.state.voicePhase === 'confirm') this.turnDraftPage(-1)
+        else this.undoPhrase()
+        return
+      case 'swipeDown':
+        // End the phrase here, short of the ten-second floor or not. The floor
+        // is about not spending a request on a pause; this is the wearer
+        // marking where the phrase ends, which is the only way to choose what
+        // a single undo takes back.
+        if (this.state.voicePhase === 'confirm') this.turnDraftPage(1)
+        else if (this.state.voicePhase === 'recording') this.closePhrase()
         return
     }
   }
 
   private async startVoice(target: ReplyTarget): Promise<void> {
     this.voiceTarget = target
-    this.audioChunks = []
-    this.heardSpeech = false
-    this.silentSamples = 0
+    this.phrases = []
+    this.state.voicePhrases = []
+    this.state.voicePage = 0
+    this.state.voiceHeardSpeech = false
     this.state.mode = 'voice'
     this.state.voicePhase = 'recording'
     this.state.voiceText = ''
     this.state.voiceFailed = false
     this.state.voiceSessionName = this.sessionLabel(target.sessionId)
     this.render()
+    await this.beginCapture()
+  }
+
+  /**
+   * Open the microphone at the start of a phrase. False when it would not open.
+   *
+   * Nothing to open in a demo: transcription is the server's job and a demo has
+   * no server, so a real recording would arrive at "(nothing was recognized)"
+   * every time. The screens and the gestures are unchanged; only the audio is
+   * not real.
+   */
+  private async beginCapture(): Promise<void> {
+    this.audioChunks = []
+    this.phraseSamples = 0
+    this.silentSamples = 0
+    this.heardSpeech = false
+    this.state.voiceLevel = 0
+    this.state.voiceMicFailed = false
     this.recording = true
-    // Nothing to open a microphone for: transcription is the server's job and
-    // a demo has no server, so a real recording would arrive at "(nothing was
-    // recognized)" every time. The screens and the gestures are unchanged;
-    // only the audio is not real.
-    if (this.demo) return
-    const ok = await this.platform.startMicCapture()
-    if (!ok) {
+    this.micOpen = false
+    const run = ++this.voiceRun
+    if (this.demo) {
+      this.micOpen = true
+      return
+    }
+    // A host that answers with neither true nor false has still not opened a
+    // microphone, and left as a rejection it would take the caller down with it.
+    const opened = await this.micOp(() => this.platform.startMicCapture()).catch(() => false)
+    // Nothing below belongs to this run any more, so none of it is written -
+    // not the failure flag either, which would otherwise report this run's
+    // microphone trouble on the screen of the one that replaced it.
+    if (run !== this.voiceRun) {
+      // The microphone is a single device: closing it here would close it on
+      // whoever is recording now. Only a microphone nobody is using is ours to
+      // put back - and nobody else's stop can do it for us, because the run
+      // that left had not opened this one yet.
+      if (opened && !this.recording) void this.micOp(() => this.platform.stopMicCapture())
+      return
+    }
+    if (!opened) {
       this.recording = false
+      this.state.voiceMicFailed = true
       this.state.voicePhase = 'confirm'
-      this.state.voiceText = ''
       this.render()
       return
     }
+    this.micOpen = true
     // Only once the microphone is actually open: a start that failed has
     // nothing to stop, and arming the timer anyway would fire a transcription
     // of no audio half a minute after the wearer had moved on.
-    this.recordTimer = setTimeout(() => void this.stopAndTranscribe(), MAX_RECORDING_MS)
+    this.armIdleStop()
+  }
+
+  /**
+   * Run one microphone call after the last one, never beside it.
+   *
+   * There is one microphone, and a stop already on its way to the host will
+   * close whatever is open when it lands - including a recording that started
+   * after it. Queued, the start that follows a stop happens after it, and the
+   * device ends up in the state the last gesture asked for.
+   */
+  private micOp<T>(op: () => Promise<T>): Promise<T> {
+    const next = this.micChain.then(op, op)
+    this.micChain = next.then(
+      () => {},
+      () => {},
+    )
+    return next
+  }
+
+  /** Speak on after seeing the draft, rather than sending it as it stands. */
+  private async resumeVoice(): Promise<void> {
+    if (this.recording) return
+    this.state.voicePhase = 'recording'
+    this.state.voiceFailed = false
+    this.render()
+    await this.beginCapture()
+  }
+
+  /**
+   * Put the loudness on the panel, but not on every chunk of audio.
+   *
+   * Four redraws a second is what the deliberately slow spinner exists to
+   * avoid, so this draws only when the step has actually changed and never
+   * faster than `LEVEL_REDRAW_MS`. What goes out is one container either way:
+   * the meter is the only thing that moved, and a container whose content has
+   * not changed is skipped before it reaches the panel.
+   */
+  private showMicLevel(rms: number): void {
+    if (this.stopped || !this.foreground || this.state.screenOff) return
+    const level = micLevel(rms)
+    if (level === this.state.voiceLevel) return
+    const now = Date.now()
+    // A voice crossing a step boundary on alternate chunks would otherwise
+    // redraw as fast as the audio arrives.
+    if (now - this.lastLevelDrawAt < LEVEL_REDRAW_MS) return
+    this.lastLevelDrawAt = now
+    this.state.voiceLevel = level
+    this.render()
+  }
+
+  /** Restart the wait for a microphone nobody is speaking into. */
+  private armIdleStop(): void {
+    this.clearRecordTimer()
+    this.recordTimer = setTimeout(() => void this.stopAndTranscribe(), IDLE_STOP_MS)
   }
 
   /** Disarm the self-stop. Safe to call when it was never armed. */
@@ -1729,39 +1987,129 @@ export class GlassesController {
     }
   }
 
+  /**
+   * End the phrase being spoken and send it to be transcribed.
+   *
+   * Room noise is not a phrase. Sending it spends a request to be told what
+   * silence sounds like, and what comes back is not nothing - it is a stock
+   * sign-off Whisper invents, which would then be in the draft.
+   */
+  private closePhrase(): void {
+    const audio = trimSilence(concatPcm(this.audioChunks))
+    const spoke = this.heardSpeech
+    this.audioChunks = []
+    this.phraseSamples = 0
+    this.silentSamples = 0
+    this.heardSpeech = false
+    if (!spoke) return
+    this.state.voiceHeardSpeech = true
+    const phrase: DraftPhrase = { text: null, failed: false }
+    this.phrases.push(phrase)
+    this.renderDraft()
+    void this.transcribePhrase(phrase, audio)
+  }
+
+  private async transcribePhrase(phrase: DraftPhrase, audio: Uint8Array): Promise<void> {
+    let text = ''
+    let failed = false
+    try {
+      text = await this.platform.transcribeAudio(audio, this.voiceTarget?.sessionId)
+    } catch (err) {
+      // Kept apart from an empty transcript: the request not arriving and the
+      // audio holding no words are different things to be told, and only one
+      // of them is answered by speaking more clearly.
+      console.warn('[voice] transcription failed:', err)
+      failed = true
+    }
+    // Taken back, or the whole draft cancelled, while this was in flight.
+    // These words belong to a phrase that no longer exists, and redrawing the
+    // panel to say so costs a BLE round trip for a screen that has moved on.
+    if (!this.phrases.includes(phrase)) return
+    phrase.text = text
+    phrase.failed = failed
+    this.renderDraft()
+  }
+
+  /** Rebuild the draft from its phrases, and let the wait end when they are in. */
+  private renderDraft(): void {
+    const st = this.state
+    // Two shapes of the same thing: the lines a wearer reads and checks an undo
+    // against, and the one string an agent is given.
+    st.voicePhrases = this.phrases.map((p) =>
+      p.failed ? { kind: 'lost' } : p.text === null ? { kind: 'pending' } : { kind: 'text', text: p.text },
+    )
+    // Whatever moved, the wearer is being shown a different draft from the one
+    // they were reading - so it starts from the top again rather than holding a
+    // page number that now points somewhere else.
+    st.voicePage = 0
+    st.voiceText = joinPhrases(this.phrases.map((p) => p.text ?? ''))
+    // One phrase that did not come back is a gap in a draft that still has
+    // words in it; only a draft with nothing left in it is worth the screen
+    // that says the recording was not the problem.
+    st.voiceFailed = !st.voiceText && this.phrases.some((p) => p.failed)
+    if (st.voicePhase === 'transcribing' && !this.phrases.some((p) => p.text === null)) {
+      st.voicePhase = 'confirm'
+    }
+    this.render()
+  }
+
+  /**
+   * Move through a draft that outgrew the panel.
+   *
+   * By hand rather than on a clock: this screen is a decision, and one that
+   * has to be waited out is worse than one that has to be worked. Past either
+   * end nothing happens, so a swipe cannot walk off the draft.
+   */
+  private turnDraftPage(by: number): void {
+    const st = this.state
+    const page = Math.max(0, Math.min((st.voicePage ?? 0) + by, confirmDraftPages(st) - 1))
+    if (page === (st.voicePage ?? 0)) return
+    st.voicePage = page
+    this.render()
+  }
+
+  /**
+   * Take back the last phrase.
+   *
+   * The last *closed* one, not the words being spoken now: those are not on
+   * the screen yet, and a gesture that removed something invisible would be
+   * indistinguishable from one that did nothing.
+   */
+  private undoPhrase(): void {
+    if (this.phrases.length === 0) return
+    this.phrases.pop()
+    this.renderDraft()
+  }
+
   private async stopAndTranscribe(): Promise<void> {
     if (!this.recording) return
     this.recording = false
+    this.micOpen = false
+    const run = ++this.voiceRun
     // Whichever of the two stopped it, the other must not fire later.
     this.clearRecordTimer()
+    this.state.voicePhase = 'transcribing'
+    // Before the microphone has finished closing, not after. The wearer has
+    // said they are done, and a screen still promising `tap:done` for as long
+    // as the host takes to answer is promising an action that now does nothing.
+    this.render()
     if (this.demo) {
-      this.state.voicePhase = 'transcribing'
-      this.render()
       await new Promise((resolve) => setTimeout(resolve, DEMO_TRANSCRIBE_MS))
-      this.state.voiceText = demoTranscript()
-      this.state.voicePhase = 'confirm'
-      this.render()
+      if (run !== this.voiceRun) return
+      // Through the draft, like everything else. A demo has no audio to make a
+      // phrase out of, but it has the same screens and the same gestures, and
+      // an undo that quietly did nothing was the difference showing.
+      this.phrases.push({ text: demoTranscript(), failed: false })
+      this.renderDraft()
       return
     }
-    await this.platform.stopMicCapture()
-    this.state.voicePhase = 'transcribing'
-    this.state.voiceFailed = false
-    this.render()
-    try {
-      this.state.voiceText = await this.platform.transcribeAudio(
-        concatPcm(this.audioChunks),
-        this.voiceTarget?.sessionId,
-      )
-    } catch (err) {
-      // Kept apart from an empty transcript: the request not arriving
-      // and the audio holding no words are different things to be told, and
-      // only one of them is answered by speaking more clearly.
-      console.warn('[voice] transcription failed:', err)
-      this.state.voiceText = ''
-      this.state.voiceFailed = true
-    }
-    this.state.voicePhase = 'confirm'
-    this.render()
+    await this.micOp(() => this.platform.stopMicCapture()).catch(() => {})
+    // Left, or started again, while the microphone was closing. Everything
+    // below writes the draft and the phase, and both belong to whoever is
+    // recording now.
+    if (run !== this.voiceRun) return
+    this.closePhrase()
+    this.renderDraft()
   }
 
   /**
@@ -1844,11 +2192,17 @@ export class GlassesController {
   }
 
   private async cancelVoice(): Promise<void> {
+    this.voiceRun++
     this.clearRecordTimer()
     if (this.recording) {
       this.recording = false
-      await this.platform.stopMicCapture()
+      this.micOpen = false
+      await this.micOp(() => this.platform.stopMicCapture()).catch(() => {})
     }
+    this.phrases = []
+    this.audioChunks = []
+    this.state.voicePhrases = []
+    this.state.voiceText = ''
     this.state.mode = 'conversation'
     this.render()
   }

@@ -43,6 +43,12 @@ export type Bridge = Awaited<ReturnType<typeof waitForEvenAppBridge>>
 type Mode = 'session_list' | 'conversation' | 'choice' | 'voice' | 'overlay'
 export type VoicePhase = 'recording' | 'transcribing' | 'confirm'
 
+/** One phrase of the draft as the screen shows it. */
+export type DraftPhraseView =
+  | { kind: 'text'; text: string }
+  | { kind: 'pending' }
+  | { kind: 'lost' }
+
 /** Break text into the lines the body container will show. */
 function splitDisplayLines(text: string): string[] {
   return splitLines(text, BODY_WIDTH)
@@ -334,7 +340,38 @@ export interface AppState {
   noticeWindow?: number
   debugEvent?: string
   voicePhase?: VoicePhase
+  /** The whole draft as the agent will receive it: no line breaks, no marks. */
   voiceText?: string
+  /**
+   * The same draft as the wearer reads it, one phrase per entry, oldest first.
+   *
+   * Kept apart from `voiceText` because the screen has to show where one phrase
+   * ends and the next begins - that boundary is what a single undo takes back -
+   * and the marks that show it are not part of the instruction. A phrase that
+   * is still out, and one that never came back, are entries here for the same
+   * reason: both are holes an undo can reach, and neither is in what would be
+   * sent.
+   */
+  voicePhrases?: DraftPhraseView[]
+  /** How loud the microphone is hearing right now, as filled meter cells. */
+  voiceLevel?: number
+  /**
+   * Whether anything crossed the speech bar at any point in this recording.
+   *
+   * Not the same as the draft having phrases in it: a wearer who took every
+   * phrase back was heard perfectly well, and telling them to speak up is the
+   * one thing that would not help.
+   */
+  voiceHeardSpeech?: boolean
+  /**
+   * The microphone would not open, which is not a thing the wearer said wrong.
+   *
+   * It reads as an empty recording otherwise, and the empty-recording screen
+   * asks them to speak up - advice that cannot help when nothing was listening.
+   */
+  voiceMicFailed?: boolean
+  /** Which panel of a finished draft is showing. Only the confirm screen pages. */
+  voicePage?: number
   /**
    * The transcription never came back, as distinct from coming back empty.
    *
@@ -636,13 +673,13 @@ const SPINNER = ['·', '•']
 export const SPINNER_INTERVAL_MS = 3000
 
 /**
- * How long a recording runs before stopping itself.
+ * How much quiet closes a microphone nobody is speaking into.
  *
- * Spoken instructions to an agent are short - a sentence, two at most - so an
- * open microphone is far more likely to be one somebody forgot to stop than
- * one still being spoken into. Left running it costs the wearer's battery, the
- * upload, and Groq quota, and produces a transcript with a minute of room
- * noise on the end.
+ * A recording is not capped: dictating a long instruction, or stopping to
+ * think in the middle of one, must not be the thing that ends it. What is
+ * capped is silence, because an open microphone is far more likely to be one
+ * somebody forgot to stop than one still being spoken into, and left running
+ * it costs the wearer's battery and the upload.
  *
  * The screen says the number rather than counting down to it. A countdown
  * would mean redrawing the panel every second over BLE for the entire
@@ -650,7 +687,7 @@ export const SPINNER_INTERVAL_MS = 3000
  * spinner is deliberately slow for the same reason, and an idle app sends
  * nothing at all.
  */
-export const MAX_RECORDING_MS = 30_000
+export const IDLE_STOP_MS = 30_000
 
 function spinnerFrame(state: AppState): string {
   return SPINNER[(state.spinnerTick ?? 0) % SPINNER.length]
@@ -1737,30 +1774,200 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
   // it was missing, which is the worst place for it to be: a recording screen
   // that does not say DEMO is a recording screen claiming to be listening.
   const demoTail = state.demo ? DEMO_TAIL : ''
+  const draft = draftBody(state)
   switch (state.voicePhase) {
     case 'recording':
       return {
         headerText: withClock(`${name}  [recording]`, demoTail),
-        bodyText: `● Recording\n\nSpeak into the microphone\nStops when you stop, or after ${Math.round(MAX_RECORDING_MS / 1000)} seconds`,
-        footerText: 'tap:stop and transcribe  dbl:cancel',
+        // The meter goes here rather than in the header, which a long session
+        // name already fills to the pixel - and this is where the wearer is
+        // looking anyway, at the words appearing under what they are saying.
+        bodyText: pinToBottom(
+          draftBody(state, MAX_LINES - 1) ??
+            `Speak into the microphone. It waits while you think, and closes itself after ${Math.round(IDLE_STOP_MS / 1000)} seconds of quiet.`,
+          micLevelBar(state.voiceLevel),
+          MAX_LINES - 1,
+        ),
+        // Undo is promised only once there is a phrase to take back. A footer
+        // that offers a gesture which does nothing has misled the one reader
+        // who tried it.
+        footerText: draft
+          ? 'tap:done  dbl:cancel  up:undo  down:new phrase'
+          : 'tap:done  dbl:cancel  down:new phrase',
       }
     case 'transcribing':
       return {
         headerText: withClock(`${name}  [transcribing]`, demoTail),
-        bodyText: 'Transcribing...',
-        footerText: 'dbl:cancel',
+        bodyText: draft ?? 'Transcribing...',
+        footerText: 'dbl:cancel  up:undo',
       }
-    default: // 'confirm'
+    default: {
+      // The question, because the draft alone is the transcribing screen over
+      // again and the wearer could not tell which one they were looking at. It
+      // takes a line, so the draft under it gets one fewer.
+      const page = state.voicePage ?? 0
+      const pages = confirmDraftPages(state)
+      const lines = sentLines(state)
+      const from = Math.max(0, Math.min(page, pages - 1)) * (MAX_LINES - 1)
+      const asked = lines.length ? lines.slice(from, from + MAX_LINES - 1).join('\n') : null
+      // Both swipes are spoken for, so the count is the only thing that can say
+      // there is more of this than the panel is showing.
+      const of = pages > 1 ? `  ${page + 1}/${pages}` : ''
+      // A phrase that did not come back leaves a hole in the middle of an
+      // instruction that otherwise reads as though it were complete. The
+      // sending screen has no marks on it, so this is the only place the hole
+      // can be named.
+      const missing = (state.voicePhrases ?? []).filter((p) => p.kind === 'lost').length
+      const lost = missing > 0 ? `  (${missing} lost)` : ''
       return {
         headerText: withClock(`${name}  [confirm]`, demoTail),
-        bodyText: state.voiceText
-          ? state.voiceText
-          : state.voiceFailed
-            ? '(the transcription did not come back)\n\nSay it again - the recording was not the problem'
-            : '(nothing was recognized)',
-        footerText: state.voiceText ? 'tap:send  dbl:cancel' : 'dbl:back',
+        // Three different pieces of news, and only one of them is answered by
+        // speaking more clearly. Nothing having crossed the meter's divider
+        // means no request was made at all, which read as a failed recognition
+        // and sent the wearer looking for the wrong problem.
+        bodyText: asked
+          ? `Send this?${of}${lost}\n${asked}`
+          : state.voiceMicFailed
+            ? '(the microphone did not open)\n\nNothing was listening, so there is nothing to send'
+            : state.voiceFailed
+              ? '(the transcription did not come back)\n\nSay it again - the recording was not the problem'
+              : state.voiceHeardSpeech
+                ? '(nothing was recognized)\n\nDouble-tap to speak again'
+                : '(nothing loud enough was heard)\n\nDouble-tap and speak up, or move the microphone closer',
+        // The swipes are promised only when there is somewhere for them to go.
+        footerText: asked
+          ? `tap:send  dbl:say more${pages > 1 ? '  swipe:scroll' : ''}`
+          : 'dbl:try again',
       }
+    }
   }
+}
+
+/**
+ * What counts as speech, as RMS of 16-bit samples (full scale 32768).
+ *
+ * Set from what a wearer's own voice measures on the G2's microphone rather
+ * than from what is audible: the question this answers is "has the speaking
+ * stopped", and a room where a television is on down the hall or a car is
+ * idling outside never falls below a bar set at merely audible. Measured
+ * outdoors and in a room with a television, both sat above 600 - which is
+ * where this was, and why no pause was ever detected there.
+ *
+ * Too high has its own failure, and a worse-looking one: nothing crosses the
+ * bar, so no phrase ever closes. That failure is at least visible now - it is
+ * what the meter draws, and the divider stands exactly here.
+ */
+export const SPEECH_RMS = 2400
+
+/**
+ * Loud enough that something is happening in front of the microphone.
+ *
+ * Far below `SPEECH_RMS`, and it decides nothing about phrases or requests -
+ * only whether the microphone is one nobody is speaking into. A wearer talking
+ * below the speech bar is still talking, and having the recording close under
+ * them mid-sentence is a different and worse thing than being told afterwards
+ * that they were too quiet.
+ */
+export const SOUND_RMS = 420
+
+/** The loudness scale, as the steps the meter has cells for. */
+const LEVEL_STEPS = [150, 250, SOUND_RMS, 600, 1100, 1700, SPEECH_RMS, 3400, 4800, 6800, 9600, 13600]
+
+/** Cells before the divider: everything the detector counts as a quiet room. */
+const QUIET_CELLS = LEVEL_STEPS.indexOf(SPEECH_RMS)
+
+/** How loud the microphone is hearing, as a count of filled cells. */
+export function micLevel(rms: number): number {
+  let level = 0
+  for (const step of LEVEL_STEPS) {
+    if (rms < step) break
+    level++
+  }
+  return level
+}
+
+/**
+ * The loudness bar.
+ *
+ * Every cell is one block character wide whether it is lit or not, so the bar
+ * does not change width as a voice moves through it - drawn with a narrow
+ * character for the empty cells, the whole meter shifted on every syllable.
+ * The divider says which side of the line the microphone is on: anything past
+ * it is loud enough to be counted as speech.
+ */
+export function micLevelBar(level = 0): string {
+  const cells = LEVEL_STEPS.map((_, i) => (i < level ? '▅' : '▁'))
+  return `${cells.slice(0, QUIET_CELLS).join('')}|${cells.slice(QUIET_CELLS).join('')}`
+}
+
+/**
+ * The draft, one phrase to a line.
+ *
+ * A phrase is what a single undo takes back, so where one ends has to be
+ * visible - run together as one paragraph there was no way to tell what the
+ * next swipe would remove. The leading mark is what survives wrapping: a long
+ * phrase covers several lines, and only the marked one starts a phrase.
+ */
+function draftLines(state: AppState): string[] {
+  return (state.voicePhrases ?? []).flatMap((phrase) => {
+    // A phrase whose transcript came back empty is not a hole in the
+    // instruction - there was nothing in it to lose - so it takes no line.
+    if (phrase.kind === 'text' && !phrase.text) return []
+    const body =
+      phrase.kind === 'text' ? phrase.text : phrase.kind === 'pending' ? '...' : '(lost)'
+    return splitLines(`· ${body}`, BODY_WIDTH)
+  })
+}
+
+/**
+ * The draft as the agent will receive it: no marks, no breaks between phrases.
+ *
+ * The recording screen shows where the phrases divide because an undo takes one
+ * back. Nothing on this screen does, and what is being approved here is the
+ * instruction itself - shown in pieces, a wearer is checking something that is
+ * not what will be sent.
+ */
+function sentLines(state: AppState): string[] {
+  return state.voiceText ? splitLines(state.voiceText, BODY_WIDTH) : []
+}
+
+/**
+ * How many panels the draft covers on the confirm screen.
+ *
+ * The budget is this screen's own, so the swipe that pages it does not have to
+ * know the panel's geometry to ask whether there is another page.
+ */
+export function confirmDraftPages(state: AppState): number {
+  return Math.max(1, Math.ceil(sentLines(state).length / (MAX_LINES - 1)))
+}
+
+/**
+ * The part of the draft the recording screen is showing.
+ *
+ * The tail, because while the words are still arriving that is the only part
+ * worth the space: it is what was just said and is still being checked against
+ * what was meant.
+ */
+function draftBody(state: AppState, budget = MAX_LINES): string | null {
+  const lines = draftLines(state)
+  if (lines.length === 0) return null
+  return lines.slice(-budget).join('\n')
+}
+
+/**
+ * Pad the body so what is pinned to its last line stays on its last line.
+ *
+ * The meter is read by glancing at it, which only works if it is always in the
+ * same place - allowed to follow the end of the draft it would climb a line
+ * with every phrase.
+ */
+function pinToBottom(above: string, last: string, budget: number): string {
+  // Wrapped rather than split on the breaks already there: a sentence with no
+  // break in it still covers several rows once the panel has wrapped it, and
+  // counting it as one would push the pinned line off the bottom.
+  const lines = above ? splitLines(above, BODY_WIDTH) : []
+  const blanks = Math.max(0, budget - lines.length)
+  return [...lines.slice(0, budget), ...Array(blanks).fill(''), last].join('\n')
 }
 
 // ─── Page builders ───
