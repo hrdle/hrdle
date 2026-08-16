@@ -445,7 +445,11 @@ function TerminalPane({
 		{/* Above the bar rather than inside the chat overlay: the bar is fixed
 		    for the soft keyboard, so a composer in the overlay sat behind it. */}
 		{stewardMode && showConversation && conversationAvailable && sessionTarget && (
-			<StewardSessionComposer sessionId={sessionTarget.id} peerId={sessionTarget.peerId} />
+			<StewardSessionComposer
+				sessionId={sessionTarget.id}
+				peerId={sessionTarget.peerId}
+				agentState={session?.indicatorState}
+			/>
 		)}
 		<div className="flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border-b border-white/[0.06]">
 			{/* Session selector. Takes the bar's free space so the name gets every
@@ -561,6 +565,7 @@ function TerminalPane({
 					<ChatView
 						sessionId={sessionTarget.id}
 						composerInBar={stewardMode}
+						agentState={session?.indicatorState}
 						title={session?.name}
 						subtitle={
 							session?.currentPath
@@ -885,6 +890,7 @@ function TerminalPane({
 						enabled={showConversation}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
+						agentState={session?.indicatorState}
 					/>
 				)}
 				{sessionTarget ? (

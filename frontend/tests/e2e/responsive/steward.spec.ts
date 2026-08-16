@@ -331,6 +331,18 @@ test.describe('a session in steward mode', () => {
     });
   });
 
+  // The list says which session is working; reading one there was nothing to
+  // tell a working pane from a finished one.
+  test('says whether this session is working, beside the composer', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      indicatorState: 'processing',
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+
+    await expect(page.getByText('このセッションは作業中です')).toBeVisible();
+  });
+
   test('the terminal is in the menu, not beside the summary', async ({ page }) => {
     await boot(page);
 

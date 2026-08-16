@@ -1,7 +1,11 @@
 import { ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ConversationMessage, StewardTurn } from "../../../../shared/types";
+import type {
+	ConversationMessage,
+	IndicatorState,
+	StewardTurn,
+} from "../../../../shared/types";
 import { useStewardSession } from "../../hooks/useSteward";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
@@ -23,11 +27,13 @@ export function StewardSessionView({
 	sessionId,
 	agentSessionId,
 	composerInBar = false,
+	agentState,
 }: {
 	sessionId: string;
 	agentSessionId?: string | null;
 	/** The phone puts it in the bottom bar instead. */
 	composerInBar?: boolean;
+	agentState?: IndicatorState;
 }) {
 	const { t } = useTranslation();
 	const { turns, waiting, thinking } = useStewardSession(sessionId, true);
@@ -90,6 +96,7 @@ export function StewardSessionView({
 			{!composerInBar && (
 				<StewardSessionComposer
 					sessionId={sessionId}
+					agentState={agentState}
 					className="mx-auto flex w-full max-w-2xl items-end gap-2 border-cv-border border-t p-2"
 				/>
 			)}
