@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.160] - 2026-08-17
+
+### Fixed
+- **The activity line was rendering at 10.5px.** `text-xs` is `0.75rem` and
+  this app's root font is 14px rather than 16, so the line naming the file
+  being edited came out readable at a desk and not at arm's length on a phone,
+  which is the only place it is for. 13px, a heavier tool name, and room
+  around it.
+
 ## [0.3.159] - 2026-08-17
 
 ### Added
