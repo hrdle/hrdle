@@ -132,6 +132,9 @@ interface PaneContainerProps {
 	sessions: ExtendedSession[];
 	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>;
 	variant?: LayoutVariant;
+	/** The phone's pane tabs, stacked with the session bar by the pane that
+	 *  draws the bottom of the screen. See `mobilePaneTabs` in DesktopLayout. */
+	paneTabs?: React.ReactNode;
 	globalReloadKey?: number;
 	controlModeContext: ControlModeContext;
 }
@@ -149,6 +152,7 @@ export function PaneContainer({
 	sessions,
 	terminalRefs,
 	variant = "desktop",
+	paneTabs,
 	globalReloadKey = 0,
 	controlModeContext,
 }: PaneContainerProps) {
@@ -167,6 +171,7 @@ export function PaneContainer({
 				terminalRefs={terminalRefs}
 				globalReloadKey={globalReloadKey}
 				variant={variant}
+				paneTabs={paneTabs}
 				controlModeContext={controlModeContext}
 			/>
 		);
@@ -187,6 +192,7 @@ export function PaneContainer({
 				sessions={sessions}
 				terminalRefs={terminalRefs}
 				variant={variant}
+				paneTabs={paneTabs}
 				globalReloadKey={globalReloadKey}
 				controlModeContext={controlModeContext}
 			/>
@@ -210,6 +216,7 @@ interface TerminalPaneProps {
 	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>;
 	globalReloadKey?: number;
 	variant?: LayoutVariant;
+	paneTabs?: React.ReactNode;
 	controlModeContext: ControlModeContext;
 }
 
@@ -226,6 +233,7 @@ function TerminalPane({
 	terminalRefs,
 	globalReloadKey = 0,
 	variant = "desktop",
+	paneTabs,
 	controlModeContext,
 }: TerminalPaneProps) {
 	const { t } = useTranslation();
@@ -892,7 +900,14 @@ function TerminalPane({
 							// The steward's screen has a composer of its own, and it is not
 							// this one: typing here reached the agent and showed nothing.
 							lockInputHidden={stewardMode && showConversation}
-							overlayContent={bottomBar}
+							overlayContent={
+								bottomBar ? (
+									<>
+										{paneTabs}
+										{bottomBar}
+									</>
+								) : undefined
+							}
 							onConnect={handleConnect}
 							onDisconnect={handleDisconnect}
 							theme={session?.theme}
@@ -1079,6 +1094,7 @@ interface SplitContainerProps {
 	sessions: ExtendedSession[];
 	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>;
 	variant?: LayoutVariant;
+	paneTabs?: React.ReactNode;
 	globalReloadKey?: number;
 	controlModeContext: ControlModeContext;
 }
@@ -1096,6 +1112,7 @@ function SplitContainer({
 	sessions,
 	terminalRefs,
 	variant = "desktop",
+	paneTabs,
 	globalReloadKey = 0,
 	controlModeContext,
 }: SplitContainerProps) {
@@ -1300,6 +1317,7 @@ function SplitContainer({
 					sessions={sessions}
 					terminalRefs={terminalRefs}
 					variant={variant}
+					paneTabs={paneTabs}
 					globalReloadKey={globalReloadKey}
 					controlModeContext={controlModeContext}
 				/>
