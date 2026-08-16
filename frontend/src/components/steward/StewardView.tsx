@@ -1,5 +1,5 @@
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	ConversationMessage,
@@ -58,12 +58,33 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 		}
 	}, []);
 
+	/**
+	 * The overview conversation, not every entry the steward has written.
+	 *
+	 * What is about one session belongs to that session: its row carries the
+	 * current state and its chat carries the history, so a third copy here
+	 * turned this screen into a feed of everything at once - the reason it read
+	 * as a raw log rather than a conversation with anybody.
+	 *
+	 * A question still waiting is the exception, wherever it came from. It is
+	 * answered here because this is where the controls are, and one that is
+	 * only findable by opening the right session is one nobody answers.
+	 */
+	const shown = useMemo(
+		() =>
+			thread.filter(
+				(item) =>
+					!item.sessionId || (item.kind === "ask" && !item.ask.answer),
+			),
+		[thread],
+	);
+
 	// The newest exchange is the one being read - on open, and again whenever
 	// something arrives or the steward starts thinking.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: neither value is read here; their change is the cue to scroll.
 	useEffect(() => {
 		endRef.current?.scrollIntoView({ block: "end" });
-	}, [thread.length, thinking]);
+	}, [shown.length, thinking]);
 
 	// Answering an ask, which the composer cannot express.
 	const send = async (input: Parameters<typeof reply>[0]) => {
@@ -92,14 +113,14 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 			<div className="mx-auto w-full max-w-2xl flex-1 overflow-y-auto px-3 py-3">
 				{isLoading && <p className="text-cv-text-muted text-sm">{t("common.loading", "Loading...")}</p>}
 				{error && <p className="text-sm text-red-400">{error}</p>}
-				{!isLoading && !error && thread.length === 0 && (
+				{!isLoading && !error && shown.length === 0 && (
 					<p className="text-cv-text-muted text-sm">
-						{t("steward.empty", "Nothing yet. The steward writes here when something needs you.")}
+						{t("steward.emptyOverview", "セッションを横断する相談はここに。個々のセッションの話は、そのセッションを開いてください。")}
 					</p>
 				)}
 
 				<ul className="flex flex-col gap-3">
-					{thread.map((item) => (
+					{shown.map((item) => (
 						<li key={item.id}>
 							<ThreadItem item={item} onAnswer={send} onOpenSource={openSource} />
 						</li>

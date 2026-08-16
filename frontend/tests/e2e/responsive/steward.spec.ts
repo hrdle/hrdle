@@ -77,6 +77,47 @@ test.describe('steward mode', () => {
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
   });
 
+  // The thread is the conversation about the whole set. What is about one
+  // session is on that session's row and in its chat, and a third copy here
+  // turned this screen into a feed of everything at once.
+  test('shows the overview conversation, and a question still waiting', async ({ page }) => {
+    await bootApp(page, {
+      steward: {
+        enabled: true,
+        thread: [
+          { id: 's1', at: 1, role: 'steward', kind: 'notify', text: 'w5Qのテストが落ちています', sessionId: 'w5Q' },
+          { id: 'o1', at: 2, role: 'steward', kind: 'notify', text: '3件が止まっています' },
+          {
+            id: 's2',
+            at: 3,
+            role: 'steward',
+            kind: 'ask',
+            text: '巻き戻しますか',
+            sessionId: 'w5Q',
+            ask: { id: 's2', mode: 'single', choices: ['はい', 'いいえ'] },
+          },
+          {
+            id: 's3',
+            at: 4,
+            role: 'steward',
+            kind: 'ask',
+            text: '答え済みの質問',
+            sessionId: 'w5Q',
+            ask: { id: 's3', mode: 'single', choices: ['はい'], answer: { kind: 'choice', indices: [0] } },
+          },
+        ],
+      },
+    });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('3件が止まっています')).toBeVisible();
+    // Waiting on an answer, so it is here wherever it came from.
+    await expect(page.getByText('巻き戻しますか')).toBeVisible();
+    await expect(page.getByText('w5Qのテストが落ちています')).toHaveCount(0);
+    await expect(page.getByText('答え済みの質問')).toHaveCount(0);
+  });
+
   test('a question offers its choices, and a way to walk away', async ({ page }) => {
     await bootApp(page, { steward: { enabled: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
@@ -286,9 +327,41 @@ test.describe('a session in steward mode', () => {
       buffer: Buffer.from('89504e47', 'hex'),
     });
 
-    // The path, not the picture: what the steward can pass on is a filename an
-    // agent can open.
-    await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveValue('/tmp/shot.png');
+    // A thumbnail, not the path pasted into the line being typed.
+    await expect(page.getByRole('img', { name: '/tmp/shot.png' })).toBeVisible();
+    await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveValue('');
+
+    const posted = page.waitForRequest(
+      (req) => req.url().includes('/api/steward/thread/reply') && req.method() === 'POST',
+    );
+    await page.getByPlaceholder('スチュワードに話しかける').fill('これを見て');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    // The path travels in the message: what the steward can pass on is a
+    // filename an agent can open.
+    expect(JSON.parse((await posted).postData() ?? '{}')).toEqual({
+      text: 'これを見て\n/tmp/shot.png',
+      sessionId: 'demo',
+    });
+  });
+
+  test('an attached image can be taken off again', async ({ page }) => {
+    await boot(page);
+    await page.route('**/api/upload/image', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ path: '/tmp/shot.png', filename: 'shot.png' }),
+      }),
+    );
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'shot.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('89504e47', 'hex'),
+    });
+
+    await page.getByRole('button', { name: '画像を外す' }).click();
+    await expect(page.getByRole('img', { name: '/tmp/shot.png' })).toHaveCount(0);
   });
 
   test('the list can speak to the steward without opening the thread first', async ({ page }) => {
@@ -312,16 +385,23 @@ test.describe('a session in steward mode', () => {
     await expect(page.getByText('考えています…')).toBeVisible();
   });
 
-  // The steward's own entries say which session they are about; the person's
-  // do not, because they know what they just wrote and where.
-  test('the session label is on the steward side only', async ({ page }) => {
+  // A question from a session is the one thing the thread still carries from
+  // one, so it has to say which.
+  test('a waiting question says which session it is about', async ({ page }) => {
     await bootApp(page, {
       steward: {
         enabled: true,
         view: true,
         thread: [
-          { id: 'a1', at: 1, role: 'steward', kind: 'notify', text: 'テストが落ちています', sessionId: 'w5Q' },
-          { id: 'a2', at: 2, role: 'user', kind: 'reply', text: 'どれ', sessionId: 'w5Q' },
+          {
+            id: 'a1',
+            at: 1,
+            role: 'steward',
+            kind: 'ask',
+            text: '巻き戻しますか',
+            sessionId: 'w5Q',
+            ask: { id: 'a1', mode: 'single', choices: ['はい'] },
+          },
         ],
       },
     });

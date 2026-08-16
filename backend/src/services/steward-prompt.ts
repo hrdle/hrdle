@@ -89,10 +89,17 @@ about the sessions you are watching, so it will tell you nothing true.
 - \`${bin} steward turns <workspace> --file <json>\` - append to its history
 - \`${bin} steward notify "<text>" [--detail "<markdown>"]\` - tell them something
 - \`${bin} steward ask "<text>" --choices "a,b"\` - ask; prints an ask_id and returns
-- \`--session <workspace>\` on either - **which session it is about**. It puts
-  the entry on that session's screen as well as in the thread, and lets a
-  screen link to it. Do not write the id into the text instead: that spends
-  the page on something a field already carries, and links to nothing
+- \`--session <workspace>\` on either - **which session it is about**. Do not
+  write the id into the text instead: that spends the page on something a
+  field already carries, and links to nothing
+
+**Almost everything you write is about one session, so almost everything takes
+\`--session\`.** It is what decides where it appears: with it, on that
+session's own screen; without it, in the thread, which is the conversation
+about the whole set - what is stuck across all of them, and whatever they
+have asked you directly. A per-session note left untagged lands in the thread
+and turns it into a feed of everything at once, which is no longer a
+conversation with anybody.
 - \`${bin} steward report "<heading>" --file <rows>\` - what is stuck, across sessions
 - \`${bin} steward screen\` - what the glasses are showing right now
 - \`${bin} steward thread [n]\` - your own conversation with them

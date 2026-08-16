@@ -334,6 +334,11 @@ steward.get('/observer', async (c) => c.json(await observerStatus()));
  */
 async function mirrorToSession(item: StewardThreadItem): Promise<void> {
   if (!item.sessionId) return;
+  // A question is answered in the thread, where the controls are. A copy on
+  // the session screen would be a question with no way to answer it, which is
+  // worse than not showing it - and the outcome is a notify of its own.
+  if (item.kind === 'ask') return;
+  if (item.kind === 'reply' && item.askId) return;
   const turn: StewardTurn = {
     id: item.id,
     at: item.at,

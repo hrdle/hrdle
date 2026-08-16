@@ -253,7 +253,7 @@ describe('session writes', () => {
     expect(turns.turns).toEqual([]);
   });
 
-  test('an answer inherits the session its question was about', async () => {
+  test('a question and its answer stay in the thread, not on the session', async () => {
     const asked = await post('/api/steward/thread', {
       kind: 'ask',
       text: '巻き戻しますか',
@@ -264,11 +264,12 @@ describe('session writes', () => {
 
     await post('/api/steward/thread/reply', { askId, answer: { kind: 'choice', indices: [0] } });
 
+    // A copy on the session screen would be a question with no way to answer
+    // it - the controls are in the thread.
     const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
-      turns: { role: string; text: string }[];
+      turns: unknown[];
     };
-    // The question and the answer, both on the screen it was asked from.
-    expect(turns.turns.map((t) => t.text)).toEqual(['巻き戻しますか', 'はい']);
+    expect(turns.turns).toEqual([]);
   });
 
   test('turns are fitted the same way', async () => {
