@@ -243,6 +243,54 @@ test.describe('a session in steward mode', () => {
     await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveCount(0);
   });
 
+  // "The link to the original is not connected": it was, but it opened at the
+  // top of a 3400-message transcript - a /clear from days ago.
+  test('the original opens at its newest end when the turn names no message', async ({ page }) => {
+    await boot(page);
+    await page.route('**/api/sessions/history/sess-1/conversation*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          messages: [
+            { id: 'm1', role: 'user', content: 'Command: /clear' },
+            ...Array.from({ length: 60 }, (_, i) => ({
+              id: `f${i}`,
+              role: 'assistant',
+              content: `filler ${i}`,
+            })),
+            { id: 'last', role: 'assistant', content: 'いちばん新しい発言' },
+          ],
+        }),
+      }),
+    );
+
+    await page.getByRole('button', { name: '元の会話を見る' }).first().click();
+    await expect(page.getByText('いちばん新しい発言')).toBeVisible();
+  });
+
+  test('an image can be attached to what is said', async ({ page }) => {
+    await boot(page);
+    await page.route('**/api/upload/image', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ path: '/tmp/shot.png', filename: 'shot.png' }),
+      }),
+    );
+
+    await expect(page.getByRole('button', { name: '画像を添付' })).toBeVisible();
+    await page.locator('input[type=file]').setInputFiles({
+      name: 'shot.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from('89504e47', 'hex'),
+    });
+
+    // The path, not the picture: what the steward can pass on is a filename an
+    // agent can open.
+    await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveValue('/tmp/shot.png');
+  });
+
   test('the list can speak to the steward without opening the thread first', async ({ page }) => {
     await bootApp(page, { steward: { enabled: true, view: true } });
     await page.locator('[data-onboarding="session-list"]').click();
@@ -257,8 +305,30 @@ test.describe('a session in steward mode', () => {
     await page.getByRole('button', { name: 'Send' }).click();
     expect(JSON.parse((await posted).postData() ?? '{}')).toEqual({ text: '止まっているものを教えて' });
 
-    // Sending opens the thread: that is where the answer lands.
+    // Sending opens the thread: that is where the answer lands. And it says it
+    // is working - landing on your own sentence with no sign of life is what
+    // made this screen read as broken.
     await expect(page.getByText('スチュワード', { exact: true })).toBeVisible();
+    await expect(page.getByText('考えています…')).toBeVisible();
+  });
+
+  // The steward's own entries say which session they are about; the person's
+  // do not, because they know what they just wrote and where.
+  test('the session label is on the steward side only', async ({ page }) => {
+    await bootApp(page, {
+      steward: {
+        enabled: true,
+        view: true,
+        thread: [
+          { id: 'a1', at: 1, role: 'steward', kind: 'notify', text: 'テストが落ちています', sessionId: 'w5Q' },
+          { id: 'a2', at: 2, role: 'user', kind: 'reply', text: 'どれ', sessionId: 'w5Q' },
+        ],
+      },
+    });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('w5Q', { exact: true })).toHaveCount(1);
   });
 });
 

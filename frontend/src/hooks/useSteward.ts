@@ -5,7 +5,10 @@ import type {
 	StewardThreadItem,
 	StewardTurn,
 } from "../../../shared/types";
-import { SAID_EVENT } from "../components/steward/StewardSessionComposer";
+import {
+	SAID_EVENT,
+	overviewSayPending,
+} from "../components/steward/StewardSessionComposer";
 import { authFetch } from "../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -108,6 +111,26 @@ export function useSteward(enabled: boolean): UseStewardReturn {
 	useEffect(() => {
 		void refetch();
 	}, [refetch]);
+
+	// Said from the overview, which then opens this screen: without the cue you
+	// land on your own sentence with nothing to say it is being worked on, and
+	// the answer appears a minute later out of nowhere.
+	useEffect(() => {
+		if (!enabled) return;
+		const watch = () => {
+			void refetch();
+			setThinking(true);
+			void watchForAnswer(refetch, setThinking);
+		};
+		// Said a moment ago, from the screen that opened this one.
+		if (overviewSayPending()) watch();
+		const onSaid = (e: Event) => {
+			if ((e as CustomEvent<{ sessionId?: string }>).detail?.sessionId) return;
+			watch();
+		};
+		window.addEventListener(SAID_EVENT, onSaid);
+		return () => window.removeEventListener(SAID_EVENT, onSaid);
+	}, [enabled, refetch]);
 
 	const reply = useCallback(
 		async (input: {

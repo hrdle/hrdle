@@ -457,6 +457,7 @@
     "writingSession": "スチュワードがこのセッションを読んでいます…",
     "sessionEmpty": "まだ何も書かれていません。",
     "detailShow": "詳細",
-    "detailHide": "詳細を閉じる"
+    "detailHide": "詳細を閉じる",
+    "attachImage": "画像を添付"
   }
 }

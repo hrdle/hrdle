@@ -113,7 +113,7 @@ function formatTokenCount(n: number): string {
 import { useHistoryV2Flag } from "../hooks/useHistoryV2Flag";
 import { useSessionHistory } from "../hooks/useSessionHistory";
 import { useStewardLines, useStewardView } from "../hooks/useSteward";
-import { StewardListComposer } from "./steward/StewardListComposer";
+import { StewardSessionComposer } from "./steward/StewardSessionComposer";
 import { authFetch } from "../services/api";
 import { ConversationViewer } from "./ConversationViewer";
 import { SessionHistory } from "./SessionHistory";
@@ -2754,7 +2754,10 @@ export function WorkspaceList({
 			    because this is the screen those requests are looked at from - and
 			    it opens the thread on send, since that is where the answer lands. */}
 			{onToggleSteward && stewardViewOn && activeTab === "sessions" && !stewardOpen && (
-				<StewardListComposer onSent={onToggleSteward} />
+				<StewardSessionComposer
+					onSent={onToggleSteward}
+					className="shrink-0 flex items-end gap-1 border-white/[0.06] border-t bg-[#0a0a0a] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+				/>
 			)}
 		</div>
 		</StewardLinesContext.Provider>
