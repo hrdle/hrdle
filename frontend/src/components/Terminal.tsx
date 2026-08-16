@@ -87,6 +87,15 @@ interface TerminalProps {
 	onError?: (error: string) => void;
 	onReady?: (send: (data: string) => void) => void;
 	hideKeyboard?: boolean;
+	/**
+	 * Keep the pane's own input closed, without taking the bottom bar with it.
+	 *
+	 * For an overlay that has a composer of its own: two places to type over one
+	 * pane, and the one on screen was not the one listening. `hideKeyboard`
+	 * cannot do this - it removes the bar as well, and the bar is how a phone
+	 * navigates.
+	 */
+	lockInputHidden?: boolean;
 	overlayContent?: React.ReactNode;
 	onOverlayTap?: () => void;
 	showOverlay?: boolean;
@@ -127,6 +136,7 @@ export const TerminalComponent = memo(
 			onError,
 			onReady,
 			hideKeyboard,
+			lockInputHidden,
 			overlayContent,
 			onOverlayTap,
 			showOverlay = true,
@@ -150,6 +160,10 @@ export const TerminalComponent = memo(
 		const selectionRef = useRef<string>("");
 		const [isInitialized, setIsInitialized] = useState(false);
 		const [inputMode, setInputMode] = useState<InputMode>("hidden");
+		useEffect(() => {
+			if (lockInputHidden) setInputMode("hidden");
+		}, [lockInputHidden]);
+		const effectiveInputMode: InputMode = lockInputHidden ? "hidden" : inputMode;
 		const [fontSize, setFontSize] = useState(() => loadFontSize(sessionId));
 		const [keyboardOffset, setKeyboardOffset] = useState(0);
 		const [showFontSizeIndicator, setShowFontSizeIndicator] = useState(false);
@@ -1586,7 +1600,7 @@ export const TerminalComponent = memo(
 				{/* Input bar (mobile/tablet keyboard) */}
 				<InputBar
 					ref={inputBarRef}
-					inputMode={inputMode}
+					inputMode={effectiveInputMode}
 					setInputMode={setInputMode}
 					sendRef={sendRef}
 					fitTerminal={fitTerminal}
@@ -1599,7 +1613,7 @@ export const TerminalComponent = memo(
 				/>
 
 				{/* Bottom overlay when keyboard is hidden (mobile only) */}
-				{!hideKeyboard && inputMode === "hidden" && overlayContent && (
+				{!hideKeyboard && effectiveInputMode === "hidden" && overlayContent && (
 					<div className="fixed bottom-0 left-0 right-0 z-40 bg-th-bg border-t border-th-border">
 						{overlayContent}
 						{!showOverlay && onOverlayTap && (
@@ -1609,7 +1623,7 @@ export const TerminalComponent = memo(
 				)}
 
 				{/* Tap area at bottom when keyboard hidden */}
-				{!hideKeyboard && inputMode === "hidden" && !overlayContent && (
+				{!hideKeyboard && effectiveInputMode === "hidden" && !overlayContent && (
 					<div
 						className="fixed bottom-0 left-0 right-0 h-8 z-40 bg-[var(--color-overlay)] flex items-center justify-center"
 						onClick={handleShowKeyboard}

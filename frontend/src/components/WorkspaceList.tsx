@@ -112,7 +112,8 @@ function formatTokenCount(n: number): string {
 
 import { useHistoryV2Flag } from "../hooks/useHistoryV2Flag";
 import { useSessionHistory } from "../hooks/useSessionHistory";
-import { useStewardLines } from "../hooks/useSteward";
+import { useStewardLines, useStewardView } from "../hooks/useSteward";
+import { StewardListComposer } from "./steward/StewardListComposer";
 import { authFetch } from "../services/api";
 import { ConversationViewer } from "./ConversationViewer";
 import { SessionHistory } from "./SessionHistory";
@@ -1828,6 +1829,7 @@ export function WorkspaceList({
 	// Empty unless the steward is on AND this screen is set to show it, so a row
 	// falls back to exactly what it rendered before.
 	const stewardLines = useStewardLines();
+	const [stewardViewOn] = useStewardView();
 
 	const [sessionForMenu, setSessionForMenu] = useState<SessionResponse | null>(
 		null,
@@ -2745,6 +2747,14 @@ export function WorkspaceList({
 					isActive={viewingConversation.isActive}
 					onRefresh={handleRefreshConversation}
 				/>
+			)}
+
+			{/* Speaking to the steward about no session in particular: reorder the
+			    list, find something in history. Here rather than only in the thread
+			    because this is the screen those requests are looked at from - and
+			    it opens the thread on send, since that is where the answer lands. */}
+			{onToggleSteward && stewardViewOn && activeTab === "sessions" && !stewardOpen && (
+				<StewardListComposer onSent={onToggleSteward} />
 			)}
 		</div>
 		</StewardLinesContext.Provider>

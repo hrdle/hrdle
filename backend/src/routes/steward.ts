@@ -70,6 +70,7 @@ const ThreadPostSchema = z.discriminatedUnion('kind', [
     detail: z.string().max(DETAIL_MAX).optional(),
     refs: RefsSchema.optional(),
     source: SourceSchema.optional(),
+    sessionId: SessionId.optional(),
   }),
   z.object({
     kind: z.literal('ask'),
@@ -77,6 +78,7 @@ const ThreadPostSchema = z.discriminatedUnion('kind', [
     detail: z.string().max(DETAIL_MAX).optional(),
     refs: RefsSchema.optional(),
     source: SourceSchema.optional(),
+    sessionId: SessionId.optional(),
     mode: z.enum(['single', 'multi', 'freeText']).default('single'),
     // A free-text question legitimately offers nothing to pick from.
     choices: z.array(z.string().min(1).max(200)).max(9).default([]),
@@ -88,6 +90,7 @@ const ThreadPostSchema = z.discriminatedUnion('kind', [
     rows: z.array(z.string().max(TEXT_MAX)).max(100),
     detail: z.string().max(DETAIL_MAX).optional(),
     refs: RefsSchema.optional(),
+    // A report crosses sessions by definition, so it carries none.
   }),
 ]);
 
@@ -97,6 +100,8 @@ const ReplySchema = z.object({
   askId: z.string().min(1).max(200).optional(),
   answer: AskAnswerSchema.optional(),
   text: z.string().max(TEXT_MAX).optional(),
+  /** Set when it was written from a session's own screen. */
+  sessionId: SessionId.optional(),
 });
 
 const steward = new Hono();
@@ -160,16 +165,18 @@ steward.post('/thread', async (c) => {
       ...base,
       id,
       source: input.source,
+      sessionId: input.sessionId,
       kind: 'ask',
       ask: { id, mode: input.mode, choices: input.choices, step: input.step },
     });
   } else if (input.kind === 'report') {
     item = await appendThreadItem({ ...base, kind: 'report', rows: input.rows });
   } else {
-    item = await appendThreadItem({ ...base, source: input.source, kind: 'notify' });
+    item = await appendThreadItem({ ...base, source: input.source, sessionId: input.sessionId, kind: 'notify' });
   }
 
   broadcastSteward({ type: 'steward-thread', item });
+  await mirrorToSession(item);
   return c.json({
     item,
     askId: item.kind === 'ask' ? item.ask.id : undefined,
@@ -181,7 +188,7 @@ steward.post('/thread/reply', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = ReplySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid reply', detail: parsed.error.issues }, 400);
-  const { askId, answer, text } = parsed.data;
+  const { askId, answer, text, sessionId } = parsed.data;
 
   if (askId && !answer) return c.json({ error: 'answer is required when askId is given' }, 400);
   // An answer with nothing to answer is a caller bug, and accepting it would
@@ -219,16 +226,28 @@ steward.post('/thread/reply', async (c) => {
   // Its own entry even when it answered a question: the ask holds the
   // machine-readable answer, the thread has to read back as a conversation.
   const replyText = text ?? answerAsText(answer, updatedAsk);
-  const item = await appendThreadItem({ kind: 'reply', askId, role: 'user', text: replyText });
+  // A reply written from a session's screen belongs to that session even when
+  // it answers an ask raised elsewhere - it is where the person was looking.
+  const about = sessionId ?? (updatedAsk?.kind === 'ask' ? updatedAsk.sessionId : undefined);
+  const item = await appendThreadItem({
+    kind: 'reply',
+    askId,
+    role: 'user',
+    text: replyText,
+    sessionId: about,
+  });
   broadcastSteward({ type: 'steward-thread', item });
+  await mirrorToSession(item);
 
   // No pane moves when a person answers, so the status watcher cannot see this.
   // The wake-up carries the answer rather than announcing that one exists:
   // waking and delivering are the same act, so there is nothing to poll.
+  const said = askId ? `The owner answered ask ${askId}: ${replyText}` : `The owner said: ${replyText}`;
   wakeObserverWith(
-    askId
-      ? `The owner answered ask ${askId}: ${replyText}`
-      : `The owner said: ${replyText}`,
+    about
+      ? `${said}\nThey were reading session ${about}, so this is about that session unless they say otherwise. ` +
+          `Answer with \`steward notify --session ${about}\` so it reaches the screen they are on.`
+      : said,
   );
 
   return c.json({ item, ask: updatedAsk });
@@ -304,6 +323,29 @@ steward.get('/screen', (c) => c.json({ screen: getLastGlassesScreen() }));
 
 /** Whether the steward is thinking. Polled by a screen that has just spoken. */
 steward.get('/observer', async (c) => c.json(await observerStatus()));
+
+/**
+ * A thread entry about one session also belongs in that session's history.
+ *
+ * Written here rather than asked of the steward: an answer that appeared only
+ * in the thread left the screen the question was asked from showing nothing,
+ * and "call two commands every time" is a rule that holds until the one turn
+ * it does not. Same id both places, so the upsert makes this idempotent.
+ */
+async function mirrorToSession(item: StewardThreadItem): Promise<void> {
+  if (!item.sessionId) return;
+  const turn: StewardTurn = {
+    id: item.id,
+    at: item.at,
+    role: item.role,
+    text: item.text,
+    detail: item.detail,
+    refs: item.refs,
+    source: item.source,
+  };
+  const turns = await appendSessionTurns(item.sessionId, [turn]);
+  broadcastSteward({ type: 'steward-turns', sessionId: item.sessionId, turns });
+}
 
 /** What a person's answer says, in the words the thread is read in. */
 function answerAsText(

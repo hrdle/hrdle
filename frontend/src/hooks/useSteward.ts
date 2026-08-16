@@ -5,6 +5,7 @@ import type {
 	StewardThreadItem,
 	StewardTurn,
 } from "../../../shared/types";
+import { SAID_EVENT } from "../components/steward/StewardSessionComposer";
 import { authFetch } from "../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -59,8 +60,14 @@ export interface UseStewardReturn {
 	/** True while the steward is working on a turn. Someone who has just spoken
 	 *  and sees nothing cannot tell "it is thinking" from "it never arrived". */
 	thinking: boolean;
-	/** Say something, or answer a question the steward asked. */
-	reply: (input: { text?: string; askId?: string; answer?: StewardAskAnswer }) => Promise<void>;
+	/** Say something, or answer a question the steward asked. `sessionId` is the
+	 *  session the person was reading when they wrote it. */
+	reply: (input: {
+		text?: string;
+		askId?: string;
+		answer?: StewardAskAnswer;
+		sessionId?: string;
+	}) => Promise<void>;
 	refetch: () => Promise<void>;
 }
 
@@ -103,7 +110,12 @@ export function useSteward(enabled: boolean): UseStewardReturn {
 	}, [refetch]);
 
 	const reply = useCallback(
-		async (input: { text?: string; askId?: string; answer?: StewardAskAnswer }) => {
+		async (input: {
+			text?: string;
+			askId?: string;
+			answer?: StewardAskAnswer;
+			sessionId?: string;
+		}) => {
 			const res = await authFetch(`${API_BASE}/api/steward/thread/reply`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
@@ -193,22 +205,30 @@ export function useStewardView(): [boolean, (on: boolean) => void] {
 	return [on, set];
 }
 
-/** Turns for one session, asking the steward to write them when there are none. */
+/**
+ * Turns for one session, asking the steward to write them when there are none,
+ * and carrying what the person says back about this session.
+ *
+ * The steward is who this screen talks to. The pane's own input bar reaches the
+ * agent and shows nothing here, which read as the message having gone nowhere.
+ */
 export function useStewardSession(sessionId: string | null, active: boolean) {
 	const [turns, setTurns] = useState<StewardTurn[]>([]);
 	const [waiting, setWaiting] = useState(false);
+	const [thinking, setThinking] = useState(false);
+
+	const load = useCallback(async (): Promise<StewardTurn[]> => {
+		if (!sessionId) return [];
+		const res = await authFetch(
+			`${API_BASE}/api/steward/sessions/${encodeURIComponent(sessionId)}/turns`,
+		);
+		if (!res.ok) return [];
+		return ((await res.json()) as { turns?: StewardTurn[] }).turns ?? [];
+	}, [sessionId]);
 
 	useEffect(() => {
 		if (!active || !sessionId) return;
 		let alive = true;
-
-		const load = async (): Promise<StewardTurn[]> => {
-			const res = await authFetch(
-				`${API_BASE}/api/steward/sessions/${encodeURIComponent(sessionId)}/turns`,
-			);
-			if (!res.ok) return [];
-			return ((await res.json()) as { turns?: StewardTurn[] }).turns ?? [];
-		};
 
 		void (async () => {
 			const first = await load();
@@ -242,9 +262,27 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 		return () => {
 			alive = false;
 		};
-	}, [sessionId, active]);
+	}, [sessionId, active, load]);
 
-	return { turns, waiting };
+	// The composer is not always in this subtree - on a phone it is in the fixed
+	// bottom bar - so the cue to catch up is an event rather than a callback.
+	// The server mirrors the reply into this session, so the echo is one read
+	// away rather than something a screen has to invent and reconcile.
+	useEffect(() => {
+		if (!active || !sessionId) return;
+		const onSaid = (e: Event) => {
+			if ((e as CustomEvent<{ sessionId?: string }>).detail?.sessionId !== sessionId) return;
+			void (async () => {
+				setTurns(await load());
+				setThinking(true);
+				void watchForAnswer(async () => setTurns(await load()), setThinking);
+			})();
+		};
+		window.addEventListener(SAID_EVENT, onSaid);
+		return () => window.removeEventListener(SAID_EVENT, onSaid);
+	}, [active, sessionId, load]);
+
+	return { turns, waiting, thinking };
 }
 
 /**

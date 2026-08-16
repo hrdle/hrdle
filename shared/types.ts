@@ -1828,8 +1828,18 @@ export interface StewardAsk {
 
 /** One entry in the steward thread: its own conversation with its owner, which
  *  is not any agent's transcript. */
-export type StewardThreadItem = StewardTurn &
-  (
+export type StewardThreadItem = StewardTurn & {
+  /**
+   * Which session this entry is about, when it is about one.
+   *
+   * The thread is global and a person reads it out of context, so an entry has
+   * to say what it belongs to. Without the field the steward wrote the id into
+   * the text itself ("w4H: ..."), which spends the page budget on it and
+   * leaves nothing for a screen to link. A person writing from a session's own
+   * screen carries it the same way, so the answer knows where it is going.
+   */
+  sessionId?: string;
+} & (
     | { kind: 'notify' }
     | { kind: 'ask'; ask: StewardAsk }
     /** Belongs to no single session (what is stuck, what finished). */

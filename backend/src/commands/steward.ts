@@ -29,6 +29,8 @@ export interface StewardCliOptions {
   stewardMode?: 'single' | 'multi' | 'freeText';
   stewardStep?: { index: number; total: number };
   stewardFile?: string;
+  /** `--session`: which workspace a notify or an ask is about. */
+  session?: string;
   port: number;
 }
 
@@ -165,12 +167,15 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
     switch (options.stewardVerb) {
       case 'notify': {
         const text = args[0];
-        if (!text) throw new Error('usage: hrdle steward notify <text> [--detail <markdown>]');
+        if (!text) {
+          throw new Error('usage: hrdle steward notify <text> [--detail <markdown>] [--session <workspace>]');
+        }
         emit(
           await api(port, 'POST', '/api/steward/thread', {
             kind: 'notify',
             text,
             detail: options.stewardDetail,
+            sessionId: options.session,
           }),
         );
         return;
@@ -180,7 +185,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
         const text = args[0];
         if (!text) {
           throw new Error(
-            'usage: hrdle steward ask <text> [--choices "a,b"] [--mode single|multi|freeText] [--step 2/3]',
+            'usage: hrdle steward ask <text> [--choices "a,b"] [--mode single|multi|freeText] [--step 2/3] [--session <workspace>]',
           );
         }
         emit(
@@ -191,6 +196,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
             mode: options.stewardMode ?? 'single',
             step: options.stewardStep,
             detail: options.stewardDetail,
+            sessionId: options.session,
           }),
         );
         return;
