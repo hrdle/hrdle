@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.159] - 2026-08-17
+
+### Added
+- **A session's chat says what the agent is doing, not just that it is.**
+  "Working" tells someone watching from a phone only that the pane has not
+  stopped, which reads the same as a screen that has frozen; the newest tool
+  call in the transcript names the file being edited or the command being run.
+  Read from the tail, and only while the pane is processing. A path shows as
+  its file name - the directory is the session's own nine times in ten, and on
+  a phone it is the part that gets cut.
+
 ## [0.3.158] - 2026-08-17
 
 ### Added
