@@ -7,6 +7,7 @@ import type {
 	StewardTurn,
 } from "../../../../shared/types";
 import { useStewardSession } from "../../hooks/useSteward";
+import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
@@ -40,12 +41,8 @@ export function StewardSessionView({
 	const [source, setSource] = useState<{ agentSessionId: string; messageId?: string } | null>(null);
 	const [sourceMessages, setSourceMessages] = useState<ConversationMessage[]>([]);
 	const [sourceLoading, setSourceLoading] = useState(false);
-	const endRef = useRef<HTMLDivElement>(null);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: neither value is read here; their change is the cue to scroll.
-	useEffect(() => {
-		endRef.current?.scrollIntoView({ block: "end" });
-	}, [turns.length, thinking]);
+	const scrollerRef = useRef<HTMLDivElement>(null);
+	const stick = useStickToBottom(scrollerRef, [turns, thinking]);
 
 	const openSource = async (next: { agentSessionId: string; messageId?: string }) => {
 		setSource(next);
@@ -68,13 +65,19 @@ export function StewardSessionView({
 			{/* 4xl rather than 2xl: at the app's 14px root, 2xl is 588px, so a
 			    tablet gave the conversation just over half its width and the rest
 			    to margins. A phone is narrower than either, so nothing moves there. */}
-			<div className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+			<div ref={scrollerRef} className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
 				{/* Anchored to the bottom: a handful of turns sitting at the top of a
 				    tall screen with the composer far below did not read as a
 				    conversation. */}
 				<div className="mx-auto mt-auto flex w-full max-w-4xl flex-col gap-3">
 					{turns.map((turn) => (
-						<TurnCard key={turn.id} turn={turn} fallbackSession={agentSessionId} onOpenSource={openSource} />
+						<TurnCard
+							key={turn.id}
+							turn={turn}
+							fallbackSession={agentSessionId}
+							onOpenSource={openSource}
+							onGrow={stick}
+						/>
 					))}
 
 					{/* Nothing written yet: the steward was asked on open, so this is a
@@ -92,7 +95,6 @@ export function StewardSessionView({
 						</p>
 					)}
 
-					<div ref={endRef} />
 				</div>
 			</div>
 
@@ -126,24 +128,43 @@ export function StewardSessionView({
 
 function TurnCard({
 	turn,
-	fallbackSession,
 	onOpenSource,
+	onGrow,
 }: {
 	turn: StewardTurn;
 	/** The pane's own agent session, for a turn that named no source of its own. */
 	fallbackSession?: string | null;
 	onOpenSource: (source: { agentSessionId: string; messageId?: string }) => void;
+	/** A picture finishing loading changes the height after the scroll. */
+	onGrow: () => void;
 }) {
 	const { t } = useTranslation();
 	const mine = turn.role === "user";
-	const sourceSession = turn.source?.agentSessionId ?? fallbackSession ?? null;
+	// Only where the turn names its own source. The pane-level fallback put this
+	// on all 60 bubbles of a real session - 32px each, a quarter of the reading
+	// area spent on a link that mostly opened the same conversation.
+	const sourceSession = turn.source?.agentSessionId ?? null;
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
 			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
+				{sourceSession && (
+					<button
+						type="button"
+						onClick={() =>
+							onOpenSource({ agentSessionId: sourceSession, messageId: turn.source?.messageIds?.[0] })
+						}
+						aria-label={t("steward.seeOriginal", "元の会話を見る")}
+						title={t("steward.seeOriginal", "元の会話を見る")}
+						className="-mr-1 float-right ml-2 flex h-8 w-8 items-center justify-center text-cv-text-muted hover:text-cv-text"
+					>
+						<ExternalLink size={13} />
+					</button>
+				)}
+
 				<p className="whitespace-pre-wrap break-words">{turn.text}</p>
 
-					{turn.images && <TurnImages paths={turn.images} />}
+					{turn.images && <TurnImages paths={turn.images} onLoad={onGrow} />}
 
 				{turn.detail && <TurnDetail detail={turn.detail} />}
 
@@ -154,18 +175,6 @@ function TurnCard({
 					</p>
 				)}
 
-				{sourceSession && (
-					<button
-						type="button"
-						onClick={() =>
-							onOpenSource({ agentSessionId: sourceSession, messageId: turn.source?.messageIds?.[0] })
-						}
-						className="mt-2 flex min-h-[32px] items-center gap-1 text-cv-text-muted text-xs hover:text-cv-text"
-					>
-						<ExternalLink size={12} />
-						{t("steward.seeOriginal", "元の会話を見る")}
-					</button>
-				)}
 			</div>
 		</div>
 	);

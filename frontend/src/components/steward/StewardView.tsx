@@ -182,6 +182,23 @@ function ThreadItem({
 					<p className="mb-1 font-medium text-[11px] text-cv-text-muted">{item.sessionId}</p>
 				)}
 
+				{item.source && (
+					<button
+						type="button"
+						onClick={() =>
+							onOpenSource({
+								agentSessionId: item.source?.agentSessionId ?? "",
+								messageId: item.source?.messageIds?.[0],
+							})
+						}
+						aria-label={t("steward.seeOriginal", "元の会話を見る")}
+						title={t("steward.seeOriginal", "元の会話を見る")}
+						className="-mr-1 float-right ml-2 flex h-8 w-8 items-center justify-center text-cv-text-muted hover:text-cv-text"
+					>
+						<ExternalLink size={13} />
+					</button>
+				)}
+
 				<p className="whitespace-pre-wrap break-words">{item.text}</p>
 
 					{item.images && <TurnImages paths={item.images} />}
@@ -197,22 +214,6 @@ function ThreadItem({
 				{item.detail && <TurnDetail detail={item.detail} />}
 
 				{item.kind === "ask" && <AskControls ask={item.ask} onAnswer={onAnswer} />}
-
-				{item.source && (
-					<button
-						type="button"
-						onClick={() =>
-							onOpenSource({
-								agentSessionId: item.source?.agentSessionId ?? "",
-								messageId: item.source?.messageIds?.[0],
-							})
-						}
-						className="mt-2 flex min-h-[32px] items-center gap-1 text-cv-text-muted text-xs hover:text-cv-text"
-					>
-						<ExternalLink size={12} />
-						{t("steward.seeOriginal", "See the original")}
-					</button>
-				)}
 			</div>
 		</div>
 	);

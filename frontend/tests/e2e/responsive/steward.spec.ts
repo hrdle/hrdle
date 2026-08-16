@@ -279,7 +279,15 @@ test.describe('steward mode on a tablet', () => {
  * what someone typed there went somewhere they could not see.
  */
 const TURNS = [
-  { id: 't1', at: 1_760_000_000_000, role: 'agent', text: 'テストを直しています' },
+  {
+    id: 't1',
+    at: 1_760_000_000_000,
+    role: 'agent',
+    text: 'テストを直しています',
+    // A source with no message id: the turn says which conversation it came
+    // from and not where in it, which is the ordinary case.
+    source: { agentSessionId: 'sess-1' },
+  },
 ];
 
 test.describe('a session in steward mode', () => {
@@ -522,6 +530,31 @@ test.describe('a session in steward mode', () => {
 
     await expect(page.getByRole('img', { name: 'a.jpg' })).toBeVisible();
     await expect(page.getByText('/tmp/shots/a.jpg')).toHaveCount(0);
+  });
+
+  // Rendering nothing while it arrives read as a message sent without its
+  // pictures: on a phone over LTE the two are seconds apart.
+  test('a picture on its way leaves a space, not a gap', async ({ page }) => {
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: {
+        enabled: true,
+        view: true,
+        turns: [{ id: 'p3', at: 1, role: 'user', text: '見てください', images: ['/tmp/shots/b.jpg'] }],
+      },
+    });
+    await page.route('**/api/files/images/b.jpg', async (route) => {
+      await held;
+      await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from('ffd8ffdb', 'hex') });
+    });
+
+    await expect(page.locator('[aria-busy="true"]')).toBeVisible();
+    release?.();
+    await expect(page.getByRole('img', { name: 'b.jpg' })).toBeVisible();
   });
 
   test('an attached image can be taken off again', async ({ page }) => {
