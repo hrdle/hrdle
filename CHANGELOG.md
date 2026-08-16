@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.147] - 2026-08-16
+
+### Fixed
+- **The steward's thread read as a raw feed rather than a conversation.** An
+  entry about one session was written in three places - the session's row
+  carries its state, its chat carries its history, and the thread carried it
+  again - so the screen reached from the overview showed everything at once.
+  It now carries what belongs to no single session, plus any question still
+  waiting: the controls are there, and a question only findable by opening the
+  right session is one nobody answers. An ask and its answer are therefore no
+  longer copied onto the session, where they would be a question with no way
+  to answer it.
+- **"Go to this terminal" opens the chat in steward mode**, and now says so.
+  The destination was already right; the word was not.
+
+### Changed
+- **An attached image shows as a thumbnail**, with a way to take it off again,
+  rather than its path pasted into the line being typed. The path still
+  travels in the message - what the steward can pass on is a filename an agent
+  can open.
+
 ## [0.3.146] - 2026-08-16
 
 ### Fixed
