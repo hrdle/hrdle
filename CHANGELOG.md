@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.158] - 2026-08-17
+
+### Added
+- **A URL in a steward message is a link**, opening in a new tab. On a phone a
+  URL that is only text has to be selected and copied by hand, which nobody
+  does. It is split on the same definition of a URL the terminal's link chip
+  uses, so a sentence's full stop stays with the sentence and a link written
+  straight against Japanese ends where the Japanese starts.
+
 ## [0.3.157] - 2026-08-17
 
 ### Fixed
