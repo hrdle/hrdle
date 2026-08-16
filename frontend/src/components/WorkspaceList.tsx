@@ -10,6 +10,7 @@ import type { TFunction } from "i18next";
 import {
 	ArrowRight,
 	BarChart3,
+	MessagesSquare,
 	ChevronLeft,
 	ChevronRight,
 	ExternalLink,
@@ -20,7 +21,7 @@ import {
 	Search,
 	X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	AGENT_PROVIDER_IDS,
@@ -111,6 +112,7 @@ function formatTokenCount(n: number): string {
 
 import { useHistoryV2Flag } from "../hooks/useHistoryV2Flag";
 import { useSessionHistory } from "../hooks/useSessionHistory";
+import { useStewardLines } from "../hooks/useSteward";
 import { authFetch } from "../services/api";
 import { ConversationViewer } from "./ConversationViewer";
 import { SessionHistory } from "./SessionHistory";
@@ -172,7 +174,18 @@ interface SessionListProps {
 	// at the bottom edge loses its last row. Inside the desktop picker the
 	// list ends at the modal's edge, which nothing overlaps.
 	fullScreen?: boolean;
+	// Only passed when the server reports a steward; absent, no button appears.
+	onToggleSteward?: () => void;
+	stewardOpen?: boolean;
 }
+
+/**
+ * The line the steward wrote for each workspace, by workspace id.
+ *
+ * A context rather than a prop threaded through the sortable wrapper: with no
+ * steward it is empty, and every row renders exactly as it did before.
+ */
+export const StewardLinesContext = createContext<Map<string, string>>(new Map());
 
 // Session menu dialog (color change + title edit + delete)
 function SessionMenuDialog({
@@ -1394,6 +1407,7 @@ function SessionItem({
 
 	// Use customTitle if set, otherwise use session name
 	const displayTitle = session.customTitle ? session.customTitle : session.name;
+	const stewardLine = useContext(StewardLinesContext).get(session.id);
 
 	// Show resume button only when no agent is currently running and we have a
 	// conversation id we can resume from (Claude → ccSessionId, Codex → agentSessionId).
@@ -1637,14 +1651,21 @@ function SessionItem({
 					</div>
 				)}
 
-				{/* Collapsed multi-pane workspace: one pane speaks for the card so the
-				    list still says what is going on without being expanded. */}
-				{collapsedLead && (
-					<CollapsedWorkspaceSummary
-						lead={collapsedLead}
-						panes={extSession.panes ?? []}
-						tabs={extSession.tabs}
-					/>
+				{/* What the steward wrote about this workspace. It speaks for the
+				    whole card - the recaps below it are per pane - so it takes the
+				    place of the collapsed summary rather than sitting beside it. */}
+				{stewardLine ? (
+					<p className="mt-1 line-clamp-2 text-[12px] text-sky-200 leading-relaxed">
+						{stewardLine}
+					</p>
+				) : (
+					collapsedLead && (
+						<CollapsedWorkspaceSummary
+							lead={collapsedLead}
+							panes={extSession.panes ?? []}
+							tabs={extSession.tabs}
+						/>
+					)
 				)}
 
 				{!hintSeen && (
@@ -1789,6 +1810,8 @@ export function WorkspaceList({
 	onToggleDashboard,
 	dashboardOpen = false,
 	fullScreen = false,
+	onToggleSteward,
+	stewardOpen = false,
 }: SessionListProps) {
 	const { t } = useTranslation();
 	const {
@@ -1802,6 +1825,9 @@ export function WorkspaceList({
 	const { peers, refresh: refreshPeers } = usePeers();
 	const serverReachable = useServerReachable();
 	const { fetchConversation } = useSessionHistory();
+	// Empty unless the steward is on AND this screen is set to show it, so a row
+	// falls back to exactly what it rendered before.
+	const stewardLines = useStewardLines();
 
 	const [sessionForMenu, setSessionForMenu] = useState<SessionResponse | null>(
 		null,
@@ -2255,6 +2281,7 @@ export function WorkspaceList({
 	const isDraggable = !searchQuery; // Disable drag during search
 
 	return (
+		<StewardLinesContext.Provider value={stewardLines}>
 		<div className="h-full flex flex-col bg-[#0a0a0a] text-white overflow-hidden">
 			{/* ─── Header: frosted glass ─── */}
 			<div className="shrink-0 px-4 pt-3 pb-2 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
@@ -2300,6 +2327,20 @@ export function WorkspaceList({
 							</div>
 						</div>
 						<div className="flex items-center gap-1 shrink-0">
+							{onToggleSteward && (
+								<button
+									type="button"
+									onClick={onToggleSteward}
+									className={`p-2 rounded-lg transition-colors ${
+										stewardOpen
+											? "text-blue-400 bg-blue-500/20"
+											: "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+									}`}
+									title={t("steward.title")}
+								>
+									<MessagesSquare className="w-[18px] h-[18px]" />
+								</button>
+							)}
 							{onToggleDashboard && (
 								<button
 									type="button"
@@ -2706,5 +2747,6 @@ export function WorkspaceList({
 				/>
 			)}
 		</div>
+		</StewardLinesContext.Provider>
 	);
 }

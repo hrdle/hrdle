@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next";
 import type { AgentProvider } from "../../../../shared/types";
 import { useAgentConversation } from "../../hooks/useAgentConversation";
+import { useStewardEnabled, useStewardView } from "../../hooks/useSteward";
 import { ConversationViewer } from "../ConversationViewer";
+import { StewardSessionView } from "./StewardSessionView";
 
 interface ChatViewProps {
 	sessionId: string;
@@ -32,12 +34,23 @@ export function ChatView({
 	agentSessionId,
 }: ChatViewProps) {
 	const { t } = useTranslation();
+	const stewardAvailable = useStewardEnabled();
+	const [stewardView] = useStewardView();
+	// The steward's version replaces the transcript here rather than adding a
+	// mode: this is already where someone comes to read what happened, so what
+	// changes is the reading, not the navigation.
+	const showSteward = stewardAvailable && stewardView;
+
 	const { messages, isReady, conversationId, error } = useAgentConversation({
 		agent,
 		sessionId,
 		agentSessionId,
-		enabled,
+		enabled: enabled && !showSteward,
 	});
+
+	if (showSteward) {
+		return <StewardSessionView sessionId={sessionId} agentSessionId={agentSessionId} />;
+	}
 
 	const resolvedTitle = title ?? t("conversation.claude");
 	const resolvedSubtitle =

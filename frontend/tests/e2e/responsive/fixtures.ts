@@ -44,7 +44,13 @@ const ROUTES: Array<[RegExp, unknown]> = [
   [/\/api\/notify\/hook-status$/, { missing: [] }],
 ];
 
-export async function bootApp(page: Page): Promise<void> {
+export interface BootOptions {
+  /** What `/api/steward/enabled` answers. Off by default, which is what a
+   *  server without the flag reports and what every other spec expects. */
+  steward?: { enabled: boolean; thread?: unknown[]; lines?: unknown[] };
+}
+
+export async function bootApp(page: Page, options: BootOptions = {}): Promise<void> {
   // Onboarding is a full-screen overlay; skipping it exposes the real UI, which
   // is what these specs are measuring.
   await page.addInitScript(() => {
@@ -52,9 +58,15 @@ export async function bootApp(page: Page): Promise<void> {
     localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
   });
 
+  const steward = options.steward ?? { enabled: false };
+  const stewardRoutes: Array<[RegExp, unknown]> = [
+    [/\/api\/steward\/enabled$/, { enabled: steward.enabled }],
+    [/\/api\/steward$/, { thread: steward.thread ?? [], lines: steward.lines ?? [] }],
+  ];
+
   await page.route('**/api/**', async (route) => {
     const url = route.request().url();
-    const match = ROUTES.find(([pattern]) => pattern.test(url));
+    const match = [...stewardRoutes, ...ROUTES].find(([pattern]) => pattern.test(url));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

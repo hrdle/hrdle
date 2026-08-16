@@ -338,7 +338,7 @@ export class OpenCodeSessionStore {
   }
 
   /** Messages of one session, oldest first, each with its parts in order. */
-  getSessionParts(sessionId: string): Array<{ role: string; parts: string[] }> {
+  getSessionParts(sessionId: string): Array<{ id: string; role: string; parts: string[] }> {
     return this.read((db) => {
       const messages = db.query<{ id: string; data: string }, [string]>(`
         SELECT id, data FROM message WHERE session_id = ? ORDER BY time_created, id
@@ -364,7 +364,7 @@ export class OpenCodeSessionStore {
         } catch {
           // keep the default; a message with unreadable data still owns its parts
         }
-        return { role, parts: byMessage.get(message.id) ?? [] };
+        return { id: message.id, role, parts: byMessage.get(message.id) ?? [] };
       });
     }, []);
   }

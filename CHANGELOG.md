@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **The steward's view is the screens that already exist** (#383, stage 3).
+  A switch in the dashboard turns it on for the workspace list and the Chat
+  mode together - one state ("see it through the steward"), not a setting per
+  screen. With it on, a row carries the line the steward wrote and Chat carries
+  the turns it wrote, with the raw transcript one tap behind each. No new mode,
+  no new screen: this is already where someone comes to read what happened, so
+  what changes is the reading. Off, or without a steward on the server, both
+  render exactly as before - pinned by tests, because the switch reaches into
+  two screens that were working.
+- **Opening a session the steward has not written asks it to write one.**
+  Falling back to the raw transcript would mean that session is never
+  steward-backed; `update_session` writes differences, so the first write is
+  all it takes to catch up. The screen says it is being read while it waits.
+- **The steward has a screen on a phone** (#383, stage 3). Its thread, with a
+  composer - unlike the read-only chat view, this is the only place to type, so
+  the two-inputs ambiguity does not arise, and an `ask` with nowhere to answer
+  would be a question the steward could never resolve. A turn's `detail` (the
+  half the glasses could not carry) renders as markdown against the
+  conversation palette, and a question's choices are answered in place, with
+  "not now" as an answer of its own. The entry point appears in the session
+  list only when the server reports a steward; a build carrying this code shows
+  nothing at all until then. On a tablet the list is a modal rather than a
+  screen, so the entry point is wired there too - and the thread takes a
+  measure rather than the full width, which stops being readable past a phone.
+- **A summary can cite what it summarised.** The Claude parser was discarding
+  the `uuid` on every record and now keeps it (present on both roles, unlike
+  `message.id`, which exists only on assistant turns); OpenCode's row id travels
+  the same way. Grok, Kimi and Codex records carry no per-message identity, so
+  the field is optional and stays absent there. `ConversationViewer` takes an
+  `anchorId` and scrolls to it, marked - an id no longer in the conversation is
+  ignored rather than treated as an error, because a transcript trimmed since
+  the summary was written is the ordinary case. A steward turn that cites its
+  source offers "see the original", which opens the real transcript at that
+  message: reading the original is part of reading the summary, so it opens
+  from the steward's own view rather than being handed up to the app.
+
 ## [0.3.139] - 2026-08-16
 
 ### Fixed

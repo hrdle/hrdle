@@ -320,7 +320,7 @@ const markdownComponents = {
 
 const MathMarkdown = lazy(() => import("./MathMarkdown"));
 
-function Markdown({ content }: { content: string }) {
+export function Markdown({ content }: { content: string }) {
 	const { source, hasMath } = useMemo(
 		() => prepareMath(processImageReferences(content)),
 		[content],
@@ -805,6 +805,15 @@ interface ConversationViewerProps {
 	inline?: boolean; // If true, render inline instead of fullscreen modal
 	/** Agent that produced these messages. Switches the assistant label. */
 	agent?: string;
+	/**
+	 * Scroll to the message with this id and mark it.
+	 *
+	 * What makes a steward turn's `source` reachable: the summary says one
+	 * thing, and this opens the transcript at what it was summarising. Ignored
+	 * when the id is not in this conversation - a transcript trimmed since the
+	 * summary was written is the ordinary case, not an error.
+	 */
+	anchorId?: string;
 }
 
 export function ConversationViewer({
@@ -820,6 +829,7 @@ export function ConversationViewer({
 	onRefresh,
 	inline = false,
 	agent,
+	anchorId,
 }: ConversationViewerProps) {
 	const { t } = useTranslation();
 	const parentRef = useRef<HTMLDivElement>(null);
@@ -966,6 +976,18 @@ export function ConversationViewer({
 		},
 		overscan: 10,
 	});
+
+	// Anchors resolve against rows rather than messages: buildRows drops the
+	// result-only messages, so a message index is not a row index.
+	const anchorIndex = useMemo(
+		() => (anchorId ? rows.findIndex((r) => r.msg.id === anchorId) : -1),
+		[anchorId, rows],
+	);
+
+	useEffect(() => {
+		if (anchorIndex < 0) return;
+		virtualizer.scrollToIndex(anchorIndex, { align: "center" });
+	}, [anchorIndex, virtualizer]);
 
 	const scrollToEnd = useCallback(() => {
 		if (rows.length > 0) {
@@ -1144,11 +1166,15 @@ export function ConversationViewer({
 										ref={virtualizer.measureElement}
 									>
 										<div
-											className={
+											className={`${
 												rows[virtualRow.index]?.showSpeaker
 													? "pb-1 pt-5"
 													: "pb-1"
-											}
+											}${
+												virtualRow.index === anchorIndex
+													? " rounded-lg ring-2 ring-[var(--color-conv-accent,currentColor)]"
+													: ""
+											}`}
 										>
 											<MessageRow row={rows[virtualRow.index]} agent={agent} />
 										</div>

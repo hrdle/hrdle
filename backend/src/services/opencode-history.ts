@@ -52,7 +52,7 @@ function parseToolInput(raw: unknown): Record<string, unknown> {
  *    boundary, so the row is split back out into that shape.
  *  - `step-start` / `step-finish`  → dropped (step bookkeeping and token counts)
  */
-export function parseOpenCodeMessages(messages: Array<{ role: string; parts: string[] }>): ConversationMessage[] {
+export function parseOpenCodeMessages(messages: Array<{ id?: string; role: string; parts: string[] }>): ConversationMessage[] {
   const result: ConversationMessage[] = [];
   let current: ConversationMessage | null = null;
 
@@ -63,10 +63,12 @@ export function parseOpenCodeMessages(messages: Array<{ role: string; parts: str
     current = null;
   };
 
-  const ensureRole = (role: 'user' | 'assistant'): ConversationMessage => {
+  // The id of the row that opened this turn. Several rows can merge into one
+  // turn, and the anchor points at where it starts.
+  const ensureRole = (role: 'user' | 'assistant', id?: string): ConversationMessage => {
     if (current?.role !== role) {
       flush();
-      current = { role, content: '' };
+      current = { role, content: '', ...(id ? { id } : {}) };
     }
     return current as ConversationMessage;
   };
@@ -85,7 +87,7 @@ export function parseOpenCodeMessages(messages: Array<{ role: string; parts: str
       if (part.type === 'text') {
         const text = typeof part.text === 'string' ? part.text.trim() : '';
         if (!text) continue;
-        const turn = ensureRole(role);
+        const turn = ensureRole(role, message.id);
         turn.content = turn.content ? `${turn.content}\n\n${text}` : text;
         continue;
       }
