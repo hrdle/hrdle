@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.141] - 2026-08-16
+
 ### Fixed
 - **The steward's prompt named a command that does not exist.** It carried an
   absolute path so a pane with a thin PATH could still run it, and took that
