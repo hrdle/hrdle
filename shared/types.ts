@@ -1063,6 +1063,15 @@ export interface ToolResultInfo {
 }
 
 export interface ConversationMessage {
+  /**
+   * The transcript's own id for this message, where its format has one.
+   *
+   * Carried so a summary can point at what it summarised: a steward turn names
+   * the messages behind it, and the reader taps through to them. Absent for a
+   * provider whose records are not individually identified, and for anything
+   * the parser synthesised rather than read.
+   */
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp?: string;

@@ -1,4 +1,4 @@
-import { Bot, Globe, Moon, Server, SlidersHorizontal, Sun } from "lucide-react";
+import { Bot, Globe, MessagesSquare, Moon, Server, SlidersHorizontal, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,7 @@ import { IDENTITY } from "../../../../shared/identity";
 import { agentDisplayName } from "../../../../shared/types";
 import { useDashboard } from "../../hooks/useDashboard";
 import { usePeers } from "../../hooks/usePeers";
+import { useStewardEnabled, useStewardView } from "../../hooks/useSteward";
 import { useTheme } from "../../hooks/useTheme";
 import { useUiScale } from "../../hooks/useUiScale";
 import { formatTokens, formatUsd } from "../../utils/format";
@@ -74,6 +75,8 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 	);
 	const { data, isLoading, error } = useDashboard(30000);
 	const { theme, toggleTheme } = useTheme();
+	const stewardAvailable = useStewardEnabled();
+	const [stewardView, setStewardView] = useStewardView();
 	const {
 		scale: uiScale,
 		setScale: setUiScale,
@@ -496,6 +499,25 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 					{t("dashboard.settings")}
 				</SectionHeading>
 				<div className="flex flex-wrap items-center gap-2 max-w-lg">
+					{/* One switch for two screens: the list and the session view show
+					    the steward together, because "see it through the steward" is a
+					    single way of looking rather than a setting per screen. Absent
+					    unless the server has a steward at all. */}
+					{stewardAvailable && (
+						<button
+							type="button"
+							onClick={() => setStewardView(!stewardView)}
+							className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] transition-colors ${
+								stewardView
+									? "bg-sky-500/15 text-sky-300 hover:bg-sky-500/20"
+									: "bg-white/[0.04] text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-300"
+							}`}
+							title={t("steward.viewToggle")}
+						>
+							<MessagesSquare className="h-3.5 w-3.5" />
+							<span>{t("steward.viewToggle")}</span>
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={toggleTheme}

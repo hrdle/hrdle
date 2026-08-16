@@ -23,6 +23,73 @@ All notable changes to this project will be documented in this file.
   - Not a regression: the same overlap measures on v0.3.129, before the layouts
     were merged
 
+## [0.3.142] - 2026-08-16
+
+### Fixed
+- **A steward turn ran to whatever length the observer wrote.** `text` is one
+  G2 page and `detail` is the phone's half with no limit, but measured on the
+  first sessions written for real the observer used only the first: turns of
+  512 and 649 characters with `detail` empty on every one, rendered whole in
+  the mobile session view. What runs past the page now moves into `detail` on
+  the way in - cut at a sentence end where there is one - so nothing is lost
+  and both screens read the same fitted string. The response says the split
+  was overridden, and the prompt says so too.
+
+### Changed
+- **A turn's detail sits behind a tap** in the thread and the session view.
+  Rendered open it is the glance plus everything the glance was meant to
+  spare them, which is the wall the pair exists to prevent.
+
+## [0.3.141] - 2026-08-16
+
+### Fixed
+- **The steward's prompt named a command that does not exist.** It carried an
+  absolute path so a pane with a thin PATH could still run it, and took that
+  path from `argv[0]` - which a compiled Bun binary reports as the literal
+  string "bun". A released build therefore told the observer to type
+  `bun steward-do watch`, and it spent its turn hunting for the command.
+  `execPath` is the binary itself there, and bun under `bun run`. Only ever
+  wrong in a compiled build, which is why every check up to now passed.
+
+## [0.3.140] - 2026-08-16
+
+### Added
+- **The steward's view is the screens that already exist** (#383, stage 3).
+  A switch in the dashboard turns it on for the workspace list and the Chat
+  mode together - one state ("see it through the steward"), not a setting per
+  screen. With it on, a row carries the line the steward wrote and Chat carries
+  the turns it wrote, with the raw transcript one tap behind each. No new mode,
+  no new screen: this is already where someone comes to read what happened, so
+  what changes is the reading. Off, or without a steward on the server, both
+  render exactly as before - pinned by tests, because the switch reaches into
+  two screens that were working.
+- **Opening a session the steward has not written asks it to write one.**
+  Falling back to the raw transcript would mean that session is never
+  steward-backed; `update_session` writes differences, so the first write is
+  all it takes to catch up. The screen says it is being read while it waits.
+- **The steward has a screen on a phone** (#383, stage 3). Its thread, with a
+  composer - unlike the read-only chat view, this is the only place to type, so
+  the two-inputs ambiguity does not arise, and an `ask` with nowhere to answer
+  would be a question the steward could never resolve. A turn's `detail` (the
+  half the glasses could not carry) renders as markdown against the
+  conversation palette, and a question's choices are answered in place, with
+  "not now" as an answer of its own. The entry point appears in the session
+  list only when the server reports a steward; a build carrying this code shows
+  nothing at all until then. On a tablet the list is a modal rather than a
+  screen, so the entry point is wired there too - and the thread takes a
+  measure rather than the full width, which stops being readable past a phone.
+- **A summary can cite what it summarised.** The Claude parser was discarding
+  the `uuid` on every record and now keeps it (present on both roles, unlike
+  `message.id`, which exists only on assistant turns); OpenCode's row id travels
+  the same way. Grok, Kimi and Codex records carry no per-message identity, so
+  the field is optional and stays absent there. `ConversationViewer` takes an
+  `anchorId` and scrolls to it, marked - an id no longer in the conversation is
+  ignored rather than treated as an error, because a transcript trimmed since
+  the summary was written is the ordinary case. A steward turn that cites its
+  source offers "see the original", which opens the real transcript at that
+  message: reading the original is part of reading the summary, so it opens
+  from the steward's own view rather than being handed up to the app.
+
 ## [0.3.139] - 2026-08-16
 
 ### Fixed

@@ -14,7 +14,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { getLastGlassesScreen, broadcastSteward } from './terminal-mux';
 import { getStewardSettings, isStewardEnabled, setStewardSettings } from '../services/steward-config';
-import { wakeObserverWith } from '../services/steward-runtime';
+import { observerStatus, wakeObserverWith } from '../services/steward-runtime';
 import {
   answerAsk,
   findAsk,
@@ -25,14 +25,14 @@ import {
   getThread,
   setLine,
 } from '../services/steward-store';
+import { fitToPage } from '../services/steward-text';
 import type { StewardThreadItem, StewardTurn } from '../../../shared/types';
 
 // Same alphabet as SessionIdSchema.
 const SessionId = z.string().regex(/^[A-Za-z0-9._-]{1,128}$/);
 
-/** Not a G2 page: fitting the glasses is the steward's job, and a server that
- *  trimmed silently is the failure this area keeps producing. These only stop
- *  a runaway writer filling the disk. */
+/** Not the page budget: `fitToPage` moves what overruns it into `detail`, so
+ *  these only stop a runaway writer filling the disk. */
 const TEXT_MAX = 4000;
 const DETAIL_MAX = 20_000;
 
@@ -143,10 +143,11 @@ steward.post('/thread', async (c) => {
   if (!parsed.success) return c.json({ error: 'invalid thread item', detail: parsed.error.issues }, 400);
   const input = parsed.data;
 
+  const fitted = fitToPage(input.text, input.detail);
   const base = {
     role: 'steward' as const,
-    text: input.text,
-    detail: input.detail,
+    text: fitted.text,
+    detail: fitted.detail,
     refs: input.refs,
   };
 
@@ -169,7 +170,11 @@ steward.post('/thread', async (c) => {
   }
 
   broadcastSteward({ type: 'steward-thread', item });
-  return c.json({ item, askId: item.kind === 'ask' ? item.ask.id : undefined });
+  return c.json({
+    item,
+    askId: item.kind === 'ask' ? item.ask.id : undefined,
+    ...(fitted.spilled ? { fitted: 'text was longer than one page; the rest moved into detail' } : {}),
+  });
 });
 
 steward.post('/thread/reply', async (c) => {
@@ -247,6 +252,32 @@ steward.get('/sessions/:id/turns', async (c) => {
   return c.json({ turns: await getSessionTurns(id.data) });
 });
 
+/**
+ * Ask for a session the steward has not written yet.
+ *
+ * A screen opening a session it has no summary for must get one, not the raw
+ * transcript: falling back means that session is never steward-backed, and
+ * `update_session` writes differences, so the first write is all it takes to
+ * catch up. Writing every session all the time is what this avoids - the
+ * steward writes when a session is read, and when its state moves.
+ */
+steward.post('/sessions/:id/summarise', async (c) => {
+  const id = SessionId.safeParse(c.req.param('id'));
+  if (!id.success) return c.json({ error: 'invalid session id' }, 400);
+
+  const existing = await getSessionTurns(id.data);
+  // Already written: nothing to ask for, and asking anyway would wake the
+  // observer every time somebody opened a session.
+  if (existing.length > 0) return c.json({ turns: existing, asked: false });
+
+  wakeObserverWith(
+    `The owner opened session ${id.data} and it has no history written yet. ` +
+      'Read it and write its turns with `steward turns`, newest work first. ' +
+      'Answer nothing in the thread for this - the session screen is where it goes.',
+  );
+  return c.json({ turns: [], asked: true });
+});
+
 steward.post('/sessions/:id/turns', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
@@ -255,13 +286,24 @@ steward.post('/sessions/:id/turns', async (c) => {
   if (!parsed.success) return c.json({ error: 'invalid turns', detail: parsed.error.issues }, 400);
 
   const now = Date.now();
-  const turns: StewardTurn[] = parsed.data.turns.map((t) => ({ ...t, at: t.at ?? now }));
+  let spilled = 0;
+  const turns: StewardTurn[] = parsed.data.turns.map((t) => {
+    const fitted = fitToPage(t.text, t.detail);
+    if (fitted.spilled) spilled++;
+    return { ...t, text: fitted.text, detail: fitted.detail, at: t.at ?? now };
+  });
   const stored = await appendSessionTurns(id.data, turns);
   broadcastSteward({ type: 'steward-turns', sessionId: id.data, turns: stored });
-  return c.json({ turns: stored });
+  return c.json({
+    turns: stored,
+    ...(spilled ? { fitted: `${spilled} turn(s) ran past one page; the rest moved into detail` } : {}),
+  });
 });
 
 steward.get('/screen', (c) => c.json({ screen: getLastGlassesScreen() }));
+
+/** Whether the steward is thinking. Polled by a screen that has just spoken. */
+steward.get('/observer', async (c) => c.json(await observerStatus()));
 
 /** What a person's answer says, in the words the thread is read in. */
 function answerAsText(

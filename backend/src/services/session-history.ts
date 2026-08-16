@@ -718,6 +718,10 @@ export class SessionHistoryService {
           }
 
           messages.push({
+            // The record's own uuid, present on both roles. `message.id` exists
+            // too but only on assistant turns, so it cannot address half a
+            // conversation.
+            id: entry.uuid,
             role,
             content,
             timestamp: entry.timestamp,
