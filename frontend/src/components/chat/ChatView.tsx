@@ -16,6 +16,9 @@ interface ChatViewProps {
 	agent?: AgentProvider;
 	/** Thread id for thread-based agents, used as the conversation key. */
 	agentSessionId?: string | null;
+	/** Steward mode on a phone: the composer belongs to the fixed bottom bar,
+	 *  which the soft keyboard cannot push off the screen. */
+	composerInBar?: boolean;
 }
 
 /**
@@ -32,6 +35,7 @@ export function ChatView({
 	enabled = true,
 	agent,
 	agentSessionId,
+	composerInBar,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const stewardAvailable = useStewardEnabled();
@@ -49,7 +53,13 @@ export function ChatView({
 	});
 
 	if (showSteward) {
-		return <StewardSessionView sessionId={sessionId} agentSessionId={agentSessionId} />;
+		return (
+			<StewardSessionView
+				sessionId={sessionId}
+				agentSessionId={agentSessionId}
+				composerInBar={composerInBar}
+			/>
+		);
 	}
 
 	const resolvedTitle = title ?? t("conversation.claude");

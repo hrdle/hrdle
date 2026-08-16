@@ -179,6 +179,13 @@ function ThreadItem({
 					mine ? "bg-cv-bubble" : "bg-cv-surface"
 				}`}
 			>
+				{/* Which session this is about. The thread is global and read out of
+				    context, and the steward used to spend page budget writing the id
+				    into the sentence. */}
+				{item.sessionId && (
+					<p className="mb-1 font-medium text-[11px] text-cv-text-muted">{item.sessionId}</p>
+				)}
+
 				<p className="whitespace-pre-wrap">{item.text}</p>
 
 				{item.kind === "report" && item.rows.length > 0 && (

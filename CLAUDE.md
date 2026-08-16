@@ -241,6 +241,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `GET /` - Snapshot: the thread and every session's overview line
 - `POST /thread` - The steward writes (`kind: notify | ask | report`). An `ask` gets the thread item's own id back as its `ask_id`
 - `POST /thread/reply` - A person answers (`askId` + `answer`, where `dismissed` is one of the answers) or simply says something (`text`)
+- `sessionId` on either says **which session the entry is about**, and an entry that carries one is mirrored into that session's turns under the same id. Without the field the steward wrote the workspace id into the text (`"w4H: ..."`), which spends the page budget on it and links to nothing; and an answer that lived only in the thread left the screen the question was asked from showing nothing. A `report` carries none - it crosses sessions by definition
 - `PUT /sessions/:id/line` - The overview row for one session
 - `GET`/`POST /sessions/:id/turns` - That session's glasses-side history; POST upserts by turn id
 - `GET /screen` - What the glasses are showing right now (the mirror's last frame, or null)
@@ -299,7 +300,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **dashboard/PeerServerCard.tsx** - Per-peer server info card with system metrics
 
 **Chat** (`components/chat/`):
-- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. **Read-only**: there is no composer, and chat mode does not raise the soft keyboard. Two places to type into one pane make it ambiguous which one is listening, and it is never the one on screen
+- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. Reading the agent's transcript, it is **read-only**: two places to type into one pane make it ambiguous which one is listening, and it is never the one on screen. In steward mode it is the steward's summary instead, and then it *does* have a composer - because that one is not a second way into the pane, it addresses the steward about this session. The pane's own input bar is locked shut while it is up (`lockInputHidden`), which is the same rule, not an exception to it
 
 **Keyboard / Input**:
 - **InputBar.tsx** - Persistent input bar above the terminal with prompt history, slash-command picker, image upload, sendable to the focused pane
@@ -465,6 +466,7 @@ hrdle stt-prompt --glossary                # Take it again
 # How the steward reaches its owner (#383). Every verb prints JSON, so it can
 # read back what it wrote. Requires HRDLE_STEWARD=1 on the server.
 hrdle steward notify "ビルドが通りました" --detail "3 files changed"
+hrdle steward notify "テストが通りました" --session w5Q   # そのセッションの画面にも出る
 hrdle steward ask "デプロイしますか" --choices "はい,いいえ" --step 1/2   # -> ask_id
 hrdle steward report "3 セッションが止まっています" --file rows.txt      # 1 行 1 row
 hrdle steward line w5Q "レビュー待ち 12分"   # the overview row for one session

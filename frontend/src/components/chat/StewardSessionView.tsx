@@ -1,10 +1,11 @@
 import { ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ConversationMessage, StewardTurn } from "../../../../shared/types";
 import { useStewardSession } from "../../hooks/useSteward";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
+import { StewardSessionComposer } from "../steward/StewardSessionComposer";
 import { TurnDetail } from "../steward/TurnDetail";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -20,15 +21,24 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 export function StewardSessionView({
 	sessionId,
 	agentSessionId,
+	composerInBar = false,
 }: {
 	sessionId: string;
 	agentSessionId?: string | null;
+	/** The phone puts it in the bottom bar instead. */
+	composerInBar?: boolean;
 }) {
 	const { t } = useTranslation();
-	const { turns, waiting } = useStewardSession(sessionId, true);
+	const { turns, waiting, thinking } = useStewardSession(sessionId, true);
 	const [source, setSource] = useState<{ agentSessionId: string; messageId?: string } | null>(null);
 	const [sourceMessages, setSourceMessages] = useState<ConversationMessage[]>([]);
 	const [sourceLoading, setSourceLoading] = useState(false);
+	const endRef = useRef<HTMLDivElement>(null);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: neither value is read here; their change is the cue to scroll.
+	useEffect(() => {
+		endRef.current?.scrollIntoView({ block: "end" });
+	}, [turns.length, thinking]);
 
 	const openSource = async (next: { agentSessionId: string; messageId?: string }) => {
 		setSource(next);
@@ -47,27 +57,48 @@ export function StewardSessionView({
 	};
 
 	return (
-		<div className="h-full overflow-y-auto bg-cv-bg px-3 py-3 text-cv-text">
-			<div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
-				{turns.map((turn) => (
-					<TurnCard key={turn.id} turn={turn} fallbackSession={agentSessionId} onOpenSource={openSource} />
-				))}
+		<div className="flex h-full flex-col bg-cv-bg text-cv-text">
+			<div className="flex-1 overflow-y-auto px-3 py-3">
+				<div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
+					{turns.map((turn) => (
+						<TurnCard key={turn.id} turn={turn} fallbackSession={agentSessionId} onOpenSource={openSource} />
+					))}
 
-				{/* Nothing written yet: the steward was asked on open, so this is a
-				    wait rather than an empty state. */}
-				{waiting && (
-					<p className="flex items-center gap-2 text-cv-text-muted text-sm">
-						<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
-						{t("steward.writingSession", "スチュワードがこのセッションを読んでいます…")}
-					</p>
-				)}
+					{/* Nothing written yet: the steward was asked on open, so this is a
+					    wait rather than an empty state. */}
+					{waiting && (
+						<p className="flex items-center gap-2 text-cv-text-muted text-sm">
+							<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
+							{t("steward.writingSession", "スチュワードがこのセッションを読んでいます…")}
+						</p>
+					)}
 
-				{!waiting && turns.length === 0 && (
-					<p className="text-cv-text-muted text-sm">
-						{t("steward.sessionEmpty", "まだ何も書かれていません。")}
-					</p>
-				)}
+					{thinking && (
+						<p className="flex items-center gap-2 text-cv-text-muted text-sm">
+							<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
+							{t("steward.thinking", "考えています…")}
+						</p>
+					)}
+
+					{!waiting && turns.length === 0 && (
+						<p className="text-cv-text-muted text-sm">
+							{t("steward.sessionEmpty", "まだ何も書かれていません。")}
+						</p>
+					)}
+
+					<div ref={endRef} />
+				</div>
 			</div>
+
+			{/* Talking to the steward about this session, not to the agent. On a
+			    phone the composer is in the fixed bottom bar instead, where the soft
+			    keyboard cannot push it off - `composerInBar` says which. */}
+			{!composerInBar && (
+				<StewardSessionComposer
+					sessionId={sessionId}
+					className="mx-auto flex w-full max-w-2xl items-end gap-2 border-cv-border border-t p-2"
+				/>
+			)}
 
 			{source && (
 				<ConversationViewer

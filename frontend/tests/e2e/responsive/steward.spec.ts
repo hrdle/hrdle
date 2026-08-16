@@ -189,6 +189,80 @@ test.describe('steward mode on a tablet', () => {
 });
 
 /**
+ * With the view on, a session opens onto what the steward wrote and the
+ * terminal is a level down. The composer is the point of the rearrangement:
+ * the pane's own input bar sat under the summary and reached the agent, so
+ * what someone typed there went somewhere they could not see.
+ */
+const TURNS = [
+  { id: 't1', at: 1_760_000_000_000, role: 'agent', text: 'テストを直しています' },
+];
+
+test.describe('a session in steward mode', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  const boot = (page: import('@playwright/test').Page) =>
+    bootApp(page, {
+      withAgentPane: true,
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+
+  test('opens onto the steward, with a composer that is the steward', async ({ page }) => {
+    await boot(page);
+
+    await expect(page.getByText('テストを直しています')).toBeVisible();
+
+    const composer = page.getByPlaceholder('スチュワードに話しかける');
+    await expect(composer).toBeVisible();
+
+    const posted = page.waitForRequest(
+      (req) => req.url().includes('/api/steward/thread/reply') && req.method() === 'POST',
+    );
+    await composer.fill('あとどのくらい');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    // The session it was written from travels with it, or the steward answers
+    // about whichever session it happened to be looking at.
+    expect(JSON.parse((await posted).postData() ?? '{}')).toEqual({
+      text: 'あとどのくらい',
+      sessionId: 'demo',
+    });
+  });
+
+  test('the terminal is in the menu, not beside the summary', async ({ page }) => {
+    await boot(page);
+
+    await expect(page.getByTestId('action-chat')).toHaveCount(0);
+    await page.getByTestId('pane-more').click();
+    await page.getByTestId('pane-more-terminal').click();
+
+    await expect(page.getByText('テストを直しています')).toHaveCount(0);
+    // The steward's composer goes with it: this pane is the agent's again.
+    await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveCount(0);
+  });
+
+  test('the list can speak to the steward without opening the thread first', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, view: true } });
+    await page.locator('[data-onboarding="session-list"]').click();
+
+    const composer = page.getByPlaceholder('スチュワードに話しかける');
+    await expect(composer).toBeVisible();
+
+    const posted = page.waitForRequest(
+      (req) => req.url().includes('/api/steward/thread/reply') && req.method() === 'POST',
+    );
+    await composer.fill('止まっているものを教えて');
+    await page.getByRole('button', { name: 'Send' }).click();
+    expect(JSON.parse((await posted).postData() ?? '{}')).toEqual({ text: '止まっているものを教えて' });
+
+    // Sending opens the thread: that is where the answer lands.
+    await expect(page.getByText('スチュワード', { exact: true })).toBeVisible();
+  });
+});
+
+/**
  * The steward view reaches into two screens that already existed, so the case
  * that matters most is the one where it is off: a build carrying all of this
  * must render the list and the transcript exactly as it did before.
@@ -224,6 +298,22 @@ test.describe('with the steward off, nothing changes', () => {
     await page.getByTitle('ダッシュボード').last().click();
 
     await expect(page.getByRole('button', { name: 'スチュワード表示' })).toHaveCount(0);
+  });
+
+  test('a session still opens onto its terminal, with its own input bar', async ({ page }) => {
+    await bootApp(page, { withAgentPane: true, steward: { enabled: false } });
+
+    await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveCount(0);
+    // The chat toggle is where it was; nothing moved into a menu.
+    await expect(page.getByTestId('action-chat')).toBeVisible();
+    await expect(page.getByTestId('pane-more')).toHaveCount(0);
+  });
+
+  test('the list has no composer', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: false } });
+    await page.locator('[data-onboarding="session-list"]').click();
+
+    await expect(page.getByPlaceholder('スチュワードに話しかける')).toHaveCount(0);
   });
 
   // Enabled on the server but not switched on here: still the old rendering.
