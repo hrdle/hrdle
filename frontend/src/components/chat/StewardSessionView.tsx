@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import type { ConversationMessage, StewardTurn } from "../../../../shared/types";
 import { useStewardSession } from "../../hooks/useSteward";
 import { authFetch } from "../../services/api";
-import { ConversationViewer, Markdown } from "../ConversationViewer";
+import { ConversationViewer } from "../ConversationViewer";
+import { TurnDetail } from "../steward/TurnDetail";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -100,11 +101,7 @@ function TurnCard({
 			<div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
 				<p className="whitespace-pre-wrap">{turn.text}</p>
 
-				{turn.detail && (
-					<div className="mt-2 border-cv-border border-t pt-2 text-cv-text-secondary">
-						<Markdown content={turn.detail} />
-					</div>
-				)}
+				{turn.detail && <TurnDetail detail={turn.detail} />}
 
 				{turn.refs?.file && (
 					<p className="mt-1 font-mono text-cv-text-muted text-xs">

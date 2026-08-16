@@ -457,6 +457,8 @@
     "thinking": "Thinking...",
     "viewToggle": "Steward view",
     "writingSession": "Reading this session...",
-    "sessionEmpty": "Nothing written yet."
+    "sessionEmpty": "Nothing written yet.",
+    "detailShow": "Detail",
+    "detailHide": "Hide detail"
   }
 }

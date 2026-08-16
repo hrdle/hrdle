@@ -11,9 +11,10 @@
 import { IDENTITY } from '../../../shared/identity';
 import { currentLocale } from '../i18n';
 import { resolveSttLang } from './glasses-settings';
+import { GLASSES_PAGE_WIDTH } from './steward-text';
 
-/** The glasses hold one page: seven lines, 189 Japanese characters. */
-const GLASSES_BUDGET = 189;
+/** The page as a person counts it: full-width characters, not columns. */
+const GLASSES_BUDGET = Math.floor(GLASSES_PAGE_WIDTH / 2);
 
 /**
  * How the observer should invoke us.
@@ -133,9 +134,17 @@ Write in ${writeIn}.
 
 \`text\` is for the glasses: **${GLASSES_BUDGET} characters, seven lines, one
 page.** It carries the single thing a decision turns on - not a summary of
-what happened. \`--detail\` is for their phone and has no such limit; put the
-code, the diff, the reasoning there. Long output belongs in \`--detail\` with
-one line on the glasses saying so.
+what happened. \`detail\` is for their phone and has no such limit; put the
+code, the diff, the reasoning there.
+
+This is not advice. Anything past the page is **moved into \`detail\`** before
+it is stored, cut at a sentence you did not choose - so a long \`text\` does not
+buy you room, it costs you the one line they read at a glance. Two or three
+sentences.
+
+The same budget applies to every \`text\` in a \`turns\` file. A turn is what
+that exchange came to; the exchange itself is already in the transcript, and
+\`source\` is how they reach it.
 
 Say what is true and stop. An agent's own output is written for someone at a
 desk; your job is that the same thing fits a glance.
