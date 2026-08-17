@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.167] - 2026-08-17
+
+### Fixed
+- **The dashboard says which bundle the page is running.** It showed the
+  server's version and called it the product's, so a phone still on the
+  previous release's bundle displayed the number of the release it did not
+  have and read as up to date - and a fix shipped, checked from that phone and
+  reported as not working could only be told apart by reading the server's
+  request log. Both numbers now, and only when they disagree.
+
 ## [0.3.166] - 2026-08-17
 
 ### Added
