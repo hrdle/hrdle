@@ -32,9 +32,16 @@ describe("needsIntentEscape", () => {
 describe("toIntentUrl", () => {
 	test("the scheme moves into the fragment, and the original is the fallback", () => {
 		expect(toIntentUrl("https://github.com/hrdle/hrdle/pull/450")).toBe(
-			"intent://github.com/hrdle/hrdle/pull/450#Intent;scheme=https;action=android.intent.action.VIEW;" +
+			"intent://github.com/hrdle/hrdle/pull/450#Intent;scheme=https;package=com.android.chrome;" +
+				"action=android.intent.action.VIEW;" +
 				`S.browser_fallback_url=${encodeURIComponent("https://github.com/hrdle/hrdle/pull/450")};end`,
 		);
+	});
+
+	// Measured: without it the intent came straight back to the app it was
+	// dispatched from, and the link opened inside the PWA again.
+	test("the browser is named, or the app it came from claims it back", () => {
+		expect(toIntentUrl("https://example.com/a")).toContain("package=com.android.chrome");
 	});
 
 	test("a query and a fragment survive into the fallback", () => {
