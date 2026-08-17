@@ -741,10 +741,12 @@ test.describe('with the steward off, nothing changes', () => {
 /**
  * A workspace running two agents.
  *
- * The phone draws a tab per pane, and the steward writes one history per
- * workspace - so with the summary up the tabs switched nothing at all. Two
- * rows both labelled `claude` over a conversation that never changed reads as
- * the chat being stuck, which is how it was reported.
+ * The steward writes one history per workspace, and the phone draws a tab per
+ * pane - so with the summary up, tapping a tab changed nothing on the screen
+ * and read as the chat being stuck. The tabs stay: picking a pane is what they
+ * are for, and the terminal is one tap away. What was missing is anything that
+ * answers the tap, so the state line follows the pane and the history says
+ * what it covers.
  */
 test.describe('two agents in one workspace', () => {
   test.beforeEach(({}, testInfo) => {
@@ -757,16 +759,17 @@ test.describe('two agents in one workspace', () => {
       steward: { enabled: true, view: true, turns: TURNS },
     });
 
-  test('the pane tabs are not drawn over the summary', async ({ page }) => {
+  // Removing them was the first attempt at this and the wrong one: a pane is a
+  // thing someone has to be able to pick, summary or no summary.
+  test('the pane tabs are still there with the summary up', async ({ page }) => {
     await boot(page);
     await expect(page.getByPlaceholder('スチュワードに話しかける')).toBeVisible();
-    // The tabs act on the terminal, and the terminal is a level down from here.
-    await expect(page.getByRole('button', { name: 'claude', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'claude', exact: true })).toHaveCount(2);
   });
 
   test('the summary says what it covers', async ({ page }) => {
     await boot(page);
-    await expect(page.getByText('2つのエージェントをまとめた記録')).toBeVisible();
+    await expect(page.getByText('ワークスペース全体')).toBeVisible();
   });
 
   test('one agent needs no such note', async ({ page }) => {
@@ -774,6 +777,19 @@ test.describe('two agents in one workspace', () => {
       withAgentPane: true,
       steward: { enabled: true, view: true, turns: TURNS },
     });
-    await expect(page.getByText('エージェントをまとめた記録')).toHaveCount(0);
+    await expect(page.getByText('ワークスペース全体')).toHaveCount(0);
+  });
+
+  // The history is the workspace's, so this line is the whole of what picking
+  // a pane changes - and with nothing changing at all, the tap read as broken.
+  test("the state line is the picked pane's, not the workspace's", async ({ page }) => {
+    await bootApp(page, {
+      withSecondAgentPane: true,
+      // Picked, and doing something the workspace-level field does not report.
+      secondPaneActivity: { tool: 'Bash', target: 'bun test services/' },
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+
+    await expect(page.getByText('bun test services/')).toBeVisible();
   });
 });

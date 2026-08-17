@@ -431,6 +431,17 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           tabId: p.tabId,
           label: p.label,
           indicatorState: paneIndicator,
+          // What THIS pane is doing, not what the workspace is doing.
+          //
+          // The session-level field is read from the workspace's primary agent,
+          // so in a two-agent workspace both panes reported the same tool call
+          // - and the phone's chat, which is per workspace, then had nothing
+          // that changed when a pane was picked. Same tail read as the session's
+          // and gated the same way: only a pane that is actually processing.
+          activity:
+            p.agent === 'claude' && p.agentSessionId && paneIndicator === 'processing'
+              ? await claudeActivity(p.agentSessionId)
+              : undefined,
           pid: p.pid,
           metrics: paneMetrics,
           recap: paneClaude?.lastRecap?.content,

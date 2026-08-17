@@ -241,6 +241,14 @@ export interface PaneInfo {
    */
   label?: string;
   indicatorState?: IndicatorState;
+  /**
+   * The tool call this pane is on, while it is on one.
+   *
+   * The session-level field of the same name is read from the workspace's
+   * primary agent. A workspace running two agents has two answers, and a
+   * screen showing one of them for both is reporting the wrong pane's work.
+   */
+  activity?: { tool: string; target?: string };
   pid?: number;            // shell/subprocess PID of the pane's foreground group
   /** Per-pane agent metrics (model / context% / memory). Populated only for
    *  agent panes of a multi-pane/multi-tab workspace, where a single
