@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.165] - 2026-08-17
+
+### Fixed
+- **The pane tabs no longer sit over a chat they cannot switch.** In a
+  workspace running two agents, whichever pane was tapped gave the same
+  conversation: the steward writes one history per workspace, while the tabs
+  switch which pane the terminal draws. They are hidden while the steward's
+  chat is up and come back with the terminal, and a workspace that really is
+  running more than one agent now says so at the top of its chat.
+
 ## [0.3.164] - 2026-08-17
 
 ### Added
