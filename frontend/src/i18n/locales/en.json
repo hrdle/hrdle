@@ -386,7 +386,11 @@
   "appearance": {
     "dark": "Dark",
     "light": "Light",
-    "uiScale": "UI Scale"
+    "uiScale": "UI Scale",
+    "chatFontSize": "Chat text",
+    "chatFontSmaller": "Smaller chat text",
+    "chatFontLarger": "Larger chat text",
+    "chatFontReset": "Reset chat text size"
   },
   "theme": {
     "red": "Red",

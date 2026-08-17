@@ -40,7 +40,11 @@ import type {
 import { prepareMath } from "../utils/math-content";
 import { TMP_PATHS } from "../../../shared/identity";
 import { agentBadge } from "../utils/agentDisplay";
-import { storageKey } from "../utils/app-storage";
+import {
+	chatFontStyle,
+	useChatFontSize,
+	usePinchFontSize,
+} from "../hooks/useChatFontSize";
 import {
 	highlightToHtml,
 	languageForOutput,
@@ -64,39 +68,6 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
  * clipped. This space absorbs that too.
  */
 const CV_BOTTOM_SPACE = 128;
-
-const CV_FONT_SIZE_KEY = storageKey("conversation-font-size");
-const CV_DEFAULT_FONT_SIZE = 15;
-const CV_MIN_FONT_SIZE = 11;
-const CV_MAX_FONT_SIZE = 24;
-
-function loadCvFontSize(): number {
-	try {
-		const saved = localStorage.getItem(CV_FONT_SIZE_KEY);
-		if (saved) {
-			const n = parseInt(saved, 10);
-			if (!Number.isNaN(n) && n >= CV_MIN_FONT_SIZE && n <= CV_MAX_FONT_SIZE)
-				return n;
-		}
-	} catch {
-		// ignore
-	}
-	return CV_DEFAULT_FONT_SIZE;
-}
-
-function saveCvFontSize(n: number) {
-	try {
-		localStorage.setItem(CV_FONT_SIZE_KEY, String(n));
-	} catch {
-		// ignore
-	}
-}
-
-function getPinchDistance(touches: TouchList): number {
-	const dx = touches[0].clientX - touches[1].clientX;
-	const dy = touches[0].clientY - touches[1].clientY;
-	return Math.sqrt(dx * dx + dy * dy);
-}
 
 // Convert [Image: source: <imagesDir>/xxx.png] into an actual image.
 //
@@ -861,24 +832,10 @@ export function ConversationViewer({
 		return () => window.removeEventListener("keydown", onKey);
 	}, [lightboxSrc]);
 
-	const [fontSize, setFontSize] = useState<number>(loadCvFontSize);
+	const chatFont = useChatFontSize();
+	const { fontSize, changeFontSize, resetFontSize } = chatFont;
 	const [showFontSizeIndicator, setShowFontSizeIndicator] = useState(false);
 	const fontSizeIndicatorTimerRef = useRef<number | null>(null);
-
-	const changeFontSize = useCallback((delta: number) => {
-		setFontSize((prev) => {
-			const next = Math.max(
-				CV_MIN_FONT_SIZE,
-				Math.min(CV_MAX_FONT_SIZE, prev + delta),
-			);
-			if (next !== prev) saveCvFontSize(next);
-			return next;
-		});
-	}, []);
-	const resetFontSize = useCallback(() => {
-		setFontSize(CV_DEFAULT_FONT_SIZE);
-		saveCvFontSize(CV_DEFAULT_FONT_SIZE);
-	}, []);
 
 	// Briefly show the size indicator after any change
 	useEffect(() => {
@@ -895,50 +852,7 @@ export function ConversationViewer({
 		};
 	}, [fontSize]);
 
-	// Pinch-zoom on the message scroll container to change font size
-	useEffect(() => {
-		const el = parentRef.current;
-		if (!el) return;
-		let pinch: { d: number; size: number } | null = null;
-		const onStart = (e: TouchEvent) => {
-			if (e.touches.length === 2) {
-				e.preventDefault();
-				pinch = { d: getPinchDistance(e.touches), size: fontSize };
-			}
-		};
-		const onMove = (e: TouchEvent) => {
-			if (e.touches.length === 2 && pinch) {
-				e.preventDefault();
-				const scale = getPinchDistance(e.touches) / pinch.d;
-				const next = Math.round(pinch.size * scale);
-				const clamped = Math.max(
-					CV_MIN_FONT_SIZE,
-					Math.min(CV_MAX_FONT_SIZE, next),
-				);
-				setFontSize((prev) => (prev === clamped ? prev : clamped));
-			}
-		};
-		const onEnd = (e: TouchEvent) => {
-			if (e.touches.length < 2 && pinch) {
-				pinch = null;
-				// Persist the final size after pinch ends
-				setFontSize((prev) => {
-					saveCvFontSize(prev);
-					return prev;
-				});
-			}
-		};
-		el.addEventListener("touchstart", onStart, { passive: false });
-		el.addEventListener("touchmove", onMove, { passive: false });
-		el.addEventListener("touchend", onEnd);
-		el.addEventListener("touchcancel", onEnd);
-		return () => {
-			el.removeEventListener("touchstart", onStart);
-			el.removeEventListener("touchmove", onMove);
-			el.removeEventListener("touchend", onEnd);
-			el.removeEventListener("touchcancel", onEnd);
-		};
-	}, [fontSize]);
+	usePinchFontSize(parentRef, chatFont);
 
 	// Whether the reader is at the live edge. Streaming output only follows the
 	// scroll when they are — otherwise reading older output yanks them back.
@@ -1124,8 +1038,7 @@ export function ConversationViewer({
 					WebkitUserSelect: "text",
 					userSelect: "text",
 					WebkitTouchCallout: "default",
-					fontSize: `${fontSize}px`,
-					["--cv-fs-meta" as never]: `${Math.max(10, fontSize - 3)}px`,
+					...chatFontStyle(fontSize),
 				}}
 			>
 				<div

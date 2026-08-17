@@ -6,6 +6,11 @@ import type {
 	IndicatorState,
 	StewardTurn,
 } from "../../../../shared/types";
+import {
+	chatFontStyle,
+	useChatFontSize,
+	usePinchFontSize,
+} from "../../hooks/useChatFontSize";
 import { useStewardSession } from "../../hooks/useSteward";
 import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { authFetch } from "../../services/api";
@@ -46,6 +51,10 @@ export function StewardSessionView({
 	const [sourceLoading, setSourceLoading] = useState(false);
 	const scrollerRef = useRef<HTMLDivElement>(null);
 	const stick = useStickToBottom(scrollerRef, [turns, thinking]);
+	// The same size the conversation viewer uses, and the same pinch: this is
+	// the screen someone reads all day, and it had no size of its own at all.
+	const chatFont = useChatFontSize();
+	usePinchFontSize(scrollerRef, chatFont);
 
 	const openSource = async (next: { agentSessionId: string; messageId?: string }) => {
 		setSource(next);
@@ -68,7 +77,11 @@ export function StewardSessionView({
 			{/* 4xl rather than 2xl: at the app's 14px root, 2xl is 588px, so a
 			    tablet gave the conversation just over half its width and the rest
 			    to margins. A phone is narrower than either, so nothing moves there. */}
-			<div ref={scrollerRef} className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+			<div
+				ref={scrollerRef}
+				className="flex flex-1 flex-col overflow-y-auto px-3 py-3"
+				style={chatFontStyle(chatFont.fontSize)}
+			>
 				{/* Anchored to the bottom: a handful of turns sitting at the top of a
 				    tall screen with the composer far below did not read as a
 				    conversation. */}
@@ -86,14 +99,14 @@ export function StewardSessionView({
 					{/* Nothing written yet: the steward was asked on open, so this is a
 					    wait rather than an empty state. */}
 					{waiting && (
-						<p className="flex items-center gap-2 text-cv-text-muted text-sm">
+						<p className="flex items-center gap-2 text-[1em] text-cv-text-muted">
 							<span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cv-text-muted" />
 							{t("steward.writingSession", "スチュワードがこのセッションを読んでいます…")}
 						</p>
 					)}
 
 					{!waiting && turns.length === 0 && (
-						<p className="text-cv-text-muted text-sm">
+						<p className="text-[1em] text-cv-text-muted">
 							{t("steward.sessionEmpty", "まだ何も書かれていません。")}
 						</p>
 					)}
@@ -151,7 +164,7 @@ function TurnCard({
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
-			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
+			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-[1em] ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
 				{sourceSession && (
 					<button
 						type="button"
@@ -175,7 +188,7 @@ function TurnCard({
 				{turn.detail && <TurnDetail detail={turn.detail} />}
 
 				{turn.refs?.file && (
-					<p className="mt-1 font-mono text-cv-text-muted text-xs">
+					<p className="mt-1 font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">
 						{turn.refs.file}
 						{turn.refs.line ? `:${turn.refs.line}` : ""}
 					</p>

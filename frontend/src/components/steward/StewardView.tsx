@@ -5,6 +5,11 @@ import type {
 	ConversationMessage,
 	StewardThreadItem,
 } from "../../../../shared/types";
+import {
+	chatFontStyle,
+	useChatFontSize,
+	usePinchFontSize,
+} from "../../hooks/useChatFontSize";
 import { useSteward } from "../../hooks/useSteward";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
@@ -36,6 +41,9 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 	const { thread, isLoading, error, thinking, reply } = useSteward(true);
 	const [sendError, setSendError] = useState<string | null>(null);
 	const endRef = useRef<HTMLDivElement>(null);
+	const scrollerRef = useRef<HTMLDivElement>(null);
+	const chatFont = useChatFontSize();
+	usePinchFontSize(scrollerRef, chatFont);
 
 	// Reading the original is part of reading the summary, so it opens from
 	// here rather than being handed up to the app: nothing above this view
@@ -113,7 +121,11 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 				<h2 className="font-medium text-sm">{t("steward.title", "Steward")}</h2>
 			</header>
 
-			<div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-3 py-3">
+			<div
+				ref={scrollerRef}
+				className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-3 py-3"
+				style={chatFontStyle(chatFont.fontSize)}
+			>
 				{isLoading && <p className="text-cv-text-muted text-sm">{t("common.loading", "Loading...")}</p>}
 				{error && <p className="text-sm text-red-400">{error}</p>}
 				{!isLoading && !error && shown.length === 0 && (
@@ -180,7 +192,7 @@ function ThreadItem({
 				    into the sentence. Not on the person's own words: they know what
 				    they just said and where, and the label there only read as noise. */}
 				{item.sessionId && !mine && (
-					<p className="mb-1 font-medium text-[11px] text-cv-text-muted">{item.sessionId}</p>
+					<p className="mb-1 font-medium text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">{item.sessionId}</p>
 				)}
 
 				{item.source && (
@@ -207,7 +219,7 @@ function ThreadItem({
 					{item.images && <TurnImages paths={item.images} />}
 
 				{item.kind === "report" && item.rows.length > 0 && (
-					<ul className="mt-2 flex flex-col gap-0.5 font-mono text-cv-text-secondary text-xs">
+					<ul className="mt-2 flex flex-col gap-0.5 font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-secondary">
 						{item.rows.map((row) => (
 							<li key={row}>{row}</li>
 						))}
