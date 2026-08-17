@@ -26,7 +26,7 @@ export function AskControls({
 				: ask.answer.kind === "text"
 					? ask.answer.text
 					: t("steward.dismissed", "dismissed");
-		return <p className="mt-2 text-cv-text-muted text-xs">{t("steward.answered", "Answered")}: {said}</p>;
+		return <p className="mt-2 text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">{t("steward.answered", "Answered")}: {said}</p>;
 	}
 
 	const multi = ask.mode === "multi";
@@ -51,7 +51,7 @@ export function AskControls({
 							}
 							setPicked((prev) => (on ? prev.filter((i) => i !== index) : [...prev, index]));
 						}}
-						className={`rounded-lg px-3 py-2 text-left text-sm ${
+						className={`rounded-lg px-3 py-2 text-left text-[1em] ${
 							on ? "bg-cv-surface-hover" : "bg-cv-bg hover:bg-cv-surface-hover"
 						}`}
 					>

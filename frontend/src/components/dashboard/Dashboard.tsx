@@ -6,6 +6,10 @@ import { IDENTITY } from "../../../../shared/identity";
 import { agentDisplayName } from "../../../../shared/types";
 import { useDashboard } from "../../hooks/useDashboard";
 import { usePeers } from "../../hooks/usePeers";
+import {
+	CHAT_FONT_DEFAULT,
+	useChatFontSize,
+} from "../../hooks/useChatFontSize";
 import { useStewardEnabled, useStewardView } from "../../hooks/useSteward";
 import { useTheme } from "../../hooks/useTheme";
 import { useUiScale } from "../../hooks/useUiScale";
@@ -76,6 +80,8 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 	const { data, isLoading, error } = useDashboard(30000);
 	const { theme, toggleTheme } = useTheme();
 	const stewardAvailable = useStewardEnabled();
+	const { fontSize: chatFontSize, changeFontSize: changeChatFontSize, resetFontSize: resetChatFontSize } =
+		useChatFontSize();
 	const [stewardView, setStewardView] = useStewardView();
 	const {
 		scale: uiScale,
@@ -591,6 +597,48 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 								</button>
 							);
 						})}
+					</fieldset>
+					{/* The chat's own size, beside the UI's. Two settings rather than
+					    one because they answer different questions: the UI scale is how
+					    big this device draws everything, and this is how big the text
+					    being read is - a phone at arm's length wants the second larger
+					    without the first following it. Reachable here because the pinch
+					    that also sets it is a gesture nobody finds by looking. */}
+					<span className="ml-3 text-[12px] text-zinc-500">
+						{t("appearance.chatFontSize")}
+					</span>
+					<fieldset
+						className="inline-flex items-center rounded-md bg-white/[0.04] p-0.5 border-0"
+						aria-label={t("appearance.chatFontSize")}
+					>
+						<button
+							type="button"
+							onClick={() => changeChatFontSize(-1)}
+							aria-label={t("appearance.chatFontSmaller")}
+							className="px-2.5 py-1 text-[12px] rounded text-zinc-500 transition-colors hover:text-zinc-300"
+						>
+							−
+						</button>
+						<button
+							type="button"
+							onClick={resetChatFontSize}
+							aria-label={t("appearance.chatFontReset")}
+							className={`px-2 py-1 text-[12px] rounded transition-colors ${
+								chatFontSize === CHAT_FONT_DEFAULT
+									? "text-zinc-500"
+									: "bg-white/[0.10] text-zinc-200"
+							}`}
+						>
+							{chatFontSize}px
+						</button>
+						<button
+							type="button"
+							onClick={() => changeChatFontSize(1)}
+							aria-label={t("appearance.chatFontLarger")}
+							className="px-2.5 py-1 text-[12px] rounded text-zinc-500 transition-colors hover:text-zinc-300"
+						>
+							＋
+						</button>
 					</fieldset>
 					{/* On the scale row's own line rather than under it: a version
 					    string is not a setting, and a row of its own gave it the

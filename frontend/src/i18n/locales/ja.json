@@ -384,7 +384,11 @@
   "appearance": {
     "dark": "ダーク",
     "light": "ライト",
-    "uiScale": "UI拡大率"
+    "uiScale": "UI拡大率",
+    "chatFontSize": "チャットの文字",
+    "chatFontSmaller": "チャットの文字を小さく",
+    "chatFontLarger": "チャットの文字を大きく",
+    "chatFontReset": "チャットの文字サイズを既定に戻す"
   },
   "theme": {
     "red": "赤",
