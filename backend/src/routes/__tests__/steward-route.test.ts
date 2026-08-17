@@ -384,6 +384,50 @@ describe('session writes', () => {
     expect((await post('/api/steward/sessions/w5Q/spoke', {})).status).toBe(400);
   });
 
+  // Two agents in one workspace are two pieces of work - measured on one whose
+  // panes were a health project and a recipe project, and whose single history
+  // read as a conversation that kept changing the subject.
+  test('a pane keeps its own history', async () => {
+    await post('/api/steward/sessions/w2H/turns?pane=%251', {
+      turns: [{ id: 'a', role: 'agent', text: '健康相談の続き' }],
+    });
+    await post('/api/steward/sessions/w2H/turns?pane=%256', {
+      turns: [{ id: 'b', role: 'agent', text: 'レシピの続き' }],
+    });
+
+    const first = (await (await app.request('/api/steward/sessions/w2H/turns?pane=%251')).json()) as {
+      turns: { text: string }[];
+    };
+    const second = (await (await app.request('/api/steward/sessions/w2H/turns?pane=%256')).json()) as {
+      turns: { text: string }[];
+    };
+    expect(first.turns.map((t) => t.text)).toEqual(['健康相談の続き']);
+    expect(second.turns.map((t) => t.text)).toEqual(['レシピの続き']);
+  });
+
+  // Most workspaces run one agent and name no pane. Their history is where it
+  // always was, and a pane's writes must not land in it.
+  test("a workspace's own history is not any pane's", async () => {
+    await post('/api/steward/sessions/w5Q/turns', {
+      turns: [{ id: 'w', role: 'agent', text: 'workspace level' }],
+    });
+    await post('/api/steward/sessions/w5Q/turns?pane=%251', {
+      turns: [{ id: 'p', role: 'agent', text: 'pane level' }],
+    });
+
+    const workspace = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { text: string }[];
+    };
+    expect(workspace.turns.map((t) => t.text)).toEqual(['workspace level']);
+  });
+
+  test('a pane id that is not one is refused rather than written elsewhere', async () => {
+    const res = await post('/api/steward/sessions/w2H/turns?pane=nonsense', {
+      turns: [{ id: 'x', role: 'agent', text: 'x' }],
+    });
+    expect(res.status).toBe(400);
+  });
+
   test('turns are fitted the same way', async () => {
     const long = 'あ'.repeat(400);
     const res = await post('/api/steward/sessions/w5Q/turns', {

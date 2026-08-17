@@ -47,6 +47,13 @@ export type StewardThreadItem = StewardTurn & {
     | { kind: 'reply'; askId?: string }
   )
 
+/** Which of a workspace's histories a set of turns is. A workspace running
+ *  several agents keeps one per pane; one running a single agent keeps its
+ *  own, under the workspace's id alone. */
+export function turnsKey(sessionId: string, paneId?: string): string {
+  return paneId ? `${sessionId}:${paneId}` : sessionId
+}
+
 export interface StewardSessionLine {
   sessionId: string
   text: string

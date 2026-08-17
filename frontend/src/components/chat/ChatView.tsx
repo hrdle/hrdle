@@ -21,9 +21,11 @@ interface ChatViewProps {
 	composerInBar?: boolean;
 	/** What the agent in this session is doing, for the steward's chat. */
 	agentState?: IndicatorState;
-	/** How many agent panes this workspace holds. The steward writes one
-	 *  history for the workspace, so above one it has to say what it covers. */
+	/** How many agent panes this workspace holds. Above one, each pane keeps
+	 *  its own steward history. */
 	agentPaneCount?: number;
+	/** The pane that is picked, which above one agent is whose history is read. */
+	paneId?: string;
 	activity?: { tool: string; target?: string };
 }
 
@@ -45,6 +47,7 @@ export function ChatView({
 	agentState,
 	activity,
 	agentPaneCount,
+	paneId,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const stewardAvailable = useStewardEnabled();
@@ -70,6 +73,7 @@ export function ChatView({
 				agentState={agentState}
 				activity={activity}
 				agentPaneCount={agentPaneCount}
+				paneId={paneId}
 			/>
 		);
 	}

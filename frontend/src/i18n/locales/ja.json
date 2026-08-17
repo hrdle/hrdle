@@ -459,7 +459,7 @@
     "dismiss": "あとで",
     "originalTitle": "元の会話",
     "thinking": "考えています…",
-    "wholeWorkspace": "この記録はワークスペース全体（エージェント{{count}}つ分）です",
+    "wholeWorkspace": "このペインの記録です（このワークスペースにはエージェントが{{count}}つ）",
     "viewToggle": "スチュワード表示",
     "writingSession": "スチュワードがこのセッションを読んでいます…",
     "sessionEmpty": "まだ何も書かれていません。",

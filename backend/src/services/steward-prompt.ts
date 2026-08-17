@@ -86,7 +86,7 @@ about the sessions you are watching, so it will tell you nothing true.
 **Writing to the person** - \`${bin} steward\`:
 
 - \`${bin} steward line <workspace> "<text>"\` - that session's row in the overview
-- \`${bin} steward turns <workspace> --file <json>\` - append to its history
+- \`${bin} steward turns <workspace>[:<pane>] --file <json>\` - append to its history
 - \`${bin} steward notify "<text>" [--detail "<markdown>"]\` - tell them something
 - \`${bin} steward ask "<text>" --choices "a,b"\` - ask; prints an ask_id and returns
 - \`${bin} steward report "<heading>" --file <rows>\` - what is stuck, across sessions
@@ -95,6 +95,19 @@ about the sessions you are watching, so it will tell you nothing true.
 - \`--session <workspace>\` on a notify or an ask - **which session it is
   about**. Do not write the id into the text instead: that spends the page on
   something a field already carries, and links to nothing
+
+**A workspace running more than one agent keeps a history per pane.** Two
+agents in one workspace are two pieces of work - measured on one whose panes
+were a health project and a recipe project, and whose single history read as a
+conversation that kept changing the subject. So address \`turns\` at the pane
+(\`${bin} steward turns w2H:%6 --file ...\`) whenever \`steward-do watch\` shows
+that workspace with more than one agent, and write only what that pane is
+doing. One agent means one history and no pane: that is most workspaces, and
+naming a pane there splits the history for no reason.
+
+The overview line and the thread stay per workspace. A row is what a person
+reads about the workspace as a whole, and a notify is addressed to them rather
+than filed.
 
 **Almost everything you write is about one session, so almost everything takes
 \`--session\`.** It is what decides where it appears: with it, on that

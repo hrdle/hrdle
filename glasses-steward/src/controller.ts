@@ -34,7 +34,7 @@ import {
   SPEECH_RMS,
 } from './display.ts'
 import type { AppState, DraftPhraseView, VoiceTarget } from './display.ts'
-import { latestReport, pendingAsks, sessionName, sessionOfRow, threadAgentOf } from './types.ts'
+import { latestReport, pendingAsks, sessionName, sessionOfRow, threadAgentOf, turnsKey } from './types.ts'
 import type { Session, StewardSessionLine, StewardThreadItem, StewardTurn } from './types.ts'
 import { WsClient } from './ws-client.ts'
 
@@ -158,7 +158,7 @@ export class GlassesController {
       onStewardSnapshot: (thread, lines) => this.onSnapshot(thread, lines),
       onStewardThread: (item) => this.onThreadItem(item),
       onStewardLine: (line) => this.onLine(line),
-      onStewardTurns: (sessionId, turns) => this.onTurns(sessionId, turns),
+      onStewardTurns: (sessionId, paneId, turns) => this.onTurns(sessionId, paneId, turns),
       onStewardSessionRemoved: (sessionId) => this.onSessionRemoved(sessionId),
       onTerminalOutput: (sessionId, _paneId, text) => this.onTerminal(sessionId, text),
       onReady: () => this.onReady(),
@@ -247,8 +247,8 @@ export class GlassesController {
     this.render()
   }
 
-  private onTurns(sessionId: string, turns: StewardTurn[]): void {
-    this.state.turns.set(sessionId, turns)
+  private onTurns(sessionId: string, paneId: string | undefined, turns: StewardTurn[]): void {
+    this.state.turns.set(turnsKey(sessionId, paneId), turns)
     if (sessionId === this.state.openSessionId) {
       this.state.sessionWaiting = false
       // Stay where the reader is, unless they were on a page that no longer
@@ -362,14 +362,15 @@ export class GlassesController {
    * exists to replace.
    */
   private async loadSession(sessionId: string): Promise<void> {
+    const paneId = this.historyPaneOf(sessionId)
     try {
-      const { turns } = await getSessionTurns(sessionId)
+      const { turns } = await getSessionTurns(sessionId, paneId)
       if (this.state.openSessionId !== sessionId) return
-      this.state.turns.set(sessionId, turns)
+      this.state.turns.set(turnsKey(sessionId, paneId), turns)
       if (turns.length === 0) {
         this.state.sessionWaiting = true
         this.render()
-        await summariseSession(sessionId)
+        await summariseSession(sessionId, paneId)
         // The writing arrives as `steward-turns`, which clears the wait.
       }
       this.render()
@@ -377,6 +378,23 @@ export class GlassesController {
       this.state.sessionWaiting = false
       this.render()
     }
+  }
+
+  /**
+   * Which of a workspace's histories this screen reads.
+   *
+   * A workspace running several agents keeps one per pane - two agents in one
+   * workspace are two pieces of work. These screens show one session at a
+   * time and have no room to offer a choice, so they take the pane herdr has
+   * focused, which is the one a person was last in. A workspace with a single
+   * agent names no pane and keeps its own history, as every workspace did
+   * before the split.
+   */
+  private historyPaneOf(sessionId: string): string | undefined {
+    const session = this.state.sessions.find((s) => s.id === sessionId)
+    const agents = session?.panes?.filter((p) => p.agent) ?? []
+    if (agents.length <= 1) return undefined
+    return (agents.find((p) => p.isActive) ?? agents[0])?.paneId
   }
 
   private openDirect(): void {

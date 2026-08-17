@@ -87,11 +87,16 @@ function apply(msg: MuxServerMessage) {
 			break;
 		}
 		case "steward-turns":
-			state.turns = new Map(state.turns).set(msg.sessionId, msg.turns);
+			state.turns = new Map(state.turns).set(turnsKey(msg.sessionId, msg.paneId), msg.turns);
 			break;
 		case "steward-session-removed": {
 			const turns = new Map(state.turns);
-			turns.delete(msg.sessionId);
+			// Its panes' histories go with it: they are keyed by the workspace
+			// with the pane appended, so deleting the bare id leaves them behind
+			// to be shown for a workspace that no longer exists.
+			for (const key of [...turns.keys()]) {
+				if (key === msg.sessionId || key.startsWith(`${msg.sessionId}:`)) turns.delete(key);
+			}
 			state.turns = turns;
 			state.lines = state.lines.filter((l) => l.sessionId !== msg.sessionId);
 			break;
@@ -204,8 +209,25 @@ export function seedStewardThread(
 	publish();
 }
 
+/**
+ * Which history a set of turns belongs to.
+ *
+ * A workspace running several agents keeps one per pane - two agents in one
+ * workspace are two pieces of work, and a single history of both reads as one
+ * conversation that keeps changing the subject. One running a single agent
+ * names no pane and keeps the workspace's own key, which is what every
+ * workspace used before the split.
+ */
+export function turnsKey(sessionId: string, paneId?: string): string {
+	return paneId ? `${sessionId}:${paneId}` : sessionId;
+}
+
 /** Turns fetched over REST, folded in so a later push lands on top of them. */
-export function seedStewardTurns(sessionId: string, turns: StewardTurn[]): void {
-	state.turns = new Map(state.turns).set(sessionId, turns);
+export function seedStewardTurns(
+	sessionId: string,
+	turns: StewardTurn[],
+	paneId?: string,
+): void {
+	state.turns = new Map(state.turns).set(turnsKey(sessionId, paneId), turns);
 	publish();
 }

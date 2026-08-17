@@ -461,7 +461,7 @@
     "dismiss": "Not now",
     "originalTitle": "The original",
     "thinking": "Thinking...",
-    "wholeWorkspace": "This history covers the whole workspace, all {{count}} agents",
+    "wholeWorkspace": "This pane's own history - the workspace runs {{count}} agents",
     "viewToggle": "Steward view",
     "writingSession": "Reading this session...",
     "sessionEmpty": "Nothing written yet.",
