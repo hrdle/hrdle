@@ -454,8 +454,12 @@ function TerminalPane({
 			<StewardSessionComposer
 				sessionId={sessionTarget.id}
 				peerId={sessionTarget.peerId}
-				agentState={session?.indicatorState}
-				activity={session?.activity}
+				// The picked pane's, not the workspace's. This line is the whole of
+				// what picking a pane changes while the summary is up - the history
+				// below it belongs to the workspace - and on the phone it is here,
+				// in the bar, rather than in the chat.
+				agentState={activeTmuxPane?.indicatorState ?? session?.indicatorState}
+				activity={activeTmuxPane?.activity ?? session?.activity}
 			/>
 		)}
 		<div className="flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border-b border-white/[0.06]">
@@ -579,8 +583,13 @@ function TerminalPane({
 						sessionId={sessionTarget.id}
 						composerInBar={stewardMode}
 						agentPaneCount={agentPaneCount}
-						agentState={session?.indicatorState}
-						activity={session?.activity}
+						// The pane the tabs picked, falling back to the workspace for the
+						// ordinary one-pane case. The history below is the workspace's
+						// either way - the steward writes one per session - so this line
+						// is what a tab changes, and without it tapping one changed
+						// nothing on the screen at all.
+						agentState={activeTmuxPane?.indicatorState ?? session?.indicatorState}
+						activity={activeTmuxPane?.activity ?? session?.activity}
 						title={session?.name}
 						subtitle={
 							session?.currentPath
@@ -925,14 +934,7 @@ function TerminalPane({
 							overlayContent={
 								bottomBar ? (
 									<>
-										{/* The tabs pick which pane the terminal draws and where
-										    typing goes. The steward writes one history per
-										    workspace, not one per pane, so while its chat is up
-										    they change nothing at all - and a workspace with two
-										    `claude` panes showed two tabs above one conversation
-										    that stayed the same whichever was tapped. They come
-										    back with the terminal, which is what they act on. */}
-										{!(stewardMode && showConversation) && paneTabs}
+										{paneTabs}
 										{bottomBar}
 									</>
 								) : undefined

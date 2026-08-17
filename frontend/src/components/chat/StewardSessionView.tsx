@@ -91,16 +91,18 @@ export function StewardSessionView({
 				    conversation. */}
 				<div className="mx-auto mt-auto flex w-full max-w-4xl flex-col gap-3">
 						{/* One history for a workspace that is running two agents.
-						    The steward summarises the work, and the work is the
-						    workspace - but with two `claude` panes and nothing said,
-						    this reads as the chat having stuck on one of them. Said
-						    once, at the top, and only where the question arises. */}
+						    The steward summarises the work and the work is the
+						    workspace, so switching panes does not change what is below
+						    - it changes the state line above, which is that pane's.
+						    Unsaid, two identical tabs over an unchanging conversation
+						    read as the chat having stuck on one of them. Said once, at
+						    the top, and only where the question arises. */}
 						{(agentPaneCount ?? 0) > 1 && (
 							<p className="text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">
 								{t("steward.wholeWorkspace", {
 									count: agentPaneCount,
 									defaultValue:
-										"このワークスペースの{{count}}つのエージェントをまとめた記録です",
+										"この記録はワークスペース全体（エージェント{{count}}つ分）です",
 								})}
 							</p>
 						)}

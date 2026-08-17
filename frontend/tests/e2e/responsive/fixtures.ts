@@ -70,6 +70,15 @@ export interface BootOptions {
    *  then, which is the case the steward's chat has to answer for: it writes
    *  one history per workspace, so the tabs cannot switch it. */
   withSecondAgentPane?: boolean;
+  /** What the second pane is doing, as its own row of the sessions list
+   *  reports it - and it becomes the picked pane.
+   *
+   *  Picked here rather than by clicking its tab: a tap asks the server to
+   *  focus the pane and the answer comes back on `sessions-updated`, which
+   *  this harness has no socket for. What is under test is the screen reading
+   *  the picked pane instead of the workspace; the round trip is the server's
+   *  and is not stubbed. */
+  secondPaneActivity?: { tool: string; target?: string };
 }
 
 const AGENT_PANE = {
@@ -114,7 +123,15 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
     ...(options.indicatorState ? { indicatorState: options.indicatorState } : {}),
     ...(options.activity ? { activity: options.activity } : {}),
   };
-  const panes = options.withSecondAgentPane ? [AGENT_PANE, SECOND_AGENT_PANE] : [AGENT_PANE];
+  const picksSecond = !!options.secondPaneActivity;
+  const second = {
+    ...SECOND_AGENT_PANE,
+    ...(picksSecond
+      ? { isActive: true, indicatorState: 'processing', activity: options.secondPaneActivity }
+      : {}),
+  };
+  const firstPane = picksSecond ? { ...AGENT_PANE, isActive: false } : AGENT_PANE;
+  const panes = options.withSecondAgentPane ? [firstPane, second] : [AGENT_PANE];
   const sessions =
     options.withAgentPane || options.withSecondAgentPane
       ? [{ ...first, agentSessionId: 'sess-1', panes }, ...SESSIONS.slice(1)]
