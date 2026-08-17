@@ -21,6 +21,9 @@ interface ChatViewProps {
 	composerInBar?: boolean;
 	/** What the agent in this session is doing, for the steward's chat. */
 	agentState?: IndicatorState;
+	/** How many agent panes this workspace holds. The steward writes one
+	 *  history for the workspace, so above one it has to say what it covers. */
+	agentPaneCount?: number;
 	activity?: { tool: string; target?: string };
 }
 
@@ -41,6 +44,7 @@ export function ChatView({
 	composerInBar,
 	agentState,
 	activity,
+	agentPaneCount,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const stewardAvailable = useStewardEnabled();
@@ -65,6 +69,7 @@ export function ChatView({
 				composerInBar={composerInBar}
 				agentState={agentState}
 				activity={activity}
+				agentPaneCount={agentPaneCount}
 			/>
 		);
 	}

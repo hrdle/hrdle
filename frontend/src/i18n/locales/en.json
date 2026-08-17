@@ -461,6 +461,7 @@
     "dismiss": "Not now",
     "originalTitle": "The original",
     "thinking": "Thinking...",
+    "wholeWorkspace": "One history for the {{count}} agents in this workspace",
     "viewToggle": "Steward view",
     "writingSession": "Reading this session...",
     "sessionEmpty": "Nothing written yet.",

@@ -36,6 +36,7 @@ export function StewardSessionView({
 	composerInBar = false,
 	agentState,
 	activity,
+	agentPaneCount,
 }: {
 	sessionId: string;
 	agentSessionId?: string | null;
@@ -43,6 +44,9 @@ export function StewardSessionView({
 	composerInBar?: boolean;
 	agentState?: IndicatorState;
 	activity?: { tool: string; target?: string };
+	/** Agents running in this workspace. Above one, the history says what it
+	 *  covers - see the note it draws. */
+	agentPaneCount?: number;
 }) {
 	const { t } = useTranslation();
 	const { turns, waiting, thinking } = useStewardSession(sessionId, true);
@@ -86,6 +90,21 @@ export function StewardSessionView({
 				    tall screen with the composer far below did not read as a
 				    conversation. */}
 				<div className="mx-auto mt-auto flex w-full max-w-4xl flex-col gap-3">
+						{/* One history for a workspace that is running two agents.
+						    The steward summarises the work, and the work is the
+						    workspace - but with two `claude` panes and nothing said,
+						    this reads as the chat having stuck on one of them. Said
+						    once, at the top, and only where the question arises. */}
+						{(agentPaneCount ?? 0) > 1 && (
+							<p className="text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">
+								{t("steward.wholeWorkspace", {
+									count: agentPaneCount,
+									defaultValue:
+										"このワークスペースの{{count}}つのエージェントをまとめた記録です",
+								})}
+							</p>
+						)}
+
 					{turns.map((turn) => (
 						<TurnCard
 							key={turn.id}
