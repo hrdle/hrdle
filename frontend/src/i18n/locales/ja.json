@@ -459,6 +459,7 @@
     "dismiss": "あとで",
     "originalTitle": "元の会話",
     "thinking": "考えています…",
+    "wholeWorkspace": "このワークスペースの{{count}}つのエージェントをまとめた記録です",
     "viewToggle": "スチュワード表示",
     "writingSession": "スチュワードがこのセッションを読んでいます…",
     "sessionEmpty": "まだ何も書かれていません。",

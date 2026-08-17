@@ -397,6 +397,11 @@ function TerminalPane({
 	const conversationAvailable = !!(
 		activeTmuxPane?.agent && activeTmuxPane.agentSessionId
 	);
+	// How many agents are running in this workspace. The steward's history
+	// covers all of them together, and with two `claude` panes there is nothing
+	// on the screen to say so - which reads as the chat being stuck on one of
+	// them.
+	const agentPaneCount = session?.panes?.filter((p) => p.agent).length ?? 0;
 	const panesLoaded = !!session?.panes;
 	useEffect(() => {
 		if (!panesLoaded) return;
@@ -573,6 +578,7 @@ function TerminalPane({
 					<ChatView
 						sessionId={sessionTarget.id}
 						composerInBar={stewardMode}
+						agentPaneCount={agentPaneCount}
 						agentState={session?.indicatorState}
 						activity={session?.activity}
 						title={session?.name}
@@ -919,7 +925,14 @@ function TerminalPane({
 							overlayContent={
 								bottomBar ? (
 									<>
-										{paneTabs}
+										{/* The tabs pick which pane the terminal draws and where
+										    typing goes. The steward writes one history per
+										    workspace, not one per pane, so while its chat is up
+										    they change nothing at all - and a workspace with two
+										    `claude` panes showed two tabs above one conversation
+										    that stayed the same whichever was tapped. They come
+										    back with the terminal, which is what they act on. */}
+										{!(stewardMode && showConversation) && paneTabs}
 										{bottomBar}
 									</>
 								) : undefined

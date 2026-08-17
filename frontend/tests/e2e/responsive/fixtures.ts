@@ -66,6 +66,10 @@ export interface BootOptions {
    *  Opt-in: with panes present a row renders differently, and the specs that
    *  measure the row were written without them. */
   withAgentPane?: boolean;
+  /** A second agent pane in the same workspace. The phone draws a tab per pane
+   *  then, which is the case the steward's chat has to answer for: it writes
+   *  one history per workspace, so the tabs cannot switch it. */
+  withSecondAgentPane?: boolean;
 }
 
 const AGENT_PANE = {
@@ -73,6 +77,24 @@ const AGENT_PANE = {
   isActive: true,
   agent: 'claude',
   agentSessionId: 'sess-1',
+  // What the tab is labelled with. Taken from a real payload: `agentName` is
+  // only set for an agent started through `herdr agent start`, so the label
+  // that actually reaches the screen is this one.
+  currentCommand: 'claude',
+  currentPath: '/home/dev/project',
+};
+
+/** The same agent again, which is what a real two-pane workspace looks like -
+ *  two rows both labelled `claude`, telling nobody which is which. */
+const SECOND_AGENT_PANE = {
+  paneId: '%6',
+  isActive: false,
+  agent: 'claude',
+  // A different conversation in the same workspace, which is the whole point:
+  // the raw transcript switches with the pane and the steward's history does
+  // not, because it is written per workspace.
+  agentSessionId: 'sess-2',
+  currentCommand: 'claude',
   currentPath: '/home/dev/project',
 };
 
@@ -92,9 +114,11 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
     ...(options.indicatorState ? { indicatorState: options.indicatorState } : {}),
     ...(options.activity ? { activity: options.activity } : {}),
   };
-  const sessions = options.withAgentPane
-    ? [{ ...first, agentSessionId: 'sess-1', panes: [AGENT_PANE] }, ...SESSIONS.slice(1)]
-    : [first, ...SESSIONS.slice(1)];
+  const panes = options.withSecondAgentPane ? [AGENT_PANE, SECOND_AGENT_PANE] : [AGENT_PANE];
+  const sessions =
+    options.withAgentPane || options.withSecondAgentPane
+      ? [{ ...first, agentSessionId: 'sess-1', panes }, ...SESSIONS.slice(1)]
+      : [first, ...SESSIONS.slice(1)];
   const stewardRoutes: Array<[RegExp, unknown]> = [
     [/\/api\/steward\/enabled$/, { enabled: steward.enabled }],
     [/\/api\/steward$/, { thread: steward.thread ?? [], lines: steward.lines ?? [] }],

@@ -737,3 +737,43 @@ test.describe('with the steward off, nothing changes', () => {
     await expect(page.getByTitle('スチュワード')).toBeVisible();
   });
 });
+
+/**
+ * A workspace running two agents.
+ *
+ * The phone draws a tab per pane, and the steward writes one history per
+ * workspace - so with the summary up the tabs switched nothing at all. Two
+ * rows both labelled `claude` over a conversation that never changed reads as
+ * the chat being stuck, which is how it was reported.
+ */
+test.describe('two agents in one workspace', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  const boot = (page: import('@playwright/test').Page) =>
+    bootApp(page, {
+      withSecondAgentPane: true,
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+
+  test('the pane tabs are not drawn over the summary', async ({ page }) => {
+    await boot(page);
+    await expect(page.getByPlaceholder('スチュワードに話しかける')).toBeVisible();
+    // The tabs act on the terminal, and the terminal is a level down from here.
+    await expect(page.getByRole('button', { name: 'claude', exact: true })).toHaveCount(0);
+  });
+
+  test('the summary says what it covers', async ({ page }) => {
+    await boot(page);
+    await expect(page.getByText('2つのエージェントをまとめた記録')).toBeVisible();
+  });
+
+  test('one agent needs no such note', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+    await expect(page.getByText('エージェントをまとめた記録')).toHaveCount(0);
+  });
+});
