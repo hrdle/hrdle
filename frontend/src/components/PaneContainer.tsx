@@ -915,8 +915,16 @@ function TerminalPane({
 						enabled={showConversation}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
-						agentState={session?.indicatorState}
-						activity={session?.activity}
+						// The same four the phone's chat takes. They were added there
+						// and not here, so a tablet read the workspace's history for
+						// both panes of a two-agent workspace and reported the split as
+						// not working - which it was not, on that screen. A phone and a
+						// tablet render this from two call sites, and a prop added to
+						// one of them is a fix for one of them.
+						agentPaneCount={agentPaneCount}
+						paneId={activeTmuxPane?.paneId}
+						agentState={activeTmuxPane?.indicatorState ?? session?.indicatorState}
+						activity={activeTmuxPane?.activity ?? session?.activity}
 					/>
 				)}
 				{sessionTarget ? (
