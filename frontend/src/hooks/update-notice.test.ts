@@ -43,4 +43,18 @@ describe("the update notice", () => {
 			expect(readFileSync(join(SRC, file), "utf8")).toContain("noteServerVersion");
 		}
 	});
+
+	// A phone on last release's bundle showed the server's number and read as up
+	// to date, so a fix shipped and checked from that phone came back as "not
+	// working". The page's own version was only in a console line, which on a
+	// phone nobody can reach.
+	test("the dashboard says which bundle the page is, when it is not the server's", () => {
+		const dashboard = readFileSync(
+			join(SRC, "components/dashboard/Dashboard.tsx"),
+			"utf8",
+		);
+		const line = dashboard.slice(dashboard.indexOf("{data?.version && ("));
+		expect(line.slice(0, 900)).toContain("__APP_VERSION__ !== data.version");
+		expect(line.slice(0, 900)).toContain("appearance.pageVersion");
+	});
 });

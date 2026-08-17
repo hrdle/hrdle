@@ -642,10 +642,27 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 					</fieldset>
 					{/* On the scale row's own line rather than under it: a version
 					    string is not a setting, and a row of its own gave it the
-					    weight of one. */}
+					    weight of one.
+
+					    Two numbers when they disagree, because this one said only the
+					    server's - so a phone still running last release's bundle
+					    displayed the number of the release it did not have, and read
+					    as up to date. A fix shipped, checked from that phone, and
+					    reported as not working is the shape that costs the most: the
+					    page's own version is otherwise only in a console line, which
+					    on a phone nobody can reach. */}
 					{data?.version && (
-						<span className="text-[11px] text-zinc-700 ml-auto shrink-0">
-							{IDENTITY.productName} v{data.version}
+						<span className="ml-auto shrink-0 text-[11px]">
+							<span className="text-zinc-700">
+								{IDENTITY.productName} v{data.version}
+							</span>
+							{__APP_VERSION__ !== data.version && (
+								<span className="ml-1.5 text-amber-500/80">
+									{t("appearance.pageVersion", "この画面 v{{version}}", {
+										version: __APP_VERSION__,
+									})}
+								</span>
+							)}
 						</span>
 					)}
 				</div>

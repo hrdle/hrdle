@@ -384,6 +384,7 @@
   "appearance": {
     "dark": "ダーク",
     "light": "ライト",
+    "pageVersion": "この画面 v{{version}}",
     "uiScale": "UI拡大率",
     "chatFontSize": "チャットの文字",
     "chatFontSmaller": "チャットの文字を小さく",

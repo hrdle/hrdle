@@ -386,6 +386,7 @@
   "appearance": {
     "dark": "Dark",
     "light": "Light",
+    "pageVersion": "this page v{{version}}",
     "uiScale": "UI Scale",
     "chatFontSize": "Chat text",
     "chatFontSmaller": "Smaller chat text",
