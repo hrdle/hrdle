@@ -1,0 +1,27 @@
+{
+  "name": "glasses-steward",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build --mode device",
+    "build:web": "tsc && vite build --base=/glasses-steward/ --outDir=dist-web",
+    "preview": "vite preview",
+    "pack": "bun scripts/pack.ts",
+    "test": "bun test",
+    "lint": "echo 'no lint'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "^0.0.13",
+    "@evenrealities/pretext": "^0.1.4"
+  },
+  "devDependencies": {
+    "@evenrealities/evenhub-cli": "^0.1.13",
+    "@types/bun": "^1.3.14",
+    "typescript": "^7",
+    "vite": "^8.2.0"
+  }
+}

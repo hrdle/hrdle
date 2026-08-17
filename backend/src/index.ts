@@ -248,7 +248,10 @@ if (EMBEDDED_MODE && getStaticAsset) {
           // revalidated on every load so a new release is picked up without a
           // manual cache clear.
           'Cache-Control':
-            isAssetHit && (path.startsWith('/assets/') || path.startsWith('/glasses/assets/'))
+            isAssetHit &&
+            (path.startsWith('/assets/') ||
+              path.startsWith('/glasses/assets/') ||
+              path.startsWith('/glasses-steward/assets/'))
               ? 'public, max-age=31536000, immutable'
               : 'no-cache, must-revalidate',
         },
@@ -262,6 +265,17 @@ if (EMBEDDED_MODE && getStaticAsset) {
   // Glasses simulator first: it has its own dist and must not fall through to
   // the frontend's SPA index.html.
   const glassesRoot = process.env.GLASSES_STATIC_ROOT || '../glasses/dist-web';
+  // The steward app's simulator is mounted first: `/glasses-steward` would
+  // otherwise be swallowed by the `/glasses/*` pattern below it.
+  const stewardGlassesRoot = process.env.GLASSES_STEWARD_STATIC_ROOT || '../glasses-steward/dist-web';
+  app.use(
+    '/glasses-steward/*',
+    serveStatic({
+      root: stewardGlassesRoot,
+      rewriteRequestPath: (p) => p.replace(/^\/glasses-steward/, ''),
+    })
+  );
+  app.get('/glasses-steward', serveStatic({ root: stewardGlassesRoot, path: '/index.html' }));
   app.use(
     '/glasses/*',
     serveStatic({ root: glassesRoot, rewriteRequestPath: (p) => p.replace(/^\/glasses/, '') })

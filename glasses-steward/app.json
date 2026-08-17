@@ -1,0 +1,23 @@
+{
+  "package_id": "com.hrdle.steward",
+  "edition": "202601",
+  "name": "Hrdle Steward",
+  "version": "0.0.1",
+  "min_app_version": "2.2.6",
+  "min_sdk_version": "0.0.12",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Reach your own Hrdle server over your tailnet, to read what your steward wrote and answer it"
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "Speak to your steward, or to one agent session directly. The audio goes to your own Hrdle server, which turns it into text"
+    }
+  ],
+  "supported_languages": [
+    "en",
+    "ja"
+  ]
+}

@@ -152,6 +152,30 @@ describe('answers are checked against the question', () => {
     expect(res.status).toBe(200);
   });
 
+  // The Send row on a multi-select exists because a tap there is a toggle, so
+  // "none of these" is a decision the wearer can reach and had no way to send.
+  test('accepts none of them on a multi-answer question', async () => {
+    const askId = await ask(['a', 'b'], 'multi');
+    const res = await post('/api/steward/thread/reply', {
+      askId,
+      answer: { kind: 'choice', indices: [] },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { item: { text: string } };
+    // Reads back as a sentence: an empty string here is a reply that says
+    // nothing, which is exactly what an unanswered question looks like.
+    expect(body.item.text).toBe('none of them');
+  });
+
+  test('rejects an empty answer to a single-answer question', async () => {
+    const askId = await ask(['a', 'b']);
+    const res = await post('/api/steward/thread/reply', {
+      askId,
+      answer: { kind: 'choice', indices: [] },
+    });
+    expect(res.status).toBe(400);
+  });
+
   test('rejects a choice against a free-text question', async () => {
     const askId = await ask([], 'freeText');
     const res = await post('/api/steward/thread/reply', {
@@ -338,6 +362,26 @@ describe('session writes', () => {
       turns: unknown[];
     };
     expect(turns.turns).toEqual([]);
+  });
+
+  // Direct-talk mode on the glasses reaches the agent without the steward. The
+  // steward still has to see it, or the pane's next move is a change it cannot
+  // account for.
+  test('speaking straight to a pane is recorded against that session', async () => {
+    const res = await post('/api/steward/sessions/w5Q/spoke', { text: 'そのまま進めて' });
+    expect(res.status).toBe(200);
+
+    const turns = (await (await app.request('/api/steward/sessions/w5Q/turns')).json()) as {
+      turns: { role: string; text: string }[];
+    };
+    expect(turns.turns).toEqual([
+      expect.objectContaining({ role: 'user', text: 'そのまま進めて' }),
+    ]);
+  });
+
+  test('an empty utterance is not a record of anything', async () => {
+    expect((await post('/api/steward/sessions/w5Q/spoke', { text: '' })).status).toBe(400);
+    expect((await post('/api/steward/sessions/w5Q/spoke', {})).status).toBe(400);
   });
 
   test('turns are fitted the same way', async () => {

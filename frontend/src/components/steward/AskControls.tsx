@@ -60,12 +60,14 @@ export function AskControls({
 				);
 			})}
 			<div className="flex gap-2">
+				{/* Sends on an empty pick too. Ticking nothing is an answer to a
+				    multi-select - "none of these" - and it is one the steward can act
+				    on, where silence is one it waits out. */}
 				{multi && (
 					<button
 						type="button"
-						disabled={picked.length === 0}
 						onClick={() => onAnswer({ askId: ask.id, answer: { kind: "choice", indices: picked } })}
-						className="min-h-[32px] rounded-lg bg-cv-surface-hover px-3 py-1.5 text-xs disabled:opacity-40"
+						className="min-h-[32px] rounded-lg bg-cv-surface-hover px-3 py-1.5 text-xs"
 					>
 						{t("common.send", "Send")}
 					</button>

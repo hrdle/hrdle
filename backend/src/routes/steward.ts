@@ -61,7 +61,11 @@ const TurnSchema = z.object({
 });
 
 const AskAnswerSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('choice'), indices: z.array(z.number().int().min(0).max(64)).min(1).max(64) }),
+  // No minimum. A multi-select's answer can genuinely be the empty set - which
+  // is why it has a Send row at all, a tap being a toggle there rather than a
+  // decision - and refusing it here made "none of these" the one answer the
+  // glasses could not give. `single` is still held to exactly one, below.
+  z.object({ kind: z.literal('choice'), indices: z.array(z.number().int().min(0).max(64)).max(64) }),
   z.object({ kind: z.literal('text'), text: z.string().max(TEXT_MAX) }),
   z.object({ kind: z.literal('dismissed') }),
 ]);
@@ -218,7 +222,7 @@ steward.post('/thread/reply', async (c) => {
       if (outOfRange.length > 0) {
         return c.json({ error: `no such choice: ${outOfRange.join(', ')}` }, 400);
       }
-      if (mode === 'single' && answer.indices.length > 1) {
+      if (mode === 'single' && answer.indices.length !== 1) {
         return c.json({ error: 'this question takes one answer' }, 400);
       }
       if (mode === 'freeText') {
@@ -316,6 +320,47 @@ steward.post('/sessions/:id/summarise', async (c) => {
   return c.json({ turns: [], asked: true });
 });
 
+/**
+ * What the owner said to a pane without going through the steward.
+ *
+ * The glasses have a direct-talk mode: one step down inside a session, where
+ * speech reaches the agent as a prompt and the steward is not in the loop. It
+ * still has to be in the record. Unwritten, the steward sees a pane change
+ * state for a reason it cannot account for, and its next summary of that
+ * session is written around a gap - which is the shape of every "the steward
+ * is confidently wrong about this session" report.
+ *
+ * Not `/thread/reply`, though the store work is the same. That one wakes the
+ * observer with "the owner said X" and the observer answers it; this one has
+ * already been answered by the agent, and an observer replying to it would be
+ * a second voice in a conversation it is not part of.
+ */
+steward.post('/sessions/:id/spoke', async (c) => {
+  const id = SessionId.safeParse(c.req.param('id'));
+  if (!id.success) return c.json({ error: 'invalid session id' }, 400);
+  const body = await c.req.json().catch(() => null);
+  const parsed = z.object({ text: z.string().min(1).max(TEXT_MAX) }).safeParse(body);
+  if (!parsed.success) return c.json({ error: 'text is required' }, 400);
+
+  const item = await appendThreadItem({
+    kind: 'reply',
+    role: 'user',
+    text: parsed.data.text,
+    sessionId: id.data,
+  });
+  broadcastSteward({ type: 'steward-thread', item });
+  await mirrorToSession(item);
+
+  wakeObserverWith(
+    `The owner spoke straight to session ${id.data}, bypassing you: "${parsed.data.text}"\n` +
+      'It went to the agent in that pane and the agent is answering it. Do not answer it yourself, ' +
+      'and do not relay it onward. Take it as context for what that pane does next, so the state ' +
+      'change you are about to see is one you can explain.',
+  );
+
+  return c.json({ item });
+});
+
 steward.post('/sessions/:id/turns', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
@@ -399,6 +444,9 @@ function answerAsText(
   if (answer.kind === 'text') return answer.text;
   if (answer.kind === 'dismissed') return 'dismissed';
   const choices = ask?.kind === 'ask' ? ask.ask.choices : [];
+  // Picking nothing from a multi-select is an answer, and an empty string here
+  // would reach the thread as a reply that says nothing at all.
+  if (answer.indices.length === 0) return 'none of them';
   return answer.indices.map((i) => choices[i] ?? `#${i}`).join(', ');
 }
 
