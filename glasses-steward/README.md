@@ -24,7 +24,15 @@ Six screens:
 | `ask` | a question, in one of three answering modes |
 | `report` | what is stuck, and nothing else |
 | `voice` | record, transcribe, confirm - from any of four entry points |
-| `direct` | the raw pane, one step down inside a session |
+| `direct` | one pane's own conversation, one step down inside a session |
+
+`direct` is the one screen the steward does not write, and it is still not the
+terminal: a pane's output is escape sequences and a redrawing spinner, and seven
+lines of that is unreadable. It shows the same information in the format the
+other glasses app arrived at - `$` for the wearer's turn, one reserved line per
+tool call saying what the call was about, Markdown unwrapped - carried over in
+`conversation.ts`. What the pane paints is used only as the signal that the
+transcript has moved.
 
 ## Running it
 

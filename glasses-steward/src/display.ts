@@ -44,9 +44,17 @@ import {
   splitLines,
   textWidth,
 } from './metrics.ts'
+import { conversationPages } from './conversation.ts'
 import { GIVE_UP_AFTER_MS } from './ws-client.ts'
 import { lineFor, sessionName } from './types.ts'
-import type { Session, StewardAsk, StewardSessionLine, StewardThreadItem, StewardTurn } from './types.ts'
+import type {
+  ConversationMessage,
+  Session,
+  StewardAsk,
+  StewardSessionLine,
+  StewardThreadItem,
+  StewardTurn,
+} from './types.ts'
 
 const W = 576
 const H = 288
@@ -126,8 +134,15 @@ export interface AppState {
   /** voice */
   voice: VoiceState | null
 
-  /** direct */
-  directText: string
+  /**
+   * direct: the pane's transcript, as the history API sends it.
+   *
+   * The messages rather than the terminal. What the pane is painting is escape
+   * sequences and a redrawing spinner, and seven lines of that is not what
+   * anyone stepped down here to read - see `conversation.ts`, which turns these
+   * into the format the panel reserves for them.
+   */
+  direct: ConversationMessage[]
   directPage: number
 
   /**
@@ -166,7 +181,7 @@ export function initialState(): AppState {
     askChecked: [],
     reportCursor: 0,
     voice: null,
-    directText: '',
+    direct: [],
     directPage: 0,
     deferredAskId: null,
   }
@@ -697,15 +712,39 @@ function voiceContent(state: AppState): { header: string; body: string; footer: 
 
 // ─── direct ───
 
+/**
+ * Lines this screen's body actually draws, once a notice has taken its share.
+ *
+ * Paging by the panel's height while drawing fewer lines is a hole at every
+ * page boundary: the body clips its tail, the next page begins past it, and
+ * what is in between is on no page at all with nothing on screen to say a line
+ * was skipped. The other app paid for that one twice.
+ */
+function directLines(state: AppState): number {
+  const notice = deferredNotice(state)
+  const lines = notice ? notice.split('\n').length : 0
+  const body = H - 2 * BAR_H - noticeHeight(lines)
+  return Math.max(1, Math.floor((body - 2 * BODY_PAD) / LINE_H))
+}
+
 export function directPages(state: AppState): string[][] {
-  const lines = state.directText ? state.directText.split('\n').flatMap(splitBody) : []
-  if (lines.length === 0) return []
-  const pages: string[][] = []
-  // Oldest first so paging back goes back in time, and page 0 is the live end.
-  for (let at = lines.length; at > 0; at -= MAX_LINES) {
-    pages.push(lines.slice(Math.max(0, at - MAX_LINES), at))
-  }
-  return pages
+  return conversationPages(state.direct, directLines(state))
+}
+
+/**
+ * What the pane is doing, in the space a badge has.
+ *
+ * The terminal shows this without being asked - a spinner, or a prompt sitting
+ * there waiting - and a transcript alone cannot say which of the two a silence
+ * is. `[!]` is the one that changes what the wearer does next, so it is the one
+ * spelled out.
+ */
+function paneBadge(session: Session | undefined): string {
+  const pane = session?.panes?.find((p) => p.agent && p.isActive) ?? session?.panes?.find((p) => p.agent)
+  const state = pane?.indicatorState ?? session?.indicatorState
+  if (state === 'waiting_input') return '[!]'
+  if (state === 'processing') return '...'
+  return ''
 }
 
 function directContent(state: AppState): { header: string; body: string; footer: string } {
@@ -713,8 +752,12 @@ function directContent(state: AppState): { header: string; body: string; footer:
   const pages = directPages(state)
   const page = pages[state.directPage] ?? []
   const position = pages.length > 1 ? `${state.directPage + 1}/${pages.length}` : ''
+  const badge = paneBadge(session)
   return {
-    header: layOut(`${session ? sessionName(session) : ''} · direct`, `${position} ${clock()}`.trim()),
+    header: layOut(
+      `${session ? sessionName(session) : ''} · direct${badge ? ` ${badge}` : ''}`,
+      `${position} ${clock()}`.trim(),
+    ),
     body: page.length > 0 ? page.join('\n') : 'Nothing on this pane yet.',
     footer: 'swipe:page  tap:speak  dbl:up',
   }

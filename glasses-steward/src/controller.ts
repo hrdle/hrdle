@@ -34,8 +34,9 @@ import {
   SPEECH_RMS,
 } from './display.ts'
 import type { AppState, DraftPhraseView, VoiceTarget } from './display.ts'
+import { filterConversation } from './conversation.ts'
 import { latestReport, pendingAsks, sessionName, sessionOfRow, threadAgentOf, turnsKey } from './types.ts'
-import type { Session, StewardSessionLine, StewardThreadItem, StewardTurn } from './types.ts'
+import type { ConversationMessage, Session, StewardSessionLine, StewardThreadItem, StewardTurn } from './types.ts'
 import { WsClient } from './ws-client.ts'
 
 export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
@@ -89,6 +90,19 @@ const LEVEL_REDRAW_MS = 250
 /** The clock in the bar only moves once a minute; this is close enough. */
 const HEADER_TICK_MS = 20_000
 
+/**
+ * How many turns direct mode reads back.
+ *
+ * Enough that paging back reaches the start of what is being worked on, and no
+ * more: the request is made again every few seconds while an agent is working,
+ * and each message carries its tool calls and their output.
+ */
+const DIRECT_LOAD_COUNT = 20
+
+/** The floor between two reloads of it. A working pane repaints several times a
+ *  second, and every repaint is otherwise a request. */
+const DIRECT_REFRESH_MS = 3_000
+
 /** One phrase of the draft. `text` is null until the transcription answers. */
 interface DraftPhrase {
   text: string | null
@@ -141,6 +155,7 @@ export class GlassesController {
   private platform: GlassesPlatform
   private headerTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
+  private lastDirectLoad = 0
 
   // Voice capture
   private audioChunks: Uint8Array[] = []
@@ -267,10 +282,22 @@ export class GlassesController {
     this.render()
   }
 
-  private onTerminal(sessionId: string, text: string): void {
+  /**
+   * A pane painted something, which is the only signal that its transcript has
+   * moved.
+   *
+   * The output itself is not what direct mode shows - see `conversation.ts` -
+   * so it is spent here as a clock instead. Throttled, because a working agent
+   * repaints several times a second and each reload is a request; and held off
+   * entirely once the reader has paged back, or the screen would jump to the
+   * live edge under someone reading history.
+   */
+  private onTerminal(sessionId: string, _text: string): void {
     if (sessionId !== this.state.openSessionId) return
-    this.state.directText = text
-    if (this.state.screen === 'direct') this.render()
+    if (this.state.screen !== 'direct' || this.state.directPage > 0) return
+    const now = Date.now()
+    if (now - this.lastDirectLoad < DIRECT_REFRESH_MS) return
+    void this.loadDirect(sessionId)
   }
 
   // ── questions ──
@@ -339,7 +366,7 @@ export class GlassesController {
   toOverview(): void {
     this.state.screen = 'overview'
     this.state.openSessionId = null
-    this.state.directText = ''
+    this.state.direct = []
     this.ws.unsubscribeSession()
     this.presentPendingAsk()
   }
@@ -402,28 +429,37 @@ export class GlassesController {
     if (!sessionId) return
     this.state.screen = 'direct'
     this.state.directPage = 0
-    this.state.directText = ''
+    this.state.direct = []
+    // Not for its text - for the fact that it arrives. See `onTerminal`.
     this.ws.subscribeSession(sessionId)
-    void this.loadDirectTranscript(sessionId)
+    void this.loadDirect(sessionId)
   }
 
   /**
-   * The raw conversation, for the one screen that shows it.
+   * The pane's own conversation, which is the whole of what direct mode shows.
    *
-   * Both sources: the pane's live text arrives over the socket, and the
-   * transcript fills in what is above it. A pane that has scrolled past its own
-   * output shows nothing otherwise, which reads as an empty session.
+   * The pane a workspace's history is kept under is the pane spoken to, so the
+   * transcript read here is that pane's: a workspace running two agents has two
+   * of them, and reading the workspace's Claude log answers with whichever was
+   * written last - a different agent from the one on screen.
    */
-  private async loadDirectTranscript(sessionId: string): Promise<void> {
+  private async loadDirect(sessionId: string): Promise<void> {
+    this.lastDirectLoad = Date.now()
+    if (this.state.demo) {
+      this.state.direct = filterConversation(GlassesController.demoMessages())
+      this.render()
+      return
+    }
     const session = this.state.sessions.find((s) => s.id === sessionId)
-    const agentSession = session?.agentSessionId ?? session?.panes?.find((p) => p.agentSessionId)?.agentSessionId
+    const paneId = this.historyPaneOf(sessionId)
+    const pane = paneId ? session?.panes?.find((p) => p.paneId === paneId) : undefined
+    const agentSession = pane?.agentSessionId
+      ?? session?.agentSessionId
+      ?? session?.panes?.find((p) => p.agentSessionId)?.agentSessionId
     if (!agentSession) return
-    const messages = await getConversation(agentSession, 6, threadAgentOf(session?.agent))
+    const messages = await getConversation(agentSession, DIRECT_LOAD_COUNT, threadAgentOf(pane?.agent ?? session?.agent))
     if (this.state.openSessionId !== sessionId || this.state.screen !== 'direct') return
-    if (this.state.directText) return
-    this.state.directText = messages
-      .map((m) => `${m.role === 'user' ? 'you' : 'agent'}: ${m.content}`)
-      .join('\n')
+    this.state.direct = filterConversation(messages)
     this.render()
   }
 
@@ -840,6 +876,32 @@ export class GlassesController {
   }
 
   // ── lifecycle ──
+
+  /**
+   * A canned pane transcript, for the demo's direct screen.
+   *
+   * The demo is the only place a reviewer sees this screen, and the screen is
+   * the one that shows a tool call as a line of its own - so the rows here are
+   * chosen to show that rather than to read as a tidy exchange.
+   */
+  private static demoMessages(): ConversationMessage[] {
+    return [
+      { role: 'user', content: 'Why is the release job failing?' },
+      {
+        role: 'assistant',
+        content: 'The tag build cannot find the binary. Looking at the workflow.',
+        toolUse: [
+          { name: 'Read', input: { file_path: '/home/you/repo/.github/workflows/release.yml' } },
+          { name: 'Bash', input: { description: 'List the release assets', command: 'gh release view v1.2.0' } },
+        ],
+      },
+      { role: 'user', content: 'Fix it and push.' },
+      {
+        role: 'assistant',
+        content: 'The **upload step** ran before the build. Moved it after, and the tag build is green.',
+      },
+    ]
+  }
 
   /** A canned overview, for a first run with no server. A reviewer has neither
    *  a server nor any intention of installing one, and without this the app
