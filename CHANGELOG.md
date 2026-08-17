@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.166] - 2026-08-17
+
+### Added
+- **A workspace running several agents keeps a steward history per pane.** Two
+  agents in one workspace are two pieces of work - measured on one whose panes
+  were a health project and a recipe project, whose single history read as a
+  conversation that kept changing the subject. A workspace running one agent
+  names no pane and keeps the history it always had. The CLI addresses a pane
+  as `steward turns <workspace>:<pane>`, the mobile chat reads the picked
+  pane's, and the glasses read herdr's focused one. Existing histories are not
+  split - nothing in them says which pane they belong to - so a multi-agent
+  workspace is written fresh on the next read.
+
+### Fixed
+- **The responsive e2e specs no longer depend on where the dev server points.**
+  Run against one with a real backend behind it, the steward's socket connected
+  and replaced every stubbed fixture with live data - three specs failed on a
+  thread of 222 entries where the fixture supplies three. The fixture refuses
+  WebSockets now, so the suite tests the same thing wherever it is run.
+
 ## [0.3.165] - 2026-08-17
 
 ### Fixed
