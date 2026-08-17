@@ -583,6 +583,7 @@ function TerminalPane({
 						sessionId={sessionTarget.id}
 						composerInBar={stewardMode}
 						agentPaneCount={agentPaneCount}
+						paneId={activeTmuxPane?.paneId}
 						// The pane the tabs picked, falling back to the workspace for the
 						// ordinary one-pane case. The history below is the workspace's
 						// either way - the steward writes one per session - so this line

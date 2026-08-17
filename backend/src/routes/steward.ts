@@ -31,6 +31,29 @@ import type { StewardThreadItem, StewardTurn } from '../../../shared/types';
 // Same alphabet as SessionIdSchema.
 const SessionId = z.string().regex(/^[A-Za-z0-9._-]{1,128}$/);
 
+/**
+ * A pane, as herdr writes it (`%6`).
+ *
+ * It names which history inside a workspace is meant. A workspace running one
+ * agent names none and keeps the workspace's own, which is what every
+ * workspace did before this; one running several has a history per pane,
+ * because two agents in one workspace are two pieces of work and a single
+ * history of both reads as one conversation that keeps changing the subject.
+ *
+ * A query parameter, never a path segment: `%` in a path is an escape, and a
+ * pane id round-tripping through one is a bug nobody should have to think
+ * about twice.
+ */
+const PaneId = z.string().regex(/^%\d{1,6}$/);
+
+/** The pane named on the request, or nothing. Rejects a malformed one rather
+ *  than quietly writing the workspace's own history instead. */
+function paneOf(raw: string | undefined): { ok: true; paneId?: string } | { ok: false } {
+  if (raw === undefined || raw === '') return { ok: true };
+  const parsed = PaneId.safeParse(raw);
+  return parsed.success ? { ok: true, paneId: parsed.data } : { ok: false };
+}
+
 /** Not the page budget: `fitToPage` moves what overruns it into `detail`, so
  *  these only stop a runaway writer filling the disk. */
 const TEXT_MAX = 4000;
@@ -291,7 +314,9 @@ steward.put('/sessions/:id/line', async (c) => {
 steward.get('/sessions/:id/turns', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
-  return c.json({ turns: await getSessionTurns(id.data) });
+  const pane = paneOf(c.req.query('pane'));
+  if (!pane.ok) return c.json({ error: 'invalid pane id' }, 400);
+  return c.json({ turns: await getSessionTurns(id.data, pane.paneId), paneId: pane.paneId });
 });
 
 /**
@@ -306,15 +331,22 @@ steward.get('/sessions/:id/turns', async (c) => {
 steward.post('/sessions/:id/summarise', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
+  const pane = paneOf(c.req.query('pane'));
+  if (!pane.ok) return c.json({ error: 'invalid pane id' }, 400);
 
-  const existing = await getSessionTurns(id.data);
+  const existing = await getSessionTurns(id.data, pane.paneId);
   // Already written: nothing to ask for, and asking anyway would wake the
   // observer every time somebody opened a session.
   if (existing.length > 0) return c.json({ turns: existing, asked: false });
 
+  const target = pane.paneId ? `${id.data}:${pane.paneId}` : id.data;
   wakeObserverWith(
-    `The owner opened session ${id.data} and it has no history written yet. ` +
-      'Read it and write its turns with `steward turns`, newest work first. ' +
+    `The owner opened session ${target} and it has no history written yet. ` +
+      `Read it and write its turns with \`steward turns ${target}\`, newest work first. ` +
+      (pane.paneId
+        ? 'That workspace runs more than one agent, so its history is per pane: write only what ' +
+          'this pane is doing, and address the others by their own pane ids. '
+        : '') +
       'Answer nothing in the thread for this - the session screen is where it goes.',
   );
   return c.json({ turns: [], asked: true });
@@ -364,6 +396,8 @@ steward.post('/sessions/:id/spoke', async (c) => {
 steward.post('/sessions/:id/turns', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
+  const pane = paneOf(c.req.query('pane'));
+  if (!pane.ok) return c.json({ error: 'invalid pane id' }, 400);
   const body = await c.req.json().catch(() => null);
   const parsed = z.object({ turns: z.array(TurnSchema).min(1).max(50) }).safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid turns', detail: parsed.error.issues }, 400);
@@ -375,10 +409,11 @@ steward.post('/sessions/:id/turns', async (c) => {
     if (fitted.spilled) spilled++;
     return { ...t, text: fitted.text, detail: fitted.detail, at: t.at ?? now };
   });
-  const stored = await appendSessionTurns(id.data, turns);
-  broadcastSteward({ type: 'steward-turns', sessionId: id.data, turns: stored });
+  const stored = await appendSessionTurns(id.data, turns, pane.paneId);
+  broadcastSteward({ type: 'steward-turns', sessionId: id.data, paneId: pane.paneId, turns: stored });
   return c.json({
     turns: stored,
+    paneId: pane.paneId,
     ...(spilled ? { fitted: `${spilled} turn(s) ran past one page; the rest moved into detail` } : {}),
   });
 });

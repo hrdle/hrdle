@@ -1804,7 +1804,10 @@ export type MuxServerMessage =
   | { type: 'steward-snapshot'; thread: StewardThreadItem[]; lines: StewardSessionLine[] }
   | { type: 'steward-thread'; item: StewardThreadItem }
   | { type: 'steward-line'; line: StewardSessionLine }
-  | { type: 'steward-turns'; sessionId: string; turns: StewardTurn[] }
+  // `paneId` when the workspace runs several agents and this history is one
+  // pane's. Absent for a workspace with one, which is most of them and every
+  // one that existed before the split.
+  | { type: 'steward-turns'; sessionId: string; paneId?: string; turns: StewardTurn[] }
   | { type: 'steward-session-removed'; sessionId: string }
   | (ControlServerMessage & { sessionId: string });
 

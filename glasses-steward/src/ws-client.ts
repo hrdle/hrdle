@@ -23,7 +23,7 @@ export interface WsCallbacks {
   onStewardSnapshot: (thread: StewardThreadItem[], lines: StewardSessionLine[]) => void
   onStewardThread: (item: StewardThreadItem) => void
   onStewardLine: (line: StewardSessionLine) => void
-  onStewardTurns: (sessionId: string, turns: StewardTurn[]) => void
+  onStewardTurns: (sessionId: string, paneId: string | undefined, turns: StewardTurn[]) => void
   onStewardSessionRemoved: (sessionId: string) => void
   /** Direct mode's pane text, already stripped of escape sequences. */
   onTerminalOutput: (sessionId: string, paneId: string, text: string) => void
@@ -165,7 +165,11 @@ export class WsClient {
         this.callbacks.onStewardLine(msg.line as StewardSessionLine)
         return
       case 'steward-turns':
-        this.callbacks.onStewardTurns(msg.sessionId as string, (msg.turns as StewardTurn[]) ?? [])
+        this.callbacks.onStewardTurns(
+          msg.sessionId as string,
+          msg.paneId as string | undefined,
+          (msg.turns as StewardTurn[]) ?? [],
+        )
         return
       case 'steward-session-removed':
         this.callbacks.onStewardSessionRemoved(msg.sessionId as string)

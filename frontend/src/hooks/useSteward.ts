@@ -26,6 +26,7 @@ import {
 	seedStewardThread,
 	seedStewardTurns,
 	subscribeSteward,
+	turnsKey,
 } from "../services/steward-socket";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -275,11 +276,18 @@ export function useStewardView(): [boolean, (on: boolean) => void] {
  * The steward is who this screen talks to. The pane's own input bar reaches the
  * agent and shows nothing here, which read as the message having gone nowhere.
  */
-export function useStewardSession(sessionId: string | null, active: boolean) {
+export function useStewardSession(
+	sessionId: string | null,
+	active: boolean,
+	/** The pane whose history to read, when the workspace runs several agents.
+	 *  Absent for a workspace with one, which keeps the workspace's own. */
+	paneId?: string,
+) {
 	const live = useStewardLive(active && !!sessionId);
 	const [waiting, setWaiting] = useState(false);
 	const thinking = useThinkingSince(sessionId ?? "") !== null;
-	const turns = (sessionId ? live.turns.get(sessionId) : undefined) ?? EMPTY_TURNS;
+	const turns =
+		(sessionId ? live.turns.get(turnsKey(sessionId, paneId)) : undefined) ?? EMPTY_TURNS;
 
 	// The snapshot on subscribe carries the thread and the lines only, so the
 	// first read of a session's turns is still REST; every later change arrives
@@ -287,14 +295,18 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 	useEffect(() => {
 		if (!active || !sessionId) return;
 		let alive = true;
+		// The pane travels as a query parameter: a `%` in a path is an escape,
+		// and a pane id round-tripping through one is a bug nobody should have
+		// to think about twice.
+		const paneQuery = paneId ? `?pane=${encodeURIComponent(paneId)}` : "";
 
 		const load = async (): Promise<StewardTurn[]> => {
 			const res = await authFetch(
-				`${API_BASE}/api/steward/sessions/${encodeURIComponent(sessionId)}/turns`,
+				`${API_BASE}/api/steward/sessions/${encodeURIComponent(sessionId)}/turns${paneQuery}`,
 			);
 			if (!res.ok) return [];
 			const next = ((await res.json()) as { turns?: StewardTurn[] }).turns ?? [];
-			if (alive) seedStewardTurns(sessionId, next);
+			if (alive) seedStewardTurns(sessionId, next, paneId);
 			return next;
 		};
 
@@ -323,7 +335,7 @@ export function useStewardSession(sessionId: string | null, active: boolean) {
 		return () => {
 			alive = false;
 		};
-	}, [sessionId, active]);
+	}, [sessionId, active, paneId]);
 
 	// Saying something is the one moment worth not waiting a frame for, and the
 	// composer is not always in this subtree - on a phone it is in the fixed

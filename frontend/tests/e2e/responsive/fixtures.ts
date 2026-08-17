@@ -53,6 +53,10 @@ export interface BootOptions {
     lines?: unknown[];
     /** What `demo` has written about it. */
     turns?: unknown[];
+    /** What the second pane has written about it, when the workspace runs two
+     *  agents and each keeps its own history. Answered for a request that
+     *  names that pane; `turns` answers the rest. */
+    secondPaneTurns?: unknown[];
     /** Questions still waiting, as `GET /asks` answers them. */
     asks?: unknown[];
     /** Set the localStorage view switch before the app boots. */
@@ -139,7 +143,11 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
   const stewardRoutes: Array<[RegExp, unknown]> = [
     [/\/api\/steward\/enabled$/, { enabled: steward.enabled }],
     [/\/api\/steward$/, { thread: steward.thread ?? [], lines: steward.lines ?? [] }],
-    [/\/api\/steward\/sessions\/[^/]+\/turns$/, { turns: steward.turns ?? [] }],
+    // The pane rides as a query parameter, so the pattern has to stop at the
+    // path: with `$` after `turns` a pane's request fell through to `{}` and
+    // the screen showed nothing, which is not what an unwritten history looks
+    // like either.
+    [/\/api\/steward\/sessions\/[^/]+\/turns(\?|$)/, { turns: steward.turns ?? [] }],
     [/\/api\/steward\/asks/, { asks: steward.asks ?? [] }],
     [/\/api\/steward\/observer$/, { present: true, status: 'idle' }],
     [/\/api\/workspaces$/, { sessions }],
@@ -148,6 +156,16 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
 
   await page.route('**/api/**', async (route) => {
     const url = route.request().url();
+    // A pane's history is its own. Matched before the table, which cannot see
+    // a query string it was written without.
+    if (steward.secondPaneTurns && /\/turns/.test(url) && url.includes(`pane=${encodeURIComponent(SECOND_AGENT_PANE.paneId)}`)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ turns: steward.secondPaneTurns }),
+      });
+      return;
+    }
     const match = [...stewardRoutes, ...ROUTES].find(([pattern]) => pattern.test(url));
     await route.fulfill({
       status: 200,

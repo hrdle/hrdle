@@ -767,9 +767,9 @@ test.describe('two agents in one workspace', () => {
     await expect(page.getByRole('button', { name: 'claude', exact: true })).toHaveCount(2);
   });
 
-  test('the summary says what it covers', async ({ page }) => {
+  test("the summary says which of the workspace's histories it is", async ({ page }) => {
     await boot(page);
-    await expect(page.getByText('ワークスペース全体')).toBeVisible();
+    await expect(page.getByText('このペインの記録です')).toBeVisible();
   });
 
   test('one agent needs no such note', async ({ page }) => {
@@ -777,7 +777,28 @@ test.describe('two agents in one workspace', () => {
       withAgentPane: true,
       steward: { enabled: true, view: true, turns: TURNS },
     });
-    await expect(page.getByText('ワークスペース全体')).toHaveCount(0);
+    await expect(page.getByText('このペインの記録です')).toHaveCount(0);
+  });
+
+  // Two agents in one workspace are two pieces of work - on `life` they were a
+  // health project and a recipe project, and one history of both read as a
+  // conversation that kept changing the subject.
+  test('the picked pane has its own history', async ({ page }) => {
+    await bootApp(page, {
+      withSecondAgentPane: true,
+      secondPaneActivity: { tool: 'Bash', target: 'bun test services/' },
+      steward: {
+        enabled: true,
+        view: true,
+        turns: TURNS,
+        secondPaneTurns: [
+          { id: 's1', at: 1_760_000_000_000, role: 'agent', text: 'レシピの続きです' },
+        ],
+      },
+    });
+
+    await expect(page.getByText('レシピの続きです')).toBeVisible();
+    await expect(page.getByText('テストを直しています')).toHaveCount(0);
   });
 
   // The history is the workspace's, so this line is the whole of what picking

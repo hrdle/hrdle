@@ -167,9 +167,33 @@ export async function setLine(sessionId: string, text: string): Promise<StewardS
 
 // ── per-session turns ──
 
-export async function getSessionTurns(sessionId: string): Promise<StewardTurn[]> {
+/**
+ * The key a session's history is kept under.
+ *
+ * A workspace running one agent is one piece of work and keeps the workspace's
+ * own id, which is every workspace that existed before this and most of them
+ * since. A workspace running several is several pieces of work - measured on
+ * `life`, whose two panes were a health project and a recipe project, and
+ * whose single history read as one conversation that kept changing the
+ * subject. Those get a key each.
+ *
+ * The pane id is herdr's (`%6`), and it travels as a query parameter rather
+ * than in the path: a `%` in a URL path is an escape, and the round trip
+ * through one is a class of bug nobody should have to think about again.
+ */
+export function turnsKey(sessionId: string, paneId?: string): string {
+  return paneId ? `${sessionId}:${paneId}` : sessionId;
+}
+
+/** Every key belonging to one workspace, its panes included. What a workspace
+ *  being removed has to clear, and what the mobile view counts. */
+function keysOfSession(sessions: Record<string, SessionBucket>, sessionId: string): string[] {
+  return Object.keys(sessions).filter((k) => k === sessionId || k.startsWith(`${sessionId}:`));
+}
+
+export async function getSessionTurns(sessionId: string, paneId?: string): Promise<StewardTurn[]> {
   const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
-  return file.sessions?.[sessionId]?.turns ?? [];
+  return file.sessions?.[turnsKey(sessionId, paneId)]?.turns ?? [];
 }
 
 /** Upsert by id rather than replace-all: the steward writes only the
@@ -178,11 +202,13 @@ export async function getSessionTurns(sessionId: string): Promise<StewardTurn[]>
 export async function appendSessionTurns(
   sessionId: string,
   turns: StewardTurn[],
+  paneId?: string,
 ): Promise<StewardTurn[]> {
   return withSessionsLock(async () => {
     const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
     const sessions = file.sessions ?? {};
-    const existing = sessions[sessionId]?.turns ?? [];
+    const key = turnsKey(sessionId, paneId);
+    const existing = sessions[key]?.turns ?? [];
 
     for (const turn of turns) {
       const index = existing.findIndex((t) => t.id === turn.id);
@@ -194,7 +220,7 @@ export async function appendSessionTurns(
       existing.push(turn);
     }
     const trimmed = existing.slice(-TURNS_PER_SESSION_MAX);
-    sessions[sessionId] = { at: Date.now(), turns: trimmed };
+    sessions[key] = { at: Date.now(), turns: trimmed };
 
     const byAge = Object.entries(sessions).sort((a, b) => a[1].at - b[1].at);
     for (const [stale] of byAge.slice(0, Math.max(0, byAge.length - SESSIONS_MAX))) {
@@ -224,8 +250,9 @@ export async function removeSession(sessionId: string): Promise<boolean> {
   await withSessionsLock(async () => {
     const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
     const sessions = file.sessions ?? {};
-    if (sessions[sessionId]) {
-      delete sessions[sessionId];
+    const keys = keysOfSession(sessions, sessionId);
+    if (keys.length > 0) {
+      for (const key of keys) delete sessions[key];
       removed = true;
       await writeJson(SESSIONS_FILE, { sessions });
     }
@@ -261,10 +288,14 @@ export async function pruneToSessions(liveSessionIds: string[]): Promise<string[
     const file = await readJson<SessionsFile>(SESSIONS_FILE, { sessions: {} });
     const sessions = file.sessions ?? {};
     let changed = false;
-    for (const id of Object.keys(sessions)) {
-      if (live.has(id)) continue;
-      delete sessions[id];
-      removed.add(id);
+    for (const key of Object.keys(sessions)) {
+      // A pane's key is its workspace's with the pane appended, and the live
+      // set is workspaces. Judged as it stands, every pane history would be
+      // pruned on the first sweep.
+      const owner = key.includes(':') ? key.slice(0, key.indexOf(':')) : key;
+      if (live.has(owner)) continue;
+      delete sessions[key];
+      removed.add(owner);
       changed = true;
     }
     if (changed) await writeJson(SESSIONS_FILE, { sessions });

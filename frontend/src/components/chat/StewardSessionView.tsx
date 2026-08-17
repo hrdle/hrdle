@@ -37,6 +37,7 @@ export function StewardSessionView({
 	agentState,
 	activity,
 	agentPaneCount,
+	paneId,
 }: {
 	sessionId: string;
 	agentSessionId?: string | null;
@@ -44,12 +45,19 @@ export function StewardSessionView({
 	composerInBar?: boolean;
 	agentState?: IndicatorState;
 	activity?: { tool: string; target?: string };
-	/** Agents running in this workspace. Above one, the history says what it
-	 *  covers - see the note it draws. */
+	/** Agents running in this workspace. Above one, each pane keeps its own
+	 *  history. */
 	agentPaneCount?: number;
+	/** Which pane is picked. Only consulted above one agent. */
+	paneId?: string;
 }) {
 	const { t } = useTranslation();
-	const { turns, waiting, thinking } = useStewardSession(sessionId, true);
+	// The pane's own history when the workspace runs several agents: two agents
+	// in one workspace are two pieces of work, and one history of both read as
+	// a conversation that kept changing the subject. One agent names no pane and
+	// keeps the workspace's own, which is what it always had.
+	const historyPane = (agentPaneCount ?? 0) > 1 ? paneId : undefined;
+	const { turns, waiting, thinking } = useStewardSession(sessionId, true, historyPane);
 	const [source, setSource] = useState<{ agentSessionId: string; messageId?: string } | null>(null);
 	const [sourceMessages, setSourceMessages] = useState<ConversationMessage[]>([]);
 	const [sourceLoading, setSourceLoading] = useState(false);
@@ -90,19 +98,17 @@ export function StewardSessionView({
 				    tall screen with the composer far below did not read as a
 				    conversation. */}
 				<div className="mx-auto mt-auto flex w-full max-w-4xl flex-col gap-3">
-						{/* One history for a workspace that is running two agents.
-						    The steward summarises the work and the work is the
-						    workspace, so switching panes does not change what is below
-						    - it changes the state line above, which is that pane's.
-						    Unsaid, two identical tabs over an unchanging conversation
-						    read as the chat having stuck on one of them. Said once, at
-						    the top, and only where the question arises. */}
+						{/* Which of the workspace's histories this is.
+						    Two agents in one workspace are two pieces of work - on
+						    `life` they were a health project and a recipe project - so
+						    each pane keeps its own. Said once, at the top, and only
+						    where there is more than one to be confused with. */}
 						{(agentPaneCount ?? 0) > 1 && (
 							<p className="text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">
 								{t("steward.wholeWorkspace", {
 									count: agentPaneCount,
 									defaultValue:
-										"この記録はワークスペース全体（エージェント{{count}}つ分）です",
+										"このペインの記録です（このワークスペースにはエージェントが{{count}}つ）",
 								})}
 							</p>
 						)}

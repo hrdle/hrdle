@@ -66,8 +66,13 @@ export function getSteward(): Promise<{ thread: StewardThreadItem[]; lines: Stew
   return fetchJson('/api/steward')
 }
 
-export function getSessionTurns(sessionId: string): Promise<{ turns: StewardTurn[] }> {
-  return fetchJson(`/api/steward/sessions/${encodeURIComponent(sessionId)}/turns`)
+/** `paneId` when the workspace runs several agents: each pane keeps its own
+ *  history there, because two agents in one workspace are two pieces of work.
+ *  A query parameter rather than a path segment - a `%` in a path is an
+ *  escape, and a pane id round-tripping through one is a bug twice over. */
+export function getSessionTurns(sessionId: string, paneId?: string): Promise<{ turns: StewardTurn[] }> {
+  const pane = paneId ? `?pane=${encodeURIComponent(paneId)}` : ''
+  return fetchJson(`/api/steward/sessions/${encodeURIComponent(sessionId)}/turns${pane}`)
 }
 
 /**
@@ -78,8 +83,12 @@ export function getSessionTurns(sessionId: string): Promise<{ turns: StewardTurn
  * and falling back would make that permanent. Answers immediately - the writing
  * arrives later, as turns.
  */
-export function summariseSession(sessionId: string): Promise<{ turns: StewardTurn[]; asked: boolean }> {
-  return postJson(`/api/steward/sessions/${encodeURIComponent(sessionId)}/summarise`)
+export function summariseSession(
+  sessionId: string,
+  paneId?: string,
+): Promise<{ turns: StewardTurn[]; asked: boolean }> {
+  const pane = paneId ? `?pane=${encodeURIComponent(paneId)}` : ''
+  return postJson(`/api/steward/sessions/${encodeURIComponent(sessionId)}/summarise${pane}`)
 }
 
 /** Say something to the steward, or answer a question it asked. */

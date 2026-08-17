@@ -160,6 +160,23 @@ async function readPayload(options: StewardCliOptions): Promise<unknown> {
   }
 }
 
+/**
+ * A target that may name a pane inside a workspace: `w2H` or `w2H:%6`.
+ *
+ * A workspace running several agents keeps a history per pane, because two
+ * agents in one workspace are two pieces of work. One running a single agent
+ * names no pane and keeps the workspace's own history, which is every
+ * workspace that existed before the split and most of them since.
+ *
+ * Split on the last colon, not the first: a workspace id has none today, and
+ * splitting on the first would hand a future one's tail to the pane.
+ */
+export function splitPaneTarget(target: string): { session: string; paneId?: string } {
+  const at = target.lastIndexOf(':');
+  if (at <= 0) return { session: target };
+  return { session: target.slice(0, at), paneId: target.slice(at + 1) };
+}
+
 export async function runSteward(options: StewardCliOptions): Promise<void> {
   const args = options.stewardArgs ?? [];
   try {
@@ -230,13 +247,21 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
       }
 
       case 'turns': {
-        const session = args[0];
-        if (!session) throw new Error('usage: hrdle steward turns <session> --file <json>, or JSON on stdin');
+        const target = args[0];
+        if (!target) {
+          throw new Error('usage: hrdle steward turns <workspace>[:<pane>] --file <json>, or JSON on stdin');
+        }
+        const { session, paneId } = splitPaneTarget(target);
         const payload = await readPayload(options);
         // Both shapes accepted: the array is what a caller naturally writes,
         // and the object is what the endpoint takes.
         const turns = Array.isArray(payload) ? payload : (payload as { turns?: unknown }).turns;
-        emit(await api(port, 'POST', `/api/steward/sessions/${encodeURIComponent(session)}/turns`, { turns }));
+        const pane = paneId ? `?pane=${encodeURIComponent(paneId)}` : '';
+        emit(
+          await api(port, 'POST', `/api/steward/sessions/${encodeURIComponent(session)}/turns${pane}`, {
+            turns,
+          }),
+        );
         return;
       }
 
