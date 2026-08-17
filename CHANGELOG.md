@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.168] - 2026-08-17
+
+### Fixed
+- **A tablet's chat reads the picked pane too.** A phone and a tablet render it
+  from two call sites, and the per-pane history was passed to one of them - so
+  the split worked on a phone while a tablet showed the workspace's history for
+  both panes of a two-agent workspace. Every two-agent spec was mobile-only,
+  which is what let the second call site through; there is a tablet one now.
+
 ## [0.3.167] - 2026-08-17
 
 ### Fixed
