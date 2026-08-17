@@ -193,15 +193,6 @@ function fit(line: string, px: number = BODY_WIDTH): string {
   return textWidth(line) <= px ? line : ellipsize(line, px)
 }
 
-/** Pad `text` with spaces until it occupies about `px`, clipping if it is
- *  already wider. Columns on this panel are pixels, not characters: the font is
- *  proportional and a name padded to a character count does not line up. */
-function padTo(text: string, px: number): string {
-  const clipped = clipToWidth(text, px)
-  const spaces = Math.max(0, Math.floor((px - textWidth(clipped)) / SPACE_W))
-  return clipped + ' '.repeat(spaces)
-}
-
 /** The head, and a right-parked tail. The head yields if the two do not fit. */
 function layOut(head: string, tail: string): string {
   const tailPx = tail ? textWidth(tail) : 0
@@ -304,31 +295,83 @@ function latestReportOf(state: AppState): (StewardThreadItem & { kind: 'report' 
   return undefined
 }
 
-/** How wide a session's name column is. Wide enough for the names in use, and
- *  narrow enough that the steward's line - the part that says what is going on
- *  - keeps most of the row. */
-const NAME_W = 168
+/** What the steward's line is indented by, under the name it belongs to. */
+const ROW_INDENT = '    '
 
-function overviewRowText(row: OverviewRow, selected: boolean): string {
+/**
+ * One session, over two lines.
+ *
+ * Both halves were on one line to begin with, in columns - and both were
+ * crushed. A workspace label here runs to forty characters and the steward's
+ * line is a sentence, so a 564px row gave each of them a third of what it
+ * needed and clipped the rest: the name said `端末Chrome…` and the line said
+ * `レビュー待…`, which is two things unreadable instead of one thing read.
+ *
+ * Half as many sessions fit on a page now, and that is the trade. The list is
+ * still whole - swiping reaches every session, and which ones come first is
+ * the steward's judgement - but what is on screen can be read rather than
+ * decoded.
+ *
+ * A session the steward has not written about takes one line, not two: an
+ * empty second line spends the budget on saying nothing.
+ */
+function overviewRowLines(row: OverviewRow, selected: boolean): string[] {
   const cursor = mark(selected)
-  if (row.kind === 'say') return `${cursor}${ACTION} Talk to the steward`
-  if (row.kind === 'report') return `${cursor}${fit(`${row.text} ${ACTION}`, BODY_WIDTH - textWidth(cursor))}`
-  const name = padTo(sessionName(row.session), NAME_W)
-  // No line yet is drawn as nothing rather than as a recap or a status: half a
-  // list in the steward's words and half in scraped ones reads as neither.
-  const line = row.line ?? '-'
-  return fit(`${cursor}${name} ${line}`)
+  if (row.kind === 'say') return [`${cursor}${ACTION} Talk to the steward`]
+  if (row.kind === 'report') {
+    return [`${cursor}${fit(`${row.text} ${ACTION}`, BODY_WIDTH - textWidth(cursor))}`]
+  }
+  const name = fit(`${cursor}${sessionName(row.session)}`)
+  // Nothing written is drawn as nothing rather than as a recap or a status:
+  // half a list in the steward's words and half in scraped ones reads as
+  // neither.
+  if (!row.line) return [name]
+  return [name, fit(`${ROW_INDENT}${row.line}`)]
+}
+
+/**
+ * Which row the window starts at, when rows are not all the same height.
+ *
+ * `windowStart` counts rows and cannot be used here: a two-line session and a
+ * one-line action row spend different amounts of the nine lines there are. The
+ * cursor's row is always whole, about half the budget is kept above it so what
+ * came before is still visible, and at the end of the list the window is
+ * pulled back rather than left half empty.
+ */
+export function overviewStart(heights: number[], cursor: number, budget: number): number {
+  const half = Math.floor(budget / 2)
+  let start = Math.max(0, Math.min(cursor, heights.length - 1))
+  let above = 0
+  while (start > 0 && above + (heights[start - 1] ?? 1) <= half) {
+    start--
+    above += heights[start] ?? 1
+  }
+  let used = above + (heights[cursor] ?? 1)
+  for (let i = cursor + 1; i < heights.length && used + (heights[i] ?? 1) <= budget; i++) {
+    used += heights[i] ?? 1
+  }
+  while (start > 0 && used + (heights[start - 1] ?? 1) <= budget) {
+    start--
+    used += heights[start] ?? 1
+  }
+  return start
 }
 
 function overviewBody(state: AppState): string {
   if (!state.connected) return 'Connecting...'
   const rows = overviewRows(state)
-  const room = LIST_LINES
-  const start = windowStart(state.cursor, rows.length, room)
-  return rows
-    .slice(start, start + room)
-    .map((row, i) => overviewRowText(row, start + i === state.cursor))
-    .join('\n')
+  const drawn = rows.map((row, i) => overviewRowLines(row, i === state.cursor))
+  const start = overviewStart(drawn.map((lines) => lines.length), state.cursor, LIST_LINES)
+
+  const out: string[] = []
+  for (let i = start; i < drawn.length; i++) {
+    const lines = drawn[i] ?? []
+    // A row is drawn whole or not at all: half a session is a name with
+    // somebody else's line under it.
+    if (out.length + lines.length > LIST_LINES) break
+    out.push(...lines)
+  }
+  return out.join('\n')
 }
 
 /** Keep the cursor on screen without moving the window more than it has to. */

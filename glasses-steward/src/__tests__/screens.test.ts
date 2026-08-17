@@ -128,6 +128,52 @@ describe('overview', () => {
     }
   })
 
+  // Both halves were on one line to begin with and both were crushed: a
+  // forty-character label and a sentence, each given a third of the width.
+  test('a session takes two lines - its name, then what the steward said', () => {
+    const s = state({
+      sessions: sessions('端末ChromeのCDPデバッグ化とHrdle修正リリース — 完了'),
+      lines: [{ sessionId: 'w1', text: 'レビュー待ち。1件は設計が変わる規模です', at: 1 }],
+    })
+    const lines = screenText(s).body.split('\n')
+    expect(lines[0]).toContain('端末Chrome')
+    expect(lines[1]).toStartWith('    ')
+    expect(lines[1]).toContain('レビュー待ち')
+  })
+
+  // An empty second line spends the budget on saying nothing.
+  test('a session the steward has not written about takes one line', () => {
+    const s = state({ sessions: sessions('work-1') })
+    const lines = screenText(s).body.split('\n')
+    expect(lines[0]).toContain('work-1')
+    expect(lines[1]).toContain('Talk to the steward')
+  })
+
+  // Half a session is a name with somebody else's line under it.
+  test('a row is drawn whole or not at all', () => {
+    const many = sessions(...Array.from({ length: 12 }, (_, i) => `work-${i + 1}`))
+    const s = state({
+      sessions: many,
+      lines: many.map((session) => ({ sessionId: session.id, text: 'waiting on review', at: 1 })),
+      cursor: 6,
+    })
+    const lines = screenText(s).body.split('\n')
+    expect(lines.length).toBeLessThanOrEqual(LIST_LINES)
+    // Every name line is followed by its own indented line.
+    for (const [i, line] of lines.entries()) {
+      if (line.includes('work-')) expect(lines[i + 1]).toStartWith('    ')
+    }
+  })
+
+  test('the row under the cursor is always on screen', () => {
+    const many = sessions(...Array.from({ length: 20 }, (_, i) => `work-${i + 1}`))
+    const withLines = many.map((session) => ({ sessionId: session.id, text: 'x', at: 1 }))
+    for (const cursor of [0, 5, 12, 19]) {
+      const s = state({ sessions: many, lines: withLines, cursor })
+      expect(screenText(s).body).toContain(`> ${many[cursor]?.name}`)
+    }
+  })
+
   test('an empty list before the first frame says it is connecting', () => {
     expect(screenText(initialState()).body).toBe('Connecting...')
   })
