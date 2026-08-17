@@ -5,8 +5,16 @@ import type { Page } from '@playwright/test';
  *
  * These specs exist to catch layout regressions across viewports, so they must
  * run anywhere — including CI, where there is no backend and no herdr. Every
- * /api call is answered from here instead; the terminal WebSocket is left to
- * fail, which the app already tolerates.
+ * /api call is answered from here instead, and every WebSocket is refused.
+ *
+ * Refusing them is not tidiness. `subscribe-steward` carries the whole thread,
+ * and a socket that connects replaces every stub in this file with whatever
+ * that server holds: run against a dev server pointed at a real backend, three
+ * of these specs failed on a live thread of 222 entries where the fixture
+ * supplies three. Nothing was wrong with the code, and the failures were
+ * reported as if something were. A suite whose data depends on where the dev
+ * server happens to point is not a suite, so the dependency is cut here rather
+ * than left to whoever runs it.
  */
 
 const SESSIONS = [
@@ -79,6 +87,12 @@ export interface BootOptions {
    *  the picked pane instead of the workspace; the round trip is the server's
    *  and is not stubbed. */
   secondPaneActivity?: { tool: string; target?: string };
+  /** This spec drives the WebSocket itself, so leave its route alone.
+   *
+   *  Playwright matches the last-registered route first, and `bootApp` runs
+   *  after the spec's own `routeWebSocket` - so without this the refusal below
+   *  would shadow a socket the spec had deliberately set up. */
+  ownsWebSocket?: boolean;
 }
 
 const AGENT_PANE = {
@@ -145,6 +159,13 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
     [/\/api\/workspaces$/, { sessions }],
     [/\/api\/sessions$/, { sessions }],
   ];
+
+  // Before `goto`, or the app's first connection is made before this is in
+  // place. Closing rather than hanging: the client treats a closed socket as a
+  // server that is not there, which is the state these specs are written for.
+  if (!options.ownsWebSocket) {
+    await page.routeWebSocket('**/ws/**', (ws) => ws.close());
+  }
 
   await page.route('**/api/**', async (route) => {
     const url = route.request().url();
