@@ -814,3 +814,36 @@ test.describe('two agents in one workspace', () => {
     await expect(page.getByText('bun test services/')).toBeVisible();
   });
 });
+
+/**
+ * The same workspace on a tablet.
+ *
+ * A phone and a tablet render the chat from two call sites in
+ * `PaneContainer`, and the pane was passed to one of them - so the split
+ * worked on a phone and the tablet read the workspace's history for both
+ * panes. Reported as a device difference, which is exactly what it looked
+ * like from outside.
+ */
+test.describe('two agents, on a tablet', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-tablet', 'tablet only');
+  });
+
+  test('the picked pane has its own history here too', async ({ page }) => {
+    await bootApp(page, {
+      withSecondAgentPane: true,
+      secondPaneActivity: { tool: 'Bash', target: 'bun test services/' },
+      steward: {
+        enabled: true,
+        view: true,
+        turns: TURNS,
+        secondPaneTurns: [
+          { id: 's1', at: 1_760_000_000_000, role: 'agent', text: 'レシピの続きです' },
+        ],
+      },
+    });
+
+    await expect(page.getByText('レシピの続きです')).toBeVisible();
+    await expect(page.getByText('テストを直しています')).toHaveCount(0);
+  });
+});
