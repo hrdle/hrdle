@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.163] - 2026-08-17
+
+### Fixed
+- **The tool call above the composer said which directory, not what was run.**
+  It was cut at 48 characters on one line, and for a `Bash` call that is the
+  wrong 48: `cd /home/me/repos/hrdle-work-3/backend/src && ...` spends all of
+  it on the path. The line now wraps instead of truncating - two lines for a
+  typical command - and the server's cap moves to 160 characters, where it is a
+  backstop against a heredoc riding on every sessions push rather than a layout
+  decision.
+
 ## [0.3.162] - 2026-08-17
 
 ### Fixed
