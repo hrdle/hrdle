@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.162] - 2026-08-17
+
+### Fixed
+- **The intent that takes a link out of the installed app now names the
+  browser.** Measured on the device: without a package, Android handed the
+  intent straight back to the app it came from and the link opened inside the
+  PWA again. A device without Chrome falls through to the fallback URL, which
+  is the behaviour this replaces.
+
 ## [0.3.161] - 2026-08-17
 
 ### Fixed
