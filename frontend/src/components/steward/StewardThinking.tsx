@@ -42,6 +42,10 @@ export function StewardThinking({
 	// where this line is for.
 	const row = "flex items-center gap-2 px-1 pt-0.5 pb-1.5 text-[13px]";
 	const dot = "inline-block h-2 w-2 shrink-0 rounded-full";
+	// The tool call is the one line here that can run past the width, so it is
+	// the one that stacks: the dot sits against the first line rather than
+	// centred against a block whose height depends on the command.
+	const rowTall = "flex items-start gap-2 px-1 pt-0.5 pb-1.5 text-[13px]";
 
 	if (since !== null) {
 		return (
@@ -53,19 +57,32 @@ export function StewardThinking({
 	}
 
 	if (agentState === "processing") {
+		if (!activity) {
+			return (
+				<p className={`${row} text-cv-accent`}>
+					<span className={`${dot} animate-pulse bg-cv-accent`} />
+					{t("steward.agentWorking", "このセッションは作業中です")}
+				</p>
+			);
+		}
 		return (
-			<p className={`${row} text-cv-accent`}>
-				<span className={`${dot} animate-pulse bg-cv-accent`} />
-				{activity ? (
-					<span className="min-w-0 truncate">
-						<span className="font-semibold">{activity.tool}</span>
-						{activity.target && (
-							<span className="ml-2 font-mono text-cv-text-secondary">{activity.target}</span>
-						)}
-					</span>
-				) : (
-					t("steward.agentWorking", "このセッションは作業中です")
-				)}
+			<p className={`${rowTall} text-cv-accent`}>
+				<span className={`${dot} mt-[5px] animate-pulse bg-cv-accent`} />
+				{/* Wraps rather than being cut. A command is the answer to "what is
+				    it doing", and one line of it is usually the directory it is
+				    doing it in - `cd /home/me/repos/… && …` said nothing at all. A
+				    second line is where most of them end. No line clamp: a clamp is
+				    the same cut one row lower, and what bounds the height instead is
+				    the server's cap on the string (160 characters, in
+				    `agent-activity.ts`) - three or four lines on a phone at the very
+				    worst. Breaking anywhere because a path has no spaces to break
+				    at. */}
+				<span className="min-w-0 [overflow-wrap:anywhere]">
+					<span className="font-semibold">{activity.tool}</span>
+					{activity.target && (
+						<span className="ml-2 font-mono text-cv-text-secondary">{activity.target}</span>
+					)}
+				</span>
 			</p>
 		);
 	}
