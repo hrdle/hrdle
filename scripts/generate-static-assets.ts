@@ -9,6 +9,9 @@ const FRONTEND_DIST = join(scriptDir, '../frontend/dist');
 // Glasses simulator, built with --base=/glasses/ so it can be mounted under
 // that prefix. Lets anyone open the G2 UI without the hardware.
 const GLASSES_DIST = join(scriptDir, '../glasses/dist-web');
+// The steward glasses app's simulator, the same way. Its own prefix because it
+// is its own app - two ehpks, two package ids, two simulators.
+const GLASSES_STEWARD_DIST = join(scriptDir, '../glasses-steward/dist-web');
 const OUTPUT_FILE = join(scriptDir, '../backend/src/static-assets.ts');
 
 interface AssetEntry {
@@ -73,6 +76,18 @@ if (existsSync(GLASSES_DIST)) {
 } else {
   // Not fatal: a binary without it simply has no simulator route.
   console.warn('glasses/dist-web missing — skipping the simulator (run: bun run --filter glasses build:web)');
+}
+
+if (existsSync(GLASSES_STEWARD_DIST)) {
+  const steward = scanDirectory(GLASSES_STEWARD_DIST);
+  for (const [path, entry] of Object.entries(steward)) {
+    assets[`/glasses-steward${path}`] = entry;
+  }
+  console.log(`Found ${Object.keys(steward).length} steward simulator files (mounted at /glasses-steward)`);
+} else {
+  console.warn(
+    'glasses-steward/dist-web missing — skipping that simulator (run: bun run --filter glasses-steward build:web)',
+  );
 }
 
 const output = `// Auto-generated static assets - DO NOT EDIT
