@@ -142,7 +142,7 @@ test.describe('steward mode', () => {
       });
     });
 
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { ownsWebSocket: true, steward: { enabled: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
