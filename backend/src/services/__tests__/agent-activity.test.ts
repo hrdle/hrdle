@@ -50,10 +50,21 @@ describe('claudeActivity', () => {
     });
   });
 
-  test('a long command is cut rather than wrapped across the screen', async () => {
-    const id = await transcript([call('Bash', { command: `echo ${'x'.repeat(200)}` })]);
+  test('a command long enough for two lines arrives whole', async () => {
+    // The length that used to be cut at 48, which is where the directory ended
+    // and the command began.
+    const command = 'cd /home/dev/repos/hrdle-work-3/backend/src && bun test services/';
+    const id = await transcript([call('Bash', { command })]);
+    expect(await claudeActivity(id, join(dir, 'projects'))).toEqual({
+      tool: 'Bash',
+      target: command,
+    });
+  });
+
+  test('a runaway command is still cut - this rides on every sessions push', async () => {
+    const id = await transcript([call('Bash', { command: `echo ${'x'.repeat(4000)}` })]);
     const activity = await claudeActivity(id, join(dir, 'projects'));
-    expect(activity?.target?.length).toBeLessThanOrEqual(48);
+    expect(activity?.target?.length).toBeLessThanOrEqual(160);
     expect(activity?.target?.endsWith('…')).toBe(true);
   });
 

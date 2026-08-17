@@ -18,8 +18,17 @@ import { readLastLines } from '../utils/read-last-lines';
 
 /** Enough to pass over a run of tool results and reach the call. */
 const TAIL_LINES = 200;
-/** A command line is a sentence on a phone; a file name is not. */
-const MAX_TARGET = 48;
+/**
+ * A backstop against a runaway string on the sessions push, not a layout rule.
+ *
+ * It was 48 - one line on a phone - and that cut the answer rather than the
+ * screen: `cd /home/me/repos/hrdle-work-3/backend/src && …` says which
+ * directory and not what was run there. How much fits is the screen's
+ * question, and the screen can now wrap to a second line and answer it.
+ * What has to stay here is a ceiling: a heredoc pasted into `Bash` is
+ * kilobytes, and this rides on every sessions push for every busy session.
+ */
+const MAX_TARGET = 160;
 
 export interface AgentActivity {
   /** The tool's own name, as the transcript records it. */
