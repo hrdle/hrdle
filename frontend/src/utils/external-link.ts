@@ -27,6 +27,21 @@ export function needsIntentEscape(
 }
 
 /**
+ * The browser app the intent is addressed to.
+ *
+ * Measured: an intent with no package was handed straight back to the app it
+ * came from, so the link opened inside the PWA again. Naming the browser is
+ * what gets past that, and Chrome is the one the WebAPK itself runs in - the
+ * browser *app*, with the person's tabs, is a different surface from the
+ * Custom Tab the PWA was opening.
+ *
+ * A device without it falls through to `browser_fallback_url`, which is no
+ * worse than the behaviour this replaces. One constant, because swapping it
+ * for another browser is a one-line change.
+ */
+const BROWSER_PACKAGE = "com.android.chrome";
+
+/**
  * The same URL, addressed to Android's intent resolver.
  *
  * The scheme moves into the `#Intent` fragment - that is the format's own
@@ -39,6 +54,7 @@ export function toIntentUrl(url: string): string {
 	return [
 		`intent://${rest}#Intent`,
 		`scheme=${scheme}`,
+		`package=${BROWSER_PACKAGE}`,
 		"action=android.intent.action.VIEW",
 		`S.browser_fallback_url=${encodeURIComponent(url)}`,
 		"end",
