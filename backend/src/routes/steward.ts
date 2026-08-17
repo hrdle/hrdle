@@ -102,6 +102,7 @@ const ThreadPostSchema = z.discriminatedUnion('kind', [
     refs: RefsSchema.optional(),
     source: SourceSchema.optional(),
     sessionId: SessionId.optional(),
+    paneId: PaneId.optional(),
   }),
   z.object({
     kind: z.literal('ask'),
@@ -110,6 +111,7 @@ const ThreadPostSchema = z.discriminatedUnion('kind', [
     refs: RefsSchema.optional(),
     source: SourceSchema.optional(),
     sessionId: SessionId.optional(),
+    paneId: PaneId.optional(),
     mode: z.enum(['single', 'multi', 'freeText']).default('single'),
     // A free-text question legitimately offers nothing to pick from.
     choices: z.array(z.string().min(1).max(200)).max(9).default([]),
@@ -134,6 +136,9 @@ const ReplySchema = z.object({
   images: ImagesSchema.optional(),
   /** Set when it was written from a session's own screen. */
   sessionId: SessionId.optional(),
+  /** And which pane of it, when that workspace runs more than one agent. A
+   *  person's own words belong in the history they typed them into. */
+  paneId: PaneId.optional(),
 });
 
 const steward = new Hono();
@@ -199,13 +204,20 @@ steward.post('/thread', async (c) => {
       id,
       source: input.source,
       sessionId: input.sessionId,
+      paneId: input.paneId,
       kind: 'ask',
       ask: { id, mode: input.mode, choices: input.choices, step: input.step },
     });
   } else if (input.kind === 'report') {
     item = await appendThreadItem({ ...base, kind: 'report', rows: input.rows });
   } else {
-    item = await appendThreadItem({ ...base, source: input.source, sessionId: input.sessionId, kind: 'notify' });
+    item = await appendThreadItem({
+      ...base,
+      source: input.source,
+      sessionId: input.sessionId,
+      paneId: input.paneId,
+      kind: 'notify',
+    });
   }
 
   broadcastSteward({ type: 'steward-thread', item });
@@ -221,7 +233,7 @@ steward.post('/thread/reply', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = ReplySchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid reply', detail: parsed.error.issues }, 400);
-  const { askId, answer, text, images, sessionId } = parsed.data;
+  const { askId, answer, text, images, sessionId, paneId } = parsed.data;
 
   if (askId && !answer) return c.json({ error: 'answer is required when askId is given' }, 400);
   // An answer with nothing to answer is a caller bug, and accepting it would
@@ -267,6 +279,10 @@ steward.post('/thread/reply', async (c) => {
   // A reply written from a session's screen belongs to that session even when
   // it answers an ask raised elsewhere - it is where the person was looking.
   const about = sessionId ?? (updatedAsk?.kind === 'ask' ? updatedAsk.sessionId : undefined);
+  // The pane goes with the session it came from, so what a person says on a
+  // pane's screen is in that pane's history rather than in a workspace-level
+  // one nothing reads.
+  const onPane = sessionId ? paneId : (updatedAsk?.kind === 'ask' ? updatedAsk.paneId : undefined);
   const item = await appendThreadItem({
     kind: 'reply',
     askId,
@@ -274,6 +290,7 @@ steward.post('/thread/reply', async (c) => {
     text: replyText,
     images,
     sessionId: about,
+    paneId: onPane,
   });
   broadcastSteward({ type: 'steward-thread', item });
   await mirrorToSession(item);
@@ -289,10 +306,11 @@ steward.post('/thread/reply', async (c) => {
   const withImages = images?.length
     ? `${said}\nThey attached: ${images.join(', ')}. Pass the path itself on - an agent can open the file, and your description of an image you cannot see is not the report.`
     : said;
+  const target = about && onPane ? `${about}:${onPane}` : about;
   wakeObserverWith(
     about
-      ? `${withImages}\nThey were reading session ${about}, so this is about that session unless they say otherwise. ` +
-          `Answer with \`steward notify --session ${about}\` so it reaches the screen they are on.`
+      ? `${withImages}\nThey were reading session ${target}, so this is about that session unless they say otherwise. ` +
+          `Answer with \`steward notify --session ${target}\` so it reaches the screen they are on.`
       : withImages,
   );
 
@@ -370,6 +388,8 @@ steward.post('/sessions/:id/summarise', async (c) => {
 steward.post('/sessions/:id/spoke', async (c) => {
   const id = SessionId.safeParse(c.req.param('id'));
   if (!id.success) return c.json({ error: 'invalid session id' }, 400);
+  const pane = paneOf(c.req.query('pane'));
+  if (!pane.ok) return c.json({ error: 'invalid pane id' }, 400);
   const body = await c.req.json().catch(() => null);
   const parsed = z.object({ text: z.string().min(1).max(TEXT_MAX) }).safeParse(body);
   if (!parsed.success) return c.json({ error: 'text is required' }, 400);
@@ -379,12 +399,14 @@ steward.post('/sessions/:id/spoke', async (c) => {
     role: 'user',
     text: parsed.data.text,
     sessionId: id.data,
+    paneId: pane.paneId,
   });
   broadcastSteward({ type: 'steward-thread', item });
   await mirrorToSession(item);
 
   wakeObserverWith(
-    `The owner spoke straight to session ${id.data}, bypassing you: "${parsed.data.text}"\n` +
+    `The owner spoke straight to session ${pane.paneId ? `${id.data}:${pane.paneId}` : id.data}, ` +
+      `bypassing you: "${parsed.data.text}"\n` +
       'It went to the agent in that pane and the agent is answering it. Do not answer it yourself, ' +
       'and do not relay it onward. Take it as context for what that pane does next, so the state ' +
       'change you are about to see is one you can explain.',
@@ -466,8 +488,13 @@ async function mirrorToSession(item: StewardThreadItem): Promise<void> {
     refs: item.refs,
     source: item.source,
   };
-  const turns = await appendSessionTurns(item.sessionId, [turn]);
-  broadcastSteward({ type: 'steward-turns', sessionId: item.sessionId, turns });
+  const turns = await appendSessionTurns(item.sessionId, [turn], item.paneId);
+  broadcastSteward({
+    type: 'steward-turns',
+    sessionId: item.sessionId,
+    paneId: item.paneId,
+    turns,
+  });
 }
 
 /** What a person's answer says, in the words the thread is read in. */

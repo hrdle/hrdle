@@ -453,6 +453,8 @@ function TerminalPane({
 		{stewardMode && showConversation && conversationAvailable && sessionTarget && (
 			<StewardSessionComposer
 				sessionId={sessionTarget.id}
+				// The history this screen is reading, so what is typed lands in it.
+				paneId={agentPaneCount > 1 ? activeTmuxPane?.paneId : undefined}
 				peerId={sessionTarget.peerId}
 				// The picked pane's, not the workspace's. This line is the whole of
 				// what picking a pane changes while the summary is up - the history

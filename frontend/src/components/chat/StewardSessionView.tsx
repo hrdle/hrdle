@@ -147,6 +147,8 @@ export function StewardSessionView({
 			{!composerInBar && (
 				<StewardSessionComposer
 					sessionId={sessionId}
+					// The history above, so what is typed lands in the same one.
+					paneId={historyPane}
 					agentState={agentState}
 					activity={activity}
 					className="mx-auto w-full max-w-4xl border-cv-border border-t p-2"

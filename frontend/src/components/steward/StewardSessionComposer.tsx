@@ -36,6 +36,7 @@ export function overviewSayPending(): boolean {
 
 export function StewardSessionComposer({
 	sessionId,
+	paneId,
 	peerId,
 	className,
 	onSent,
@@ -44,6 +45,11 @@ export function StewardSessionComposer({
 }: {
 	/** Unset on the overview, where what is said belongs to no session. */
 	sessionId?: string;
+	/** Which pane of it, when the workspace runs more than one agent. What is
+	 *  said on a pane's screen belongs in that pane's history: filed under the
+	 *  workspace it lands where that screen no longer looks, and a person's own
+	 *  words vanished from the conversation they had typed them into. */
+	paneId?: string;
 	/** Routes the image upload, so the file lands on the host that will read it. */
 	peerId?: string;
 	className?: string;
@@ -83,6 +89,7 @@ export function StewardSessionComposer({
 					text,
 					...(images.length > 0 ? { images } : {}),
 					...(sessionId ? { sessionId } : {}),
+					...(sessionId && paneId ? { paneId } : {}),
 				}),
 			});
 			if (!res.ok) return;
