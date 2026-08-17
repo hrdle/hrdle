@@ -97,6 +97,10 @@ export function replyToSteward(input: {
   askId?: string
   answer?: StewardAskAnswer
   sessionId?: string
+  /** Which of the workspace's histories this belongs in, when it runs several
+   *  agents. Without it a person's own words land in the workspace's history,
+   *  which the screen they typed them into no longer reads. */
+  paneId?: string
 }): Promise<{ item: StewardThreadItem }> {
   return postJson('/api/steward/thread/reply', input)
 }
@@ -109,8 +113,13 @@ export function replyToSteward(input: {
  * cannot account for. Sent alongside the prompt rather than instead of it: the
  * prompt is what makes the agent move, this is what makes the record true.
  */
-export function reportSpokenDirectly(sessionId: string, text: string): Promise<{ item: StewardThreadItem }> {
-  return postJson(`/api/steward/sessions/${encodeURIComponent(sessionId)}/spoke`, { text })
+export function reportSpokenDirectly(
+  sessionId: string,
+  text: string,
+  paneId?: string,
+): Promise<{ item: StewardThreadItem }> {
+  const pane = paneId ? `?pane=${encodeURIComponent(paneId)}` : ''
+  return postJson(`/api/steward/sessions/${encodeURIComponent(sessionId)}/spoke${pane}`, { text })
 }
 
 // ── sessions, for direct mode ──

@@ -105,9 +105,14 @@ that workspace with more than one agent, and write only what that pane is
 doing. One agent means one history and no pane: that is most workspaces, and
 naming a pane there splits the history for no reason.
 
-The overview line and the thread stay per workspace. A row is what a person
-reads about the workspace as a whole, and a notify is addressed to them rather
-than filed.
+\`--session\` takes the pane the same way (\`--session w2H:%6\`), and **it has
+to when the entry is about one**: what you write about a pane belongs in that
+pane's history, and filed under the workspace it lands where that screen no
+longer looks. A wake-up tells you which one the person was reading; answer to
+that one.
+
+The overview line stays per workspace - a row is what a person reads about the
+workspace as a whole.
 
 **Almost everything you write is about one session, so almost everything takes
 \`--session\`.** It is what decides where it appears: with it, on that

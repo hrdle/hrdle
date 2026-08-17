@@ -782,7 +782,14 @@ export class GlassesController {
           this.state.screen = 'overview'
           break
         case 'steward-session':
-          await replyToSteward({ text, sessionId: target.sessionId })
+          // The history the session screen is showing, so what was said lands
+          // in the same one rather than in a workspace-level history that
+          // screen no longer reads.
+          await replyToSteward({
+            text,
+            sessionId: target.sessionId,
+            paneId: this.historyPaneOf(target.sessionId),
+          })
           this.state.screen = 'session'
           break
         case 'ask':
@@ -797,7 +804,9 @@ export class GlassesController {
           // Told to the steward as well as to the agent. Unrecorded, the pane
           // changes state for a reason the steward cannot account for, and its
           // next summary of this session is written around the gap.
-          void reportSpokenDirectly(target.sessionId, text).catch(() => {})
+          void reportSpokenDirectly(target.sessionId, text, this.historyPaneOf(target.sessionId)).catch(
+            () => {},
+          )
           this.state.screen = 'direct'
           break
         }

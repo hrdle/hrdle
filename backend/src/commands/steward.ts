@@ -29,7 +29,8 @@ export interface StewardCliOptions {
   stewardMode?: 'single' | 'multi' | 'freeText';
   stewardStep?: { index: number; total: number };
   stewardFile?: string;
-  /** `--session`: which workspace a notify or an ask is about. */
+  /** `--session`: which workspace a notify or an ask is about, and which pane
+   *  of it (`w2H:%6`) when that workspace runs more than one agent. */
   session?: string;
   port: number;
 }
@@ -171,6 +172,15 @@ async function readPayload(options: StewardCliOptions): Promise<unknown> {
  * Split on the last colon, not the first: a workspace id has none today, and
  * splitting on the first would hand a future one's tail to the pane.
  */
+/** What `--session` puts on a thread entry. A pane named there is where the
+ *  entry belongs: a workspace running several agents keeps a history each, and
+ *  an answer filed under the workspace lands where nothing reads it. */
+export function sessionFields(target?: string): { sessionId?: string; paneId?: string } {
+  if (!target) return {};
+  const { session, paneId } = splitPaneTarget(target);
+  return { sessionId: session, paneId };
+}
+
 export function splitPaneTarget(target: string): { session: string; paneId?: string } {
   const at = target.lastIndexOf(':');
   if (at <= 0) return { session: target };
@@ -185,14 +195,14 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
       case 'notify': {
         const text = args[0];
         if (!text) {
-          throw new Error('usage: hrdle steward notify <text> [--detail <markdown>] [--session <workspace>]');
+          throw new Error('usage: hrdle steward notify <text> [--detail <markdown>] [--session <workspace>[:<pane>]]');
         }
         emit(
           await api(port, 'POST', '/api/steward/thread', {
             kind: 'notify',
             text,
             detail: options.stewardDetail,
-            sessionId: options.session,
+            ...sessionFields(options.session),
           }),
         );
         return;
@@ -202,7 +212,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
         const text = args[0];
         if (!text) {
           throw new Error(
-            'usage: hrdle steward ask <text> [--choices "a,b"] [--mode single|multi|freeText] [--step 2/3] [--session <workspace>]',
+            'usage: hrdle steward ask <text> [--choices "a,b"] [--mode single|multi|freeText] [--step 2/3] [--session <workspace>[:<pane>]]',
           );
         }
         emit(
@@ -213,7 +223,7 @@ export async function runSteward(options: StewardCliOptions): Promise<void> {
             mode: options.stewardMode ?? 'single',
             step: options.stewardStep,
             detail: options.stewardDetail,
-            sessionId: options.session,
+            ...sessionFields(options.session),
           }),
         );
         return;

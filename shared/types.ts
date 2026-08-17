@@ -1873,6 +1873,16 @@ export type StewardThreadItem = StewardTurn & {
    * screen carries it the same way, so the answer knows where it is going.
    */
   sessionId?: string;
+  /**
+   * Which pane of that session, when it runs more than one agent.
+   *
+   * A workspace running several agents keeps a history per pane, and an entry
+   * about one of them belongs in that one. Without it, everything said from a
+   * pane's own screen landed in the workspace's history - which that screen no
+   * longer reads - so a person's own words vanished from the conversation they
+   * had just typed them into.
+   */
+  paneId?: string;
 } & (
     | { kind: 'notify' }
     | { kind: 'ask'; ask: StewardAsk }

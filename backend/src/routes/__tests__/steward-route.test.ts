@@ -428,6 +428,49 @@ describe('session writes', () => {
     expect(res.status).toBe(400);
   });
 
+  // What a person says on a pane's screen belongs in that pane's history.
+  // Filed under the workspace it landed where that screen no longer looks, so
+  // their own words vanished from the conversation they had typed them into.
+  test("what is said on a pane's screen is in that pane's history", async () => {
+    await post('/api/steward/thread/reply', {
+      text: '木綿豆腐ベーグルのレシピを登録して',
+      sessionId: 'w2H',
+      paneId: '%6',
+    });
+
+    const pane = (await (await app.request('/api/steward/sessions/w2H/turns?pane=%256')).json()) as {
+      turns: { role: string; text: string }[];
+    };
+    expect(pane.turns.map((t) => t.text)).toEqual(['木綿豆腐ベーグルのレシピを登録して']);
+
+    // And not in the workspace's, which is a different history.
+    const workspace = (await (await app.request('/api/steward/sessions/w2H/turns')).json()) as {
+      turns: unknown[];
+    };
+    expect(workspace.turns).toEqual([]);
+  });
+
+  test("the steward's answer can name the same pane", async () => {
+    await post('/api/steward/thread', {
+      kind: 'notify',
+      text: '登録しました',
+      sessionId: 'w2H',
+      paneId: '%6',
+    });
+    const pane = (await (await app.request('/api/steward/sessions/w2H/turns?pane=%256')).json()) as {
+      turns: { text: string }[];
+    };
+    expect(pane.turns.map((t) => t.text)).toEqual(['登録しました']);
+  });
+
+  test('speaking straight to a pane is recorded against that pane', async () => {
+    await post('/api/steward/sessions/w2H/spoke?pane=%256', { text: 'そのまま進めて' });
+    const pane = (await (await app.request('/api/steward/sessions/w2H/turns?pane=%256')).json()) as {
+      turns: { role: string; text: string }[];
+    };
+    expect(pane.turns).toEqual([expect.objectContaining({ role: 'user', text: 'そのまま進めて' })]);
+  });
+
   test('turns are fitted the same way', async () => {
     const long = 'あ'.repeat(400);
     const res = await post('/api/steward/sessions/w5Q/turns', {
