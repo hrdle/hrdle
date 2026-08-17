@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.169] - 2026-08-18
+
+### Fixed
+- **What is said on a pane's screen stays in that pane's history.** Reads went
+  per pane when the split landed and writes did not, so everything a person
+  typed - and every answer to it - was filed under the workspace, which that
+  screen had stopped reading. They wrote into a conversation and their sentence
+  did not appear in it. A thread entry carries the pane now, and every way in
+  takes it: the reply endpoint, `notify` and `ask`, `spoke`, the CLI's
+  `--session <workspace>:<pane>`, the composer on all three screens, and the
+  glasses. Existing entries are not moved - nothing in them says which pane
+  they belong to.
+
 ## [0.3.168] - 2026-08-17
 
 ### Fixed
