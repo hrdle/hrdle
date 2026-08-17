@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.164] - 2026-08-17
+
+### Added
+- **A second glasses app, `Hrdle Steward`.** Six screens - overview, session,
+  question, report, voice, direct - showing what the steward wrote rather than
+  what a terminal happened to print. The existing `Hrdle` app is untouched and
+  both can be installed at once. Built to `glasses-steward/`, with its own
+  simulator at `/glasses-steward`.
+- **The chat's text size follows one setting.** The conversation viewer's font
+  size, its buttons and its pinch gesture now cover the steward's chat and its
+  thread as well, under the key the viewer already used - and there is a control
+  beside the UI scale in the dashboard, since a pinch is a gesture nobody finds
+  by looking. Captions trail the body rather than tracking it, and the controls
+  keep their own size.
+
+### Fixed
+- **A multi-select question could not be answered "none of these"**, which is
+  the answer its Send row exists for. An empty set of indices is accepted now,
+  and a single-answer question is held to exactly one.
+- **An instruction spoken straight to a pane is recorded.** The glasses' direct
+  mode reaches the agent without the steward, and unrecorded it left the steward
+  watching a pane move for a reason it could not account for.
+- **Two things the steward kept getting wrong when relaying.** It now says one
+  short thing after passing something to an agent rather than going silent (the
+  rule against repeating itself had been read as a rule to say nothing), and it
+  resolves what "this" refers to before relaying an instruction that touches
+  more than one topic.
+
 ## [0.3.163] - 2026-08-17
 
 ### Fixed
