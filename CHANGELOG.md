@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.174] - 2026-08-18
+
+### Changed
+- **The steward is told that `detail` is read rather than opened.** The prompt
+  still said it "has no such limit; put the code, the diff, the reasoning
+  there" - written when it sat behind a disclosure, where length costs nothing
+  until someone asks for it. It is now the rest of the message, so its length
+  is length on the reader's screen. Measured across 386 thread entries: `text`
+  averaged around 120 characters and `detail` around 900. None of it ever
+  reached the glasses - `fitToPage` holds `text` to the page before it is
+  stored, and none of the 386 were over - so this was a phone problem only.
+
 ## [0.3.173] - 2026-08-18
 
 ### Fixed
