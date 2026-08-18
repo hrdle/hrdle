@@ -516,7 +516,7 @@ test.describe('a session in steward mode', () => {
     );
 
     await expect(page.getByRole('button', { name: '画像を添付' })).toBeVisible();
-    await page.locator('input[type=file]').setInputFiles({
+    await page.locator('input[type=file]:not([capture])').setInputFiles({
       name: 'shot.png',
       mimeType: 'image/png',
       buffer: Buffer.from('89504e47', 'hex'),
@@ -623,7 +623,7 @@ test.describe('a session in steward mode', () => {
         body: JSON.stringify({ path: '/tmp/shot.png', filename: 'shot.png' }),
       }),
     );
-    await page.locator('input[type=file]').setInputFiles({
+    await page.locator('input[type=file]:not([capture])').setInputFiles({
       name: 'shot.png',
       mimeType: 'image/png',
       buffer: Buffer.from('89504e47', 'hex'),
@@ -858,5 +858,35 @@ test.describe('two agents, on a tablet', () => {
 
     await expect(page.getByText('レシピの続きです')).toBeVisible();
     await expect(page.getByText('テストを直しています')).toHaveCount(0);
+  });
+});
+
+/**
+ * Taking a picture rather than finding one.
+ *
+ * Reported as something used often: the composer could attach an image from
+ * the library, and going through the library to photograph a screen or a
+ * printed part is three taps and a scroll past everything else in it.
+ */
+test.describe('the camera', () => {
+  test('is offered beside the library on a touch device', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'responsive-desktop', 'no camera on a desktop pointer');
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByRole('button', { name: '写真を撮る' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '画像を添付' })).toBeVisible();
+  });
+
+  test('opens the camera rather than the library', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'responsive-desktop', 'no camera on a desktop pointer');
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    // The attribute is the whole feature: without it the host opens its file
+    // sheet and the button is a duplicate.
+    await expect(page.locator('input[type=file][capture="environment"]')).toHaveCount(1);
   });
 });

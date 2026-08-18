@@ -468,6 +468,7 @@
     "removeImage": "画像を外す",
     "working": "処理中…（経過 {{seconds}} 秒）",
     "agentWorking": "このセッションは作業中です",
-    "agentWaiting": "このセッションは入力を待っています"
+    "agentWaiting": "このセッションは入力を待っています",
+    "takePhoto": "写真を撮る"
   }
 }
