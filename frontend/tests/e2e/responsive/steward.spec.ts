@@ -70,11 +70,13 @@ test.describe('steward mode', () => {
     await page.getByTitle('スチュワード').click();
 
     await expect(page.getByText('レビューが7件返っています')).toBeVisible();
-    // The half the glasses could not carry, behind a tap: open, the card is the
-    // glance plus everything the glance was meant to spare them.
-    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
-    await page.getByRole('button', { name: '詳細', exact: true }).click();
+    // The half the glasses could not carry, in the message rather than behind a
+    // tap. The split is the glasses' constraint; a disclosure triangle under
+    // every reply is the shape of an AI chat, and the server *moves* an
+    // over-long `text` down here, so the two halves are often one sentence cut
+    // in the middle.
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(0);
   });
 
   // The thread is the conversation about the whole set. What is about one
@@ -253,14 +255,25 @@ test.describe('steward mode on a tablet', () => {
     await expect(page.getByTestId('floating-keyboard')).toHaveCount(0);
   });
 
-  test('a detail is behind a tap here too', async ({ page }) => {
+  test('a detail is part of the message here too', async ({ page }) => {
     await bootApp(page, { steward: { enabled: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
-    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
-    await page.getByRole('button', { name: '詳細', exact: true }).click();
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(0);
+  });
+
+  // A conversation is read as a sequence of moments, and until this there was
+  // nothing on any turn to say which moment.
+  test('every turn says when it was said', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    const times = page.locator('time[datetime]');
+    await expect(times.first()).toBeVisible();
+    expect(await times.count()).toBeGreaterThanOrEqual(THREAD.length);
   });
 
   test('is absent when the server has no steward', async ({ page }) => {
@@ -503,7 +516,7 @@ test.describe('a session in steward mode', () => {
     );
 
     await expect(page.getByRole('button', { name: '画像を添付' })).toBeVisible();
-    await page.locator('input[type=file]').setInputFiles({
+    await page.locator('input[type=file]:not([capture])').setInputFiles({
       name: 'shot.png',
       mimeType: 'image/png',
       buffer: Buffer.from('89504e47', 'hex'),
@@ -610,7 +623,7 @@ test.describe('a session in steward mode', () => {
         body: JSON.stringify({ path: '/tmp/shot.png', filename: 'shot.png' }),
       }),
     );
-    await page.locator('input[type=file]').setInputFiles({
+    await page.locator('input[type=file]:not([capture])').setInputFiles({
       name: 'shot.png',
       mimeType: 'image/png',
       buffer: Buffer.from('89504e47', 'hex'),
@@ -845,5 +858,35 @@ test.describe('two agents, on a tablet', () => {
 
     await expect(page.getByText('レシピの続きです')).toBeVisible();
     await expect(page.getByText('テストを直しています')).toHaveCount(0);
+  });
+});
+
+/**
+ * Taking a picture rather than finding one.
+ *
+ * Reported as something used often: the composer could attach an image from
+ * the library, and going through the library to photograph a screen or a
+ * printed part is three taps and a scroll past everything else in it.
+ */
+test.describe('the camera', () => {
+  test('is offered beside the library on a touch device', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'responsive-desktop', 'no camera on a desktop pointer');
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByRole('button', { name: '写真を撮る' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '画像を添付' })).toBeVisible();
+  });
+
+  test('opens the camera rather than the library', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'responsive-desktop', 'no camera on a desktop pointer');
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    // The attribute is the whole feature: without it the host opens its file
+    // sheet and the button is a duplicate.
+    await expect(page.locator('input[type=file][capture="environment"]')).toHaveCount(1);
   });
 });

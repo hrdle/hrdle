@@ -470,6 +470,7 @@
     "removeImage": "Remove image",
     "working": "Working... ({{seconds}}s)",
     "agentWorking": "This session is working",
-    "agentWaiting": "This session is waiting for you"
+    "agentWaiting": "This session is waiting for you",
+    "takePhoto": "Take a photo"
   }
 }

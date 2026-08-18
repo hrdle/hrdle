@@ -1,4 +1,4 @@
-import { CornerDownLeft, ImagePlus, X } from "lucide-react";
+import { Camera, CornerDownLeft, ImagePlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { IndicatorState } from "../../../../shared/types";
@@ -65,6 +65,7 @@ export function StewardSessionComposer({
 	const [uploading, setUploading] = useState(false);
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
 	const fileRef = useRef<HTMLInputElement>(null);
+	const cameraRef = useRef<HTMLInputElement>(null);
 
 	// The blob URLs are this tab's own; nothing else frees them.
 	useEffect(() => {
@@ -123,6 +124,20 @@ export function StewardSessionComposer({
 			setUploading(false);
 		}
 	};
+
+	/**
+	 * Whether taking a photo is a thing this device can do.
+	 *
+	 * `capture` is ignored on a desktop browser rather than refused, so the
+	 * button would be there and would open the same file picker as the one
+	 * beside it - two identical controls with different icons. A coarse pointer
+	 * is the honest test: a phone or a tablet, which is where a camera is.
+	 *
+	 * Not to be confused with the glasses app's WebView, which refuses
+	 * `<input capture>` outright (see the table in CLAUDE.md). This runs in the
+	 * phone's own browser, where it works.
+	 */
+	const hasCamera = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
 	const remove = (path: string) => {
 		setAttachments((prev) => {
@@ -187,6 +202,32 @@ export function StewardSessionComposer({
 			>
 				<ImagePlus size={18} />
 			</button>
+			{hasCamera && (
+				<>
+					{/* Its own input, not a flag on the one above: `capture` is an
+					    attribute of the element the picker was opened from, so
+					    toggling it before a click is a race with the host's own
+					    sheet. Two inputs, one job each. */}
+					<input
+						type="file"
+						accept="image/*"
+						capture="environment"
+						className="hidden"
+						ref={cameraRef}
+						onChange={attach}
+					/>
+					<button
+						type="button"
+						onClick={() => cameraRef.current?.click()}
+						disabled={uploading}
+						aria-label={t("steward.takePhoto", "写真を撮る")}
+						title={t("steward.takePhoto", "写真を撮る")}
+						className="min-h-10 px-2 text-cv-text-muted disabled:opacity-40"
+					>
+						<Camera size={18} />
+					</button>
+				</>
+			)}
 			{/* A textarea with the pane's own attributes, not a bare <input>.
 			    Chrome reads a plain text field as a form and puts its
 			    password / card / address strip above the keyboard; and a font
