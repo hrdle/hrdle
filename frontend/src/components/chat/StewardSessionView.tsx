@@ -17,8 +17,7 @@ import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
 import { speakerSurface } from "../steward/StewardView";
-import { Linkified } from "../steward/Linkified";
-import { TurnDetail } from "../steward/TurnDetail";
+import { TurnBody, TurnTime } from "../steward/TurnBody";
 import { TurnImages } from "../steward/TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -209,13 +208,9 @@ function TurnCard({
 					</button>
 				)}
 
-				<p className="whitespace-pre-wrap break-words">
-					<Linkified text={turn.text} />
-				</p>
+				<TurnBody text={turn.text} detail={turn.detail} />
 
 					{turn.images && <TurnImages paths={turn.images} onLoad={onGrow} />}
-
-				{turn.detail && <TurnDetail detail={turn.detail} />}
 
 				{turn.refs?.file && (
 					<p className="mt-1 font-mono text-[length:var(--cv-fs-meta,12px)] text-cv-text-muted">
@@ -223,6 +218,8 @@ function TurnCard({
 						{turn.refs.line ? `:${turn.refs.line}` : ""}
 					</p>
 				)}
+
+				<TurnTime at={turn.at} className={mine ? "text-right" : ""} />
 
 			</div>
 		</div>
