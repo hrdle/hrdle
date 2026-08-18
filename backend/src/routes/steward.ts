@@ -70,9 +70,9 @@ function paneOf(raw: string | undefined): { ok: true; paneId?: string } | { ok: 
  * through, and a report pasted into a chat message does not.
  *
  * **It does not fix an ordinary over-long message, and is not meant to.** Every
- * detail that prompted this was under 2,200. What a person actually reads is
- * decided by what the steward is told to write - see `steward-prompt.ts` - and
- * a ceiling is only there for the case where that has stopped working.
+ * detail measured was under 2,200, and a `detail` is behind a tap anyway, so
+ * its length costs a reader nothing until they ask for it. This is only the
+ * case where the writer has stopped making sense.
  */
 const TEXT_MAX = 4000;
 const DETAIL_MAX = 4000;
@@ -97,8 +97,8 @@ function tooBig(issues: { code: string; path: PropertyKey[]; maximum?: unknown }
   const limit = Number(over.maximum);
   return field === 'detail'
     ? `detail is ${sent} characters against a ceiling of ${limit}. Nothing was written. ` +
-        'A detail is the rest of the message on a phone, not a report: send a few sentences, ' +
-        'and put the long form in `steward report` or in a file you point at.'
+        'That ceiling stops a runaway, so being near it means this is a report: ' +
+        'put it in `steward report` or in a file you point at.'
     : `text is ${sent} characters against a ceiling of ${limit}. Nothing was written. ` +
         'One page reaches the glasses and the rest moves into detail on its own, so a long ' +
         'text buys no room - say the one thing the decision turns on.';

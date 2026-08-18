@@ -48,7 +48,6 @@ describe("the steward's own voice", () => {
 	test.each(["dark", "light"] as const)("%s: has a surface of its own", (theme) => {
 		const p = palette(theme);
 		expect(p.steward).toBeTruthy();
-		expect(p["steward-edge"]).toBeTruthy();
 		expect(p.steward).not.toBe(p.surface);
 		expect(p.steward).not.toBe(p.bubble);
 	});
@@ -61,13 +60,16 @@ describe("the steward's own voice", () => {
 		expect(apart(p.steward, p.surface)).toBeGreaterThanOrEqual(20);
 	});
 
-	// Colour alone fails a reader who cannot separate two warm neutrals, and the
-	// two themes must not disagree about which speaker is which.
-	test("carries an edge as well as a colour, in one place both screens read", () => {
+	// A colour, and not an edge. The first version drew an accent rule down the
+	// left of the steward's card; it reads as an AI product's card and was
+	// rejected on sight. A surface a shade off its neighbours does the finding
+	// without announcing that a machine is talking.
+	test("is a colour and not an edge, in one place both screens read", () => {
 		const view = read("components/steward/StewardView.tsx");
 		expect(view).toContain("export function speakerSurface");
 		expect(view).toContain("bg-cv-steward");
-		expect(view).toContain("border-l-");
+		expect(view).not.toContain("border-l-");
+		expect(view).not.toContain("steward-edge");
 		expect(read("components/chat/StewardSessionView.tsx")).toContain("speakerSurface(turn.role)");
 	});
 
@@ -82,12 +84,11 @@ describe("the steward's own voice", () => {
 
 	test("both themes define every token the classes name", () => {
 		const css = read("index.css");
-		for (const token of ["--color-cv-steward:", "--color-cv-steward-edge:"]) {
-			expect(css).toContain(token);
-		}
+		expect(css).toContain("--color-cv-steward:");
+		// The edge token had one reader and went with it.
+		expect(css).not.toContain("steward-edge");
 		for (const theme of ["dark", "light"] as const) {
 			expect(palette(theme).steward).toMatch(/^#[0-9a-f]{6}$/);
-			expect(palette(theme)["steward-edge"]).toMatch(/^#[0-9a-f]{6}$/);
 		}
 	});
 });

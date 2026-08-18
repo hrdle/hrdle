@@ -70,13 +70,12 @@ test.describe('steward mode', () => {
     await page.getByTitle('スチュワード').click();
 
     await expect(page.getByText('レビューが7件返っています')).toBeVisible();
-    // The half the glasses could not carry, in the message rather than behind a
-    // tap. The split is the glasses' constraint; a disclosure triangle under
-    // every reply is the shape of an AI chat, and the server *moves* an
-    // over-long `text` down here, so the two halves are often one sentence cut
-    // in the middle.
+    // The half the glasses could not carry, behind a tap. Inlined for a day on
+    // a misread of "this is an AI thing, I do not need it", which was about the
+    // coloured rule down the card's edge.
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
+    await page.getByRole('button', { name: '詳細', exact: true }).click();
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
-    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(0);
   });
 
   // The thread is the conversation about the whole set. What is about one
@@ -255,13 +254,14 @@ test.describe('steward mode on a tablet', () => {
     await expect(page.getByTestId('floating-keyboard')).toHaveCount(0);
   });
 
-  test('a detail is part of the message here too', async ({ page }) => {
+  test('a detail is behind a tap here too', async ({ page }) => {
     await bootApp(page, { steward: { enabled: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
+    await page.getByRole('button', { name: '詳細', exact: true }).click();
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
-    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(0);
   });
 
   // A conversation is read as a sequence of moments, and until this there was
