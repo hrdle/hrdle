@@ -184,25 +184,23 @@ describe("the wearer's own sentence", () => {
 })
 
 describe('who said it', () => {
-  // The panel is monochrome, so the two voices are told apart by where the line
-  // starts. The lead is only on the first line of a wrapped turn; the indent is
-  // on all of them.
-  test("the wearer's turn is led and indented, the steward's is flush", () => {
-    const s = state([turn('t1', 'user', 'a'.repeat(200))])
-    const page = sessionPages(s)[0]
-    expect(page[0]).toStartWith('    You: ')
-    expect(page[1]).toStartWith('    ')
-
-    const steward = sessionPages(state([turn('t2', 'steward', 'shipped')]))[0]
-    expect(steward[0]).toBe('shipped')
+  // The panel is monochrome, so the voices are told apart by a mark: `$` for the
+  // wearer, nothing for the steward. The shell's convention, and the one the
+  // direct screen already uses.
+  test("the wearer's turn is marked and the steward's is not", () => {
+    expect(sessionPages(state([turn('t1', 'user', 'ship it')]))[0][0]).toBe('$ ship it')
+    expect(sessionPages(state([turn('t2', 'steward', 'shipped')]))[0][0]).toBe('shipped')
   })
 
-  test('the indent does not push a wearer line past the panel', () => {
-    const s = state([turn('t1', 'user', 'ship it '.repeat(40))])
-    const plain = sessionPages(state([turn('t2', 'steward', 'ship it '.repeat(40))]))
-    for (const line of sessionPages(s).flat()) {
-      expect(line.length).toBeLessThanOrEqual(Math.max(...plain.flat().map((l) => l.length)) + 4)
-    }
+  // An indent was tried and reads well, and costs a column off every line of
+  // every wearer turn on a panel with seven lines to spend. The mark is on the
+  // first line and nothing else moves.
+  test('a wearer turn uses the full width, like the steward\'s', () => {
+    const long = 'ship it when the tests pass '.repeat(12)
+    const mine = sessionPages(state([turn('t1', 'user', long)])).flat()
+    const theirs = sessionPages(state([turn('t2', 'steward', long)])).flat()
+    for (const line of mine.slice(1)) expect(line).not.toStartWith(' ')
+    expect(mine.length).toBe(theirs.length)
   })
 })
 

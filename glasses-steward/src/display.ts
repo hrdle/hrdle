@@ -535,24 +535,20 @@ export function sessionTurns(state: AppState): StewardTurn[] {
 }
 
 /**
- * How far the wearer's own turns sit in from the steward's.
+ * One turn's lines, marked for whichever of the two said it.
  *
- * The panel is monochrome, so the two voices cannot be told apart by colour the
- * way a chat window does it. They can be told apart by *where the line starts*,
- * which reads at a glance and survives being green on green: the wearer's turns
- * are indented and led with their name, the steward's run flush left. Two
- * signals rather than one, because the lead alone is at the top of the page and
- * a wrapped turn is mostly lines that do not carry it.
+ * The panel is monochrome, so the voices cannot be told apart by colour the way
+ * a chat window does it. `$` for the wearer and nothing for the steward - the
+ * shell's own convention, the same mark the direct screen uses, and the one the
+ * other glasses app arrived at.
+ *
+ * **Not an indent.** That was tried first and reads well, but it costs a column
+ * off every line of every wearer turn, on a panel that has seven lines to spend
+ * and no more. A one-character mark on the first line buys the same distinction
+ * for a twenty-fifth of the price.
  */
-const YOU_INDENT = '    '
-
-/** One turn's lines, laid out for whichever of the two said it. */
 function turnLines(turn: StewardTurn): string[] {
-  if (turn.role !== 'user') return splitBody(turn.text)
-  // Wrapped to the narrower column first, or the indent pushes the last word of
-  // every line past the panel edge.
-  const width = BODY_WIDTH - textWidth(YOU_INDENT)
-  return splitLines(`You: ${turn.text}`, width).map((l) => `${YOU_INDENT}${l}`)
+  return splitBody(turn.role === 'user' ? `$ ${turn.text}` : turn.text)
 }
 
 /** One page, and which piece of which turn it is. */

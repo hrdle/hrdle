@@ -200,7 +200,9 @@ describe('session', () => {
       openSessionId: 'w1',
       turns: new Map([['w1', [turn('t1', 'go ahead', 'user')]]]),
     })
-    expect(sessionPages(s)[0]?.join(' ')).toContain('You:')
+    // `$`, the shell's own convention and the mark the direct screen uses. An
+    // indent was tried and costs a column off every line of a wearer turn.
+    expect(sessionPages(s)[0]?.[0]).toBe('$ go ahead')
   })
 
   test('the direct row is pinned to the last line whatever the page holds', () => {
