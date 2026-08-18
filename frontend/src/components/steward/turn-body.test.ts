@@ -6,14 +6,10 @@ import { join } from "node:path";
  * What a turn shows, and when it was said.
  *
  * The steward writes twice - a page-sized `text` for the glasses and a `detail`
- * with the code and the reasoning - and the phone rendered the second half as a
- * collapsed `詳細` row under every message. Five consecutive replies, five
- * disclosure triangles, each of which had to be opened to find out whether it
- * held anything: the shape of an AI chat rather than of a conversation, and
- * rejected on sight.
- *
- * The split is the *glasses'* constraint. It has no business following the
- * message onto a screen that can hold it.
+ * with the code and the reasoning - and the second half stays behind a tap.
+ * It was inlined for a day on a misread of "this is an AI thing, I do not need
+ * it", which was about the coloured rule down the card's edge; the disclosure
+ * was never what anyone objected to.
  */
 const SRC = join(import.meta.dir, "..", "..");
 
@@ -23,52 +19,28 @@ function read(rel: string): string {
 
 const SCREENS = ["components/steward/StewardView.tsx", "components/chat/StewardSessionView.tsx"];
 
-describe("a turn is one message", () => {
-	test("there is no expander left to open", () => {
-		expect(existsSync(join(SRC, "components/steward/TurnDetail.tsx"))).toBe(false);
+describe("a turn's second half", () => {
+	// Inlined for a day on a misread: "this is an AI thing, I do not need it"
+	// was about the coloured rule down the card's edge, not about the
+	// disclosure. Putting it back is the correction, not a second opinion about
+	// which reads better.
+	test("is behind its tap, on both screens", () => {
 		for (const screen of SCREENS) {
-			expect(read(screen)).not.toContain("TurnDetail");
+			expect(read(screen)).toMatch(/<TurnDetail detail=\{(item|turn)\.detail\}/);
 		}
-	});
-
-	// The server *moves* an over-long `text` down into `detail`, so the two are
-	// often one sentence cut in the middle. Dropping the second half to be rid
-	// of the toggle would lose what the message was saying.
-	test("the detail is still shown - inline, as part of the message", () => {
+		// The prose mentions it; the component does not take it.
 		const body = read("components/steward/TurnBody.tsx");
-		expect(body).toContain("detail");
-		expect(body).toContain("Markdown");
-		expect(body).not.toContain("useState");
-		for (const screen of SCREENS) {
-			expect(read(screen)).toContain("<TurnBody");
-			expect(read(screen)).toMatch(/detail=\{(item|turn)\.detail\}/);
-		}
+		expect(body).toContain("export function TurnBody({ text }: { text: string })");
+		expect(body).not.toContain("Markdown");
 	});
 
-	// Always-on is the intent; looking like an expanded panel is not. `Markdown`
-	// is sized for a full-width transcript - 1.3em headings with 20px above them
-	// - which inside a bubble reads as a document that has been unfolded rather
-	// than as the message carrying on. It was tolerable behind a toggle, because
-	// opening one is asking for a document.
-	test("reads as the message carrying on, not as a panel that was unfolded", () => {
-		const body = read("components/steward/TurnBody.tsx");
-		expect(body).toContain("cv-turn-detail");
-		// Dimmed, it reads as a lesser block stapled underneath.
-		expect(body).not.toContain("text-cv-text-secondary");
-
-		const css = read("index.css");
-		const rules = css.slice(css.indexOf(".cv-turn-detail"));
-		expect(rules).toContain("font-size: 1em");
-		expect(rules.slice(0, 700)).toContain("margin-block");
-	});
-
-	test("its strings go with it", () => {
+	test("its strings are back in both locales", () => {
 		for (const locale of ["en", "ja"]) {
 			const table = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
 				steward: Record<string, string>;
 			};
-			expect(table.steward.detailShow).toBeUndefined();
-			expect(table.steward.detailHide).toBeUndefined();
+			expect(table.steward.detailShow).toBeTruthy();
+			expect(table.steward.detailHide).toBeTruthy();
 		}
 	});
 });

@@ -50,7 +50,6 @@
 	   why it had not answered. The accent tinted into the surface, plus a rule
 	   down the left edge, so it is not colour alone doing the work. */
 	--color-conv-steward: #473932;
-	--color-conv-steward-edge: #d97757;
 
 	/* Syntax tokens, warm to match the surface above. highlight.js ships its
 	   own themes; every one of them is a different room's lighting. */
@@ -102,7 +101,6 @@
 	--color-conv-border: #e2dfd4;
 	--color-conv-accent: #c96442;
 	--color-conv-steward: #ecdcd1;
-	--color-conv-steward-edge: #c96442;
 
 	--conv-tok-comment: #8a8780;
 	--conv-tok-keyword: #a04a2a;
@@ -142,7 +140,6 @@
   --color-cv-border: var(--color-conv-border);
   --color-cv-accent: var(--color-conv-accent);
   --color-cv-steward: var(--color-conv-steward);
-  --color-cv-steward-edge: var(--color-conv-steward-edge);
 }
 
 html,
@@ -263,37 +260,6 @@ body {
 
 .animate-status-glow {
 	animation: status-glow 2s ease-in-out infinite;
-}
-
-/* A turn's second half, when the steward wrote one.
-   `Markdown` is sized for a full-width transcript - 1.3em headings with 20px
-   above them, paragraphs at 1.7 line-height. That is right for a document and
-   wrong inside a chat bubble, where it reads as a panel that has been expanded
-   rather than as the message carrying on. It was tolerable behind a toggle,
-   because opening one is asking for a document; it is not tolerable now that
-   the message is always whole.
-
-   Toned down rather than restyled: the headings still lead, the lists still
-   indent, the code still sits in its block - they just stop announcing
-   themselves at the scale of a page. */
-.cv-turn-detail p,
-.cv-turn-detail ul,
-.cv-turn-detail ol {
-	margin-block: 0.5rem;
-	line-height: 1.6;
-}
-.cv-turn-detail h1,
-.cv-turn-detail h2,
-.cv-turn-detail h3,
-.cv-turn-detail h4 {
-	margin-block: 0.75rem 0.25rem;
-	font-size: 1em;
-}
-.cv-turn-detail > *:first-child {
-	margin-block-start: 0;
-}
-.cv-turn-detail > *:last-child {
-	margin-block-end: 0;
 }
 
 /* Conversation code: re-colour highlight.js tokens against the conversation

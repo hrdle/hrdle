@@ -18,6 +18,7 @@ import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
 import { speakerSurface } from "../steward/StewardView";
 import { TurnBody, TurnTime } from "../steward/TurnBody";
+import { TurnDetail } from "../steward/TurnDetail";
 import { TurnImages } from "../steward/TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -208,7 +209,9 @@ function TurnCard({
 					</button>
 				)}
 
-				<TurnBody text={turn.text} detail={turn.detail} />
+				<TurnBody text={turn.text} />
+
+				{turn.detail && <TurnDetail detail={turn.detail} />}
 
 					{turn.images && <TurnImages paths={turn.images} onLoad={onGrow} />}
 

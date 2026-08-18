@@ -17,6 +17,7 @@ import { ConversationViewer } from "../ConversationViewer";
 import { AskControls } from "./AskControls";
 import { StewardSessionComposer } from "./StewardSessionComposer";
 import { TurnBody, TurnTime } from "./TurnBody";
+import { TurnDetail } from "./TurnDetail";
 import { TurnImages } from "./TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -179,12 +180,15 @@ export function StewardView({ onClose }: { onClose: () => void }) {
  * by nothing at all. It arrived, went unseen, and the steward was asked why it
  * had not answered.
  *
- * The left rule is not decoration: colour alone fails a reader who cannot
- * separate these two warm neutrals, and an edge is a shape rather than a hue.
+ * **A colour, and not an edge.** The first version put an accent rule down the
+ * left of the steward's card on the grounds that colour alone fails a reader
+ * who cannot separate two warm neutrals. It reads as an AI product's card and
+ * was rejected on sight; a surface a shade off its neighbours does the finding
+ * without announcing that a machine is talking.
  */
 export function speakerSurface(role: StewardTurn["role"]): string {
 	if (role === "user") return "bg-cv-bubble";
-	if (role === "steward") return "border-cv-steward-edge border-l-[3px] bg-cv-steward";
+	if (role === "steward") return "bg-cv-steward";
 	return "bg-cv-surface";
 }
 
@@ -228,7 +232,9 @@ function ThreadItem({
 					</button>
 				)}
 
-				<TurnBody text={item.text} detail={item.detail} />
+				<TurnBody text={item.text} />
+
+				{item.detail && <TurnDetail detail={item.detail} />}
 
 					{item.images && <TurnImages paths={item.images} />}
 
