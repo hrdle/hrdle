@@ -54,6 +54,48 @@ export function turnsKey(sessionId: string, paneId?: string): string {
   return paneId ? `${sessionId}:${paneId}` : sessionId
 }
 
+/**
+ * Which of a workspace's histories these screens read.
+ *
+ * A workspace running several agents keeps one per pane - two agents in one
+ * workspace are two pieces of work. These screens show one at a time and have
+ * no room to offer a choice, so they take the pane herdr has focused, which is
+ * the one a person was last in. A workspace with a single agent names no pane
+ * and keeps its own history, as every workspace did before the split.
+ *
+ * Here rather than in the controller because the screen has to resolve it the
+ * same way the loader did: stored under `w2H:%6` and read back under `w2H`,
+ * a two-agent workspace's history is written correctly and displayed as empty.
+ */
+export function historyPaneOf(session: Session | undefined): string | undefined {
+  const agents = session?.panes?.filter((p) => p.agent) ?? []
+  if (agents.length <= 1) return undefined
+  return (agents.find((p) => p.isActive) ?? agents[0])?.paneId
+}
+
+/**
+ * A turn this app wrote itself, before the server had it.
+ *
+ * What the wearer just said is on their screen the moment they send it rather
+ * than when the round trip finishes - see `optimisticTurn`. The prefix is how
+ * the merge tells its own entry from the server's copy of it.
+ */
+export const LOCAL_TURN = 'local:'
+
+/**
+ * The server's history, with anything of ours it has not caught up to.
+ *
+ * Matched on what was said rather than on an id, because the server assigns
+ * its own: our copy and its copy are the same turn under two names, and
+ * keeping both shows the wearer their sentence twice.
+ */
+export function mergeLocalTurns(server: StewardTurn[], previous: StewardTurn[]): StewardTurn[] {
+  const pending = previous.filter(
+    (t) => t.id.startsWith(LOCAL_TURN) && !server.some((s) => s.role === t.role && s.text === t.text),
+  )
+  return pending.length > 0 ? [...server, ...pending] : server
+}
+
 export interface StewardSessionLine {
   sessionId: string
   text: string

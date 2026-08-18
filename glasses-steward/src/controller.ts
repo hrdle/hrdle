@@ -31,13 +31,24 @@ import {
   overviewRows,
   screenText,
   sessionPageCount,
+  sessionPageKeys,
   somethingIsWorking,
   SPEECH_RMS,
   SPINNER_INTERVAL_MS,
 } from './display.ts'
 import type { AppState, DraftPhraseView, VoiceTarget } from './display.ts'
 import { filterConversation } from './conversation.ts'
-import { latestReport, pendingAsks, sessionName, sessionOfRow, threadAgentOf, turnsKey } from './types.ts'
+import {
+  historyPaneOf,
+  latestReport,
+  LOCAL_TURN,
+  mergeLocalTurns,
+  pendingAsks,
+  sessionName,
+  sessionOfRow,
+  threadAgentOf,
+  turnsKey,
+} from './types.ts'
 import type { ConversationMessage, Session, StewardSessionLine, StewardThreadItem, StewardTurn } from './types.ts'
 import { WsClient } from './ws-client.ts'
 
@@ -269,17 +280,69 @@ export class GlassesController {
     this.render()
   }
 
+  /**
+   * A session's history changed under whoever is reading it.
+   *
+   * The page is held by **what is on it**, not by its number. Pages are
+   * numbered from the newest turn, so a turn arriving renumbers every one of
+   * them: a reader holding page 0 - which is where the screen opens, and where
+   * someone who has just spoken is standing - was shown the new turn and their
+   * own sentence moved to page 1 without a word. Reported three times as "my
+   * message disappeared", and each time it was still there, one swipe away.
+   *
+   * So the anchor is the turn and the piece of it, and the page number is
+   * recomputed from that. The page follows what the wearer *did* - see
+   * `showOwnTurn` - and holds against what merely arrived.
+   */
   private onTurns(sessionId: string, paneId: string | undefined, turns: StewardTurn[]): void {
-    this.state.turns.set(turnsKey(sessionId, paneId), turns)
-    if (sessionId === this.state.openSessionId) {
+    const key = turnsKey(sessionId, paneId)
+    const open = sessionId === this.state.openSessionId
+    const anchor = open ? sessionPageKeys(this.state)[this.state.sessionPage] : undefined
+
+    this.state.turns.set(key, mergeLocalTurns(turns, this.state.turns.get(key) ?? []))
+
+    if (open) {
       this.state.sessionWaiting = false
-      // Stay where the reader is, unless they were on a page that no longer
-      // exists. Jumping to the newest turn under someone mid-read is the same
-      // fault as a list that reorders while being scrolled.
-      const pages = sessionPageCount(this.state)
-      if (this.state.sessionPage >= pages) this.state.sessionPage = Math.max(0, pages - 1)
+      const keys = sessionPageKeys(this.state)
+      const at = anchor ? keys.indexOf(anchor) : -1
+      // Pages that appeared above where they are standing. Counted from the
+      // anchor's move rather than from the turn count, so amending a turn the
+      // reader has already read does not announce itself as news.
+      if (at > this.state.sessionPage) this.state.sessionNewer += at - this.state.sessionPage
+      // A page that no longer exists - the turn was amended away, or this is
+      // the first history to arrive - falls back to the nearest one there is.
+      if (at >= 0) this.state.sessionPage = at
+      else if (this.state.sessionPage >= keys.length) {
+        this.state.sessionPage = Math.max(0, keys.length - 1)
+      }
     }
     this.render()
+  }
+
+  /**
+   * Put what the wearer just said on their screen, now.
+   *
+   * The round trip is a transcription, a POST and a push back, and until this
+   * the screen showed the turn *before* theirs for the whole of it - which is
+   * the same "it did not go anywhere" the paging bug produced, arrived at from
+   * the other direction. The entry is this app's own until the server's copy of
+   * it comes back and `mergeLocalTurns` drops the duplicate.
+   *
+   * The page moves to it, and that is not a contradiction of holding the page:
+   * the rule is that the screen follows the wearer's own act and holds against
+   * what arrives on its own.
+   */
+  private showOwnTurn(sessionId: string, text: string): void {
+    const key = turnsKey(sessionId, this.historyPaneOf(sessionId))
+    const turns = this.state.turns.get(key) ?? []
+    this.state.turns.set(key, [
+      ...turns,
+      { id: `${LOCAL_TURN}${turns.length}:${text.length}`, at: Date.now(), role: 'user', text },
+    ])
+    if (this.state.openSessionId === sessionId) {
+      this.state.sessionPage = 0
+      this.state.sessionNewer = 0
+    }
   }
 
   private onSessionRemoved(sessionId: string): void {
@@ -383,6 +446,7 @@ export class GlassesController {
     this.state.openSessionId = sessionId
     this.state.sessionPage = 0
     this.state.sessionWaiting = false
+    this.state.sessionNewer = 0
     void this.loadSession(sessionId)
   }
 
@@ -400,7 +464,11 @@ export class GlassesController {
     try {
       const { turns } = await getSessionTurns(sessionId, paneId)
       if (this.state.openSessionId !== sessionId) return
-      this.state.turns.set(turnsKey(sessionId, paneId), turns)
+      const key = turnsKey(sessionId, paneId)
+      // Through the merge like every other write: a sentence sent a moment ago
+      // is on this screen and the server may not have it yet, and a plain set
+      // would take it back off.
+      this.state.turns.set(key, mergeLocalTurns(turns, this.state.turns.get(key) ?? []))
       if (turns.length === 0) {
         this.state.sessionWaiting = true
         this.render()
@@ -414,21 +482,10 @@ export class GlassesController {
     }
   }
 
-  /**
-   * Which of a workspace's histories this screen reads.
-   *
-   * A workspace running several agents keeps one per pane - two agents in one
-   * workspace are two pieces of work. These screens show one session at a
-   * time and have no room to offer a choice, so they take the pane herdr has
-   * focused, which is the one a person was last in. A workspace with a single
-   * agent names no pane and keeps its own history, as every workspace did
-   * before the split.
-   */
+  /** The pane this session's history is kept under - one rule, shared with the
+   *  screen that reads it back. */
   private historyPaneOf(sessionId: string): string | undefined {
-    const session = this.state.sessions.find((s) => s.id === sessionId)
-    const agents = session?.panes?.filter((p) => p.agent) ?? []
-    if (agents.length <= 1) return undefined
-    return (agents.find((p) => p.isActive) ?? agents[0])?.paneId
+    return historyPaneOf(this.state.sessions.find((s) => s.id === sessionId))
   }
 
   private openDirect(): void {
@@ -547,6 +604,8 @@ export class GlassesController {
         break
       }
       case 'session': {
+        // Moving is how they go and look, so the count has been answered.
+        this.state.sessionNewer = 0
         const pages = sessionPageCount(this.state)
         // Below zero is the direct row, one step "above" the newest page. It
         // sits there rather than after the oldest so it is one swipe from where
@@ -828,14 +887,16 @@ export class GlassesController {
           // The history the session screen is showing, so what was said lands
           // in the same one rather than in a workspace-level history that
           // screen no longer reads.
+          this.showOwnTurn(target.sessionId, text)
+          this.state.screen = 'session'
           await replyToSteward({
             text,
             sessionId: target.sessionId,
             paneId: this.historyPaneOf(target.sessionId),
           })
-          this.state.screen = 'session'
           break
         case 'ask':
+          if (target.sessionId) this.showOwnTurn(target.sessionId, text)
           await replyToSteward({ askId: target.askId, answer: { kind: 'text', text } })
           this.state.ask = null
           this.state.screen = target.sessionId ? 'session' : 'overview'
@@ -939,9 +1000,17 @@ export class GlassesController {
         rows: ['work-1  waiting on review   12m', 'work-2  question unanswered  4m', 'life    done, unread  31m'],
       },
     ]
+    // Both voices, so the demo shows how they are told apart - the panel is
+    // monochrome, and where the line starts is the whole of the difference.
     this.state.turns.set('w1', [
       {
-        id: 'demo-turn',
+        id: 'demo-turn-1',
+        at: at - 60_000,
+        role: 'user',
+        text: 'What came back on the review?',
+      },
+      {
+        id: 'demo-turn-2',
         at,
         role: 'steward',
         text: 'Seven review comments came back. One of them changes the design, and it is waiting on your call.',
