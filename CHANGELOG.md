@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.173] - 2026-08-18
+
+### Fixed
+- **A turn's second half reads as the message carrying on.** Showing it always
+  is the intent, but it *looked* like a panel someone had unfolded: `Markdown`
+  is sized for a full-width transcript - 1.3em headings with 20px above them,
+  paragraphs at 1.7 line-height, the block dimmed to `text-secondary` - which
+  inside a chat bubble reads as a section that has been opened rather than as
+  the same person still talking. Toned down rather than restyled: headings
+  still lead, lists still indent, code still sits in its block, and the colour
+  is the body's own.
+
 ## [0.3.172] - 2026-08-18
 
 ### Added
