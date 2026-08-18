@@ -54,10 +54,55 @@ function paneOf(raw: string | undefined): { ok: true; paneId?: string } | { ok: 
   return parsed.success ? { ok: true, paneId: parsed.data } : { ok: false };
 }
 
-/** Not the page budget: `fitToPage` moves what overruns it into `detail`, so
- *  these only stop a runaway writer filling the disk. */
+/**
+ * The ceiling on one entry, which is not the page budget.
+ *
+ * `fitToPage` holds `text` to the glasses' one page by *moving* the overrun
+ * into `detail`, so the message still lands - and that is the right answer for
+ * length: refusing it would trade "too long" for "nothing arrived", and silence
+ * is this system's worst failure. These are the other thing: a stop on a writer
+ * that has run away.
+ *
+ * A guard that cannot fire is not a guard. `DETAIL_MAX` was 20,000, which is
+ * nine times anything ever written - measured across 391 stored entries, the
+ * largest detail was 2,198 - so it was a disk limit wearing a guard's name.
+ * 4,000 sits about twice real use: a long answer with a diff in it still goes
+ * through, and a report pasted into a chat message does not.
+ *
+ * **It does not fix an ordinary over-long message, and is not meant to.** Every
+ * detail that prompted this was under 2,200. What a person actually reads is
+ * decided by what the steward is told to write - see `steward-prompt.ts` - and
+ * a ceiling is only there for the case where that has stopped working.
+ */
 const TEXT_MAX = 4000;
-const DETAIL_MAX = 20_000;
+const DETAIL_MAX = 4000;
+
+/**
+ * A refusal the caller can act on.
+ *
+ * Zod's own issue list gives the number and no remedy, and the caller here is
+ * an agent reading stdout: it retries against whatever the message suggests, so
+ * a message that suggests nothing buys a retry of the same thing. Named the way
+ * `stt-prompt` names its own refusals, which is the pattern this repository
+ * already settled on - say what was refused, how far over it was, and what to
+ * do instead.
+ */
+function tooBig(issues: { code: string; path: PropertyKey[]; maximum?: unknown }[], body: unknown): string | null {
+  const over = issues.find(
+    (i) => i.code === 'too_big' && (i.path[0] === 'text' || i.path[0] === 'detail'),
+  );
+  if (!over) return null;
+  const field = String(over.path[0]);
+  const sent = (body as Record<string, string> | null)?.[field]?.length ?? 0;
+  const limit = Number(over.maximum);
+  return field === 'detail'
+    ? `detail is ${sent} characters against a ceiling of ${limit}. Nothing was written. ` +
+        'A detail is the rest of the message on a phone, not a report: send a few sentences, ' +
+        'and put the long form in `steward report` or in a file you point at.'
+    : `text is ${sent} characters against a ceiling of ${limit}. Nothing was written. ` +
+        'One page reaches the glasses and the rest moves into detail on its own, so a long ' +
+        'text buys no room - say the one thing the decision turns on.';
+}
 
 const RefsSchema = z.object({
   file: z.string().max(1000).optional(),
@@ -182,7 +227,11 @@ steward.put('/settings', async (c) => {
 steward.post('/thread', async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = ThreadPostSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: 'invalid thread item', detail: parsed.error.issues }, 400);
+  if (!parsed.success) {
+    const over = tooBig(parsed.error.issues, body);
+    if (over) return c.json({ error: over }, 400);
+    return c.json({ error: 'invalid thread item', detail: parsed.error.issues }, 400);
+  }
   const input = parsed.data;
 
   const fitted = fitToPage(input.text, input.detail);
