@@ -210,7 +210,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: `https://localhost:${IDENTITY.devPort}`,
+        target: process.env.HRDLE_PROXY || `https://localhost:${IDENTITY.devPort}`,
         changeOrigin: true,
         secure: false,
         // Allow long uploads (videos etc.)
@@ -228,7 +228,7 @@ export default defineConfig({
         },
       },
       '/ws': {
-        target: `wss://localhost:${IDENTITY.devPort}`,
+        target: process.env.HRDLE_PROXY?.replace(/^http/, 'ws') || `wss://localhost:${IDENTITY.devPort}`,
         ws: true,
         secure: false,
       },

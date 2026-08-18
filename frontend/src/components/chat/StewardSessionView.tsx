@@ -16,6 +16,7 @@ import { useStickToBottom } from "../../hooks/useStickToBottom";
 import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
+import { speakerSurface } from "../steward/StewardView";
 import { Linkified } from "../steward/Linkified";
 import { TurnDetail } from "../steward/TurnDetail";
 import { TurnImages } from "../steward/TurnImages";
@@ -193,7 +194,7 @@ function TurnCard({
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
-			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-[1em] ${mine ? "bg-cv-bubble" : "bg-cv-surface"}`}>
+			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-[1em] ${speakerSurface(turn.role)}`}>
 				{sourceSession && (
 					<button
 						type="button"
