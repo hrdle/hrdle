@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.172] - 2026-08-18
+
+### Added
+- **A camera in the conversation composer.** It could attach an image from the
+  library; photographing a screen or a printed part meant going through the
+  library to get there. Its own input rather than a flag on the existing one -
+  `capture` is an attribute of the element the picker was opened from, so
+  toggling it before a click races the host's own sheet. Drawn only where a
+  camera is: `capture` is *ignored* rather than refused on a desktop browser,
+  so ungated the button opens the same picker as the one beside it.
+
+### Fixed
+- Two responsive e2e specs still tapped the `詳細` button removed in 0.3.171,
+  which is what turned CI red on that release. `bun run test` does not run the
+  responsive suite - it needs its own dev server and an `E2E_BASE_URL` - so
+  removing a control has to be checked there separately.
+
 ## [0.3.171] - 2026-08-18
 
 ### Changed
