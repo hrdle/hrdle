@@ -19,6 +19,7 @@ import {
   wrapForPanel,
 } from '../display.ts'
 import type { AppState } from '../display.ts'
+import { BADGE_BLANK } from '../display.ts'
 import { LIST_LINES, MAX_LINES } from '../metrics.ts'
 import type { Session, StewardThreadItem, StewardTurn } from '../types.ts'
 
@@ -170,7 +171,8 @@ describe('overview', () => {
     const withLines = many.map((session) => ({ sessionId: session.id, text: 'x', at: 1 }))
     for (const cursor of [0, 5, 12, 19]) {
       const s = state({ sessions: many, lines: withLines, cursor })
-      expect(screenText(s).body).toContain(`> ${many[cursor]?.name}`)
+      // The cursor, then the status column, then the name.
+      expect(screenText(s).body).toContain(`> ${BADGE_BLANK}${many[cursor]?.name}`)
     }
   })
 

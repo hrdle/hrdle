@@ -157,6 +157,10 @@ export interface AppState {
    */
   deferredAskId: string | null
 
+  /** Advances one frame per tick while something on screen is working. Absent
+   *  in states built before the indicator existed; treated as 0. */
+  spinnerTick?: number
+
   /** The run is closing itself and says why. */
   fatal?: 'offline'
 
@@ -236,22 +240,109 @@ function clock(): string {
   return `${pad(now.getHours())}:${pad(now.getMinutes())}`
 }
 
+/**
+ * The cursor, and the only arrow on any screen.
+ *
+ * Rows that do something rather than open what they name used to carry a second
+ * mark, `→`, drawn whether or not the cursor was on them. On every screen's
+ * opening state that put an arrow on a row nobody had chosen - the session
+ * screen opened on its newest page with `→ Talk to this session directly`
+ * sitting at the bottom, the only arrow on the panel, pointing at the one row
+ * that was *not* selected. It reads as a selection, because an arrow is what a
+ * selection looks like here.
+ *
+ * So there is one arrow and it means one thing. What a row does is carried by
+ * its words, which are already imperative where it matters ("Talk to the
+ * steward", "Send", "Say it myself").
+ */
 const CURSOR = '>'
-const NO_CURSOR = ' '
 
 /**
- * The mark on a row that does something other than open what it names.
+ * What stands in the cursor column on every other row.
  *
- * A different glyph from the cursor on purpose: with both drawn as `>` a
- * selected action row read `> > Send`, which looks like a rendering fault
- * rather than a selection. `→` is a mark the firmware actually carries - it is
- * one of the substitution *targets* in `metrics.ts`, so it is known to have an
- * advance rather than hoped to.
+ * Two spaces, not one. `>` is 10px on this panel and a space is 5, so a single
+ * space left the row under the cursor sitting 5px right of every other row -
+ * and since the cursor moves on every swipe, the whole list shivered sideways
+ * as it was walked.
  */
-const ACTION = '→'
+const NO_CURSOR = '  '
 
 function mark(selected: boolean): string {
   return selected ? `${CURSOR} ` : `${NO_CURSOR} `
+}
+
+/**
+ * The working indicator, one frame per tick.
+ *
+ * Carried over from the other glasses app, geometry included. Two frames rather
+ * than a rotation: at one frame per three seconds nobody reads it as spinning,
+ * only as alive, and these are the only two small glyphs the firmware carries
+ * that pair - `·` and `•`. Everything else this size is a punctuation mark
+ * that sits off the baseline, which beats vertically as well as in size, and a
+ * status mark should be the quietest thing on a row it shares with a name.
+ */
+const SPINNER = ['·', '•']
+
+/** Slow on purpose: each frame costs a BLE round trip, and the question is only
+ *  whether something is alive. */
+export const SPINNER_INTERVAL_MS = 3000
+
+/**
+ * What stands in the status column on a row with nothing to say.
+ *
+ * A full-width space, not an ordinary one. The dots are 80 and 144 units - the
+ * whole reason to use them - against 320 for a full-width mark, so left
+ * unpadded every working row's name would start a third of a column left of
+ * every other one and the list would ripple sideways as rows changed state.
+ */
+export const BADGE_BLANK = '　'
+const BADGE_W = textWidth(BADGE_BLANK)
+
+/** A badge padded out to the column everything else on the row is positioned
+ *  from. Measured in a loop rather than divided out: `textWidth` charges for
+ *  the kerning across each join. */
+function padBadge(badge: string): string {
+  let out = badge
+  while (textWidth(`${out} `) <= BADGE_W) out += ' '
+  return out
+}
+
+function spinnerFrame(state: AppState): string {
+  return SPINNER[(state.spinnerTick ?? 0) % SPINNER.length]
+}
+
+/**
+ * What a session's row says about its state, in the width a badge has.
+ *
+ * Only working is marked. Waiting is the resting state of an agent and running
+ * is the news - and on these screens what a waiting session is waiting *for* is
+ * the steward's line, one row below, in words. A second mark saying the same
+ * thing would be the list answering a question the line already answers.
+ *
+ * Read from the panes as well as the workspace: a workspace's own status is a
+ * summary of panes that may be below the fold, and one pane working is the
+ * session working.
+ */
+export function sessionBadge(session: Session, state: AppState): string {
+  const panes = session.panes ?? []
+  const working =
+    session.indicatorState === 'processing' || panes.some((p) => p.indicatorState === 'processing')
+  return working ? padBadge(spinnerFrame(state)) : BADGE_BLANK
+}
+
+/** Whether a working indicator is on screen at all. Nothing working means
+ *  nothing to redraw, and an idle app sends nothing. */
+export function somethingIsWorking(state: AppState): boolean {
+  if (state.screen === 'overview') {
+    return state.sessions.some(
+      (s) =>
+        s.indicatorState === 'processing' ||
+        (s.panes ?? []).some((p) => p.indicatorState === 'processing'),
+    )
+  }
+  if (state.screen !== 'direct') return false
+  const session = state.sessions.find((s) => s.id === state.openSessionId)
+  return !!session && sessionBadge(session, state) !== BADGE_BLANK
 }
 
 // ─── The strip that holds a deferred question ───
@@ -310,8 +401,21 @@ function latestReportOf(state: AppState): (StewardThreadItem & { kind: 'report' 
   return undefined
 }
 
-/** What the steward's line is indented by, under the name it belongs to. */
-const ROW_INDENT = '    '
+/**
+ * What the steward's line is indented by, under the name it belongs to.
+ *
+ * Measured out to where the name starts rather than written as a count of
+ * spaces: the cursor column and the status column are both in front of it, and
+ * a literal stops agreeing with them the moment either changes width. It did -
+ * four spaces sat the line to the *left* of the name once the status column
+ * existed, which reads as a line belonging to nothing.
+ */
+const ROW_INDENT = (() => {
+  const target = textWidth(NO_CURSOR + ' ') + BADGE_W
+  let out = ''
+  while (textWidth(`${out} `) <= target) out += ' '
+  return out
+})()
 
 /**
  * One session, over two lines.
@@ -330,13 +434,15 @@ const ROW_INDENT = '    '
  * A session the steward has not written about takes one line, not two: an
  * empty second line spends the budget on saying nothing.
  */
-function overviewRowLines(row: OverviewRow, selected: boolean): string[] {
+function overviewRowLines(row: OverviewRow, selected: boolean, state: AppState): string[] {
   const cursor = mark(selected)
-  if (row.kind === 'say') return [`${cursor}${ACTION} Talk to the steward`]
+  // The rows that are not sessions stand in the status column too, or their
+  // words start a third of a column left of every session's.
+  if (row.kind === 'say') return [`${cursor}${BADGE_BLANK}Talk to the steward`]
   if (row.kind === 'report') {
-    return [`${cursor}${fit(`${row.text} ${ACTION}`, BODY_WIDTH - textWidth(cursor))}`]
+    return [`${cursor}${BADGE_BLANK}${fit(row.text, BODY_WIDTH - textWidth(`${cursor}${BADGE_BLANK}`))}`]
   }
-  const name = fit(`${cursor}${sessionName(row.session)}`)
+  const name = fit(`${cursor}${sessionBadge(row.session, state)}${sessionName(row.session)}`)
   // Nothing written is drawn as nothing rather than as a recap or a status:
   // half a list in the steward's words and half in scraped ones reads as
   // neither.
@@ -375,7 +481,7 @@ export function overviewStart(heights: number[], cursor: number, budget: number)
 function overviewBody(state: AppState): string {
   if (!state.connected) return 'Connecting...'
   const rows = overviewRows(state)
-  const drawn = rows.map((row, i) => overviewRowLines(row, i === state.cursor))
+  const drawn = rows.map((row, i) => overviewRowLines(row, i === state.cursor, state))
   const start = overviewStart(drawn.map((lines) => lines.length), state.cursor, LIST_LINES)
 
   const out: string[] = []
@@ -435,7 +541,7 @@ export function sessionPageCount(state: AppState): number {
 }
 
 /** The row that steps down into direct mode, and whether the ring is on it. */
-export const DIRECT_ROW = `${ACTION} Talk to this session directly`
+export const DIRECT_ROW = 'Talk to this session directly'
 
 function sessionBody(state: AppState): string {
   const pages = sessionPages(state)
@@ -498,8 +604,8 @@ export function askRows(ask: StewardAsk): AskRow[] {
 
 function askRowText(row: AskRow, state: AppState, selected: boolean, mode: StewardAsk['mode']): string {
   const cursor = mark(selected)
-  if (row.kind === 'send') return `${cursor}${ACTION} Send`
-  if (row.kind === 'speak') return `${cursor}${ACTION} Say it myself`
+  if (row.kind === 'send') return `${cursor}Send`
+  if (row.kind === 'speak') return `${cursor}Say it myself`
   if (mode === 'multi') {
     const box = state.askChecked.includes(row.index) ? '[x]' : '[ ]'
     return fit(`${cursor}${box} ${row.label}`)
@@ -739,11 +845,11 @@ export function directPages(state: AppState): string[][] {
  * is. `[!]` is the one that changes what the wearer does next, so it is the one
  * spelled out.
  */
-function paneBadge(session: Session | undefined): string {
+function paneBadge(session: Session | undefined, state: AppState): string {
   const pane = session?.panes?.find((p) => p.agent && p.isActive) ?? session?.panes?.find((p) => p.agent)
-  const state = pane?.indicatorState ?? session?.indicatorState
-  if (state === 'waiting_input') return '[!]'
-  if (state === 'processing') return '...'
+  const indicator = pane?.indicatorState ?? session?.indicatorState
+  if (indicator === 'waiting_input') return '[!]'
+  if (indicator === 'processing') return spinnerFrame(state)
   return ''
 }
 
@@ -752,7 +858,7 @@ function directContent(state: AppState): { header: string; body: string; footer:
   const pages = directPages(state)
   const page = pages[state.directPage] ?? []
   const position = pages.length > 1 ? `${state.directPage + 1}/${pages.length}` : ''
-  const badge = paneBadge(session)
+  const badge = paneBadge(session, state)
   return {
     header: layOut(
       `${session ? sessionName(session) : ''} · direct${badge ? ` ${badge}` : ''}`,
