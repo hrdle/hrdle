@@ -265,6 +265,37 @@ body {
 	animation: status-glow 2s ease-in-out infinite;
 }
 
+/* A turn's second half, when the steward wrote one.
+   `Markdown` is sized for a full-width transcript - 1.3em headings with 20px
+   above them, paragraphs at 1.7 line-height. That is right for a document and
+   wrong inside a chat bubble, where it reads as a panel that has been expanded
+   rather than as the message carrying on. It was tolerable behind a toggle,
+   because opening one is asking for a document; it is not tolerable now that
+   the message is always whole.
+
+   Toned down rather than restyled: the headings still lead, the lists still
+   indent, the code still sits in its block - they just stop announcing
+   themselves at the scale of a page. */
+.cv-turn-detail p,
+.cv-turn-detail ul,
+.cv-turn-detail ol {
+	margin-block: 0.5rem;
+	line-height: 1.6;
+}
+.cv-turn-detail h1,
+.cv-turn-detail h2,
+.cv-turn-detail h3,
+.cv-turn-detail h4 {
+	margin-block: 0.75rem 0.25rem;
+	font-size: 1em;
+}
+.cv-turn-detail > *:first-child {
+	margin-block-start: 0;
+}
+.cv-turn-detail > *:last-child {
+	margin-block-end: 0;
+}
+
 /* Conversation code: re-colour highlight.js tokens against the conversation
    palette. Two classes deep on purpose — the file viewer imports
    highlight.js/styles/github-dark.css globally, whose single-class rules would

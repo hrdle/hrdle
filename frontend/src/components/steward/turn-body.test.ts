@@ -45,6 +45,23 @@ describe("a turn is one message", () => {
 		}
 	});
 
+	// Always-on is the intent; looking like an expanded panel is not. `Markdown`
+	// is sized for a full-width transcript - 1.3em headings with 20px above them
+	// - which inside a bubble reads as a document that has been unfolded rather
+	// than as the message carrying on. It was tolerable behind a toggle, because
+	// opening one is asking for a document.
+	test("reads as the message carrying on, not as a panel that was unfolded", () => {
+		const body = read("components/steward/TurnBody.tsx");
+		expect(body).toContain("cv-turn-detail");
+		// Dimmed, it reads as a lesser block stapled underneath.
+		expect(body).not.toContain("text-cv-text-secondary");
+
+		const css = read("index.css");
+		const rules = css.slice(css.indexOf(".cv-turn-detail"));
+		expect(rules).toContain("font-size: 1em");
+		expect(rules.slice(0, 700)).toContain("margin-block");
+	});
+
 	test("its strings go with it", () => {
 		for (const locale of ["en", "ja"]) {
 			const table = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
