@@ -70,12 +70,11 @@ test.describe('steward mode', () => {
     await page.getByTitle('スチュワード').click();
 
     await expect(page.getByText('レビューが7件返っています')).toBeVisible();
-    // The half the glasses could not carry, behind a tap. Inlined for a day on
-    // a misread of "this is an AI thing, I do not need it", which was about the
-    // coloured rule down the card's edge.
-    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
-    await page.getByRole('button', { name: '詳細', exact: true }).click();
+    // The half the glasses could not carry, behind a tap - except on the newest
+    // reply, and this fixture's only detail is on it. The tap shuts it.
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
+    await page.getByRole('button', { name: '詳細を閉じる' }).click();
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
   });
 
   // The thread is the conversation about the whole set. What is about one
@@ -259,9 +258,9 @@ test.describe('steward mode on a tablet', () => {
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
-    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
-    await page.getByRole('button', { name: '詳細', exact: true }).click();
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
+    await page.getByRole('button', { name: '詳細を閉じる' }).click();
+    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
   });
 
   // A conversation is read as a sequence of moments, and until this there was
@@ -888,5 +887,48 @@ test.describe('the camera', () => {
     // The attribute is the whole feature: without it the host opens its file
     // sheet and the button is a duplicate.
     await expect(page.locator('input[type=file][capture="environment"]')).toHaveCount(1);
+  });
+});
+
+/**
+ * Which detail is already open.
+ *
+ * The newest reply's. What has just arrived is what someone came to read, and
+ * asking them to tap it is asking them to tap the thing they are looking at.
+ */
+test.describe('the newest reply', () => {
+  const TWO_DETAILS = [
+    { id: 'n1', at: 1, role: 'steward', kind: 'notify', text: '古いほう', detail: '古い詳細です。' },
+    { id: 'n2', at: 2, role: 'steward', kind: 'notify', text: '新しいほう', detail: '新しい詳細です。' },
+  ];
+
+  test('opens with its detail up, and the one before it stays shut', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'responsive-desktop', 'the thread opens from the phone list');
+    await bootApp(page, { steward: { enabled: true, thread: TWO_DETAILS } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('新しい詳細です。')).toBeVisible();
+    await expect(page.getByText('古い詳細です。')).toHaveCount(0);
+    // One open, one shut: the labels say which is which.
+    await expect(page.getByRole('button', { name: '詳細を閉じる' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(1);
+  });
+
+  // A person's own message carries no detail. With "the last entry" rather than
+  // "the last entry with a detail", saying anything would shut the answer they
+  // were reading.
+  test('saying something does not shut the answer being read', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === 'responsive-desktop', 'the thread opens from the phone list');
+    await bootApp(page, {
+      steward: {
+        enabled: true,
+        thread: [...TWO_DETAILS, { id: 'u1', at: 3, role: 'user', kind: 'reply', text: 'ありがとう' }],
+      },
+    });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('新しい詳細です。')).toBeVisible();
   });
 });

@@ -17,7 +17,7 @@ import { ConversationViewer } from "../ConversationViewer";
 import { AskControls } from "./AskControls";
 import { StewardSessionComposer } from "./StewardSessionComposer";
 import { TurnBody, TurnTime } from "./TurnBody";
-import { TurnDetail } from "./TurnDetail";
+import { TurnDetail, newestWithDetail } from "./TurnDetail";
 import { TurnImages } from "./TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -90,6 +90,10 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 		[thread],
 	);
 
+	// What has just arrived is what someone came to read, so its detail is
+	// already open; everything older stays shut.
+	const newestDetail = useMemo(() => newestWithDetail(shown), [shown]);
+
 	// The newest exchange is the one being read - on open, and again whenever
 	// something arrives or the steward starts thinking.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: neither value is read here; their change is the cue to scroll.
@@ -138,7 +142,12 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 				<ul className="mt-auto flex flex-col gap-3">
 					{shown.map((item) => (
 						<li key={item.id}>
-							<ThreadItem item={item} onAnswer={send} onOpenSource={openSource} />
+							<ThreadItem
+								item={item}
+								newest={item.id === newestDetail}
+								onAnswer={send}
+								onOpenSource={openSource}
+							/>
 						</li>
 					))}
 				</ul>
@@ -194,10 +203,13 @@ export function speakerSurface(role: StewardTurn["role"]): string {
 
 function ThreadItem({
 	item,
+	newest,
 	onAnswer,
 	onOpenSource,
 }: {
 	item: StewardThreadItem;
+	/** The newest entry carrying a detail; its detail starts open. */
+	newest?: boolean;
 	onAnswer: (input: { text?: string; askId?: string; answer?: { kind: "choice"; indices: number[] } | { kind: "dismissed" } }) => void;
 	onOpenSource: (source: OpenSource) => void;
 }) {
@@ -234,7 +246,7 @@ function ThreadItem({
 
 				<TurnBody text={item.text} />
 
-				{item.detail && <TurnDetail detail={item.detail} />}
+				{item.detail && <TurnDetail detail={item.detail} startOpen={newest} />}
 
 					{item.images && <TurnImages paths={item.images} />}
 
