@@ -71,3 +71,49 @@ describe("when it was said", () => {
 		expect(body).toContain("dateTime=");
 	});
 });
+
+/**
+ * Which detail is already open.
+ *
+ * The newest reply's - what has just arrived is what someone came to read, and
+ * asking them to tap it is asking them to tap the thing they are already
+ * looking at. Everything older stays shut, which is the whole reason the
+ * disclosure exists.
+ */
+describe("the newest reply", () => {
+	test("is the last entry carrying a detail, not simply the last entry", async () => {
+		const { newestWithDetail } = await import("./TurnDetail");
+		expect(
+			newestWithDetail([
+				{ id: "a", detail: "one" },
+				{ id: "b", detail: "two" },
+				// A person's own message. With the plain rule, typing this would
+				// shut the answer they were reading.
+				{ id: "c" },
+			]),
+		).toBe("b");
+	});
+
+	test("is nothing when no entry has one", async () => {
+		const { newestWithDetail } = await import("./TurnDetail");
+		expect(newestWithDetail([{ id: "a" }, { id: "b", detail: "  " }])).toBeNull();
+	});
+
+	test("both screens ask for it, and only the newest gets it", () => {
+		for (const screen of SCREENS) {
+			const source = read(screen);
+			expect(source).toContain("newestWithDetail");
+			expect(source).toContain("startOpen={newest}");
+			expect(source).toMatch(/newest=\{(item|turn)\.id === newestDetail\}/);
+		}
+	});
+
+	// A new arrival makes this one no longer the newest, and `useState` alone
+	// runs once - so the previous reply would stay open and the column would
+	// fill up with them.
+	test("shuts again when it stops being the newest", () => {
+		const detail = read("components/steward/TurnDetail.tsx");
+		expect(detail).toContain("useEffect");
+		expect(detail).toContain("[startOpen]");
+	});
+});

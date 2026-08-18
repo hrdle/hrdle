@@ -1,5 +1,5 @@
 import { ExternalLink } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	ConversationMessage,
@@ -18,7 +18,7 @@ import { ConversationViewer } from "../ConversationViewer";
 import { StewardSessionComposer } from "../steward/StewardSessionComposer";
 import { speakerSurface } from "../steward/StewardView";
 import { TurnBody, TurnTime } from "../steward/TurnBody";
-import { TurnDetail } from "../steward/TurnDetail";
+import { TurnDetail, newestWithDetail } from "../steward/TurnDetail";
 import { TurnImages } from "../steward/TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -64,6 +64,10 @@ export function StewardSessionView({
 	const [sourceLoading, setSourceLoading] = useState(false);
 	const scrollerRef = useRef<HTMLDivElement>(null);
 	const stick = useStickToBottom(scrollerRef, [turns, thinking]);
+	// What has just arrived is what someone came to read, so its detail is
+	// already open; everything older stays shut. Once per render of the list,
+	// not once per row.
+	const newestDetail = useMemo(() => newestWithDetail(turns), [turns]);
 	// The same size the conversation viewer uses, and the same pinch: this is
 	// the screen someone reads all day, and it had no size of its own at all.
 	const chatFont = useChatFontSize();
@@ -118,6 +122,7 @@ export function StewardSessionView({
 						<TurnCard
 							key={turn.id}
 							turn={turn}
+							newest={turn.id === newestDetail}
 							fallbackSession={agentSessionId}
 							onOpenSource={openSource}
 							onGrow={stick}
@@ -175,10 +180,13 @@ export function StewardSessionView({
 
 function TurnCard({
 	turn,
+	newest,
 	onOpenSource,
 	onGrow,
 }: {
 	turn: StewardTurn;
+	/** The newest turn carrying a detail; its detail starts open. */
+	newest?: boolean;
 	/** The pane's own agent session, for a turn that named no source of its own. */
 	fallbackSession?: string | null;
 	onOpenSource: (source: { agentSessionId: string; messageId?: string }) => void;
@@ -211,7 +219,7 @@ function TurnCard({
 
 				<TurnBody text={turn.text} />
 
-				{turn.detail && <TurnDetail detail={turn.detail} />}
+				{turn.detail && <TurnDetail detail={turn.detail} startOpen={newest} />}
 
 					{turn.images && <TurnImages paths={turn.images} onLoad={onGrow} />}
 
