@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type {
 	ConversationMessage,
 	StewardThreadItem,
+	StewardTurn,
 } from "../../../../shared/types";
 import {
 	chatFontStyle,
@@ -168,6 +169,26 @@ export function StewardView({ onClose }: { onClose: () => void }) {
 	);
 }
 
+/**
+ * The surface a turn is drawn on, by who said it.
+ *
+ * **Three speakers, so three surfaces.** There were two: the person's own turn
+ * on `bubble`, and everything else - the steward's own words *and* an
+ * agent-derived summary of what happened in a session - on `surface`, which is
+ * 9/255 away from the page behind it. So a reply from the steward was
+ * distinguished from the background by almost nothing, and from a session event
+ * by nothing at all. It arrived, went unseen, and the steward was asked why it
+ * had not answered.
+ *
+ * The left rule is not decoration: colour alone fails a reader who cannot
+ * separate these two warm neutrals, and an edge is a shape rather than a hue.
+ */
+export function speakerSurface(role: StewardTurn["role"]): string {
+	if (role === "user") return "bg-cv-bubble";
+	if (role === "steward") return "border-cv-steward-edge border-l-[3px] bg-cv-steward";
+	return "bg-cv-surface";
+}
+
 function ThreadItem({
 	item,
 	onAnswer,
@@ -182,11 +203,7 @@ function ThreadItem({
 
 	return (
 		<div className={mine ? "flex justify-end" : ""}>
-			<div
-				className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${
-					mine ? "bg-cv-bubble" : "bg-cv-surface"
-				}`}
-			>
+			<div className={`max-w-[90%] rounded-xl px-3 py-2 text-sm ${speakerSurface(item.role)}`}>
 				{/* Which session this is about. The thread is global and read out of
 				    context, and the steward used to spend page budget writing the id
 				    into the sentence. Not on the person's own words: they know what

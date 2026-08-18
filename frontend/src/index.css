@@ -42,6 +42,16 @@
 	--color-conv-border: #3d3d39;
 	--color-conv-accent: #d97757;
 
+	/* The steward's own voice.
+	   A third colour, because two were not enough to carry three speakers: the
+	   person's turn had `bubble`, and the steward's notify and an agent-derived
+	   turn shared `surface` - 9/255 away from the page behind it. A reply
+	   arrived, was invisible against the background, and the steward was asked
+	   why it had not answered. The accent tinted into the surface, plus a rule
+	   down the left edge, so it is not colour alone doing the work. */
+	--color-conv-steward: #473932;
+	--color-conv-steward-edge: #d97757;
+
 	/* Syntax tokens, warm to match the surface above. highlight.js ships its
 	   own themes; every one of them is a different room's lighting. */
 	--conv-tok-comment: #85837c;
@@ -91,6 +101,8 @@
 	--color-conv-text-muted: #83817b;
 	--color-conv-border: #e2dfd4;
 	--color-conv-accent: #c96442;
+	--color-conv-steward: #ecdcd1;
+	--color-conv-steward-edge: #c96442;
 
 	--conv-tok-comment: #8a8780;
 	--conv-tok-keyword: #a04a2a;
@@ -129,6 +141,8 @@
   --color-cv-text-muted: var(--color-conv-text-muted);
   --color-cv-border: var(--color-conv-border);
   --color-cv-accent: var(--color-conv-accent);
+  --color-cv-steward: var(--color-conv-steward);
+  --color-cv-steward-edge: var(--color-conv-steward-edge);
 }
 
 html,
