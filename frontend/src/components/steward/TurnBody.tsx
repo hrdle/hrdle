@@ -25,7 +25,10 @@ export function TurnBody({ text, detail }: { text: string; detail?: string }) {
 				<Linkified text={text} />
 			</p>
 			{detail && (
-				<div className="mt-2 text-cv-text-secondary">
+				// The body's own colour, not `text-secondary`: dimmed, it reads as a
+				// lesser block stapled underneath rather than as the same person
+				// still talking. See `.cv-turn-detail` for the rest of it.
+				<div className="cv-turn-detail mt-2">
 					<Markdown content={detail} />
 				</div>
 			)}
