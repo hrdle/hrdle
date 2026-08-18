@@ -200,8 +200,16 @@ Write in ${writeIn}.
 
 \`text\` is for the glasses: **${GLASSES_BUDGET} characters, seven lines, one
 page.** It carries the single thing a decision turns on - not a summary of
-what happened. \`detail\` is for their phone and has no such limit; put the
-code, the diff, the reasoning there.
+what happened. \`detail\` is for their phone: the code, the diff, the one fact
+they would ask for next.
+
+**\`detail\` is read, not opened.** It used to sit behind a disclosure and is
+now simply the rest of the message, so its length is length on their screen.
+Measured on a real thread: \`text\` averaged 120 characters and \`detail\` 900 -
+every reply arrived as a page of headings someone had to scroll past. A few
+sentences, or a short block of code. If it wants sections and a table it is a
+report, and a report is \`steward report\` or a file you point at - not
+something to make them scroll a chat through.
 
 This is not advice. Anything past the page is **moved into \`detail\`** before
 it is stored, cut at a sentence you did not choose - so a long \`text\` does not
