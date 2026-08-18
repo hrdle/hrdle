@@ -283,10 +283,25 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     onRawEvent(raw) {
       trace(`event: ${raw}`)
     },
-    onSwipeDown: () => controller.swipeDown(),
-    onSwipeUp: () => controller.swipeUp(),
-    onTap: () => controller.tap(),
-    onDoubleTap: () => controller.doubleTap(),
+    // Published before the action, so the recording reads gesture-then-frame.
+    // `publishInput` never throws - a dead socket is swallowed by `send` - so
+    // it cannot come between a wearer and their own ring.
+    onSwipeDown: () => {
+      controller.ws.publishInput('swipeDown')
+      controller.swipeDown()
+    },
+    onSwipeUp: () => {
+      controller.ws.publishInput('swipeUp')
+      controller.swipeUp()
+    },
+    onTap: () => {
+      controller.ws.publishInput('tap')
+      controller.tap()
+    },
+    onDoubleTap: () => {
+      controller.ws.publishInput('doubleTap')
+      controller.doubleTap()
+    },
     onAudioData: (pcm) => controller.onAudioData(pcm),
   })
 
