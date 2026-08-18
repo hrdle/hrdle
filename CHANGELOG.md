@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.176] - 2026-08-18
+
+### Fixed
+- **The accent rule down the steward's card is gone, and the `detail`
+  disclosure is back.** "This is an AI thing, I do not need it" was about the
+  rule; it was read as the disclosure and the wrong thing was removed in
+  0.3.171. The surface stays - a colour a shade off its neighbours is what
+  makes the steward's own words findable, and it does that without the card
+  looking like an AI product's. The disclosure is the same component recovered
+  from before its removal, with its strings.
+
+  Two things that followed from the misread go with it: the CSS that existed to
+  make an always-inline detail read as prose, and the prompt's claim that
+  `detail` is read rather than opened.
+
+  The timestamp on every turn (0.3.171), the camera in the composer (0.3.172)
+  and the runaway ceiling (0.3.175) were asked for on their own and stay.
+
 ## [0.3.175] - 2026-08-18
 
 ### Changed
