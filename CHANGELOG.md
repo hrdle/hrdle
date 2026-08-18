@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.170] - 2026-08-18
+
+### Fixed
+- **The steward has a surface of its own.** Three speakers shared two colours:
+  the person's own turn had `bubble`, and the steward's own words *and* an
+  agent-derived summary of a session both had `surface` - 9/255 from the page
+  behind it. So a reply arrived, was distinguished from the background by
+  almost nothing and from a session event by nothing at all, went unseen, and
+  the steward was asked why it had not answered. It gets `--color-conv-steward`
+  in both themes with a rule down its left edge; colour alone fails a reader
+  who cannot separate two warm neutrals, and an edge is a shape rather than a
+  hue. An agent turn keeps the quiet surface - it is a session event, not the
+  steward speaking.
+
+### Added
+- `HRDLE_PROXY` points the frontend dev server at another server, so a change
+  to the conversation surface can be checked against real turns rather than a
+  fixture.
+
 ## [0.3.169] - 2026-08-18
 
 ### Fixed
