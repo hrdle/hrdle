@@ -482,3 +482,75 @@ describe('session writes', () => {
     expect(body.fitted).toBeTruthy();
   });
 });
+
+/**
+ * The ceiling, which is not the page budget.
+ *
+ * `fitToPage` holds `text` to one page by *moving* the overrun into `detail`,
+ * so an over-long message still lands - refusing it would trade "too long" for
+ * "nothing arrived", and silence is this system's worst failure. The ceiling is
+ * the other thing: a stop on a writer that has run away.
+ *
+ * `DETAIL_MAX` was 20,000, nine times anything ever written (measured across
+ * 391 stored entries, the largest detail was 2,198), so it was a disk limit
+ * wearing a guard's name.
+ */
+describe('the runaway ceiling', () => {
+  test('a detail past it is refused, and nothing is written', async () => {
+    const res = await post('/api/steward/thread', {
+      kind: 'notify',
+      text: 'ceiling',
+      detail: 'あ'.repeat(4001),
+    });
+    expect(res.status).toBe(400);
+
+    const after = await app.request('/api/steward');
+    expect(((await after.json()) as { thread: unknown[] }).thread).toHaveLength(0);
+  });
+
+  // The caller is an agent reading stdout: it retries against whatever the
+  // message suggests, so a message that suggests nothing buys a retry of the
+  // same thing. Zod's issue list gives the number and no remedy.
+  test('the refusal says how far over, and what to do instead', async () => {
+    const res = await post('/api/steward/thread', {
+      kind: 'notify',
+      text: 'ceiling',
+      detail: 'x'.repeat(9000),
+    });
+    const body = (await res.json()) as { error: string; detail?: unknown };
+    expect(body.error).toContain('9000');
+    expect(body.error).toContain('4000');
+    expect(body.error).toContain('steward report');
+    // The issue list is what it replaces, not something it sits beside.
+    expect(body.detail).toBeUndefined();
+  });
+
+  test('text has its own, and says the page moves on its own', async () => {
+    const res = await post('/api/steward/thread', { kind: 'notify', text: 'あ'.repeat(4001) });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toContain('moves into detail');
+  });
+
+  // The ordinary case the ceiling is *not* for: over a page, under the ceiling.
+  // It is written, and the overrun moves rather than being refused.
+  test('a long message still lands, cut at the page rather than at the door', async () => {
+    const res = await post('/api/steward/thread', {
+      kind: 'notify',
+      text: 'あ'.repeat(400),
+      detail: 'the rest',
+    });
+    expect(res.status).toBe(200);
+    const item = (await res.json()) as { item: { text: string; detail: string }; fitted?: string };
+    expect(item.fitted).toBeTruthy();
+    expect(item.item.detail).toContain('the rest');
+  });
+
+  // Anything that is not a length problem keeps the issue list, which is what
+  // says which field was wrong and why.
+  test('other invalid input still reports its own reason', async () => {
+    const res = await post('/api/steward/thread', { kind: 'notify', text: '' });
+    const body = (await res.json()) as { error: string; detail?: unknown };
+    expect(body.error).toBe('invalid thread item');
+    expect(body.detail).toBeTruthy();
+  });
+});
