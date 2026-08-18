@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.177] - 2026-08-18
+
+### Added
+- **The newest reply arrives with its detail open**, and everything older stays
+  shut. What has just arrived is what someone came to read, and asking them to
+  tap it is asking them to tap the thing they are already looking at.
+
+  "Newest" is the last entry *carrying a detail*, not simply the last entry: a
+  person's own message has none, so under the plain rule typing "thanks" would
+  shut the answer they were reading. It shuts again when a newer reply arrives,
+  and a detail opened by hand is not shut under whoever opened it.
+
 ## [0.3.176] - 2026-08-18
 
 ### Fixed
