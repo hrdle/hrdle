@@ -46,7 +46,7 @@ import {
 } from './metrics.ts'
 import { conversationPages } from './conversation.ts'
 import { GIVE_UP_AFTER_MS } from './ws-client.ts'
-import { lineFor, sessionName } from './types.ts'
+import { historyPaneOf, lineFor, sessionName, turnsKey } from './types.ts'
 import type {
   ConversationMessage,
   Session,
@@ -122,6 +122,15 @@ export interface AppState {
   sessionPage: number
   /** The steward has been asked to write this session and has not yet. */
   sessionWaiting: boolean
+  /**
+   * Pages that arrived while the reader was held on this one.
+   *
+   * The page no longer moves when a turn arrives, which is the whole point -
+   * and it means a reply lands with nothing on the panel changing. Without this
+   * the fix for "my message disappeared" would buy "the steward never
+   * answered". Cleared by any swipe, because moving is how they go and look.
+   */
+  sessionNewer: number
 
   /** ask: the question on screen, and where the ring is inside it. */
   ask: StewardThreadItem | null
@@ -180,6 +189,7 @@ export function initialState(): AppState {
     openSessionId: null,
     sessionPage: 0,
     sessionWaiting: false,
+    sessionNewer: 0,
     ask: null,
     askCursor: 0,
     askChecked: [],
@@ -516,24 +526,72 @@ function overviewFooter(state: AppState): string {
  * steward decided was worth saying, and running two of them together on one
  * page is how a summary turns back into a feed.
  */
-export function sessionPages(state: AppState): string[][] {
+/** The open session's history, from the pane it is kept under. */
+export function sessionTurns(state: AppState): StewardTurn[] {
   const id = state.openSessionId
   if (!id) return []
-  const turns = state.turns.get(id) ?? []
+  const session = state.sessions.find((s) => s.id === id)
+  return state.turns.get(turnsKey(id, historyPaneOf(session))) ?? []
+}
+
+/**
+ * How far the wearer's own turns sit in from the steward's.
+ *
+ * The panel is monochrome, so the two voices cannot be told apart by colour the
+ * way a chat window does it. They can be told apart by *where the line starts*,
+ * which reads at a glance and survives being green on green: the wearer's turns
+ * are indented and led with their name, the steward's run flush left. Two
+ * signals rather than one, because the lead alone is at the top of the page and
+ * a wrapped turn is mostly lines that do not carry it.
+ */
+const YOU_INDENT = '    '
+
+/** One turn's lines, laid out for whichever of the two said it. */
+function turnLines(turn: StewardTurn): string[] {
+  if (turn.role !== 'user') return splitBody(turn.text)
+  // Wrapped to the narrower column first, or the indent pushes the last word of
+  // every line past the panel edge.
+  const width = BODY_WIDTH - textWidth(YOU_INDENT)
+  return splitLines(`You: ${turn.text}`, width).map((l) => `${YOU_INDENT}${l}`)
+}
+
+/** One page, and which piece of which turn it is. */
+interface SessionPage {
+  /** `<turn id>#<chunk>`. What a reader is *on*, which an index is not: a turn
+   *  arriving renumbers every page after it. */
+  key: string
+  lines: string[]
+}
+
+function sessionPageList(state: AppState): SessionPage[] {
+  const turns = sessionTurns(state)
   const room = MAX_LINES - 1 // the direct row keeps the last line
-  const pages: string[][] = []
+  const pages: SessionPage[] = []
   for (let i = turns.length - 1; i >= 0; i--) {
     const turn = turns[i]
     if (!turn) continue
-    // What the wearer said is marked as theirs. Unmarked, an instruction they
-    // gave an hour ago reads as the steward reporting it back to them.
-    const text = turn.role === 'user' ? `You: ${turn.text}` : turn.text
-    const lines = splitBody(text)
+    const lines = turnLines(turn)
     for (let at = 0; at < lines.length; at += room) {
-      pages.push(lines.slice(at, at + room))
+      pages.push({ key: `${turn.id}#${at / room}`, lines: lines.slice(at, at + room) })
     }
   }
   return pages
+}
+
+export function sessionPages(state: AppState): string[][] {
+  return sessionPageList(state).map((p) => p.lines)
+}
+
+/**
+ * What each page is, in the same order `sessionPages` draws them.
+ *
+ * Derived from the one list rather than recomputed, because two functions
+ * walking the same turns independently is how the anchor and the page it names
+ * come to disagree - and a wrong anchor moves a reader somewhere they did not
+ * ask to go, which is the fault it exists to fix.
+ */
+export function sessionPageKeys(state: AppState): string[] {
+  return sessionPageList(state).map((p) => p.key)
 }
 
 export function sessionPageCount(state: AppState): number {
@@ -566,7 +624,13 @@ function sessionHeader(state: AppState): string {
   const session = state.sessions.find((s) => s.id === state.openSessionId)
   const pages = sessionPageCount(state)
   const position = pages > 1 && state.sessionPage >= 0 ? `${state.sessionPage + 1}/${pages}` : ''
-  return layOut(session ? sessionName(session) : (state.openSessionId ?? ''), `${position} ${clock()}`.trim())
+  // Said as a count of what arrived rather than as a mark, so a reader who
+  // stepped away knows whether it is one reply or the afternoon's.
+  const newer = state.sessionNewer > 0 ? `+${state.sessionNewer}` : ''
+  return layOut(
+    session ? sessionName(session) : (state.openSessionId ?? ''),
+    [newer, position, clock()].filter(Boolean).join(' '),
+  )
 }
 
 function sessionFooter(state: AppState): string {
