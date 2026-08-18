@@ -31,7 +31,9 @@ import {
   overviewRows,
   screenText,
   sessionPageCount,
+  somethingIsWorking,
   SPEECH_RMS,
+  SPINNER_INTERVAL_MS,
 } from './display.ts'
 import type { AppState, DraftPhraseView, VoiceTarget } from './display.ts'
 import { filterConversation } from './conversation.ts'
@@ -154,7 +156,11 @@ export class GlassesController {
   readonly ws: WsClient
   private platform: GlassesPlatform
   private headerTimer: ReturnType<typeof setInterval> | null = null
+  private spinnerTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
+  /** Nothing drawn from the background reaches the panel, so an animation run
+   *  there is spent entirely on the way to being dropped. */
+  private foreground = true
   private lastDirectLoad = 0
 
   // Voice capture
@@ -186,6 +192,7 @@ export class GlassesController {
     this.headerTimer = setInterval(() => {
       if (!this.stopped) this.platform.renderHeader(this.state)
     }, HEADER_TICK_MS)
+    this.spinnerTimer = setInterval(() => this.tickSpinner(), SPINNER_INTERVAL_MS)
     // REST seeds the first paint. The socket's snapshot carries the thread and
     // the lines too, but a blocked socket would otherwise leave the panel on
     // "Connecting..." with no way to tell that from an empty server.
@@ -910,7 +917,9 @@ export class GlassesController {
     this.state.demo = true
     this.state.connected = true
     this.state.sessions = [
-      { id: 'w1', name: 'work-1' },
+      // One of them working, so the indicator is on a demo screen rather than
+      // only on a real server: it is the one thing on this list that moves.
+      { id: 'w1', name: 'work-1', indicatorState: 'processing' },
       { id: 'w2', name: 'work-2' },
       { id: 'w3', name: 'life' },
     ]
@@ -953,12 +962,30 @@ export class GlassesController {
     this.render()
   }
 
+  /**
+   * Advance the working indicator, where it is being looked at and while there
+   * is something to indicate.
+   *
+   * A whole render rather than the header alone: unlike the other app's, this
+   * indicator is in the overview's list, which is the body. It costs the same -
+   * `updateDisplay` sends only the containers whose content actually changed,
+   * so a tick that moves one dot is one container either way.
+   */
+  private tickSpinner(): void {
+    if (this.stopped || !this.foreground) return
+    if (!somethingIsWorking(this.state)) return
+    this.state.spinnerTick = (this.state.spinnerTick ?? 0) + 1
+    this.render()
+  }
+
   onForegroundEnter(): void {
+    this.foreground = true
     this.ws.connect()
     void this.refresh()
   }
 
   onForegroundExit(): void {
+    this.foreground = false
     // Nothing to save: everything on these screens is the server's, and it is
     // still there when the app comes back. The other app persists a resume
     // point because it holds scraped state that cannot be asked for again.
@@ -969,6 +996,10 @@ export class GlassesController {
     if (this.headerTimer) {
       clearInterval(this.headerTimer)
       this.headerTimer = null
+    }
+    if (this.spinnerTimer) {
+      clearInterval(this.spinnerTimer)
+      this.spinnerTimer = null
     }
     if (this.recordingTimer) {
       clearTimeout(this.recordingTimer)
