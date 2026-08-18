@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.171] - 2026-08-18
+
+### Changed
+- **A turn is one message.** The steward writes twice - a page-sized `text` for
+  the glasses and a `detail` with the code and the reasoning - and the phone
+  rendered the second half as a collapsed disclosure under every message. Five
+  consecutive replies, five triangles, each of which had to be opened to find
+  out whether it held anything. That split is the *glasses'* constraint and has
+  no business following the message onto a screen that can hold it, so the
+  detail renders inline now. Not dropped: the server *moves* an over-long
+  `text` down into `detail`, so the two halves are often one sentence cut in
+  the middle.
+
+### Added
+- **Every turn says when it was said.** Clock time alone, and the date only
+  once the turn is no longer today - a conversation is read as a sequence of
+  moments, and the date in front of every one of them is a column of the same
+  nine characters. Sized through `--cv-fs-meta`, so it trails the body rather
+  than growing with it.
+
 ## [0.3.170] - 2026-08-18
 
 ### Fixed
