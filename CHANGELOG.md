@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.178] - 2026-08-19
+
+### Added
+- **A session's chat offers the conversation itself, beside the steward's
+  summary.** The summary used to *replace* the transcript whenever the mode was
+  on, and the only way back was a global switch in the dashboard - so on a
+  phone, where the terminal is a screen of its own, the raw conversation was
+  unreachable from that screen. The route meant to cover it does not: of 196
+  stored session turns 3 carry a link to their source, and of 450 thread
+  entries none do. The narrow screen is the glasses and the summary is for
+  them; a phone is wide enough to choose. The transcript is still not fetched
+  until it is asked for.
+- **What a person sends to a pane themselves now reaches the steward.** It
+  hears about a pane through `pane.agent_status_changed`, which says something
+  moved and never what was said, and its next reading is three seconds later -
+  by which time the agent has redrawn, so it reports the answer to a question
+  it never saw. A bracketed paste (the input bar, `hrdle send --submit`) goes
+  through verbatim, capped at 2,000 characters; a bare Enter carries no text
+  and only names the pane to read now, at most once a minute per pane.
+  Reconstructing what was typed from the key stream is deliberately not
+  attempted - it would mean re-implementing the TUI's own line editing, and a
+  transcript that is wrong sometimes is worse than none.
+
 ## [0.3.177] - 2026-08-18
 
 ### Added
