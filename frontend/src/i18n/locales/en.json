@@ -466,8 +466,6 @@
     "viewToggle": "Steward view",
     "writingSession": "Reading this session...",
     "sessionEmpty": "Nothing written yet.",
-    "detailShow": "Detail",
-    "detailHide": "Hide detail",
     "attachImage": "Attach image",
     "removeImage": "Remove image",
     "working": "Working... ({{seconds}}s)",

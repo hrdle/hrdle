@@ -16,8 +16,7 @@ import { authFetch } from "../../services/api";
 import { ConversationViewer } from "../ConversationViewer";
 import { AskControls } from "./AskControls";
 import { StewardSessionComposer } from "./StewardSessionComposer";
-import { Linkified } from "./Linkified";
-import { TurnDetail } from "./TurnDetail";
+import { TurnBody, TurnTime } from "./TurnBody";
 import { TurnImages } from "./TurnImages";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -229,9 +228,7 @@ function ThreadItem({
 					</button>
 				)}
 
-				<p className="whitespace-pre-wrap break-words">
-					<Linkified text={item.text} />
-				</p>
+				<TurnBody text={item.text} detail={item.detail} />
 
 					{item.images && <TurnImages paths={item.images} />}
 
@@ -243,9 +240,9 @@ function ThreadItem({
 					</ul>
 				)}
 
-				{item.detail && <TurnDetail detail={item.detail} />}
-
 				{item.kind === "ask" && <AskControls ask={item.ask} onAnswer={onAnswer} />}
+
+				<TurnTime at={item.at} className={mine ? "text-right" : ""} />
 			</div>
 		</div>
 	);
