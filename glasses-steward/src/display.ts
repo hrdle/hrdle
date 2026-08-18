@@ -350,7 +350,10 @@ export function somethingIsWorking(state: AppState): boolean {
         (s.panes ?? []).some((p) => p.indicatorState === 'processing'),
     )
   }
-  if (state.screen !== 'direct') return false
+  // Both screens that show one session carry the indicator. The session screen
+  // was left out when this went in, on the grounds that it drew nothing to
+  // animate - which was true, and was the bug.
+  if (state.screen !== 'direct' && state.screen !== 'session') return false
   const session = state.sessions.find((s) => s.id === state.openSessionId)
   return !!session && sessionBadge(session, state) !== BADGE_BLANK
 }
@@ -623,8 +626,14 @@ function sessionHeader(state: AppState): string {
   // Said as a count of what arrived rather than as a mark, so a reader who
   // stepped away knows whether it is one reply or the afternoon's.
   const newer = state.sessionNewer > 0 ? `+${state.sessionNewer}` : ''
+  // Whether the agent is moving. This screen had none, and a summary that has
+  // not changed for two minutes looks the same whether the session is thinking
+  // or has stopped dead - which is the one thing a person watching it needs to
+  // tell apart.
+  const badge = paneBadge(session, state)
+  const name = session ? sessionName(session) : (state.openSessionId ?? '')
   return layOut(
-    session ? sessionName(session) : (state.openSessionId ?? ''),
+    `${name}${badge ? ` ${badge}` : ''}`,
     [newer, position, clock()].filter(Boolean).join(' '),
   )
 }

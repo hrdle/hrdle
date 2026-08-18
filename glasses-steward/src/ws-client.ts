@@ -250,6 +250,18 @@ export class WsClient {
     this.send({ type: 'glasses-screen', screen })
   }
 
+  /**
+   * One ring gesture, for the recording.
+   *
+   * Device only, like `publishScreen` - a simulator click is not the wearer
+   * driving. Without it a replay shows the screens changing and never what was
+   * pressed, which is the half that says whether a gesture did what the wearer
+   * meant.
+   */
+  publishInput(kind: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'): void {
+    this.send({ type: 'glasses-input', input: { kind, at: Date.now() } })
+  }
+
   hasPublished(): boolean {
     return this.screenPublished
   }

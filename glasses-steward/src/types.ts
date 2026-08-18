@@ -155,9 +155,34 @@ export function threadAgentOf(agent: string | undefined): string | undefined {
   return agent && agent !== 'claude' ? agent : undefined
 }
 
-/** What a session is called, for a person reading a list of them. */
+/**
+ * What a session is called, for a person reading a list of them.
+ *
+ * **The status suffix is dropped.** The naming convention is
+ * `<作業内容> — <状態>`, so a workspace label is a sentence that already
+ * carries a state - and on these screens the state is carried twice more: by
+ * the indicator beside the name, and by the steward's line under it. Three
+ * statements of status and no name is exactly how a person ends up unable to
+ * say which row is the workspace, which is the session and which is what is
+ * happening.
+ *
+ * The label can also disagree with the indicator: it says 作業中 because
+ * somebody typed that an hour ago, while the agent has been idle for twenty
+ * minutes. The indicator is measured and the suffix is a memory, so the
+ * measured one keeps the job.
+ *
+ * Split at the *last* separator: the name may contain one of its own
+ * (`v0.0.81公開と0.0.82ビルド — 作業中`), and the convention puts the state at
+ * the end. A label without one is a name already.
+ */
+const STATE_SUFFIX = ' — '
+
 export function sessionName(session: Session): string {
-  return session.customTitle || session.name || session.id
+  const full = session.customTitle || session.name || session.id
+  const at = full.lastIndexOf(STATE_SUFFIX)
+  if (at <= 0) return full
+  const name = full.slice(0, at).trim()
+  return name || full
 }
 
 /**

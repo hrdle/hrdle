@@ -126,9 +126,93 @@ describe('the working indicator', () => {
   test('nothing is redrawn when nothing is working', () => {
     expect(somethingIsWorking(state({ sessions: working() }))).toBe(true)
     expect(somethingIsWorking(state({ sessions: sessions('work-1') }))).toBe(false)
-    // The session screen shows no indicator, so a tick there would redraw for
-    // nothing.
-    expect(somethingIsWorking(state({ screen: 'session', sessions: working(), openSessionId: 'w1' }))).toBe(false)
+		// Both screens that show one session carry it. The session screen was left
+		// out when this went in, and a summary that has not changed for two minutes
+		// looks the same whether the session is thinking or has stopped dead.
+		expect(somethingIsWorking(state({ screen: 'session', sessions: working(), openSessionId: 'w1' }))).toBe(true)
+		// A screen with no session on it still has nothing to animate.
+		expect(somethingIsWorking(state({ screen: 'report', sessions: working() }))).toBe(false)
     expect(somethingIsWorking(state({ screen: 'direct', sessions: working(), openSessionId: 'w1' }))).toBe(true)
   })
 })
+
+/**
+ * Three things about a session, each said once.
+ *
+ * Reported as "I cannot tell which is the workspace name, which is the session
+ * and which is the状況". Measured on the live screen: the workspace label is a
+ * sentence carrying its own status (`v0.3.178 リリース — 作業中`, per the
+ * naming convention), the steward's line under it is also status, and the
+ * indicator beside it is status a third time. Three statements of state and no
+ * name.
+ */
+describe('a session, named', () => {
+  const named = (name: string): Session[] => [{ id: 'w1', name }]
+
+  test('the status suffix is not part of the name', () => {
+    const body = (name: string) => screenText(state({ sessions: named(name) })).body;
+    expect(body('v0.3.178 リリース — 作業中')).toContain('v0.3.178 リリース');
+    expect(body('v0.3.178 リリース — 作業中')).not.toContain('作業中');
+    expect(body('グラス録音メーターの所在確認 — 完了済')).not.toContain('完了済');
+    expect(body('フレーム設計 — 中断（報告待ち）')).not.toContain('中断');
+  });
+
+  // The name may carry a separator of its own, and the convention puts the
+  // state at the end.
+  test('the split is the last separator, not the first', () => {
+    expect(screenText(state({ sessions: named('v0.0.81公開と0.0.82ビルド — 作業中') })).body).toContain(
+      'v0.0.81公開と0.0.82ビルド',
+    );
+  });
+
+  test('a label without one is a name already', () => {
+    expect(screenText(state({ sessions: named('life') })).body).toContain('life');
+    expect(screenText(state({ sessions: named('hrdle work-1') })).body).toContain('hrdle work-1');
+  });
+
+  // The label says 作業中 because somebody typed it an hour ago; the indicator
+  // is measured now. Keeping both lets the screen contradict itself.
+  test('the state comes from the indicator, not from what the label remembers', () => {
+    const idle = screenText(state({ sessions: [{ id: 'w1', name: 'リリース — 作業中' }] })).body;
+    expect(idle).not.toContain('作業中');
+    expect(idle).toContain(BADGE_BLANK);
+  });
+});
+
+/**
+ * The session screen, which had no indicator at all.
+ *
+ * A summary that has not changed for two minutes looks the same whether the
+ * session is thinking or has stopped dead, and telling those apart is the whole
+ * reason to be watching it.
+ */
+describe('the session screen', () => {
+  const open = (indicator: 'processing' | 'waiting_input' | 'idle', tick = 0) =>
+    state({
+      screen: 'session',
+      openSessionId: 'w1',
+      spinnerTick: tick,
+      sessions: [
+        {
+          id: 'w1',
+          name: 'リリース — 作業中',
+          panes: [{ paneId: '%1', isActive: true, agent: 'claude', indicatorState: indicator }],
+        },
+      ],
+    });
+
+  test('says when the agent is moving, and blinks', () => {
+    expect(screenText(open('processing', 0)).header).toContain('·');
+    expect(screenText(open('processing', 1)).header).toContain('•');
+  });
+
+  test('says when it is waiting on the wearer instead', () => {
+    expect(screenText(open('waiting_input')).header).toContain('[!]');
+  });
+
+  test('and says nothing when it is idle', () => {
+    const header = screenText(open('idle')).header;
+    expect(header).not.toContain('·');
+    expect(header).not.toContain('[!]');
+  });
+});
