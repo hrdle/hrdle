@@ -70,11 +70,13 @@ test.describe('steward mode', () => {
     await page.getByTitle('スチュワード').click();
 
     await expect(page.getByText('レビューが7件返っています')).toBeVisible();
-    // The half the glasses could not carry, behind a tap: open, the card is the
-    // glance plus everything the glance was meant to spare them.
-    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
-    await page.getByRole('button', { name: '詳細', exact: true }).click();
+    // The half the glasses could not carry, in the message rather than behind a
+    // tap. The split is the glasses' constraint; a disclosure triangle under
+    // every reply is the shape of an AI chat, and the server *moves* an
+    // over-long `text` down here, so the two halves are often one sentence cut
+    // in the middle.
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(0);
   });
 
   // The thread is the conversation about the whole set. What is about one
@@ -253,14 +255,25 @@ test.describe('steward mode on a tablet', () => {
     await expect(page.getByTestId('floating-keyboard')).toHaveCount(0);
   });
 
-  test('a detail is behind a tap here too', async ({ page }) => {
+  test('a detail is part of the message here too', async ({ page }) => {
     await bootApp(page, { steward: { enabled: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
-    await expect(page.getByText('うち1件は設計が変わる規模です。')).toHaveCount(0);
-    await page.getByRole('button', { name: '詳細', exact: true }).click();
     await expect(page.getByText('うち1件は設計が変わる規模です。')).toBeVisible();
+    await expect(page.getByRole('button', { name: '詳細', exact: true })).toHaveCount(0);
+  });
+
+  // A conversation is read as a sequence of moments, and until this there was
+  // nothing on any turn to say which moment.
+  test('every turn says when it was said', async ({ page }) => {
+    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    const times = page.locator('time[datetime]');
+    await expect(times.first()).toBeVisible();
+    expect(await times.count()).toBeGreaterThanOrEqual(THREAD.length);
   });
 
   test('is absent when the server has no steward', async ({ page }) => {
