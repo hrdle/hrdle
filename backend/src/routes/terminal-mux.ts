@@ -15,6 +15,7 @@ import {
 import { recordGlassesFocus, recordGlassesInput, recordGlassesScreen } from '../services/glasses-screen-recorder';
 import { isStewardEnabled } from '../services/steward-config';
 import { getLines, getThread } from '../services/steward-store';
+import { noteOwnerInput } from '../services/steward-runtime';
 import { VERSION } from '../cli';
 import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
@@ -1105,6 +1106,9 @@ async function handleControlMessage(
         // Typing on a device makes it the size owner (active-client sizing).
         controlSession.markClientActive(ws.data.visitorId);
         await controlSession.sendInput(msg.paneId, data);
+        // What a person sends to a pane themselves is the one thing the status
+        // watcher cannot carry: it says a pane moved, never what was said.
+        noteOwnerInput(sessionId, msg.paneId, data);
         // Pre-arm a push: input usually generates output but a silent program
         // (waiting for full line, etc.) wouldn't, and we still want to refresh
         // cursor position promptly.

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentProvider, IndicatorState } from "../../../../shared/types";
 import { useAgentConversation } from "../../hooks/useAgentConversation";
@@ -52,29 +53,57 @@ export function ChatView({
 	const { t } = useTranslation();
 	const stewardAvailable = useStewardEnabled();
 	const [stewardView] = useStewardView();
-	// The steward's version replaces the transcript here rather than adding a
-	// mode: this is already where someone comes to read what happened, so what
-	// changes is the reading, not the navigation.
-	const showSteward = stewardAvailable && stewardView;
+
+	/**
+	 * Which of the two this screen is showing.
+	 *
+	 * The steward's version used to *replace* the transcript, and the only way
+	 * back was a global switch in the dashboard - so on a phone, where the
+	 * terminal is a screen of its own, the raw conversation was unreachable from
+	 * here. The route that was supposed to cover it does not: of 196 stored
+	 * turns, 3 carried a link to their source, and of 450 thread entries, none
+	 * did.
+	 *
+	 * The narrow screen is the glasses, and the summary is for them. This one is
+	 * wide enough to choose, so it chooses. The global setting is the default
+	 * this opens on, not a cage.
+	 */
+	const [view, setView] = useState<"steward" | "raw">(stewardView ? "steward" : "raw");
+	useEffect(() => {
+		setView(stewardView ? "steward" : "raw");
+	}, [stewardView]);
+
+	const showSteward = stewardAvailable && view === "steward";
 
 	const { messages, isReady, conversationId, error } = useAgentConversation({
 		agent,
 		sessionId,
 		agentSessionId,
+		// The transcript is not fetched while the summary is up; switching is
+		// what asks for it.
 		enabled: enabled && !showSteward,
 	});
 
+	const chooser = stewardAvailable ? (
+		<ViewChooser value={view} onChange={setView} />
+	) : null;
+
 	if (showSteward) {
 		return (
-			<StewardSessionView
-				sessionId={sessionId}
-				agentSessionId={agentSessionId}
-				composerInBar={composerInBar}
-				agentState={agentState}
-				activity={activity}
-				agentPaneCount={agentPaneCount}
-				paneId={paneId}
-			/>
+			<div className="flex h-full min-h-0 flex-col bg-cv-bg">
+				{chooser}
+				<div className="min-h-0 flex-1">
+					<StewardSessionView
+						sessionId={sessionId}
+						agentSessionId={agentSessionId}
+						composerInBar={composerInBar}
+						agentState={agentState}
+						activity={activity}
+						agentPaneCount={agentPaneCount}
+						paneId={paneId}
+					/>
+				</div>
+			</div>
 		);
 	}
 
@@ -109,7 +138,33 @@ export function ChatView({
 	// initial conversation arrives, render an empty container.
 	if (!isReady && messages.length === 0) {
 		const emptyClass = inline ? "h-full" : "fixed inset-0 z-50";
-		return <div className={`${emptyClass} bg-cv-bg`} />;
+		return (
+			<div className={`${emptyClass} flex min-h-0 flex-col bg-cv-bg`}>
+				{chooser}
+			</div>
+		);
+	}
+
+	if (chooser) {
+		return (
+			<div className="flex h-full min-h-0 flex-col bg-cv-bg">
+				{chooser}
+				<div className="min-h-0 flex-1">
+					<ConversationViewer
+						title={resolvedTitle}
+						subtitle={resolvedSubtitle}
+						messages={messages}
+						isLoading={false}
+						onClose={() => {
+							/* close handled by parent */
+						}}
+						scrollToBottom
+						inline
+						agent={agent}
+					/>
+				</div>
+			</div>
+		);
 	}
 
 	return (
@@ -125,5 +180,49 @@ export function ChatView({
 			inline={inline}
 			agent={agent}
 		/>
+	);
+}
+
+/**
+ * Summary or conversation, on the screen showing them.
+ *
+ * Two words and a rule under the live one - not a pill, not a card. This sits
+ * above a reading surface all day, and the quietest thing that can still be
+ * found is the right amount of control here.
+ */
+function ViewChooser({
+	value,
+	onChange,
+}: {
+	value: "steward" | "raw";
+	onChange: (next: "steward" | "raw") => void;
+}) {
+	const { t } = useTranslation();
+	const options: { key: "steward" | "raw"; label: string }[] = [
+		{ key: "steward", label: t("chat.summary", "要約") },
+		{ key: "raw", label: t("chat.transcript", "会話") },
+	];
+
+	return (
+		<div className="flex shrink-0 items-center gap-4 border-cv-border border-b px-3">
+			{options.map((option) => {
+				const live = option.key === value;
+				return (
+					<button
+						key={option.key}
+						type="button"
+						onClick={() => onChange(option.key)}
+						aria-pressed={live}
+						className={`-mb-px min-h-9 border-b-2 px-0.5 text-[length:var(--cv-fs-meta,12px)] transition-colors ${
+							live
+								? "border-cv-accent font-medium text-cv-text"
+								: "border-transparent text-cv-text-muted hover:text-cv-text"
+						}`}
+					>
+						{option.label}
+					</button>
+				);
+			})}
+		</div>
 	);
 }
