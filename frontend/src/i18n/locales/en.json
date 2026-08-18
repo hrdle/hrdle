@@ -474,5 +474,9 @@
     "takePhoto": "Take a photo",
     "detailShow": "Detail",
     "detailHide": "Hide detail"
+  },
+  "chat": {
+    "summary": "Summary",
+    "transcript": "Conversation"
   }
 }

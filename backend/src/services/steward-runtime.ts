@@ -339,6 +339,86 @@ export function wakeObserverWith(text: string): void {
 }
 
 /**
+ * What the owner sent straight to a pane, as far as we can know it.
+ *
+ * The steward learns about a pane from `pane.agent_status_changed`, which says
+ * that something moved and never what was said. That is fine for an agent
+ * working on its own and wrong for the one case a person cares about: they
+ * typed into the pane themselves, and the steward's next reading of it is three
+ * seconds later, by which time the agent has redrawn and the question is gone -
+ * so it reports the answer to a question it never saw.
+ *
+ * Two shapes, because the two are worth different amounts:
+ *
+ * - **A bracketed paste is a whole message.** It is what the input bar sends
+ *   (`bracketedPaste(value)`) and what `hrdle send --submit` sends, so the text
+ *   is exact and goes through verbatim. No reconstruction, no guessing.
+ * - **A bare Enter is only a moment.** Reconstructing what was typed from the
+ *   key stream would mean re-implementing the TUI's own line editing -
+ *   backspace, history recall, IME composition - and a transcript that is
+ *   wrong sometimes is worse than none, because the steward relays it. So this
+ *   carries no text: it names the pane and says to read it now.
+ */
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+
+/** Long enough for anything a person types, short enough that pasting a log
+ *  does not become the wake-up. */
+const SPOKEN_MAX = 2000;
+
+/** One "they are typing" wake per pane per minute. Its whole job is to point at
+ *  a pane sooner than the status watcher would; firing on every line turns the
+ *  observer's day into reading a shell being used. */
+const TYPED_NOTE_MS = 60_000;
+const lastTypedNote = new Map<string, number>();
+
+/** What a chunk of pane input amounts to, before anything is done about it.
+ *  Pure, so the parsing is testable without waking anybody. */
+export type OwnerInput =
+  | { kind: 'sent'; text: string }
+  | { kind: 'typed' }
+  | null;
+
+export function readOwnerInput(data: Buffer): OwnerInput {
+  const text = data.toString('utf8');
+
+  const start = text.indexOf(PASTE_START);
+  if (start !== -1) {
+    const from = start + PASTE_START.length;
+    const end = text.indexOf(PASTE_END, from);
+    const sent = (end === -1 ? text.slice(from) : text.slice(from, end)).trim();
+    return sent ? { kind: 'sent', text: sent.slice(0, SPOKEN_MAX) } : null;
+  }
+
+  // A submit, and nothing about what was submitted.
+  return text.endsWith('\r') || text.endsWith('\n') ? { kind: 'typed' } : null;
+}
+
+export function noteOwnerInput(sessionId: string, paneId: string, data: Buffer): void {
+  if (!isStewardEnabled()) return;
+  const input = readOwnerInput(data);
+  if (!input) return;
+  const target = `${sessionId}:${paneId}`;
+
+  if (input.kind === 'sent') {
+    lastTypedNote.set(target, Date.now());
+    wakeObserverWith(
+      `The owner sent this straight to ${target}, bypassing you: "${input.text}"\n` +
+        'You were not asked, so do not answer it - read that pane when it settles and write what came of it.',
+    );
+    return;
+  }
+
+  const now = Date.now();
+  if (now - (lastTypedNote.get(target) ?? 0) < TYPED_NOTE_MS) return;
+  lastTypedNote.set(target, now);
+  wakeObserver(
+    `the owner typed something into ${target} and submitted it - read that pane now, ` +
+      'before the agent redraws over what they asked',
+  );
+}
+
+/**
  * Wake-ups that had nowhere to go, replayed on the next successful start.
  *
  * Rebuilding on demand is not enough on its own: `ensureSteward` also declines

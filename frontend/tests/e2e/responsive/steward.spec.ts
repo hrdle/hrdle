@@ -932,3 +932,67 @@ test.describe('the newest reply', () => {
     await expect(page.getByText('新しい詳細です。')).toBeVisible();
   });
 });
+
+/**
+ * Reading the summary, or reading the conversation.
+ *
+ * The steward's version used to *replace* the transcript on a session's chat,
+ * and the only way back was a global switch in the dashboard - so on a phone,
+ * where the terminal is a screen of its own, the raw conversation was
+ * unreachable from here. The route meant to cover it does not: of 196 stored
+ * turns, 3 carried a link to their source.
+ *
+ * The narrow screen is the glasses, and the summary is for them. This one is
+ * wide enough to choose.
+ */
+test.describe('summary or conversation', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  const boot = (page: import('@playwright/test').Page) =>
+    bootApp(page, {
+      withAgentPane: true,
+      steward: { enabled: true, view: true, turns: TURNS },
+    });
+
+  test('opens on the summary, and offers the conversation beside it', async ({ page }) => {
+    await boot(page);
+
+    await expect(page.getByText('テストを直しています')).toBeVisible();
+    await expect(page.getByRole('button', { name: '要約', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: '会話', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  test('the conversation is one tap away, without leaving for the dashboard', async ({ page }) => {
+    await boot(page);
+    await page.getByRole('button', { name: '会話', exact: true }).click();
+
+    // The steward's turns are gone; what is here is the pane's own transcript.
+    await expect(page.getByText('テストを直しています')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '会話', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  test('and the summary is one tap back', async ({ page }) => {
+    await boot(page);
+    await page.getByRole('button', { name: '会話', exact: true }).click();
+    await page.getByRole('button', { name: '要約', exact: true }).click();
+    await expect(page.getByText('テストを直しています')).toBeVisible();
+  });
+
+  // Nothing to choose between when the server has no steward: the transcript is
+  // all there is, and a chooser with one live option is furniture.
+  test('is absent when the server has no steward', async ({ page }) => {
+    await bootApp(page, { withAgentPane: true, steward: { enabled: false } });
+    await expect(page.getByRole('button', { name: '要約', exact: true })).toHaveCount(0);
+  });
+});
