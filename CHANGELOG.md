@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.175] - 2026-08-18
+
+### Changed
+- **A steward entry's ceiling can now fire, and its refusal can be acted on.**
+  `DETAIL_MAX` was 20,000 against a measured maximum of 2,198 across 391 stored
+  entries - nine times anything ever written, which is a disk limit wearing a
+  guard's name. It is 4,000: about twice real use, so a long answer with a diff
+  in it goes through and a report pasted into a chat message does not. The
+  refusal used to be Zod's issue list, which gives the number and no remedy -
+  and the caller is an agent reading stdout, so it retried against a message
+  that suggested nothing. It now says how far over, that nothing was written,
+  and where the long form actually goes.
+
+  `fitToPage` is untouched: over one page, `text` still has its overrun *moved*
+  into `detail` rather than being refused, because the message still landing
+  matters more, and silence is this system's worst failure.
+
 ## [0.3.174] - 2026-08-18
 
 ### Changed
