@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.179] - 2026-08-19
+
+### Fixed
+- **A question about nothing in particular had no screen.** The steward asks
+  two kinds: one about a session, which the strip above that session's composer
+  shows, and one about nothing in particular - which way to do something,
+  whether to go ahead - which carries no `sessionId` and appeared on no session
+  screen at all. The strip was also gated on having a session, so it did not
+  appear above the overview's composer either, which is the one screen where
+  such a question obviously belongs. Its only home was the thread, a screen you
+  have to go to on purpose.
+
+  Measured: two of them sat unanswered for five hours while the person they
+  were for was in the app, and the server never saw an answer attempt for
+  either. They were not ignored - they were never drawn. The strip now shows
+  this session's questions and any that belong to no session, and the answer
+  carries the question's own session rather than the screen's.
+
 ## [0.3.178] - 2026-08-19
 
 ### Added
