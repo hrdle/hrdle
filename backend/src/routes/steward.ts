@@ -347,7 +347,8 @@ steward.post('/thread/reply', async (c) => {
   // No pane moves when a person answers, so the status watcher cannot see this.
   // The wake-up carries the answer rather than announcing that one exists:
   // waking and delivering are the same act, so there is nothing to poll.
-  const said = askId ? `The owner answered ask ${askId}: ${replyText}` : `The owner said: ${replyText}`;
+  const asked = updatedAsk?.kind === 'ask' ? updatedAsk.text : '';
+  const said = answerWake({ askId, asked, replyText });
   // The paths, in the wake-up itself. They are on the entry either way, but a
   // wake-up that only says what was typed is all the observer reads - so an
   // attached screenshot reached nobody, and the relay to the agent was a
@@ -544,6 +545,30 @@ async function mirrorToSession(item: StewardThreadItem): Promise<void> {
     paneId: item.paneId,
     turns,
   });
+}
+
+/**
+ * How the observer is told an answer arrived.
+ *
+ * **Named by what it asked, not only by its id.** The id is how the two ends
+ * agree which question this was; it is not a thing to say to anybody. An
+ * observer handed nothing else uses the only handle it has, and `068d255a`
+ * appears on no screen the owner has ever seen and links to nothing - reported
+ * on 2026-08-20 as "what is this, it appeared out of nowhere and I am
+ * confused". So the words come first and the id is labelled as bookkeeping.
+ */
+export function answerWake({
+  askId,
+  asked,
+  replyText,
+}: {
+  askId?: string;
+  asked?: string;
+  replyText: string;
+}): string {
+  if (!askId) return `The owner said: ${replyText}`;
+  const name = asked ? `"${asked}"` : 'a question';
+  return `The owner answered ${name} (ask ${askId}, for your bookkeeping - never for them): ${replyText}`;
 }
 
 /** What a person's answer says, in the words the thread is read in. */

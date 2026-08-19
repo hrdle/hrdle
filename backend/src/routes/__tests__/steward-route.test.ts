@@ -7,7 +7,7 @@ import { IDENTITY, PASSWORD_ENV, TMP_PATHS } from '../../../../shared/identity';
 import { AuthService } from '../../services/auth';
 import { conditionalAuthMiddleware, getJwtSecret, initJwtSecret } from '../../middleware/auth';
 import { STEWARD_ENV } from '../../services/steward-config';
-import { steward } from '../steward';
+import { answerWake, steward } from '../steward';
 
 const DATA_DIR_ENV = IDENTITY.dataDirEnv;
 
@@ -552,5 +552,41 @@ describe('the runaway ceiling', () => {
     const body = (await res.json()) as { error: string; detail?: unknown };
     expect(body.error).toBe('invalid thread item');
     expect(body.detail).toBeTruthy();
+  });
+});
+
+/**
+ * An id is how two machines agree which question this was. It is not a name.
+ *
+ * The observer was handed `ask <id>` and nothing else when someone answered,
+ * so the only handle it had for that question was the id - and it used it.
+ * Reported on 2026-08-20 as "what is 068d255a, it appeared out of nowhere and
+ * I am confused": a string that appears on no screen the owner has ever seen
+ * and links to nothing.
+ */
+describe('how the observer is told an answer arrived', () => {
+  test('the question is named by what it asked', () => {
+    const wake = answerWake({ askId: 'abc123', asked: '未読の印、どの形にしますか', replyText: '記号' });
+    expect(wake).toContain('"未読の印、どの形にしますか"');
+    expect(wake).toContain('記号');
+  });
+
+  // Kept, because it is what lets the observer match an answer to the question
+  // it was for - and labelled, because that is the whole of what it is for.
+  test('the id is there, and says it is bookkeeping', () => {
+    const wake = answerWake({ askId: 'abc123', asked: 'x', replyText: 'y' });
+    expect(wake).toContain('abc123');
+    expect(wake).toContain('never for them');
+  });
+
+  // An ask raised before this shipped carries no text through this path.
+  test('a question with no words is still an answerable question', () => {
+    expect(answerWake({ askId: 'abc123', replyText: 'y' })).toContain('a question');
+  });
+
+  test('something said without a question in front of it is not dressed as one', () => {
+    const wake = answerWake({ replyText: 'ちょっと待って' });
+    expect(wake).toBe('The owner said: ちょっと待って');
+    expect(wake).not.toContain('ask');
   });
 });

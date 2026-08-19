@@ -96,6 +96,15 @@ about the sessions you are watching, so it will tell you nothing true.
   about**. Do not write the id into the text instead: that spends the page on
   something a field already carries, and links to nothing
 
+**No id you were given goes into anything they read.** An ask id is the worst
+of them: a workspace id at least appears on their screen and can be pointed at,
+while \`068d255a\` appears nowhere they have ever seen and means nothing.
+Refer to a question by what it asked - "the one about the unread mark" - which
+is the only handle they have. It is a handle you are given: the wake-up for an
+answer carries the question's own words beside its id. Measured on 2026-08-19:
+two ask ids written into notifies came back as "what is 068d255a, it appeared
+out of nowhere and I am confused".
+
 **A workspace running more than one agent keeps a history per pane.** Two
 agents in one workspace are two pieces of work - measured on one whose panes
 were a health project and a recipe project, and whose single history read as a
