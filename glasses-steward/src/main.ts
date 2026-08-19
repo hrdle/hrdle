@@ -26,6 +26,7 @@ import { startDebugUI } from './debug-ui.ts'
 import { startPhoneUI } from './phone-ui.ts'
 import { createSetupGate } from './setup-gate.ts'
 import { readStored, storageKey } from './storage.ts'
+import { SEEN_SUFFIX } from './controller.ts'
 
 const URL_SUFFIX = 'url'
 const HEARTBEAT_MS = 30_000
@@ -148,6 +149,11 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   const platform: GlassesPlatform = {
     onDevice: true,
+    persist: (suffix, value) => {
+      // Never let a preference take the panel down: a failed write costs a read
+      // mark and nothing else.
+      void bridge?.setLocalStorage(storageKey(suffix), value).catch(() => {})
+    },
     render(state) {
       if (++renders <= 10) trace(`render #${renders} screen=${state.screen} sessions=${state.sessions.length}`)
       publishScreen()
@@ -234,6 +240,10 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   setBaseUrl(savedUrl)
   flushLogs()
   trace(`steward mode: url=${savedUrl}`)
+
+  // What was read last run, before the first list is drawn - a mark that
+  // arrives after the paint flashes every session as unread and then clears.
+  controller.loadSeen(await readStored((key) => bridge.getLocalStorage(key), SEEN_SUFFIX))
 
   controller.connect()
   platform.render(controller.state)
