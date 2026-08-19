@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.182] - 2026-08-20
+
 ### Fixed
 - **The herdr update button installed nothing on any machine running the
   steward.** `herdr update` replaces the binary only while *no* herdr server
