@@ -996,3 +996,117 @@ test.describe('summary or conversation', () => {
     await expect(page.getByRole('button', { name: '要約', exact: true })).toHaveCount(0);
   });
 });
+
+/**
+ * A question that belongs to no session.
+ *
+ * The steward asks two kinds: one about a session, and one about nothing in
+ * particular - which way to do something, whether to go ahead. The second
+ * carries no `sessionId`, and it used to appear on **no session screen at
+ * all**: its only home was the thread, which is a screen you have to go to on
+ * purpose.
+ *
+ * Measured on 2026-08-19: two of them sat unanswered for five hours, and the
+ * server never saw an answer attempt for either. They were not ignored - they
+ * were never on screen.
+ */
+test.describe('a question about nothing in particular', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  const GLOBAL_ASK = {
+    id: 'g1',
+    at: 1,
+    role: 'steward',
+    kind: 'ask',
+    text: '未読の印、どの形にしますか',
+    ask: { id: 'g1', mode: 'single', choices: ['記号', '色'] },
+  };
+  const SESSION_ASK = {
+    id: 's1',
+    at: 2,
+    role: 'steward',
+    kind: 'ask',
+    text: 'このセッションを巻き戻しますか',
+    sessionId: 'demo',
+    ask: { id: 's1', mode: 'single', choices: ['はい', 'いいえ'] },
+  };
+
+  test('is asked on a session screen, beside that session own question', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: { enabled: true, view: true, turns: TURNS, asks: [GLOBAL_ASK, SESSION_ASK] },
+    });
+
+    await expect(page.getByText('未読の印、どの形にしますか')).toBeVisible();
+    await expect(page.getByText('このセッションを巻き戻しますか')).toBeVisible();
+  });
+
+  // Another session's question is that session's business; this one is
+  // everybody's.
+  test("and another session's is not", async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: {
+        enabled: true,
+        view: true,
+        turns: TURNS,
+        asks: [{ ...SESSION_ASK, sessionId: 'w-somewhere-else', text: 'よそのセッションの質問' }],
+      },
+    });
+
+    await expect(page.getByText('よそのセッションの質問')).toHaveCount(0);
+  });
+
+  test('the answer is filed under nothing, not under the screen it was given on', async ({ page }) => {
+    await bootApp(page, {
+      withAgentPane: true,
+      steward: { enabled: true, view: true, turns: TURNS, asks: [GLOBAL_ASK] },
+    });
+
+    const posted = page.waitForRequest(
+      (req) => req.url().includes('/api/steward/thread/reply') && req.method() === 'POST',
+    );
+    await page.getByRole('button', { name: '記号' }).click();
+
+    const body = JSON.parse((await posted).postData() ?? '{}');
+    expect(body).toEqual({ askId: 'g1', answer: { kind: 'choice', indices: [0] } });
+  });
+});
+
+/**
+ * The same question, from the overview.
+ *
+ * The composer there belongs to no session, and the pending-question strip used
+ * to be gated on having one - so the one screen where a question about nothing
+ * in particular obviously belongs was the one screen that never showed it.
+ */
+test.describe('a question waiting, seen from the list', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== 'responsive-mobile', 'mobile only');
+  });
+
+  test('is above the composer there too', async ({ page }) => {
+    await bootApp(page, {
+      steward: {
+        enabled: true,
+        asks: [
+          {
+            id: 'g1',
+            at: 1,
+            role: 'steward',
+            kind: 'ask',
+            text: '未読の印、どの形にしますか',
+            ask: { id: 'g1', mode: 'single', choices: ['記号', '色'] },
+          },
+        ],
+      },
+    });
+    await page.locator('[data-onboarding="session-list"]').click();
+    await page.getByTitle('スチュワード').click();
+
+    await expect(page.getByText('未読の印、どの形にしますか').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: '記号' }).first()).toBeVisible();
+  });
+});

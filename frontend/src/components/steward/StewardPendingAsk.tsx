@@ -6,22 +6,33 @@ import { AskControls } from "./AskControls";
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 /**
- * A question about this session, above the composer.
+ * A question waiting on an answer, above the composer.
  *
  * The thread carries every waiting question, but somebody reading a session is
  * not there - and a question they never see is one the steward waits on
  * forever. So it is asked where they are, and answering it here is the same
  * answer.
+ *
+ * **This session's, and any that belong to no session.** A question the steward
+ * raises about nothing in particular - which way to do something, whether to go
+ * ahead - carries no `sessionId`, and until now that meant it appeared on no
+ * session screen at all. Its only home was the thread, which is a screen you
+ * have to go to on purpose. Measured on 2026-08-19: two such questions sat
+ * unanswered for five hours while the person they were for was in the app the
+ * whole time, and the server never saw an answer attempt for either. They were
+ * not ignored; they were never on screen.
  */
-export function StewardPendingAsk({ sessionId }: { sessionId: string }) {
+export function StewardPendingAsk({ sessionId }: { sessionId?: string }) {
 	const [asks, setAsks] = useState<StewardThreadItem[]>([]);
 
 	const load = useCallback(async () => {
-		const res = await authFetch(
-			`${API_BASE}/api/steward/asks?session=${encodeURIComponent(sessionId)}`,
-		);
+		// Every pending question, narrowed here: the endpoint filters to one
+		// session or to none at all, and what this screen wants is "mine, plus
+		// the ones that are nobody's".
+		const res = await authFetch(`${API_BASE}/api/steward/asks`);
 		if (!res.ok) return;
-		setAsks(((await res.json()) as { asks?: StewardThreadItem[] }).asks ?? []);
+		const all = ((await res.json()) as { asks?: StewardThreadItem[] }).asks ?? [];
+		setAsks(all.filter((item) => !item.sessionId || item.sessionId === sessionId));
 	}, [sessionId]);
 
 	useEffect(() => {
@@ -41,10 +52,14 @@ export function StewardPendingAsk({ sessionId }: { sessionId: string }) {
 		askId: string;
 		answer: { kind: "choice"; indices: number[] } | { kind: "dismissed" };
 	}) => {
+		// The question's own session, not the screen's. A question that belongs
+		// to nobody, answered from a session, would otherwise be filed under
+		// whichever screen happened to be open.
+		const about = asks.find((item) => item.kind === "ask" && item.ask.id === input.askId)?.sessionId;
 		await authFetch(`${API_BASE}/api/steward/thread/reply`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ ...input, sessionId }),
+			body: JSON.stringify({ ...input, ...(about ? { sessionId: about } : {}) }),
 		});
 		await load();
 	};
