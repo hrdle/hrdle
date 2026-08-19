@@ -4,10 +4,12 @@ import { join } from 'node:path';
 import {
   buildHerdrApplyCommands,
   buildHerdrRestoreCommand,
+  buildHerdrSessionStopCommands,
   compareVersions,
   isBrewManagedPath,
   parseHerdrStatus,
   parseLatestManifest,
+  parseRunningNamedSessions,
   planHerdrApply,
 } from '../herdr-update';
 
@@ -236,6 +238,84 @@ describe('buildHerdrApplyCommands', () => {
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.flat()).not.toContain('bootout');
     expect(commands.flat()).not.toContain('update');
+  });
+});
+
+/**
+ * The servers the supervisor does not own. `herdr update` lists every running
+ * one and refuses to replace the binary while any of them answers, so missing
+ * these is an update that downloads and installs nothing.
+ */
+describe('parseRunningNamedSessions', () => {
+  // Real `herdr session list --json` output (herdr 0.8.0).
+  const listing = JSON.stringify({
+    sessions: [
+      {
+        default: true,
+        name: 'default',
+        running: true,
+        session_dir: '/home/u/.config/herdr',
+        socket_path: '/home/u/.config/herdr/herdr.sock',
+      },
+      {
+        default: false,
+        name: 'steward',
+        running: true,
+        session_dir: '/home/u/.config/herdr/sessions/steward',
+        socket_path: '/home/u/.config/herdr/sessions/steward/herdr.sock',
+      },
+      {
+        default: false,
+        name: 'promo',
+        running: false,
+        session_dir: '/home/u/.config/herdr/sessions/promo',
+        socket_path: '/home/u/.config/herdr/sessions/promo/herdr.sock',
+      },
+    ],
+  });
+
+  it('takes the running named sessions and leaves the supervised one alone', () => {
+    expect(parseRunningNamedSessions(listing)).toEqual(['steward']);
+  });
+
+  /** Guessing at a server costs somebody's panes; not seeing one costs a refused update. */
+  it('reads anything unusable as no sessions', () => {
+    expect(parseRunningNamedSessions('not json')).toEqual([]);
+    expect(parseRunningNamedSessions('{}')).toEqual([]);
+    expect(parseRunningNamedSessions(JSON.stringify({ sessions: [{ running: true }] }))).toEqual([]);
+  });
+});
+
+describe('buildHerdrSessionStopCommands', () => {
+  it('stops each named session by name', () => {
+    expect(buildHerdrSessionStopCommands('/home/u/.local/bin/herdr', ['steward', 'dev'])).toEqual([
+      ['/home/u/.local/bin/herdr', 'session', 'stop', 'steward'],
+      ['/home/u/.local/bin/herdr', 'session', 'stop', 'dev'],
+    ]);
+  });
+
+  /** They are the steward's to bring back, and only while the steward is enabled. */
+  it('never starts one again', () => {
+    expect(buildHerdrSessionStopCommands('herdr', ['steward']).flat()).not.toContain('server');
+  });
+
+  it('runs nothing when every other session is down', () => {
+    expect(buildHerdrSessionStopCommands('herdr', [])).toEqual([]);
+  });
+
+  /**
+   * apply() runs these ahead of the supervised commands, which keeps the
+   * supervised stop the last thing standing before the update - the window
+   * where the user's own server is down stays as short as it was.
+   */
+  it('leaves the supervised stop immediately before the update', () => {
+    const commands = [
+      ...buildHerdrSessionStopCommands('herdr', ['steward']),
+      ...(buildHerdrApplyCommands('systemd', 'herdr', 1000, 'install') ?? []),
+    ];
+    const updateAt = commands.findIndex((cmd) => cmd.includes('update'));
+    expect(commands[updateAt - 1].join(' ')).toBe('systemctl --user stop herdr');
+    expect(commands[0]).toEqual(['herdr', 'session', 'stop', 'steward']);
   });
 });
 

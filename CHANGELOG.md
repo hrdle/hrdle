@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The herdr update button installed nothing on any machine running the
+  steward.** `herdr update` replaces the binary only while *no* herdr server
+  answers anywhere - it lists every running one, prints `Herdr was not
+  updated.` and exits 0 - and hrdle stopped only the server its supervisor
+  owns. The steward keeps a herdr session of its own up for as long as it is
+  enabled, so the update downloaded 0.8.2 and left 0.8.0 in place, every time.
+  The apply now stops the sessions the supervisor does not own before the
+  update, and the steward's supervisor stands down while one is running rather
+  than restarting its session underneath it (measured: it comes back within its
+  30s tick, well inside the download). Nothing is started again afterwards -
+  the steward brings its own session back when it is enabled, which is the only
+  place that knows whether it should exist.
+- **A refusal that exits 0 said nothing about itself.** The dashboard showed
+  `herdr update installed nothing; still 0.8.0` while the reason - which
+  servers were blocking it - was in output nobody kept. The error now carries
+  herdr's own last line, and the whole transcript goes to the server log.
+
 ## [0.3.181] - 2026-08-20
 
 ### Fixed

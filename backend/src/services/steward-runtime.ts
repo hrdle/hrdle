@@ -16,6 +16,7 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { addAgentStatusListener } from './herdr-agent-status';
 import { herdrBinaryPath, herdrRpc, herdrSessionName, herdrSocketPath } from './herdr-client';
+import { herdrUpdateInProgress } from './herdr-update';
 import { getStewardSettings, isStewardEnabled } from './steward-config';
 import { stewardPrompt } from './steward-prompt';
 import { stewardHomeDir, TARGET_FILE, type StewardTarget } from './steward-paths';
@@ -260,6 +261,10 @@ async function pruneDeadSessions(): Promise<void> {
  *  supervisor tick. */
 export async function ensureSteward(port: number): Promise<boolean> {
   if (!isStewardEnabled()) return false;
+  // A herdr install stops every server it can see, this session's among them,
+  // and one started again in that window makes `herdr update` replace nothing.
+  // The next tick starts it back up.
+  if (herdrUpdateInProgress()) return false;
   if (starting) return false;
   if (Date.now() < backoffUntil) return false;
 
