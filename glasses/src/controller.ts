@@ -2286,13 +2286,18 @@ export class GlassesController {
     ) {
       return false
     }
-    // `mode` names the screen under a dark panel, so this reads the same either
-    // way - and it has to, or every `Stop` hook relights the conversation the
-    // wearer was already on and nothing ever sleeps.
-    if (present === 'takeover-if-elsewhere' && this.state.mode === 'conversation') {
-      // Not about what is already on screen. "This conversation is done" thrown
-      // over the conversation itself tells the reader nothing they cannot see,
-      // and an agent working in bursts would raise it again every turn.
+    // "This conversation is done" thrown over the conversation itself tells
+    // the reader nothing they cannot see, and an agent working in bursts would
+    // raise it again every turn. That is a lit-panel argument, and it stops at
+    // the lit panel: dark, the reader sees nothing, so nothing is redundant —
+    // this is the one screen state where the session's own notice is news.
+    // Relighting does not cost the sleep either: the overlay hands the panel
+    // back by itself and the idle clock starts over.
+    if (
+      present === 'takeover-if-elsewhere' &&
+      !this.state.screenOff &&
+      this.state.mode === 'conversation'
+    ) {
       return item.sessionId !== this.currentSession()?.id
     }
     return true
