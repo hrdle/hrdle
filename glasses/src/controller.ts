@@ -2291,8 +2291,10 @@ export class GlassesController {
     // raise it again every turn. That is a lit-panel argument, and it stops at
     // the lit panel: dark, the reader sees nothing, so nothing is redundant —
     // this is the one screen state where the session's own notice is news.
-    // Relighting does not cost the sleep either: the overlay hands the panel
-    // back by itself and the idle clock starts over.
+    // A relight is not free: wake() restarts the idle clock, so each notice
+    // costs a full screenOffSeconds of lit panel, not just the seconds the
+    // overlay holds. That period is the wearer's own opt-in setting, which is
+    // what keeps the cost self-limiting.
     if (
       present === 'takeover-if-elsewhere' &&
       !this.state.screenOff &&

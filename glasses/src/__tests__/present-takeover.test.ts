@@ -142,7 +142,8 @@ describe('a dark panel', () => {
 
   test('lit, the same notice still yields to the conversation it is about', () => {
     // The guard the dark case walks past must hold when the panel is lit —
-    // remove `!screenOff` from the condition and this is the test that fails.
+    // remove the whole block and this fails with the two suppression tests
+    // beside it; removing only `!screenOff` fails the dark cases above.
     const c = reading()
     c.state.screenOff = false
     inner(c).onRelayUpsert(item({ kind: 'info', present: 'takeover-if-elsewhere', sessionId: 's1' }))
