@@ -158,7 +158,9 @@ export function StewardSessionComposer({
 				void send();
 			}}
 		>
-			{sessionId && <StewardPendingAsk sessionId={sessionId} />}
+			{/* Not gated on a session: a question that belongs to none had no
+			    screen at all, and the thread is a place you have to go to. */}
+			<StewardPendingAsk sessionId={sessionId} />
 
 			<StewardThinking sessionId={sessionId} agentState={agentState} activity={activity} />
 
