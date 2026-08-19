@@ -153,6 +153,49 @@ export function isBrewManagedPath(resolvedBinaryPath: string): boolean {
   return resolvedBinaryPath.includes(`${sep}Cellar${sep}herdr${sep}`);
 }
 
+/**
+ * Running herdr sessions other than the default one, from
+ * `herdr session list --json`. Anything unusable reads as an empty list: a
+ * server we cannot see costs a refused update, while guessing at one costs
+ * somebody's panes.
+ */
+export function parseRunningNamedSessions(raw: string): string[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  const rows = (parsed as Record<string, unknown>).sessions;
+  if (!Array.isArray(rows)) return [];
+  const names: string[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const entry = row as Record<string, unknown>;
+    if (entry.running !== true || entry.default === true) continue;
+    const name = asString(entry.name);
+    if (name) names.push(name);
+  }
+  return names;
+}
+
+/**
+ * Stops for the servers the supervisor does not own. `herdr update` replaces
+ * nothing while *any* herdr server answers — it lists them, says `Herdr was
+ * not updated.` and exits 0 — and the steward keeps a session of its own
+ * running for as long as it is enabled, so on a machine with it on the button
+ * could never install anything.
+ *
+ * They are not started again afterwards. The steward's own supervisor brings
+ * its session back when the steward is enabled, which is the only place that
+ * knows whether it should exist; anything else that was running was somebody's
+ * dev server, and hrdle has no business resurrecting one.
+ */
+export function buildHerdrSessionStopCommands(herdrPath: string, sessions: string[]): string[][] {
+  return sessions.map((name) => [herdrPath, 'session', 'stop', name]);
+}
+
 export interface HerdrApplyResult {
   ok: boolean;
   error?: string;
@@ -244,11 +287,34 @@ export function buildHerdrRestoreCommand(
   }
 }
 
-async function runCapture(cmd: string[]): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+/**
+ * The environment the apply commands run in. An inherited `HERDR_SOCKET_PATH`
+ * wins over the session a herdr command names, so with one set
+ * `herdr session stop <name>` would answer about the socket it was handed
+ * instead of the session it was told to stop.
+ */
+function applyEnv(): Record<string, string> {
+  const { HERDR_SOCKET_PATH: _socket, HERDR_SESSION: _session, ...rest } = process.env;
+  return rest as Record<string, string>;
+}
+
+/** The last thing a command said, which is where herdr puts its reason. */
+function lastLine(output: string): string | undefined {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .pop();
+}
+
+async function runCapture(
+  cmd: string[],
+  env: Record<string, string> = herdrChildEnv(),
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   // Pinned to our socket like every other herdr child: `herdr status` reports
   // the running server's version, and reading the default server's would make
   // the skew warning describe a server we are not talking to.
-  const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe', env: herdrChildEnv() });
+  const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe', env });
   const timer = setTimeout(() => proc.kill(), SPAWN_TIMEOUT_MS);
   try {
     const [stdout, stderr, exitCode] = await Promise.all([
@@ -260,6 +326,18 @@ async function runCapture(cmd: string[]): Promise<{ exitCode: number; stdout: st
   } finally {
     clearTimeout(timer);
   }
+}
+
+let applying = false;
+
+/**
+ * Whether an install is running right now. Anything that keeps a herdr server
+ * alive has to stand down while it is: the update has just stopped every
+ * server it found, and one restarted underneath it makes herdr refuse to
+ * replace the binary at all.
+ */
+export function herdrUpdateInProgress(): boolean {
+  return applying;
 }
 
 export class HerdrUpdateService {
@@ -356,6 +434,20 @@ export class HerdrUpdateService {
     };
   }
 
+  /** Sessions with a server up that the supervisor does not own. */
+  private async readRunningNamedSessions(): Promise<string[]> {
+    try {
+      const { exitCode, stdout } = await runCapture(
+        [herdrBin(), 'session', 'list', '--json'],
+        applyEnv(),
+      );
+      if (exitCode !== 0) return [];
+      return parseRunningNamedSessions(stdout);
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * The binary's own version, readable while the server is stopped — which is
    * exactly when we need to know whether the swap landed.
@@ -446,6 +538,17 @@ export class HerdrUpdateService {
    * pane PTY is re-created between `restarting` and `restored`.
    */
   async apply(onPhase?: (phase: 'restarting' | 'restored' | 'failed') => void): Promise<HerdrApplyResult> {
+    applying = true;
+    try {
+      return await this.runApply(onPhase);
+    } finally {
+      applying = false;
+    }
+  }
+
+  private async runApply(
+    onPhase?: (phase: 'restarting' | 'restored' | 'failed') => void,
+  ): Promise<HerdrApplyResult> {
     const before = await this.readStatus();
     if (!before) {
       return { ok: false, error: 'herdr status is unreadable; not touching the server', output: '', installed: false };
@@ -471,8 +574,8 @@ export class HerdrUpdateService {
       supervisor === 'launchd' && mode === 'install' && !brewPath
         ? await this.detectLaunchdPlist(uid)
         : undefined;
-    const commands = buildHerdrApplyCommands(supervisor, herdrBin(), uid, mode, plist, brewPath);
-    if (!commands) {
+    const supervised = buildHerdrApplyCommands(supervisor, herdrBin(), uid, mode, plist, brewPath);
+    if (!supervised) {
       return {
         ok: false,
         error:
@@ -484,11 +587,20 @@ export class HerdrUpdateService {
       };
     }
 
+    // Stopping the sessions hrdle does not supervise comes first, so the last
+    // thing standing before `herdr update` is still the supervised stop.
+    // Skipped for brew, which replaces the binary with every server up.
+    const prelude =
+      mode === 'install' && !brewPath
+        ? buildHerdrSessionStopCommands(herdrBin(), await this.readRunningNamedSessions())
+        : [];
+    const commands = [...prelude, ...supervised];
+
     onPhase?.('restarting');
     let output = '';
     for (let i = 0; i < commands.length; i++) {
       const cmd = commands[i];
-      const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe' });
+      const proc = Bun.spawn(cmd, { stdout: 'pipe', stderr: 'pipe', env: applyEnv() });
       const [stdout, stderr, exitCode] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),
@@ -499,10 +611,10 @@ export class HerdrUpdateService {
         // The self-update sequence stops the server first; a mid-sequence
         // failure must not leave it down and unsupervised.
         let restoreNote = '';
-        if (!brewPath && mode === 'install' && i > 0 && i < commands.length - 1) {
+        if (!brewPath && mode === 'install' && i > prelude.length && i < commands.length - 1) {
           const restore = buildHerdrRestoreCommand(supervisor, uid, plist);
           if (restore) {
-            const restored = await Bun.spawn(restore, { stdout: 'pipe', stderr: 'pipe' });
+            const restored = await Bun.spawn(restore, { stdout: 'pipe', stderr: 'pipe', env: applyEnv() });
             const [rout, rerr, rcode] = await Promise.all([
               new Response(restored.stdout).text(),
               new Response(restored.stderr).text(),
@@ -514,11 +626,7 @@ export class HerdrUpdateService {
           }
         }
         // The exit code alone says nothing; the refusal reason is in the output.
-        const detail = (stdout + stderr)
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean)
-          .pop();
+        const detail = lastLine(stdout + stderr);
         onPhase?.('failed');
         return {
           ok: false,
@@ -540,9 +648,12 @@ export class HerdrUpdateService {
       !(before.binaryVersion && toVersion && compareVersions(toVersion, before.binaryVersion) > 0)
     ) {
       onPhase?.('failed');
+      // `herdr update` says why in its output and then exits 0, so without
+      // this the one line that explains the failure is the one nobody sees.
+      const reason = lastLine(output);
       return {
         ok: false,
-        error: `herdr update installed nothing; still ${toVersion ?? 'an unknown version'}`,
+        error: `herdr update installed nothing; still ${toVersion ?? 'an unknown version'}${reason ? `: ${reason}` : ''}`,
         output,
         fromVersion: before.binaryVersion,
         toVersion,

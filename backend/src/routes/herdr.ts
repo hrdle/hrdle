@@ -17,6 +17,9 @@ herdr.post('/apply-update', async (c) => {
     broadcastToMuxClients({ type: 'herdr-restart', phase }),
   );
   if (!result.ok) {
+    // The whole transcript, once: the dashboard shows a single line, and which
+    // servers herdr listed as blocking it is only in here.
+    console.error(`[herdr-update] ${result.error}\n${result.output.trim()}`);
     return c.json({ error: result.error ?? 'herdr update failed', output: result.output }, 500);
   }
   // The dashboard re-polls right after this returns, and its payload cache
