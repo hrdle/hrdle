@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.181] - 2026-08-20
+
+### Fixed
+- **An id is not a name.** A raw ask id turned up in the steward's own writing
+  and was read as gibberish - "what is this, it appeared out of nowhere". Not a
+  rendering bug: no screen draws one, and every `ask.id` in the frontend is a
+  prop on its way to the API. It got there through how the observer was told an
+  answer had arrived - `The owner answered ask <id>: ...`, the id and nothing
+  else - and an observer handed one handle uses that handle. The wake-up now
+  leads with what the question *asked* and labels the id as bookkeeping, and
+  the prompt says the rule: a workspace id at least appears on their screen and
+  can be pointed at, while an ask id links to nothing.
+
 ## [0.3.180] - 2026-08-19
 
 ### Fixed
