@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.180] - 2026-08-19
+
+### Fixed
+- **A notice relights a dark panel even for the session it is showing.** The
+  rule that a completion notice does not interrupt the conversation it is about
+  exists because the reader can already see that conversation - which is an
+  argument about a lit panel, and it stops there. Dark, the reader sees nothing,
+  so the session's own notice is the only way they learn at all. Measured over
+  two days of screen recording: of 25 notices that arrived while the panel was
+  asleep, the 16 from another session or over the session list all relit it and
+  the 9 from the sleeping session's own conversation were silently dropped, each
+  found by waking the panel by hand minutes later. A lit panel still yields. The
+  relight is not free - it restarts the idle clock, so each notice costs a full
+  `screenOffSeconds` of lit panel - but that period is the wearer's own opt-in
+  setting, which is what bounds it. Thanks to @Chapapon (#516)
+  - Carried to the G2 by glasses build 0.0.83, which is in this release
+
 ## [0.3.179] - 2026-08-19
 
 ### Fixed
