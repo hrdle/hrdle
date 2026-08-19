@@ -249,11 +249,13 @@ describe('turning the timeout off', () => {
 
 describe('a dark panel and the takeover rule', () => {
   /**
-   * `takeover-if-elsewhere` is every non-`waiting` item, and those come from
-   * the `Stop` hook on every response. Relighting for the conversation already
-   * being read means an agent working in bursts keeps the panel awake for good.
+   * The same-session exclusion is a redundancy rule — the reader can already
+   * see the conversation the notice is about — and a dark panel voids it: the
+   * reader sees nothing, so the notice is the only way they learn at all.
+   * Sleep is not lost to this: the overlay hands the panel back by itself and
+   * the idle clock starts over.
    */
-  test('a completion notice for the session on screen does not relight it', () => {
+  test('a completion notice for the session on screen relights it', () => {
     const { c } = controller('conversation')
     ageOut(c)
     inner(c).tickScreenOff()
@@ -268,7 +270,8 @@ describe('a dark panel and the takeover rule', () => {
       present: 'takeover-if-elsewhere',
     } as GlassesRelayItem)
 
-    expect(c.state.screenOff).toBe(true)
+    expect(c.state.screenOff).toBe(false)
+    expect(c.state.mode).toBe('overlay')
   })
 
   test('but one for another session still does', () => {

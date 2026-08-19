@@ -117,6 +117,40 @@ describe('what the device still decides', () => {
   })
 })
 
+describe('a dark panel', () => {
+  test('a notice about the open conversation relights a sleeping panel', () => {
+    // The lit-panel rule ("the reader can already see this") has no ground to
+    // stand on when the panel is dark: the reader sees nothing. Measured
+    // before this rule: every completion notice arriving while the panel
+    // slept on its own conversation was dropped, and the wearer learned of
+    // each one by waking the panel by hand.
+    const c = reading()
+    c.state.screenOff = true
+    inner(c).onRelayUpsert(item({ kind: 'info', present: 'takeover-if-elsewhere', sessionId: 's1' }))
+    expect(modeOf(c)).toBe('overlay')
+    expect(c.state.screenOff).toBe(false)
+  })
+
+  test('a sleeping session list relights too', () => {
+    const c = reading()
+    c.state.mode = 'session_list'
+    c.state.screenOff = true
+    inner(c).onRelayUpsert(item({ kind: 'info', present: 'takeover-if-elsewhere', sessionId: 's1' }))
+    expect(modeOf(c)).toBe('overlay')
+    expect(c.state.screenOff).toBe(false)
+  })
+
+  test('lit, the same notice still yields to the conversation it is about', () => {
+    // The guard the dark case walks past must hold when the panel is lit —
+    // remove the whole block and this fails with the two suppression tests
+    // beside it; removing only `!screenOff` fails the dark cases above.
+    const c = reading()
+    c.state.screenOff = false
+    inner(c).onRelayUpsert(item({ kind: 'info', present: 'takeover-if-elsewhere', sessionId: 's1' }))
+    expect(modeOf(c)).toBe('conversation')
+  })
+})
+
 describe('an older server', () => {
   test('a question with no field set still takes the screen', () => {
     // `present` absent means a server from before it existed. The app keeps a
