@@ -325,3 +325,82 @@ describe('the report', () => {
     expect(c.state.screen).toBe('report')
   })
 })
+
+/**
+ * Reading a session clears its mark, and the mark survives the app closing.
+ *
+ * The case it exists for is an hour away, so a mark kept only in memory is gone
+ * by the time it would have mattered.
+ */
+describe('what has been read', () => {
+  type Seen = {
+    onSnapshot(thread: StewardThreadItem[], lines: StewardSessionLine[]): void;
+    onSessions(sessions: Session[]): void;
+    onThreadItem(item: StewardThreadItem): void;
+    state: { seen: Record<string, number>; screen: string };
+    loadSeen(raw: string | null): void;
+  };
+
+  const entry = (sessionId: string, at: number, id = `${sessionId}${at}`) =>
+    ({ id, at, role: 'steward', kind: 'notify', text: 'x', sessionId }) as unknown as StewardThreadItem;
+
+  test('opening a session marks it read, up to its newest entry', () => {
+    const c = controller();
+    const inner = c as unknown as Seen;
+    inner.onSessions(sessions('work-1'));
+    inner.onSnapshot([entry('w1', 500)], []);
+
+    c.tap(); // open the session under the cursor
+    expect(inner.state.seen.w1).toBe(500);
+  });
+
+  // Recorded against the newest entry rather than the clock, so one written a
+  // second later is not swallowed by a mark set a second early.
+  test('an entry arriving while it is open is read as it lands', () => {
+    const c = controller();
+    const inner = c as unknown as Seen;
+    inner.onSessions(sessions('work-1'));
+    inner.onSnapshot([entry('w1', 500)], []);
+    c.tap();
+
+    inner.onThreadItem(entry('w1', 900));
+    expect(inner.state.seen.w1).toBe(900);
+  });
+
+  test('and one for a session nobody is looking at is not', () => {
+    const c = controller();
+    const inner = c as unknown as Seen;
+    inner.onSessions(sessions('work-1', 'work-2'));
+    inner.onSnapshot([entry('w1', 500)], []);
+    c.tap();
+
+    inner.onThreadItem(entry('w2', 900));
+    expect(inner.state.seen.w2).toBeUndefined();
+  });
+
+  test('what was read last run is taken back up', () => {
+    const c = controller();
+    (c as unknown as Seen).loadSeen(JSON.stringify({ w1: 700 }));
+    expect((c as unknown as Seen).state.seen.w1).toBe(700);
+  });
+
+  // The worst a lost mark does is show a read session as unread; refusing to
+  // start over a corrupt preference would be the wrong trade by a distance.
+  test('an unreadable one starts with none rather than refusing to start', () => {
+    const c = controller();
+    (c as unknown as Seen).loadSeen('{not json');
+    expect((c as unknown as Seen).state.seen).toEqual({});
+  });
+
+  test('it is written out so the next run has it', () => {
+    const written: [string, string][] = [];
+    const c = new GlassesController(platform({ persist: (s, v) => written.push([s, v]) }));
+    const inner = c as unknown as Seen;
+    inner.onSessions(sessions('work-1'));
+    inner.onSnapshot([entry('w1', 500)], []);
+    c.tap();
+
+    expect(written).toHaveLength(1);
+    expect(JSON.parse(written[0][1])).toEqual({ w1: 500 });
+  });
+});

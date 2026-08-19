@@ -46,7 +46,7 @@ import {
 } from './metrics.ts'
 import { conversationPages } from './conversation.ts'
 import { GIVE_UP_AFTER_MS } from './ws-client.ts'
-import { historyPaneOf, lineFor, sessionName, turnsKey } from './types.ts'
+import { hasUnread, historyPaneOf, lineFor, sessionName, turnsKey } from './types.ts'
 import type {
   ConversationMessage,
   Session,
@@ -114,6 +114,14 @@ export interface AppState {
 
   /** overview: index into `overviewRows`. */
   cursor: number
+
+  /**
+   * When each session was last read, so an arrival while the app was closed
+   * still shows as one. Persisted through the platform - the case this exists
+   * for is being away for an hour, and a mark that only lives in memory is
+   * gone by the time it would have been useful.
+   */
+  seen: Record<string, number>
 
   /** session */
   openSessionId: string | null
@@ -186,6 +194,7 @@ export function initialState(): AppState {
     thread: [],
     turns: new Map(),
     cursor: 0,
+    seen: {},
     openSessionId: null,
     sessionPage: 0,
     sessionWaiting: false,
@@ -307,6 +316,17 @@ export const SPINNER_INTERVAL_MS = 3000
  */
 export const BADGE_BLANK = '　'
 const BADGE_W = textWidth(BADGE_BLANK)
+
+/**
+ * The mark on a session holding something unread.
+ *
+ * After the name, where the owner asked for it, and deliberately not a dot: the
+ * status column in front of the name is already two dots and a `[!]`, and a
+ * third round mark a few columns along would be a fourth thing to tell apart
+ * from them. A star is none of those shapes, and it is one of the substitution
+ * targets in `metrics.ts`, so the firmware is known to carry it.
+ */
+const UNREAD = '★' 
 
 /** A badge padded out to the column everything else on the row is positioned
  *  from. Measured in a loop rather than divided out: `textWidth` charges for
@@ -455,7 +475,8 @@ function overviewRowLines(row: OverviewRow, selected: boolean, state: AppState):
   if (row.kind === 'report') {
     return [`${cursor}${BADGE_BLANK}${fit(row.text, BODY_WIDTH - textWidth(`${cursor}${BADGE_BLANK}`))}`]
   }
-  const name = fit(`${cursor}${sessionBadge(row.session, state)}${sessionName(row.session)}`)
+  const unread = hasUnread(state.thread, row.session.id, state.seen[row.session.id] ?? 0) ? ` ${UNREAD}` : ''
+  const name = fit(`${cursor}${sessionBadge(row.session, state)}${sessionName(row.session)}${unread}`)
   // Nothing written is drawn as nothing rather than as a recap or a status:
   // half a list in the steward's words and half in scraped ones reads as
   // neither.

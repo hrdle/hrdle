@@ -76,7 +76,19 @@ export interface GlassesPlatform {
   requestExit(): void
   /** Close this run for good, without asking. */
   exitNow?: () => void
+  /**
+   * Keep a small string across runs.
+   *
+   * Only the read marks use it. The case they exist for is being away for an
+   * hour, so a mark that lives in memory is gone by the time it would have
+   * mattered. Optional: a platform without a store loses the marks and nothing
+   * else.
+   */
+  persist?: (suffix: string, value: string) => void
 }
+
+/** Where the read marks are kept. */
+export const SEEN_SUFFIX = 'steward-seen'
 
 export const MIC_SAMPLE_RATE = 16000
 
@@ -261,6 +273,11 @@ export class GlassesController {
     if (at === -1) this.state.thread = [...this.state.thread, item]
     else this.state.thread = this.state.thread.map((i, n) => (n === at ? item : i))
 
+    // Arriving while that session is on screen is arriving read. Done here
+    // rather than in `onTurns` because the mark is computed from the thread,
+    // and the two pushes arrive in no fixed order.
+    if (item.sessionId && item.sessionId === this.state.openSessionId) this.markSeen(item.sessionId)
+
     // The question on screen was just answered somewhere else - a phone, or the
     // steward withdrawing it. Leave it up and it is a question with no answer
     // that will ever arrive.
@@ -441,7 +458,38 @@ export class GlassesController {
     this.presentPendingAsk()
   }
 
+  /**
+   * What the wearer has read, from a previous run.
+   *
+   * Unparseable is empty rather than fatal: the worst a lost mark does is show
+   * one session as unread that has been read, and refusing to start over a
+   * corrupt preference would be the wrong trade by a distance.
+   */
+  loadSeen(raw: string | null): void {
+    if (!raw) return
+    try {
+      const parsed = JSON.parse(raw) as Record<string, number>
+      if (parsed && typeof parsed === 'object') this.state.seen = parsed
+    } catch {
+      /* start with none */
+    }
+  }
+
+  /** Opening a session is reading it. Recorded against the newest entry there
+   *  is rather than against the clock, so an entry written a second later is
+   *  not swallowed by a mark set a second early. */
+  private markSeen(sessionId: string): void {
+    const newest = this.state.thread.reduce(
+      (at, i) => (i.sessionId === sessionId && i.at > at ? i.at : at),
+      0,
+    )
+    if (newest <= (this.state.seen[sessionId] ?? 0)) return
+    this.state.seen = { ...this.state.seen, [sessionId]: newest }
+    this.platform.persist?.(SEEN_SUFFIX, JSON.stringify(this.state.seen))
+  }
+
   openSession(sessionId: string): void {
+    this.markSeen(sessionId)
     this.state.screen = 'session'
     this.state.openSessionId = sessionId
     this.state.sessionPage = 0

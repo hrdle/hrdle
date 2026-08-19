@@ -198,6 +198,21 @@ export function lineFor(lines: StewardSessionLine[], sessionId: string): string 
   return lines.find((l) => l.sessionId === sessionId)?.text
 }
 
+/**
+ * Whether a session has something the wearer has not read.
+ *
+ * Answered from the thread rather than from a session's turns: the app holds
+ * the whole thread, and every entry the steward files against a session is
+ * appended there before it is mirrored - so this costs no request, where
+ * reading fourteen sessions' histories to draw one list would cost fourteen.
+ *
+ * The wearer's own words never count. What they said is not news to them, and
+ * a mark that appears the moment you speak is a mark nobody can learn to read.
+ */
+export function hasUnread(thread: StewardThreadItem[], sessionId: string, seenAt: number): boolean {
+  return thread.some((i) => i.sessionId === sessionId && i.role !== 'user' && i.at > seenAt)
+}
+
 /** Questions still waiting, oldest first. */
 export function pendingAsks(thread: StewardThreadItem[]): StewardThreadItem[] {
   return thread.filter((i) => i.kind === 'ask' && !i.ask.answer)

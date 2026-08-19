@@ -16,11 +16,12 @@
 // appear here. The order stays: check here, release, check on the device.
 
 import { setBaseUrl, transcribe } from './api.ts'
-import { GlassesController, MIC_SAMPLE_RATE } from './controller.ts'
+import { GlassesController, MIC_SAMPLE_RATE, SEEN_SUFFIX } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
 import { screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
 import type { AppState } from './display.ts'
 import { LINE_H, PANEL_H, PANEL_W, splitLines, textWidth } from './metrics.ts'
+import { readStoredSync, writeStoredSync } from './storage.ts'
 import { BASELINE, createPanelPainter, inkColor } from './panel-paint.ts'
 
 const SCREEN_LABEL: Record<string, string> = {
@@ -304,6 +305,7 @@ export function startDebugUI(): void {
     // A browser panel, not a face. Claiming otherwise would have the steward
     // reasoning about a screen nobody is looking at.
     onDevice: false,
+    persist: (suffix, value) => writeStoredSync(suffix, value),
     render(state) {
       renderMeta(state)
       // The same call the device makes. `panelBridge` resolves synchronously,
@@ -352,6 +354,7 @@ export function startDebugUI(): void {
   }
 
   const controller = new GlassesController(platform)
+  controller.loadSeen(readStoredSync(SEEN_SUFFIX))
   controller.connect()
 
   function renderMeta(state: AppState): void {

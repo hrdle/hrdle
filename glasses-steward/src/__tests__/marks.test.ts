@@ -216,3 +216,54 @@ describe('the session screen', () => {
     expect(header).not.toContain('[!]');
   });
 });
+
+/**
+ * A mark for what arrived while you were away.
+ *
+ * Reported twice, and the second time with the timings: a reply was written,
+ * drawn, and then the app was closed for an hour. Coming back, every screen
+ * looked exactly as it always does - the overview row shows the *current*
+ * state, and `+N` only counts what lands while you are held on a page, so it
+ * says nothing about an hour spent elsewhere.
+ */
+describe('unread', () => {
+  const at = 1_000_000;
+  const said = (sessionId: string, when: number, role: 'steward' | 'user' = 'steward') =>
+    ({ id: `${sessionId}${when}`, at: when, role, kind: 'notify', text: 'x', sessionId }) as unknown as StewardThreadItem;
+
+  const list = (over: Partial<AppState> = {}) =>
+    state({
+      sessions: [
+        { id: 'w1', name: 'work-1' },
+        { id: 'w2', name: 'work-2' },
+      ],
+      ...over,
+    });
+
+  test('a session with something newer than you have read is marked', () => {
+    const body = screenText(list({ thread: [said('w1', at)], seen: {} })).body;
+    expect(body).toContain('work-1 ★');
+    expect(body).not.toContain('work-2 ★');
+  });
+
+  test('and is not once you have read that far', () => {
+    const body = screenText(list({ thread: [said('w1', at)], seen: { w1: at } })).body;
+    expect(body).not.toContain('★');
+  });
+
+  // A mark that appears the moment you speak is one nobody can learn to read.
+  test('your own words are not news to you', () => {
+    const body = screenText(list({ thread: [said('w1', at, 'user')], seen: {} })).body;
+    expect(body).not.toContain('★');
+  });
+
+  // The status column in front of the name is already two dots and a `[!]`.
+  test('is not a third round mark to tell apart from the indicator', () => {
+    const working: Session[] = [
+      { id: 'w1', name: 'work-1', panes: [{ paneId: '%1', agent: 'claude', indicatorState: 'processing' }] },
+    ];
+    const body = screenText(state({ sessions: working, thread: [said('w1', at)], seen: {}, spinnerTick: 1 })).body;
+    expect(body).toContain('•'); // working, in front
+    expect(body).toContain('★'); // unread, after the name
+  });
+});
