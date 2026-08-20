@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.184] - 2026-08-20
+
 ### Changed
 - **The STL preview turns any way round, and keeps turning.** Rotation was a
   yaw and a pitch, and a pitch has poles: an up-down drag stopped dead at the
