@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.183] - 2026-08-20
+
 ### Added
 - **STL files preview as 3D models in the file viewer.** A `.stl` opened from
   the browser used to be the binary placeholder and a download button - the one
