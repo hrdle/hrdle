@@ -292,7 +292,14 @@
     "uploadFailed": "アップロード失敗: {{error}}",
     "uploaded": "アップロード完了: {{names}}",
     "downloadFile": "ファイルをダウンロード",
-    "copyPrompt": "プロンプトをコピー"
+    "copyPrompt": "プロンプトをコピー",
+    "stlResetView": "視点をリセット",
+    "stlLoading": "モデルを読み込み中…",
+    "stlParseFailed": "この STL ファイルを読み込めませんでした",
+    "stlNoWebgl": "3D プレビューには WebGL が必要ですが、このブラウザでは使えません",
+    "stlEmpty": "この STL には三角形がありません",
+    "stlTriangles_other": "三角形 {{count}}",
+    "stlHint": "ドラッグで回転 · ホイールかピンチで拡大縮小 · 2本指か Shift+ドラッグで移動"
   },
   "conversation": {
     "title": "会話",

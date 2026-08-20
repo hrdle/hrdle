@@ -38,6 +38,7 @@ import {
 	isImageFile,
 	isMarkdownFile,
 	isMediaFile,
+	isModelFile,
 } from "./file-types";
 
 interface FileViewerProps {
@@ -117,10 +118,13 @@ export function FileViewer({
 
 	// `<img src>` / `<video src>` / `<audio src>` cannot send the Bearer auth
 	// header, so /files/raw 401s when HRDLE_PASSWORD is set. Fetch the bytes via
-	// authFetch and present them as a same-origin blob: URL instead.
+	// authFetch and present them as a same-origin blob: URL instead. The STL
+	// viewer reads the same blob rather than the URL, for the same reason.
 	const rawUrl =
 		selectedFile &&
-		(isImageFile(selectedFile.path) || isMediaFile(selectedFile.path))
+		(isImageFile(selectedFile.path) ||
+			isMediaFile(selectedFile.path) ||
+			isModelFile(selectedFile.path))
 			? `${filesApiBase}/raw?path=${encodeURIComponent(selectedFile.path)}&sessionWorkingDir=${encodeURIComponent(sessionWorkingDir)}`
 			: null;
 	const rawBlobUrl = useAuthBlobUrl(rawUrl);

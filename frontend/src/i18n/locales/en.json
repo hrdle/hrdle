@@ -294,7 +294,15 @@
     "uploadFailed": "Upload failed: {{error}}",
     "uploaded": "Uploaded: {{names}}",
     "downloadFile": "Download file",
-    "copyPrompt": "Copy Prompt"
+    "copyPrompt": "Copy Prompt",
+    "stlResetView": "Reset view",
+    "stlLoading": "Loading model…",
+    "stlParseFailed": "Could not read this STL file",
+    "stlNoWebgl": "3D preview needs WebGL, which this browser does not provide",
+    "stlEmpty": "This model has no triangles",
+    "stlTriangles_one": "{{count}} triangle",
+    "stlTriangles_other": "{{count}} triangles",
+    "stlHint": "Drag to rotate · scroll or pinch to zoom · two fingers or Shift+drag to pan"
   },
   "conversation": {
     "title": "Conversation",
