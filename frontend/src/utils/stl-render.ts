@@ -1,17 +1,21 @@
+import type { Mat4 } from "./mat4";
 import {
 	mat3FromMat4,
 	mat4Multiply,
 	mat4Perspective,
-	mat4RotationX,
-	mat4RotationY,
 	mat4Translation,
 } from "./mat4";
 import type { StlMesh } from "./stl-parse";
 
 export interface StlCamera {
-	/** Rotation about the model's own up axis, radians. */
-	yaw: number;
-	pitch: number;
+	/**
+	 * How the model is turned, accumulated as a matrix rather than as a pair of
+	 * angles. Euler angles have poles: an up-down drag has to stop at one or
+	 * flip the horizon when it passes. Composing each drag step about the
+	 * *screen's* axes instead has neither, so the model turns any way round and
+	 * as many times as the drag continues.
+	 */
+	orientation: Mat4;
 	/** Distance from the model centre, in model units. */
 	distance: number;
 	panX: number;
@@ -165,12 +169,12 @@ export function createStlScene(
 				Math.max(distance - radius * 2, radius * 0.01),
 				distance + radius * 4,
 			);
-			// Model space is centred first, then rotated, then pushed away from
+			// Model space is centred first, then turned, then pushed away from
 			// the eye; panning slides the result across the near plane.
 			const modelView = mat4Multiply(
 				mat4Translation(camera.panX, camera.panY, -distance),
 				mat4Multiply(
-					mat4Multiply(mat4RotationX(camera.pitch), mat4RotationY(camera.yaw)),
+					camera.orientation,
 					mat4Translation(-center[0], -center[1], -center[2]),
 				),
 			);

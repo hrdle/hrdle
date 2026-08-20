@@ -1,6 +1,12 @@
 import { Box, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import {
+	mat4Multiply,
+	mat4Orthonormalize,
+	mat4RotationX,
+	mat4RotationY,
+} from "../../utils/mat4";
 import { parseStl, type StlMesh } from "../../utils/stl-parse";
 import {
 	createStlScene,
@@ -20,6 +26,11 @@ interface StlViewerProps {
 // (-90 degrees) and then tips it forward far enough to see the top face.
 const INITIAL_PITCH = -1.15;
 const INITIAL_YAW = -0.6;
+const RADIANS_PER_PIXEL = 0.01;
+
+function initialOrientation() {
+	return mat4Multiply(mat4RotationX(INITIAL_PITCH), mat4RotationY(INITIAL_YAW));
+}
 const MAX_DEVICE_PIXEL_RATIO = 2;
 
 function formatFileSize(bytes: number): string {
@@ -47,8 +58,7 @@ export function StlViewer({ srcUrl, fileName, size }: StlViewerProps) {
 	const [contextEpoch, setContextEpoch] = useState(0);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const cameraRef = useRef<StlCamera>({
-		yaw: INITIAL_YAW,
-		pitch: INITIAL_PITCH,
+		orientation: initialOrientation(),
 		distance: 1,
 		panX: 0,
 		panY: 0,
@@ -105,8 +115,7 @@ export function StlViewer({ srcUrl, fileName, size }: StlViewerProps) {
 
 		const camera = cameraRef.current;
 		const resetView = () => {
-			camera.yaw = INITIAL_YAW;
-			camera.pitch = INITIAL_PITCH;
+			camera.orientation = initialOrientation();
 			camera.distance = scene.fitDistanceFor(
 				canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1,
 			);
@@ -162,6 +171,19 @@ export function StlViewer({ srcUrl, fileName, size }: StlViewerProps) {
 			return Math.hypot(a.x - b.x, a.y - b.y);
 		};
 
+		// Turned about the axes of the screen rather than the model's own, so a
+		// drag moves the surface under the finger the same way wherever the
+		// model has been turned to, and no direction runs out of travel.
+		const rotate = (dx: number, dy: number) => {
+			const spin = mat4Multiply(
+				mat4RotationX(dy * RADIANS_PER_PIXEL),
+				mat4RotationY(dx * RADIANS_PER_PIXEL),
+			);
+			camera.orientation = mat4Orthonormalize(
+				mat4Multiply(spin, camera.orientation),
+			);
+		};
+
 		const pan = (dx: number, dy: number) => {
 			const perPixel = worldPerPixel(camera.distance, canvas.clientHeight);
 			camera.panX += dx * perPixel;
@@ -198,13 +220,7 @@ export function StlViewer({ srcUrl, fileName, size }: StlViewerProps) {
 			} else if (event.shiftKey || event.buttons === 2 || event.buttons === 4) {
 				pan(dx, dy);
 			} else {
-				camera.yaw += dx * 0.01;
-				// Stop at the poles rather than rolling past them: an orbit that
-				// flips the horizon is disorienting and hard to recover from.
-				camera.pitch = Math.min(
-					0,
-					Math.max(-Math.PI, camera.pitch + dy * 0.01),
-				);
+				rotate(dx, dy);
 			}
 			requestDraw();
 			event.preventDefault();

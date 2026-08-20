@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **The STL preview turns any way round, and keeps turning.** Rotation was a
+  yaw and a pitch, and a pitch has poles: an up-down drag stopped dead at the
+  top and bottom of the model, so some faces could only be reached by going
+  round the other way, and some tilts not at all. The orientation is now
+  accumulated as a matrix, about the axes of the *screen* rather than of the
+  model - so a drag moves the surface under the finger the same way wherever
+  the model has been turned to, no direction runs out of travel, and a drag can
+  carry on through as many turns as it likes. The basis is re-squared after
+  every step, because an orientation thousands of matrix products deep
+  otherwise shears
+
 ## [0.3.183] - 2026-08-20
 
 ### Added
