@@ -315,6 +315,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **CodeViewer.tsx** - Syntax highlighted code display
 - **DiffViewer.tsx** - Side-by-side diff view for file changes
 - **ImageViewer.tsx** - Image preview with zoom (uses `/files/raw` streaming for large images)
+- **StlViewer.tsx** - 3D preview for `.stl`, drawn with about 200 lines of WebGL (`utils/stl-render.ts`, `utils/mat4.ts`) rather than a 3D library. Orbit / zoom / pan / reset, flat-shaded and lit two-sided so a mesh with inconsistent winding is not a set of black holes. `utils/stl-parse.ts` reads both encodings, and **decides which from the byte length, not the opening keyword** - a binary STL is free to start with `solid` and exporters do it. A stored normal of zero (equally common) is replaced by the one the winding implies. The bytes arrive over `/files/raw`, like an image or a video: the whole mesh is needed, and an ASCII STL read through the 1MB text limit would come back as a plausible model with pieces missing
 - **MarkdownViewer.tsx** - Markdown rendering
 - **HtmlViewer.tsx** - HTML file rendering via iframe
 - **PromptComposer.tsx** - Prompt text composition interface

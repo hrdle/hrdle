@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **STL files preview as 3D models in the file viewer.** A `.stl` opened from
+  the browser used to be the binary placeholder and a download button - the one
+  file type where "look at it from the phone" meant "get it onto a machine that
+  has a viewer". It now renders on a canvas: drag to rotate, wheel or pinch to
+  zoom, two fingers or Shift+drag to pan, and a reset. Both encodings are read,
+  and which one a file is comes from its byte length rather than its opening
+  keyword, because a binary STL is free to begin with `solid` and exporters do
+  it. A face whose stored normal is zero - also common - is shaded from the
+  winding instead, and whichever side of a triangle faces the camera is the one
+  that gets lit, so an inside-out mesh is a model rather than a set of holes.
+  The mesh comes down the streaming `/files/raw` route, so a large one is not
+  base64'd through the read limit, which for an ASCII STL would have quietly
+  produced a model with pieces missing. The renderer is about 200 lines of
+  WebGL rather than a 3D library: nothing else here needs one, and the bundle
+  is what a phone waits for
+
 ## [0.3.182] - 2026-08-20
 
 ### Fixed

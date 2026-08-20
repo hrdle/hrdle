@@ -51,6 +51,8 @@ const MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.bmp': 'image/bmp',
+  // 3D models
+  '.stl': 'model/stl',
   // Binary (for reference)
   '.pdf': 'application/pdf',
   '.zip': 'application/zip',
@@ -81,6 +83,12 @@ const MEDIA_EXTENSIONS = new Set([
   '.mp4', '.webm', '.ogg', '.mov', '.m4v',
   '.mp3', '.wav', '.m4a', '.aac', '.flac', '.wma',
 ]);
+
+// 3D model extensions. Also served via /files/raw: the viewer needs the whole
+// mesh, and an ASCII STL would otherwise come back as text truncated at the 1MB
+// read limit - a partial mesh renders as a plausible-looking model with pieces
+// missing rather than as an error.
+const MODEL_EXTENSIONS = new Set(['.stl']);
 
 export class FileService {
   /**
@@ -209,9 +217,9 @@ export class FileService {
     const knownText = TEXT_EXTENSIONS.has(ext) || this.isTextMime(mimeType);
     const isImage = IMAGE_EXTENSIONS.has(ext);
 
-    // Images and media are served via the streaming /files/raw endpoint.
-    // Skip content loading to avoid wasting memory on large files.
-    if (isImage || MEDIA_EXTENSIONS.has(ext)) {
+    // Images, media and 3D models are served via the streaming /files/raw
+    // endpoint. Skip content loading to avoid wasting memory on large files.
+    if (isImage || MEDIA_EXTENSIONS.has(ext) || MODEL_EXTENSIONS.has(ext)) {
       return {
         path: validPath,
         content: '',

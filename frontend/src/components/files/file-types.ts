@@ -18,6 +18,9 @@ const HTML_EXTENSIONS = new Set([".html", ".htm"]);
 
 const VIDEO_EXTENSIONS = new Set([".mp4", ".webm", ".ogg", ".mov", ".m4v"]);
 
+// 3D model formats the file viewer can render (see StlViewer)
+const MODEL_EXTENSIONS = new Set([".stl"]);
+
 const AUDIO_EXTENSIONS = new Set([
 	".mp3",
 	".wav",
@@ -55,6 +58,11 @@ export function isVideoFile(path: string): boolean {
 function isAudioFile(path: string): boolean {
 	const ext = extOf(path);
 	return ext ? AUDIO_EXTENSIONS.has(ext) : false;
+}
+
+export function isModelFile(path: string): boolean {
+	const ext = extOf(path);
+	return ext ? MODEL_EXTENSIONS.has(ext) : false;
 }
 
 export function isMediaFile(path: string): boolean {

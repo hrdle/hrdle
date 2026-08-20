@@ -10,12 +10,14 @@ import {
 	isImageFile,
 	isMarkdownFile,
 	isMediaFile,
+	isModelFile,
 	isVideoFile,
 } from "./file-types";
 import { HtmlViewer } from "./HtmlViewer";
 import { ImageViewer } from "./ImageViewer";
 import { getLanguageFromPath } from "./language-detect";
 import { MarkdownViewer } from "./MarkdownViewer";
+import { StlViewer } from "./StlViewer";
 
 interface FileContentViewProps {
 	viewMode: ViewMode;
@@ -143,6 +145,16 @@ export function FileContentView({
 
 		if (isMediaFile(path)) {
 			return <MediaContent file={selectedFile} rawBlobUrl={rawBlobUrl} />;
+		}
+
+		if (isModelFile(path)) {
+			return (
+				<StlViewer
+					srcUrl={rawBlobUrl}
+					fileName={getFileName(path)}
+					size={selectedFile.size}
+				/>
+			);
 		}
 
 		if (previewMode && isMarkdownFile(path)) {
