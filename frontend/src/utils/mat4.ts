@@ -77,6 +77,48 @@ export function mat4Perspective(
 	return out;
 }
 
+/**
+ * The same rotation with its basis made unit-length and square again.
+ * An orientation accumulated one drag step at a time is thousands of matrix
+ * products deep, and the rounding in them shears the model over a long session.
+ */
+export function mat4Orthonormalize(m: Mat4): Mat4 {
+	const out = new Float32Array(m);
+	const dot = (a: number, b: number) =>
+		(out[a] as number) * (out[b] as number) +
+		(out[a + 1] as number) * (out[b + 1] as number) +
+		(out[a + 2] as number) * (out[b + 2] as number);
+	const scale = (col: number, factor: number) => {
+		out[col] = (out[col] as number) * factor;
+		out[col + 1] = (out[col + 1] as number) * factor;
+		out[col + 2] = (out[col + 2] as number) * factor;
+	};
+
+	const xLength = Math.sqrt(dot(0, 0));
+	if (xLength < 1e-12) return mat4Identity();
+	scale(0, 1 / xLength);
+
+	const projection = dot(0, 4);
+	out[4] = (out[4] as number) - projection * (out[0] as number);
+	out[5] = (out[5] as number) - projection * (out[1] as number);
+	out[6] = (out[6] as number) - projection * (out[2] as number);
+	const yLength = Math.sqrt(dot(4, 4));
+	if (yLength < 1e-12) return mat4Identity();
+	scale(4, 1 / yLength);
+
+	// z is whatever is left over, which is what keeps the basis right-handed.
+	out[8] =
+		(out[1] as number) * (out[6] as number) -
+		(out[2] as number) * (out[5] as number);
+	out[9] =
+		(out[2] as number) * (out[4] as number) -
+		(out[0] as number) * (out[6] as number);
+	out[10] =
+		(out[0] as number) * (out[5] as number) -
+		(out[1] as number) * (out[4] as number);
+	return out;
+}
+
 /** The upper-left 3x3 block, which is the normal matrix while the transform is rotation and translation only. */
 export function mat3FromMat4(m: Mat4): Float32Array {
 	const out = new Float32Array(9);
