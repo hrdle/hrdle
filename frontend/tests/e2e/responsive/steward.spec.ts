@@ -1000,6 +1000,14 @@ test.describe('summary or conversation', () => {
     await bootApp(page, { withAgentPane: true, steward: { enabled: false } });
     await expect(page.getByRole('button', { name: '要約', exact: true })).toHaveCount(0);
   });
+
+  // Same when the server has one and this device is not showing it: the switch
+  // says whether the steward is on these screens at all.
+  test('is absent when the steward is not switched on here', async ({ page }) => {
+    await bootApp(page, { withAgentPane: true, steward: { enabled: true, turns: TURNS } });
+    await expect(page.getByRole('button', { name: '要約', exact: true })).toHaveCount(0);
+    await expect(page.getByText('テストを直しています')).toHaveCount(0);
+  });
 });
 
 /**
