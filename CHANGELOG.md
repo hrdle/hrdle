@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.187] - 2026-08-23
+
+### Fixed
+- **A Homebrew update ran the wrong `brew`.** hrdle took the first `brew` on
+  PATH, and the service PATH lists `/usr/local/bin` first - so on an Apple
+  Silicon machine that still has an Intel Homebrew installed, the update asked
+  the prefix that has never heard of herdr and got `Error: herdr not
+  installed`. The `brew` it uses now is the one whose prefix owns the Cellar
+  the binary resolves into. A `brew cleanup` that had not run for 30 days no
+  longer picks the middle of an update to run, either.
+- **The update reported "signal is aborted without reason".** The browser gave
+  up on the request after ten seconds and printed its own abort as the reason
+  the update failed - over an update that was still running, and whose real
+  error nobody saw. A brew upgrade downloads a bottle and then restarts the
+  server; that is minutes, and it ran past Bun's request timeout as well. The
+  request now returns as soon as the work starts and the dashboard asks how it
+  went, so the line under the button is the reason herdr gave.
+
 ## [0.3.186] - 2026-08-22
 
 ### Fixed
