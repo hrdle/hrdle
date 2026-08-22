@@ -44,8 +44,12 @@ async function record(transcribe: () => Promise<string>) {
     startVoice(target: { sessionId: string }): Promise<void>
     onAudioData(pcm: Uint8Array): void
     stopAndTranscribe(): Promise<void>
+    longPress(): void
   }
   await inner.startVoice({ sessionId: 'w1' })
+  // The screen opens without the microphone taking anything in; the hold is
+  // the wearer starting to speak.
+  inner.longPress()
   inner.onAudioData(speech())
   await inner.stopAndTranscribe()
   // The phrase is transcribed after the recording has been stopped, so the

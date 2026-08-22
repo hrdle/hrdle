@@ -89,6 +89,10 @@ const EN: Table = {
   'settings.biasComposed':
     'Sent with every transcription. A session speaking adds its own words in front of these - set those with `hrdle stt-prompt` in it, or from its settings.',
   'settings.glassesTitle': 'Glasses screen',
+  // Drawn by the glasses OS in its own contextual menu, not by us - so unlike
+  // everything the panel draws, this one is not held to English. At most 32
+  // bytes of UTF-8: the firmware stores no more.
+  'menu.sleep': 'Sleep now',
   'settings.screenOff': 'Auto screen-off (seconds)',
   'settings.screenOffHint':
     '0 = never. After this long with no ring input the panel goes dark; a double-tap wakes it.',
@@ -216,6 +220,9 @@ const JA: Table = {
   'settings.biasComposed':
     '毎回の文字起こしに送られます。話しかけるセッション自身の語はこの前に付きます（そのセッションで `hrdle stt-prompt`、または設定から）。',
   'settings.glassesTitle': 'グラス画面',
+  // Paired with the settings screen's own wording for the timeout, so the two
+  // read as the automatic and manual halves of one thing.
+  'menu.sleep': '手動消灯',
   'settings.screenOff': '自動消灯 (秒)',
   'settings.screenOffHint':
     '0 で消灯しない。リング無操作がこの秒数続くと画面が消え、ダブルタップで戻ります。',

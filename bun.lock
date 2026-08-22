@@ -66,7 +66,7 @@
       "name": "glasses",
       "version": "0.1.0",
       "dependencies": {
-        "@evenrealities/even_hub_sdk": "^0.0.13",
+        "@evenrealities/even_hub_sdk": "^0.0.14",
         "@evenrealities/pretext": "^0.1.4",
       },
       "devDependencies": {
@@ -298,7 +298,7 @@
 
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@2.0.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-9DsSk+o5NBX0CCJT8s0EROGSGxjR/tKu6aBTaVyq+SjAEQH4XcdcRxPBRzsBLizTTJ49MJjF+jgu3qnO9GLQcQ=="],
 
-    "@evenrealities/even_hub_sdk": ["@evenrealities/even_hub_sdk@0.0.13", "", {}, "sha512-UTEvhrvuuoCeHMQFlImGNeYP8R1SvEWLDtHj+VfMw0IA4MZl5OSonVhNKjJz+cCY27hBkSnIVeKXd99F3ttNDw=="],
+    "@evenrealities/even_hub_sdk": ["@evenrealities/even_hub_sdk@0.0.14", "", {}, "sha512-lNtyIldZfe0dhAVxCfNuJ7waH2lMPli8DyklA8jF4DlvByQtbK1janodPNo7M8+7Plp30mlQT8d+vYU3gO8vKQ=="],
 
     "@evenrealities/evenhub-cli": ["@evenrealities/evenhub-cli@0.1.13", "", { "dependencies": { "chalk": "^5.6.2", "commander": "^14.0.2", "inquirer": "^13.1.0", "js-yaml": "^4.1.1", "open": "^11.0.0", "qr-image": "^3.2.0", "qrcode-terminal": "^0.12.0", "zod": "^4.3.2" }, "peerDependencies": { "typescript": "^5" }, "bin": { "evenhub": "main.js", "eh": "main.js" } }, "sha512-glkkGfImds8ceh1YTbVvwuw7jlcSAKnI6Q7ATrDynKSvODs9/FV/R+0CliyCog3JJRTON0+EXBLW3lxU4x8NBQ=="],
 
@@ -1417,6 +1417,8 @@
     "@tailwindcss/oxide-wasm32-wasi/tslib": ["tslib@2.8.1", "", { "bundled": true }, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "filelist/minimatch": ["minimatch@5.1.6", "", { "dependencies": { "brace-expansion": "^2.0.1" } }, "sha512-lKwV/1brpG6mBUFHtb7NUmtABCb2WZZmm2wNiOA5hAb8VdCS4B3dtMWyvcoViccwAW/COERjXLt0zP1zXUN26g=="],
+
+    "glasses-steward/@evenrealities/even_hub_sdk": ["@evenrealities/even_hub_sdk@0.0.13", "", {}, "sha512-UTEvhrvuuoCeHMQFlImGNeYP8R1SvEWLDtHj+VfMw0IA4MZl5OSonVhNKjJz+cCY27hBkSnIVeKXd99F3ttNDw=="],
 
     "micromark-extension-math/katex": ["katex@0.16.47", "", { "dependencies": { "commander": "^8.3.0" }, "bin": { "katex": "cli.js" } }, "sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg=="],
 

@@ -27,7 +27,7 @@
 
 import { getConversation, getGlassesSettings, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, IDLE_STOP_MS, SOUND_RMS, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MENU_SLEEP_ID, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -223,7 +223,7 @@ export function screenOffMsFrom(view: { screenOffSeconds?: number }): number | n
  *  minutes, which is one small GET against how stale a phone edit may look. */
 const SETTINGS_POLL_TICKS = 48
 
-export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
+export type RingAction = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown' | 'longPress'
 
 /** Platform capabilities the controller cannot provide itself. The G2 wires
  *  the real Even Hub bridge + mic; the debug simulator fakes them. */
@@ -308,33 +308,40 @@ interface ReplyTarget {
 
 /**
  * The rate the microphone is opened at, on the device and in the simulator
- * alike. Lived as a private constant in each of them until the silence
- * detector needed it too - and a detector counting samples at one rate while
- * the audio arrives at another is wrong by exactly that ratio, silently.
+ * alike. Shared rather than kept private to each, because the margins
+ * `trimSilence` leaves are counted in samples: reckoned against a rate the
+ * audio does not actually arrive at, they are wrong by exactly that ratio and
+ * say nothing about it.
  */
 export const MIC_SAMPLE_RATE = 16000
 
-/** Quiet for this long after speech, and the phrase is over. */
-const SILENCE_TAIL_SAMPLES = Math.round(MIC_SAMPLE_RATE * 1.5)
+/**
+ * A long press this soon after a tap is the host's menu being opened.
+ *
+ * The glasses OS answers `tap` then long press with its own menu, and it
+ * delivers both to the app on the way past. Acting on that long press would
+ * start a recording every time the wearer reached for the OS menu - and the
+ * recording would then be hidden behind the menu that prompted it.
+ *
+ * Measured on device: the two arrive about a second apart when a person does
+ * it deliberately, so the window is generous. The cost of it being too wide is
+ * one deliberate long press ignored right after a tap; the cost of it being
+ * too narrow is a recording nobody asked for.
+ */
+const MENU_PREFIX_MS = 1200
 
 /**
- * The shortest phrase worth a request of its own.
+ * One phrase of the draft. `text` is null until the transcription answers.
  *
- * Groq bills a minimum of ten seconds per transcription whatever the audio
- * actually measures, so a phrase closed at three seconds spends exactly what a
- * ten-second one does. Under this a pause is treated as part of the phrase
- * rather than as the end of it, which keeps a minute of dictation at roughly a
- * minute of billed audio instead of two and a half.
- *
- * A tap is not subject to it: the wearer has said they are finished, and the
- * floor exists to stop a request being spent early rather than to refuse one.
+ * A line break the wearer asked for is one of these too, with `text` already
+ * set. Holding it here rather than in a separate list is what lets a single
+ * undo take it back like anything else they added.
  */
-const MIN_PHRASE_SAMPLES = MIC_SAMPLE_RATE * 10
-
-/** One phrase of the draft. `text` is null until the transcription answers. */
 interface DraftPhrase {
   text: string | null
   failed: boolean
+  /** A break the wearer inserted, not something that was said. */
+  br?: boolean
 }
 
 /** The shortest gap between two header redraws of the level meter. */
@@ -361,11 +368,12 @@ export function pcmRms(pcm: Uint8Array): number {
 /**
  * Drop the quiet at both ends of a phrase.
  *
- * The tail is quiet by construction - a pause is what closed the phrase - and
- * silence is what Whisper answers with an invented sign-off rather than with
- * nothing. A quarter-second margin stays either side so the first and last
- * consonants are not clipped, which is the failure that would be blamed on the
- * microphone.
+ * Both ends have some: the press lands before the wearer starts saying
+ * anything and the release after they have finished. Silence is not nothing to
+ * Whisper - it answers with an invented sign-off phrase, which would then be
+ * in the draft. A quarter-second margin stays either side so the first and
+ * last consonants are not clipped, which is the failure that would be blamed
+ * on the microphone.
  */
 export function trimSilence(pcm: Uint8Array, sampleRate = MIC_SAMPLE_RATE): Uint8Array {
   const window = sampleRate >> 3
@@ -400,7 +408,14 @@ export function joinPhrases(phrases: string[]): string {
   let out = ''
   for (const phrase of phrases) {
     if (!phrase) continue
-    if (out && needsSpace(out, phrase)) out += ' '
+    // A break carries its own separation. Spacing it as well would put a
+    // stray space at the end of the line above, where nothing can be seen of
+    // it and an agent reads it as part of the sentence.
+    if (phrase === '\n') {
+      out += phrase
+      continue
+    }
+    if (out && !out.endsWith('\n') && needsSpace(out, phrase)) out += ' '
     out += phrase
   }
   return out
@@ -541,11 +556,22 @@ export class GlassesController {
   private autoTimer: ReturnType<typeof setInterval> | null = null
   /** The gap between saying the run is closing and closing it. */
   private exitTimer: ReturnType<typeof setTimeout> | null = null
-  /** Closes a microphone nobody is speaking into (`IDLE_STOP_MS`); null when idle. */
-  private recordTimer: ReturnType<typeof setTimeout> | null = null
   /** Torn down by the host. Nothing draws, nothing reconnects, nothing ticks. */
   private stopped = false
   /** Last ring gesture, so the auto-advance clock can stay out of the way. */
+  /**
+   * Whether audio is being taken in right now.
+   *
+   * The microphone stays open across the whole recording - opening and closing
+   * it per phrase is what the mic-op queue exists to avoid - so "between
+   * phrases" is a gate on the incoming chunks rather than a closed device.
+   *
+   * Closed between phrases so a wearer who stops to think is not dictating the
+   * room: a television or a nearby conversation clears the speech threshold
+   * perfectly well, and no threshold can tell their voice from another's.
+   */
+  private listening = false
+
   private lastGestureAt = 0
   /**
    * Last proof someone is (or should be) looking: a gesture, a resume, or an
@@ -626,8 +652,6 @@ export class GlassesController {
   private micOpen = false
   /** Whether anything above `SPEECH_RMS` has been heard in this phrase. */
   private heardSpeech = false
-  /** Samples of quiet since the last thing that was not quiet. */
-  private silentSamples = 0
   /** Samples collected into the phrase being spoken now. */
   private phraseSamples = 0
   /** The draft, oldest phrase first. Identity matters: a transcription that
@@ -831,7 +855,13 @@ export class GlassesController {
     if (this.screenOffIdleMs <= 0) {
       // Switching the timeout off is done by someone looking at a dark panel
       // wanting it back; leaving it dark reads as a save that did not work.
-      if (st.screenOff && !this.stopped) this.wake(true)
+      //
+      // Not a panel they darkened on purpose. The timeout is off by default
+      // and this tick runs every 2.5 seconds, so a deliberate sleep was being
+      // undone within a moment of being asked for - and the gesture meant to
+      // relight it then reached the screen underneath instead, which is how a
+      // recording ended up at its sending screen on a double tap.
+      if (st.screenOff && !this.stopped && !this.sleptOnRequest) this.wake(true)
       return
     }
     if (this.stopped || !this.foreground || st.screenOff || this.demo) return
@@ -864,9 +894,60 @@ export class GlassesController {
    *  flag and the redraw; callers about to draw a new screen skip the render. */
   private wake(render: boolean): void {
     this.lastActivityAt = Date.now()
+    this.sleptOnRequest = false
     if (!this.state.screenOff) return
     this.state.screenOff = false
     if (render) this.render()
+  }
+
+  /**
+   * Darken the panel now, rather than when the idle timer says so.
+   *
+   * The timeout answers "I stopped looking"; this answers "not now" - a
+   * wearer who is mid-conversation with a person and does not want a lit
+   * panel between them. It is the same state either way, so a notice still
+   * relights it and any ring input still wakes it.
+   *
+   * Sleeping is refused on the screens that ARE the input: darkening the
+   * panel mid-utterance would leave the wearer speaking into nothing.
+   */
+  /** Set while the panel is dark because the wearer asked, rather than because
+   *  the idle timer ran out. Only that kind survives being foregrounded. */
+  private sleptOnRequest = false
+
+  /** For the heartbeat: what the panel is doing, in the log's own words. */
+  screenNote(): string {
+    const st = this.state
+    return ` screen=${st.screenOff ? (this.sleptOnRequest ? 'slept' : 'dark') : 'lit'} mode=${st.mode}${st.mode === 'voice' ? `/${st.voicePhase}${this.listening ? '/listening' : ''}` : ''}`
+  }
+
+  sleepNow(): void {
+    const st = this.state
+    if (st.screenOff || this.stopped) return
+    // The screens that ARE the input keep the panel: darkening one mid-gesture
+    // would leave the wearer speaking or picking into nothing. Between phrases
+    // the voice screen is not one of them - the finger is off, no audio is
+    // being taken in, and the draft sits there waiting.
+    const resting =
+      st.mode === 'session_list' || st.mode === 'conversation' || st.mode === 'overlay' ||
+      (st.mode === 'voice' && !this.listening)
+    if (!resting) return
+    st.screenOff = true
+    this.sleptOnRequest = true
+    this.render()
+  }
+
+  /**
+   * An entry of the menu the glasses OS draws for this app was chosen.
+   *
+   * Which entry means what is decided here rather than where the choice
+   * arrives, because it arrives in two places: the host hands the device an
+   * item id, and the simulator has a button standing in for the same menu. A
+   * mapping written at each of them is one that can differ between them, which
+   * is the divergence that only ever reproduces on a device.
+   */
+  menuItem(itemID: number): void {
+    if (itemID === MENU_SLEEP_ID) this.sleepNow()
   }
 
   /**
@@ -1048,7 +1129,13 @@ export class GlassesController {
     this.state.spinnerTick = 0
     // Being brought back is the wearer's doing, so the panel relights: a
     // resume onto a dark screen reads as the crash it took a day to rule out.
-    this.wake(false)
+    //
+    // Except when they put it to sleep themselves. Choosing Sleep from the
+    // host's menu backgrounds this app and foregrounds it again as the menu
+    // closes, so relighting here undid the very thing they had just asked
+    // for - and the panel a wearer deliberately darkened is not one they need
+    // reassuring about.
+    if (!this.sleptOnRequest) this.wake(false)
     // The timeout may have been retuned from the phone while this slept.
     this.refreshScreenOffSetting()
     this.ws.connect()
@@ -1066,9 +1153,33 @@ export class GlassesController {
     // Close the microphone as well. Nothing would have closed it: a recording
     // interrupted by the glasses showing something else went on streaming 16kHz
     // PCM from a screen nobody could see, and the PCM stops arriving while
-    // `recording` still claims otherwise — so the recording is abandoned rather
-    // than left to resume into a screen that will never receive audio again.
-    if (this.recording) void this.cancelVoice()
+    // `recording` still claims otherwise. A microphone held open behind a
+    // screen nobody is looking at is battery spent on nothing, so it goes
+    // whether or not a phrase was open, and the next hold opens it again.
+    if (this.recording) {
+      // The open still in flight belongs to a device that is about to be
+      // stopped. Left valid, its continuation writes `micOpen = true` after
+      // the stop has landed, and the next hold then skips an open that never
+      // happened - a screen saying it is listening to a closed microphone,
+      // with no audio to end the phrase and nothing on it to say why.
+      this.voiceRun++
+      // Not gated on `micOpen`: an open still in flight lands after this, and
+      // the queue is what puts the stop behind it. Gated, a background that
+      // arrived mid-open left the device running with nothing watching it.
+      this.micOpen = false
+      void this.micOp(() => this.platform.stopMicCapture()).catch(() => {})
+      // The phrase being spoken goes: the audio stops arriving here and what
+      // was captured is half a sentence. The phrases already closed stay.
+      // Opening the host's own menu backgrounds this app, and a draft built
+      // over several holds is not the wearer asking to throw it away - they
+      // come back to it paused, exactly as a release would have left it.
+      this.audioChunks = []
+      this.phraseSamples = 0
+      this.heardSpeech = false
+      this.listening = false
+      this.state.voiceListening = false
+      this.state.voiceLevel = 0
+    }
   }
 
   /** Whether the host has torn this down. Read by the simulator's diagnostics,
@@ -1155,14 +1266,12 @@ export class GlassesController {
     }
     // A recording the host tore down mid-way: the self-stop would otherwise
     // wake a dead controller up to transcribe and draw.
-    this.clearRecordTimer()
     this.clearNoticeTimer()
     this.voiceRun++
     this.recording = false
     this.micOpen = false
     this.audioChunks = []
     this.heardSpeech = false
-    this.silentSamples = 0
     this.phraseSamples = 0
     this.phrases = []
     // Unconditional: `recording` says whether the PCM was being collected, not
@@ -1176,49 +1285,66 @@ export class GlassesController {
 
   // ── Ring input (the single handler set shared by G2 and debug) ──
 
+  /**
+   * A sustained press: start speaking, or start the next phrase.
+   *
+   * The one input every screen still had free. It is spent on the microphone
+   * because dictation is the only thing here whose shape matches a press that
+   * has a beginning and an end, and because the tap it replaces was the input
+   * standing between a wearer and the host's own menu.
+   *
+   * A long press that follows a tap within `MENU_PREFIX_MS` is the host's menu
+   * being opened and is not ours to act on.
+   */
+  longPress(): void {
+    if (this.lastGestureKind === 'tap' && Date.now() - this.lastGestureAt < MENU_PREFIX_MS) return
+    void this.handle('longPress')
+  }
+
+  /**
+   * The finger came off: the phrase is over.
+   *
+   * The boundary is the release rather than a stretch of quiet, so a wearer
+   * who stops mid-sentence to find a word keeps one phrase instead of two, and
+   * a short one closes the moment they let go rather than waiting out a
+   * silence rule they cannot see.
+   *
+   * Only meaningful while a phrase is open. A release that follows the menu
+   * prefix, or one arriving on a screen that never started listening, has
+   * nothing to close.
+   */
+  longPressEnd(): void {
+    if (this.state.mode !== 'voice' || !this.listening) return
+    this.closePhrase()
+  }
+
   tap(): void { void this.handle('tap') }
   doubleTap(): void { void this.handle('doubleTap') }
   swipeUp(): void { void this.handle('swipeUp') }
   swipeDown(): void { void this.handle('swipeDown') }
 
   /**
-   * A chunk of microphone audio, and the decision of whether a phrase is over.
+   * A chunk of microphone audio, taken in only while a phrase is open.
    *
-   * A pause ends a phrase, not the recording: the phrase goes off to be
-   * transcribed and the microphone stays open, so the words appear while the
-   * wearer is still talking and the last phrase is a unit they can take back.
-   * The recording ends when they say so.
-   *
-   * Counting quiet **samples** rather than elapsed milliseconds is what makes
-   * this testable: the same chunks always produce the same decision, with no
-   * clock to stub. It is also the more honest measure - what matters is how
-   * much silence was recorded, not how long the host took to deliver it.
-   *
-   * Quiet before the first word is not counted at all. Someone who taps and
-   * then takes a moment to think would otherwise open with an empty phrase.
+   * Between phrases the device is left open and the chunks are dropped here
+   * instead. Closing it would be the honest thing to do with a microphone
+   * nobody is speaking into, but an open takes long enough that the first word
+   * of the next phrase falls inside it - so the gap is paid for in discarded
+   * audio rather than in lost words. It is also what keeps the room out of the
+   * draft: the wearer thinking between phrases is not dictating, and a
+   * television in earshot is not either.
    */
   onAudioData(pcm: Uint8Array): void {
-    if (!this.recording || !this.micOpen) return
+    if (!this.recording || !this.micOpen || !this.listening) return
     this.audioChunks.push(pcm)
     this.phraseSamples += pcm.length >> 1
 
     const rms = pcmRms(pcm)
     this.showMicLevel(rms)
-    // Any sound at all puts the idle stop back to the full wait. Keyed on the
-    // speech bar instead, a wearer talking under it would have the recording
-    // close in the middle of their sentence - and be told they were too quiet
-    // by a screen that arrived while they were still speaking.
-    if (rms >= SOUND_RMS) this.armIdleStop()
-    if (rms >= SPEECH_RMS) {
-      this.heardSpeech = true
-      this.silentSamples = 0
-      return
-    }
-    if (!this.heardSpeech) return
-    this.silentSamples += pcm.length >> 1
-    if (this.silentSamples < SILENCE_TAIL_SAMPLES) return
-    if (this.phraseSamples < MIN_PHRASE_SAMPLES) return
-    this.closePhrase()
+    // The threshold is no longer a boundary - the finger is. All it decides is
+    // whether anything was said at all, so a hold the wearer thought better of
+    // does not spend a request on a second of room noise.
+    if (rms >= SPEECH_RMS) this.heardSpeech = true
   }
 
   /** Explicit state machine dispatch: (mode, action) → transition. */
@@ -1353,6 +1479,7 @@ export class GlassesController {
   private async onConversationAction(action: RingAction): Promise<void> {
     const st = this.state
     switch (action) {
+
       case 'swipeUp': {
         const wasAt = [st.conversationOffset, st.conversationPage, st.noticeWindow ?? 0]
         // Page up within message, then previous message(s)
@@ -1434,10 +1561,13 @@ export class GlassesController {
           await this.startVoice({ sessionId: top.sessionId, paneId: top.paneId, itemId: top.id })
           return
         }
-        // No relay item: nothing is known to be waiting on this pane, so the
-        // tap opens the microphone. Reading one pane, the reply belongs to that
-        // pane: sending it to the workspace would land wherever herdr happens
-        // to have focus.
+        // No relay item: the tap opens the microphone's screen without
+        // opening the microphone. Speaking is the hold, once there.
+        //
+        // Two steps rather than one because the gap between them is where
+        // anything that has to lead the instruction goes - a line break today,
+        // a saved command like `/compact` later. A hold that started recording
+        // from here left nowhere to put them.
         //
         // Resolved against the open workspace rather than read raw: the cursor
         // keeps `selectedPaneId` from wherever it last stood, and several paths
@@ -1824,6 +1954,18 @@ export class GlassesController {
 
   private async onVoiceAction(action: RingAction): Promise<void> {
     switch (action) {
+      case 'longPress':
+        // Between phrases, this is how the next one begins. During one it is
+        // a no-op rather than a second start: the finger arriving again while
+        // the wearer is already mid-sentence means nothing new.
+        if (this.state.voicePhase !== 'recording' || this.listening) return
+        this.listening = true
+        this.state.voiceListening = true
+        this.renderDraft()
+        // Closed while the app was in the background; open it again before the
+        // wearer gets far into the phrase.
+        if (!this.micOpen) await this.beginCapture()
+        return
       case 'tap':
         if (this.state.voicePhase === 'recording') {
           await this.stopAndTranscribe()
@@ -1834,9 +1976,10 @@ export class GlassesController {
         }
         return
       // Back one screen, which from a finished draft is the microphone it came
-      // from rather than the way out entirely. Double-tapping again from there
-      // is what abandons it - the same "leave" this gesture means everywhere,
-      // arrived at one step at a time.
+      // from rather than the way out entirely. Cancelling a sending screen
+      // returns what was being sent; it does not throw it away. Double-tapping
+      // again from there is what abandons it - the same "leave" this gesture
+      // means everywhere, arrived at one step at a time.
       //
       // Except when the microphone is what failed. That screen is reached
       // without passing through a recording, so the step this escape is made of
@@ -1860,12 +2003,11 @@ export class GlassesController {
         else this.undoPhrase()
         return
       case 'swipeDown':
-        // End the phrase here, short of the ten-second floor or not. The floor
-        // is about not spending a request on a pause; this is the wearer
-        // marking where the phrase ends, which is the only way to choose what
-        // a single undo takes back.
+        // Letting go is what ends a phrase now, so this gesture came free on
+        // the recording screen. It spends it on the one thing a voice cannot
+        // say.
         if (this.state.voicePhase === 'confirm') this.turnDraftPage(1)
-        else if (this.state.voicePhase === 'recording') this.closePhrase()
+        else this.breakLine()
         return
     }
   }
@@ -1881,8 +2023,17 @@ export class GlassesController {
     this.state.voiceText = ''
     this.state.voiceFailed = false
     this.state.voiceSessionName = this.sessionLabel(target.sessionId)
+    // Opened, not listening. The tap asks for the screen; the hold asks for
+    // the microphone. The device is started anyway so the first hold reaches
+    // an open one - waiting until then costs the first word of the first
+    // phrase, which is the one nobody thinks to repeat.
+    this.listening = false
+    this.state.voiceListening = false
+    this.state.voiceOpening = true
     this.render()
     await this.beginCapture()
+    this.state.voiceOpening = false
+    this.render()
   }
 
   /**
@@ -1896,7 +2047,6 @@ export class GlassesController {
   private async beginCapture(): Promise<void> {
     this.audioChunks = []
     this.phraseSamples = 0
-    this.silentSamples = 0
     this.heardSpeech = false
     this.state.voiceLevel = 0
     this.state.voiceMicFailed = false
@@ -1929,10 +2079,6 @@ export class GlassesController {
       return
     }
     this.micOpen = true
-    // Only once the microphone is actually open: a start that failed has
-    // nothing to stop, and arming the timer anyway would fire a transcription
-    // of no audio half a minute after the wearer had moved on.
-    this.armIdleStop()
   }
 
   /**
@@ -1952,7 +2098,13 @@ export class GlassesController {
     return next
   }
 
-  /** Speak on after seeing the draft, rather than sending it as it stands. */
+  /**
+   * Back to the draft after seeing it, rather than sending it as it stands.
+   *
+   * Reached by a double tap, so the finger is not down: this returns the
+   * screen and leaves the microphone waiting, exactly as the tap that opened
+   * it did. The next phrase begins on a hold, like every other one.
+   */
   private async resumeVoice(): Promise<void> {
     if (this.recording) return
     this.state.voicePhase = 'recording'
@@ -1983,19 +2135,6 @@ export class GlassesController {
     this.render()
   }
 
-  /** Restart the wait for a microphone nobody is speaking into. */
-  private armIdleStop(): void {
-    this.clearRecordTimer()
-    this.recordTimer = setTimeout(() => void this.stopAndTranscribe(), IDLE_STOP_MS)
-  }
-
-  /** Disarm the self-stop. Safe to call when it was never armed. */
-  private clearRecordTimer(): void {
-    if (this.recordTimer) {
-      clearTimeout(this.recordTimer)
-      this.recordTimer = null
-    }
-  }
 
   /**
    * End the phrase being spoken and send it to be transcribed.
@@ -2009,9 +2148,16 @@ export class GlassesController {
     const spoke = this.heardSpeech
     this.audioChunks = []
     this.phraseSamples = 0
-    this.silentSamples = 0
     this.heardSpeech = false
-    if (!spoke) return
+    // The phrase is over, so stop taking audio in. The wearer arms the next
+    // one with another long press - which is the point of the change: the gap
+    // between phrases is theirs to think in, not the room's to dictate into.
+    this.listening = false
+    this.state.voiceListening = false
+    if (!spoke) {
+      this.renderDraft()
+      return
+    }
     this.state.voiceHeardSpeech = true
     const phrase: DraftPhrase = { text: null, failed: false }
     this.phrases.push(phrase)
@@ -2046,7 +2192,9 @@ export class GlassesController {
     // Two shapes of the same thing: the lines a wearer reads and checks an undo
     // against, and the one string an agent is given.
     st.voicePhrases = this.phrases.map((p) =>
-      p.failed ? { kind: 'lost' } : p.text === null ? { kind: 'pending' } : { kind: 'text', text: p.text },
+      p.br
+        ? { kind: 'break' }
+        : p.failed ? { kind: 'lost' } : p.text === null ? { kind: 'pending' } : { kind: 'text', text: p.text },
     )
     // Whatever moved, the wearer is being shown a different draft from the one
     // they were reading - so it starts from the top again rather than holding a
@@ -2085,6 +2233,21 @@ export class GlassesController {
    * the screen yet, and a gesture that removed something invisible would be
    * indistinguishable from one that did nothing.
    */
+  /**
+   * Put a line break where the wearer is standing in the draft.
+   *
+   * The one character dictation cannot produce: a transcript arrives with
+   * punctuation and never with structure, so an instruction with two parts to
+   * it came out as one run of words. Offered between phrases, where the finger
+   * is off and the draft is sitting still - during one the touchpad is held
+   * and the gesture cannot arrive anyway.
+   */
+  private breakLine(): void {
+    if (this.state.voicePhase !== 'recording' || this.listening) return
+    this.phrases.push({ text: '\n', failed: false, br: true })
+    this.renderDraft()
+  }
+
   private undoPhrase(): void {
     if (this.phrases.length === 0) return
     this.phrases.pop()
@@ -2097,7 +2260,6 @@ export class GlassesController {
     this.micOpen = false
     const run = ++this.voiceRun
     // Whichever of the two stopped it, the other must not fire later.
-    this.clearRecordTimer()
     this.state.voicePhase = 'transcribing'
     // Before the microphone has finished closing, not after. The wearer has
     // said they are done, and a screen still promising `tap:done` for as long
@@ -2203,7 +2365,6 @@ export class GlassesController {
 
   private async cancelVoice(): Promise<void> {
     this.voiceRun++
-    this.clearRecordTimer()
     if (this.recording) {
       this.recording = false
       this.micOpen = false

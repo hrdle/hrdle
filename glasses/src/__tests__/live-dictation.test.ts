@@ -1,9 +1,10 @@
 // A recording is a draft being built out of phrases, not one shot at a sentence.
 //
-// A pause closes a phrase and sends it while the microphone stays open, so the
-// words appear as they are spoken and the wearer can take the last one back.
-// Everything here is decided from the audio itself, so these tests feed chunks
-// and never touch a clock.
+// A press opens a phrase and the release closes it, and it goes off to be
+// transcribed while the microphone stays open, so the words appear as they are
+// spoken and the wearer can take the last one back. Nothing here is decided by
+// elapsed time, so these tests drive gestures and feed audio chunks, and never
+// touch a clock.
 
 import { describe, expect, test } from 'bun:test'
 import { GlassesController, MIC_SAMPLE_RATE, type GlassesPlatform, trimSilence } from '../controller.ts'
@@ -28,8 +29,6 @@ const SPEECH = 4000 // an ordinary voice
 const CHUNK = MIC_SAMPLE_RATE / 4
 /** Enough chunks to clear the ten-second floor a phrase has to reach. */
 const TEN_SECONDS = 40
-/** The quiet that closes a phrase (1.5s). */
-const TAIL = 6
 
 interface Recorder {
   /** One entry per transcription request, in the order they were made. */
@@ -85,15 +84,54 @@ function driver(c: GlassesController) {
     onAudioData(pcm: Uint8Array): void
     stopAndTranscribe(): Promise<void>
     cancelVoice(): Promise<void>
+    longPress(): void
+    longPressEnd(): void
   }
 }
 
+/**
+ * The wearer says something.
+ *
+ * Arms the phrase first, because a closed phrase now stops the intake and the
+ * next one begins on a hold - which is what a wearer does before speaking
+ * again. The tests below are about what the draft becomes, so the hold is
+ * folded in here rather than repeated in each of them; the arming contract
+ * itself is pinned in `hold-to-speak.test.ts`.
+ */
 function speak(d: ReturnType<typeof driver>, chunks: number): void {
+  // `longPress` is a no-op while a phrase is already open, so this is safe
+  // both straight after `start` and after a release.
+  d.longPress()
   for (let i = 0; i < chunks; i++) d.onAudioData(pcm(CHUNK, SPEECH))
 }
 
-function pause(d: ReturnType<typeof driver>, chunks = TAIL): void {
+/**
+ * Open the voice screen and start the first phrase.
+ *
+ * Two acts on the device - the tap asks for the screen, the hold asks for the
+ * microphone - and one step here, because these tests are about what the
+ * draft becomes rather than about how it is begun. The distinction is pinned
+ * in `hold-to-speak.test.ts`.
+ */
+async function start(d: ReturnType<typeof driver>): Promise<void> {
+  await d.startVoice({ sessionId: 'w1' })
+}
+
+/** Quiet with the finger still down: a breath, or a word being looked for. */
+function quiet(d: ReturnType<typeof driver>, chunks: number): void {
   for (let i = 0; i < chunks; i++) d.onAudioData(pcm(CHUNK, QUIET))
+}
+
+/**
+ * The wearer lets go, which is what ends a phrase.
+ *
+ * `chunks` is quiet fed before the release - a breath, a word being searched
+ * for - and it no longer ends anything on its own. Kept as an argument so the
+ * tests that mean "they hesitated" still read that way.
+ */
+function pause(d: ReturnType<typeof driver>, chunks = 0): void {
+  for (let i = 0; i < chunks; i++) d.onAudioData(pcm(CHUNK, QUIET))
+  d.longPressEnd()
 }
 
 describe('a pause in the middle of a recording', () => {
@@ -101,9 +139,8 @@ describe('a pause in the middle of a recording', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
 
@@ -112,32 +149,36 @@ describe('a pause in the middle of a recording', () => {
     expect(c.state.voicePhase).toBe('recording')
   })
 
-  test('does not close one that is still short of the billing floor', async () => {
-    // Groq bills ten seconds whatever the length, so a phrase closed at three
-    // spends the same request as one closed at ten.
+  test('closes a short one too - the boundary is the finger, not the length', async () => {
+    // A short phrase costs a whole request - transcription is billed a
+    // ten-second minimum whatever the audio measures - and that is the
+    // wearer's call to make. Each phrase costs a deliberate hold, so how many
+    // requests a draft spends is theirs, one release at a time.
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, 20) // five seconds
+    await start(d)
+speak(d, 20) // five seconds
     pause(d)
-    speak(d, 4)
+    speak(d, 4) // one second
     pause(d)
     await flush()
 
-    expect(rec.calls.length).toBe(0)
+    expect(rec.calls.length).toBe(2)
   })
 
   test('carries the whole phrase, pauses inside it included', async () => {
+    // No amount of quiet splits a phrase any more - only the finger coming
+    // off does. Someone searching for a word keeps the sentence they were
+    // half-way through, which is what the old silence rule kept taking from
+    // them.
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, 20)
-    pause(d, 4) // drawing breath, under the tail
-    speak(d, 20)
+    await start(d)
+speak(d, 20)
+    quiet(d, 40) // a long look for the right word, finger still down
+    for (let i = 0; i < 20; i++) d.onAudioData(pcm(CHUNK, SPEECH))
     pause(d)
     await flush()
 
@@ -152,9 +193,8 @@ describe('the draft', () => {
     const { platform: p } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
 
@@ -168,9 +208,8 @@ describe('the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -192,8 +231,8 @@ describe('the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -208,8 +247,8 @@ describe('the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -224,9 +263,8 @@ describe('the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -241,9 +279,8 @@ describe('the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -263,8 +300,8 @@ describe('the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
@@ -285,9 +322,9 @@ describe('silence', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    pause(d, 60) // fifteen seconds of room noise
+    await start(d)
+    d.longPress()
+pause(d, 60) // fifteen seconds of room noise
     await d.stopAndTranscribe()
 
     expect(rec.calls.length).toBe(0)
@@ -302,9 +339,9 @@ describe('silence', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    for (let i = 0; i < 20; i++) d.onAudioData(pcm(CHUNK, 1200))
+    await start(d)
+    d.longPress()
+for (let i = 0; i < 20; i++) d.onAudioData(pcm(CHUNK, 1200))
     c.swipeDown()
     await flush()
     await d.stopAndTranscribe()
@@ -338,9 +375,8 @@ describe('tapping done', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     speak(d, 4) // one second, well under the floor
@@ -354,9 +390,8 @@ describe('tapping done', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     expect(c.state.voicePhase).toBe('transcribing')
 
@@ -369,9 +404,8 @@ describe('tapping done', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await rec.answer(0, 'できました')
@@ -387,8 +421,9 @@ describe('the footer', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    expect(screenText(c.state).footer).not.toContain('up:undo')
+    await start(d)
+    d.longPress()
+expect(screenText(c.state).footer).not.toContain('up:undo')
 
     speak(d, TEN_SECONDS)
     pause(d)
@@ -402,13 +437,13 @@ describe('the footer', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     await rec.answer(0, '')
 
     expect(c.state.voicePhase).toBe('confirm')
-    expect(screenText(c.state).footer).toContain('dbl:try again')
+    expect(screenText(c.state).footer).toContain('dbl:cancel')
   })
 })
 
@@ -417,8 +452,8 @@ describe('the screen', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -436,8 +471,8 @@ describe('the screen', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
@@ -458,8 +493,8 @@ describe('the screen', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await rec.answer(0, 'やっぱりやめる')
@@ -476,8 +511,8 @@ describe('the screen', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await rec.answer(0, 'やっぱりやめる')
@@ -493,8 +528,8 @@ describe('the screen', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     const waiting = screenText(c.state).body
 
@@ -510,7 +545,8 @@ describe('the screen', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
+    await start(d)
+    d.longPress()
 
     const meterOf = (body: string) => {
       const lines = body.split('\n')
@@ -535,12 +571,14 @@ describe('the screen', () => {
   })
 
   test('leaves the meter on the last row when the screen above it wraps', async () => {
-    // The opening instruction is one sentence with no break in it and covers
-    // two rows once the panel has wrapped it. Counted as one, the meter is
-    // pushed a row past the bottom of the panel and is not drawn at all.
+    // The opening instruction covers two rows once the panel has wrapped it.
+    // Counted as one, the meter is pushed a row past the bottom of the panel
+    // and is not drawn at all.
     const { platform: p } = platform()
     const c = new GlassesController(p)
-    await driver(c).startVoice({ sessionId: 'w1' })
+    const dd = driver(c)
+    await dd.startVoice({ sessionId: 'w1' })
+    dd.longPress()
 
     // Wrapped the way the panel wraps it, which is the count that decides
     // whether the last row is on the screen at all.
@@ -556,8 +594,9 @@ describe('the screen', () => {
     const { platform: p } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    const meter = () => screenText(c.state).body.split('\n').pop() ?? ''
+    await start(d)
+    d.longPress()
+const meter = () => screenText(c.state).body.split('\n').pop() ?? ''
 
     d.onAudioData(pcm(CHUNK, 300)) // a quiet room, under the threshold
     const under = meter()
@@ -575,9 +614,9 @@ describe('the screen', () => {
     const { platform: p } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    const quiet = screenText(c.state).body
+    await start(d)
+    d.longPress()
+const quiet = screenText(c.state).body
     speak(d, 1)
     const loud = screenText(c.state).body
 
@@ -597,8 +636,9 @@ describe('the screen', () => {
     }
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    draws = 0
+    await start(d)
+    d.longPress()
+draws = 0
 
     for (let i = 0; i < 12; i++) {
       d.onAudioData(pcm(CHUNK, SPEECH))
@@ -631,8 +671,9 @@ describe('the screen', () => {
     }
     const d = driver(c)
     invalidatePanel()
-    await d.startVoice({ sessionId: 'w1' })
-    await flush()
+    await start(d)
+    d.longPress()
+await flush()
     drawn.length = 0
 
     d.onAudioData(pcm(CHUNK, SPEECH))
@@ -651,9 +692,8 @@ describe('the screen', () => {
     }
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, 1)
+    await start(d)
+speak(d, 1)
     const afterFirst = draws
     await new Promise((r) => setTimeout(r, 300))
     speak(d, 1)
@@ -667,8 +707,8 @@ describe('a draft longer than the panel', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     await rec.answer(0, `${'長い句。'.repeat(120)}`)
 
@@ -698,8 +738,8 @@ describe('a draft longer than the panel', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
@@ -725,8 +765,8 @@ describe('a draft longer than the panel', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await rec.answer(0, `${'古い言葉。'.repeat(60)}最後に言ったこと`)
@@ -744,9 +784,8 @@ describe('swiping up to take the last phrase back', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     speak(d, TEN_SECONDS)
     pause(d)
@@ -766,9 +805,8 @@ describe('swiping up to take the last phrase back', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     c.swipeUp()
@@ -782,9 +820,8 @@ describe('swiping up to take the last phrase back', () => {
     const { platform: p } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     expect(c.state.voicePhase).toBe('transcribing')
 
@@ -798,9 +835,9 @@ describe('swiping up to take the last phrase back', () => {
     const { platform: p } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    c.swipeUp()
+    await start(d)
+    d.longPress()
+c.swipeUp()
     await flush()
 
     expect(c.state.voicePhase).toBe('recording')
@@ -812,8 +849,9 @@ describe('swiping up to take the last phrase back', () => {
     const c = new GlassesController(p)
     const d = driver(c)
     c.startDemo()
-    await d.startVoice({ sessionId: 'w1' })
-    await d.stopAndTranscribe()
+    await start(d)
+    d.longPress()
+await d.stopAndTranscribe()
     expect(c.state.voiceText).toBeTruthy()
 
     c.doubleTap()
@@ -826,17 +864,19 @@ describe('swiping up to take the last phrase back', () => {
 })
 
 describe('swiping down while recording', () => {
-  test('ends the phrase there, short of the floor', async () => {
+  test('does not end the phrase - letting go is what does that', async () => {
+    // Letting go is what ends a phrase. Two gestures for one act is one the
+    // wearer has to choose between, and the release is the one their hand is
+    // already making.
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, 8) // two seconds
+    await start(d)
+speak(d, 8)
     c.swipeDown()
     await flush()
 
-    expect(rec.calls.length).toBe(1)
+    expect(rec.calls.length).toBe(0)
     expect(c.state.voicePhase).toBe('recording')
   })
 
@@ -844,9 +884,9 @@ describe('swiping down while recording', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    pause(d, 4)
+    await start(d)
+    d.longPress()
+pause(d, 4)
     c.swipeDown()
     await flush()
 
@@ -859,9 +899,8 @@ describe('double-tapping the draft', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     await rec.answer(0, 'まずはテスト')
     expect(c.state.voicePhase).toBe('confirm')
@@ -882,8 +921,8 @@ describe('double-tapping the draft', () => {
     const mic = p as GlassesPlatform & { startMicCapture(): Promise<boolean> }
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     await d.stopAndTranscribe()
     await rec.answer(0, '一度目は録れた')
 
@@ -929,8 +968,8 @@ describe('a gesture that lands while the host is still opening or closing the mi
     const c = new GlassesController(p)
     const d = driver(c)
 
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, 4)
+    await start(d)
+speak(d, 4)
 
     // Tap done, and while the host is still closing the microphone: leave,
     // then start again somewhere else.
@@ -978,8 +1017,8 @@ describe('a gesture that lands while the host is still opening or closing the mi
     const { platform: p, release } = slowMic('stop')
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, 4)
+    await start(d)
+speak(d, 4)
 
     void d.stopAndTranscribe()
     await flush()
@@ -999,8 +1038,8 @@ describe('a gesture that lands while the host is still opening or closing the mi
     const c = new GlassesController(p)
     const d = driver(c)
 
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, 4)
+    await start(d)
+speak(d, 4)
     void d.stopAndTranscribe()
     await flush()
     await d.cancelVoice()
@@ -1071,10 +1110,10 @@ describe('a gesture that lands while the host is still opening or closing the mi
     await flush()
     await flush()
 
-    // Otherwise it streams 16kHz PCM from a screen nobody can see until the
-    // idle timer eventually notices.
+    // Otherwise it streams 16kHz PCM from a screen nobody can see. The screen
+    // is left where it was: nothing had been said into it, and the wearer
+    // walking through the host's menu is not them abandoning a draft.
     expect(rec.stopped).toBeGreaterThan(0)
-    expect(c.state.mode).toBe('conversation')
   })
 
   test('an old failure is not reported on the recording that replaced it', async () => {
@@ -1149,9 +1188,8 @@ describe('a phrase whose words arrive after it is gone', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await d.cancelVoice()
@@ -1171,8 +1209,8 @@ describe('a phrase whose words arrive after it is gone', () => {
     }
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await d.cancelVoice()
@@ -1186,14 +1224,15 @@ describe('a phrase whose words arrive after it is gone', () => {
     const { platform: p, rec } = platform()
     const c = new GlassesController(p)
     const d = driver(c)
-    await d.startVoice({ sessionId: 'w1' })
-    speak(d, TEN_SECONDS)
+    await start(d)
+speak(d, TEN_SECONDS)
     pause(d)
     await flush()
     await d.cancelVoice()
 
-    await d.startVoice({ sessionId: 'w1' })
-    await rec.answer(0, '前の録音のもの')
+    await start(d)
+    d.longPress()
+await rec.answer(0, '前の録音のもの')
 
     expect(c.state.voiceText).toBe('')
   })

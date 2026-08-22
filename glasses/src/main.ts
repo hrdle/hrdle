@@ -582,6 +582,12 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     onRawEvent(raw) {
       trace(`event: ${raw}`)
     },
+    onMenuItem(itemID) {
+      // Traced because the menu is drawn by the OS: nothing on this side can
+      // show what the wearer saw, so the log is the only account of it.
+      trace(`menu item: ${itemID}`)
+      controller.menuItem(itemID)
+    },
     // Each gesture is also published for the recording before it acts,
     // so a replayed gesture marker lands just ahead of the frame it caused.
     // publishInput never throws (send() swallows a dead socket), and the
@@ -597,6 +603,13 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     onTap: () => {
       controller.ws.publishInput('tap')
       controller.tap()
+    },
+    onLongPress: () => {
+      controller.ws.publishInput('longPress')
+      controller.longPress()
+    },
+    onLongPressEnd: () => {
+      controller.longPressEnd()
     },
     onDoubleTap: () => {
       controller.ws.publishInput('doubleTap')
@@ -652,7 +665,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   heartbeat = setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${powerNote}${deviceNote}${drift.note()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${controller.screenNote()}${heapNote()}${powerNote}${deviceNote}${drift.note()}`,
     )
   }, HEARTBEAT_MS)
 }
