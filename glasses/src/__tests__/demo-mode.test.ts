@@ -33,7 +33,7 @@ function platform(): GlassesPlatform & { exits: number; micStarts: number } {
 
 /** A ring gesture, awaited. The public methods are fire-and-forget because the
  *  host has nothing to await; a test does. */
-function ring(c: GlassesController, action: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'): Promise<void> {
+function ring(c: GlassesController, action: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown' | 'longPress'): Promise<void> {
   return (c as unknown as { handle(a: string): Promise<void> }).handle(action)
 }
 

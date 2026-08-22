@@ -236,6 +236,7 @@ export function startPlayerUI(): void {
     doubleTap: '●● double tap',
     swipeUp: '↑ swipe up',
     swipeDown: '↓ swipe down',
+    longPress: '◉ hold',
   }
 
   let gestureTimer: number | undefined
