@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The summary tab was still offered with the steward switched off.** The chat
+  view's chooser asked only whether the server runs a steward, so a device set
+  not to show the steward still carried a way into it - the same half-gate the
+  session list's button had. It now reads the switch too: with the steward off
+  these screens are the transcript and nothing else. The chooser was
+  deliberately independent, on the reasoning that a wide screen can choose and
+  the switch is only its default; on this device the switch means whether the
+  phone and tablet carry the steward at all, and the glasses are where a
+  question gets answered.
+
 ## [0.3.185] - 2026-08-22
 
 ### Fixed

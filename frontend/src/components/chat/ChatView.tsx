@@ -54,6 +54,10 @@ export function ChatView({
 	const stewardAvailable = useStewardEnabled();
 	const [stewardView] = useStewardView();
 
+	// The switch says whether this device shows the steward at all, so with it
+	// off there is nothing here to choose between.
+	const stewardOnScreen = stewardAvailable && stewardView;
+
 	/**
 	 * Which of the two this screen is showing.
 	 *
@@ -65,15 +69,14 @@ export function ChatView({
 	 * did.
 	 *
 	 * The narrow screen is the glasses, and the summary is for them. This one is
-	 * wide enough to choose, so it chooses. The global setting is the default
-	 * this opens on, not a cage.
+	 * wide enough to choose, so with the steward on screen it chooses.
 	 */
 	const [view, setView] = useState<"steward" | "raw">(stewardView ? "steward" : "raw");
 	useEffect(() => {
 		setView(stewardView ? "steward" : "raw");
 	}, [stewardView]);
 
-	const showSteward = stewardAvailable && view === "steward";
+	const showSteward = stewardOnScreen && view === "steward";
 
 	const { messages, isReady, conversationId, error } = useAgentConversation({
 		agent,
@@ -84,9 +87,7 @@ export function ChatView({
 		enabled: enabled && !showSteward,
 	});
 
-	const chooser = stewardAvailable ? (
-		<ViewChooser value={view} onChange={setView} />
-	) : null;
+	const chooser = stewardOnScreen ? <ViewChooser value={view} onChange={setView} /> : null;
 
 	if (showSteward) {
 		return (
