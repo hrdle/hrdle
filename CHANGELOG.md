@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.186] - 2026-08-22
+
 ### Fixed
 - **The summary tab was still offered with the steward switched off.** The chat
   view's chooser asked only whether the server runs a steward, so a device set
