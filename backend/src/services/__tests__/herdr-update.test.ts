@@ -7,10 +7,13 @@ import {
   buildHerdrSessionStopCommands,
   compareVersions,
   isBrewManagedPath,
+  isStrayDefaultServer,
   parseHerdrStatus,
   parseLatestManifest,
   parseRunningNamedSessions,
+  parseSystemdLoadState,
   planHerdrApply,
+  withStrayServerStop,
 } from '../herdr-update';
 
 /**
@@ -316,6 +319,73 @@ describe('buildHerdrSessionStopCommands', () => {
     const updateAt = commands.findIndex((cmd) => cmd.includes('update'));
     expect(commands[updateAt - 1].join(' ')).toBe('systemctl --user stop herdr');
     expect(commands[0]).toEqual(['herdr', 'session', 'stop', 'steward']);
+  });
+});
+
+/**
+ * Reading a crash-looping unit as "no supervisor" disabled the button on the
+ * one machine that needed it, and told the user herdr was unmanaged while
+ * systemd restarted it every two seconds.
+ */
+describe('parseSystemdLoadState', () => {
+  it('takes a loaded unit as the supervisor whatever state it is in', () => {
+    expect(parseSystemdLoadState('loaded\n')).toBe('systemd');
+  });
+
+  it('has no supervisor when the unit does not exist or is masked', () => {
+    expect(parseSystemdLoadState('not-found')).toBe('unmanaged');
+    expect(parseSystemdLoadState('masked')).toBe('unmanaged');
+    expect(parseSystemdLoadState('')).toBe('unmanaged');
+  });
+});
+
+describe('isStrayDefaultServer', () => {
+  /** A unit that is not active cannot be the parent of a server that answers. */
+  it('is stray when a server answers and the unit is not active', () => {
+    expect(isStrayDefaultServer('activating', true)).toBe(true);
+    expect(isStrayDefaultServer('failed', true)).toBe(true);
+    expect(isStrayDefaultServer('inactive', true)).toBe(true);
+  });
+
+  it('is not stray when the unit is running it', () => {
+    expect(isStrayDefaultServer('active', true)).toBe(false);
+  });
+
+  /** Nothing to stop, and stopping what is not there fails the whole apply. */
+  it('is not stray when no server answers at all', () => {
+    expect(isStrayDefaultServer('failed', false)).toBe(false);
+  });
+});
+
+describe('withStrayServerStop', () => {
+  /** After the supervisor's stop: any earlier and the supervisor is free to
+   *  start a replacement in the seconds that follow. */
+  it('stops the stray server immediately before the update', () => {
+    const commands = withStrayServerStop(
+      buildHerdrApplyCommands('systemd', '/u/herdr', 1000, 'install') ?? [],
+      '/u/herdr',
+    );
+    expect(commands).toEqual([
+      ['systemctl', '--user', 'stop', 'herdr'],
+      ['/u/herdr', 'server', 'stop'],
+      ['/u/herdr', 'update'],
+      ['systemctl', '--user', 'start', 'herdr'],
+    ]);
+  });
+
+  it('leaves a sequence with no update in it alone', () => {
+    const brew = buildHerdrApplyCommands('systemd', '/u/herdr', 1000, 'install', undefined, '/u/brew') ?? [];
+    expect(withStrayServerStop(brew, '/u/herdr')).toEqual(brew);
+  });
+
+  it('never starts the stray server again - the supervisor is what should hold that socket', () => {
+    const commands = withStrayServerStop(
+      buildHerdrApplyCommands('systemd', '/u/herdr', 1000, 'install') ?? [],
+      '/u/herdr',
+    );
+    expect(commands.filter((cmd) => cmd[0] === '/u/herdr' && cmd[1] === 'server')).toEqual([
+      ['/u/herdr', 'server', 'stop'],
+    ]);
   });
 });
 
