@@ -12,7 +12,7 @@ import {
 } from "../../shared/types";
 import { MobileDashboard } from "./components/dashboard/MobileDashboard";
 import { StewardView } from "./components/steward/StewardView";
-import { useStewardEnabled } from "./hooks/useSteward";
+import { useStewardEnabled, useStewardView } from "./hooks/useSteward";
 import { DesktopLayout } from "./components/DesktopLayout";
 import { LoginForm } from "./components/LoginForm";
 import { Onboarding, useOnboarding } from "./components/Onboarding";
@@ -260,8 +260,12 @@ export function App() {
 	const [listDashboardOpen, setListDashboardOpen] = useState(false);
 	const [stewardOpen, setStewardOpen] = useState(false);
 	// A server setting, so it is asked once - a mode that appears while someone
-	// is looking at the screen is worse than one that waits for a reload.
+	// is looking at the screen is worse than one that waits for a reload. The
+	// switch beside it is this screen's: a steward the server runs is not one
+	// somebody asked to see.
 	const stewardEnabled = useStewardEnabled();
+	const [stewardView] = useStewardView();
+	const stewardOnScreen = stewardEnabled && stewardView;
 
 	// The session list can name a pane, not just a workspace. The layout owns
 	// which pane is in front, so this is a request rather than a value.
@@ -704,14 +708,16 @@ export function App() {
 					onToggleDashboard={() => setListDashboardOpen((v) => !v)}
 					dashboardOpen={listDashboardOpen}
 					onToggleSteward={
-						stewardEnabled ? () => setStewardOpen((v) => !v) : undefined
+						stewardOnScreen ? () => setStewardOpen((v) => !v) : undefined
 					}
 					stewardOpen={stewardOpen}
 				/>
 				{listDashboardOpen && (
 					<MobileDashboard onClose={() => setListDashboardOpen(false)} />
 				)}
-				{stewardOpen && <StewardView onClose={() => setStewardOpen(false)} />}
+				{stewardOnScreen && stewardOpen && (
+					<StewardView onClose={() => setStewardOpen(false)} />
+				)}
 				{showSessionListOnboarding && (
 					<Onboarding
 						type="sessionList"

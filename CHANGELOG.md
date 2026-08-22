@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **The steward's button stayed in the header after its view was switched
+  off.** Two screens - the tablet's session modal and the phone's session list
+  - asked only whether the server runs a steward, and never read the switch
+  beside it, so turning the view off in the dashboard left the button there to
+  open a mode nobody had asked to see. Every other screen already required
+  both. The panel each one opens is gated the same way, so a view switched off
+  while it is open cannot strand it on screen.
+
 ## [0.3.184] - 2026-08-20
 
 ### Changed
