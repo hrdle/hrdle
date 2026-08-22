@@ -181,6 +181,50 @@ export function parseRunningNamedSessions(raw: string): string[] {
 }
 
 /**
+ * Whether a systemd unit exists to drive, from
+ * `systemctl --user show herdr -p LoadState --value`.
+ *
+ * `is-active` was the wrong question. A unit restarting every two seconds
+ * answers `activating`, so hrdle read the one machine that needed the button
+ * most as having no supervisor at all - it greyed the button out and told the
+ * user herdr was unmanaged while systemd was busy restarting it 6942 times.
+ * What the apply needs to know is whether `systemctl stop` and `start` reach
+ * something, and a loaded unit is exactly that, running or not.
+ */
+export function parseSystemdLoadState(raw: string): HerdrSupervisor {
+  return raw.trim() === 'loaded' ? 'systemd' : 'unmanaged';
+}
+
+/**
+ * Whether the default server answering the socket is one the supervisor does
+ * not own.
+ *
+ * A unit that is not active cannot be the parent of a server that is
+ * answering, so that server was started from somewhere else - a login shell,
+ * or a herdr client auto-starting one on finding no socket. `systemctl stop`
+ * does not touch it and `herdr update` will not replace the binary while it
+ * answers, so an apply that ignores it stops the unit, changes nothing, and
+ * starts the unit again into a socket that is already taken.
+ */
+export function isStrayDefaultServer(unitActiveState: string, serverRunning: boolean): boolean {
+  return serverRunning && unitActiveState.trim() !== 'active';
+}
+
+/**
+ * The stray server's stop, placed immediately before `herdr update` - after
+ * the supervisor's own stop, because stopping it any earlier leaves the
+ * supervisor free to start a replacement in the two seconds that follow.
+ *
+ * Nothing starts it again: the supervisor's `start` at the end of the sequence
+ * is what the machine should have had holding that socket all along.
+ */
+export function withStrayServerStop(commands: string[][], herdrPath: string): string[][] {
+  const updateAt = commands.findIndex((cmd) => cmd[0] === herdrPath && cmd[1] === 'update');
+  if (updateAt < 0) return commands;
+  return [...commands.slice(0, updateAt), [herdrPath, 'server', 'stop'], ...commands.slice(updateAt)];
+}
+
+/**
  * Stops for the servers the supervisor does not own. `herdr update` replaces
  * nothing while *any* herdr server answers — it lists them, says `Herdr was
  * not updated.` and exits 0 — and the steward keeps a session of its own
@@ -434,6 +478,23 @@ export class HerdrUpdateService {
     };
   }
 
+  /**
+   * The unit's `ActiveState`, to tell a server the supervisor is running from
+   * one that merely holds its socket. systemd only: launchd's equivalent needs
+   * its own reading, and a wrong guess there stops a server nothing restarts.
+   */
+  private async readSystemdActiveState(): Promise<string> {
+    try {
+      const { exitCode, stdout } = await runCapture(
+        ['systemctl', '--user', 'show', 'herdr', '-p', 'ActiveState', '--value'],
+        applyEnv(),
+      );
+      return exitCode === 0 ? stdout.trim() : '';
+    } catch {
+      return '';
+    }
+  }
+
   /** Sessions with a server up that the supervisor does not own. */
   private async readRunningNamedSessions(): Promise<string[]> {
     try {
@@ -524,8 +585,16 @@ export class HerdrUpdateService {
         ]);
         return exitCode === 0 ? 'launchd' : 'unmanaged';
       }
-      const { stdout } = await runCapture(['systemctl', '--user', 'is-active', 'herdr']);
-      return stdout.trim() === 'active' ? 'systemd' : 'unmanaged';
+      const { stdout } = await runCapture([
+        'systemctl',
+        '--user',
+        'show',
+        'herdr',
+        '-p',
+        'LoadState',
+        '--value',
+      ]);
+      return parseSystemdLoadState(stdout);
     } catch {
       return 'unmanaged';
     }
@@ -594,7 +663,18 @@ export class HerdrUpdateService {
       mode === 'install' && !brewPath
         ? buildHerdrSessionStopCommands(herdrBin(), await this.readRunningNamedSessions())
         : [];
-    const commands = [...prelude, ...supervised];
+
+    // A default server the supervisor is not running has to be stopped by
+    // name; `systemctl stop` reaches only what the unit itself started.
+    const stray =
+      mode === 'install' &&
+      !brewPath &&
+      supervisor === 'systemd' &&
+      isStrayDefaultServer(await this.readSystemdActiveState(), before.serverVersion !== undefined);
+    const commands = [
+      ...prelude,
+      ...(stray ? withStrayServerStop(supervised, herdrBin()) : supervised),
+    ];
 
     onPhase?.('restarting');
     let output = '';

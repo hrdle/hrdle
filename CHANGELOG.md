@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **hrdle called a crash-looping herdr "unmanaged".** The supervisor probe read
+  `systemctl is-active`, and a unit systemd is restarting every two seconds
+  answers `activating` - so on the one machine that needed the update button,
+  hrdle greyed it out and advised restarting herdr by hand while systemd was
+  busy restarting it 6942 times. What the apply needs to know is whether
+  `systemctl stop` and `start` reach something, so it asks `LoadState` instead:
+  a loaded unit is a supervisor, running or not.
+- **An apply could not fix a server the supervisor had lost.** A herdr server
+  started outside the unit - from a login shell, or by a herdr client finding
+  no socket - keeps answering through `systemctl stop`, so the update refused
+  to replace the binary and the unit was started again into a socket already
+  taken. The apply now recognises a default server the unit cannot be running
+  (it answers while the unit is not active) and stops it by name, between the
+  supervisor's stop and the update. Nothing starts it again: the supervisor's
+  own start is what should be holding that socket.
 - **The steward's button stayed in the header after its view was switched
   off.** Two screens - the tablet's session modal and the phone's session list
   - asked only whether the server runs a steward, and never read the switch
