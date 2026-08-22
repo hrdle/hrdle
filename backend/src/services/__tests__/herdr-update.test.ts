@@ -5,6 +5,7 @@ import {
   buildHerdrApplyCommands,
   buildHerdrRestoreCommand,
   buildHerdrSessionStopCommands,
+  brewBinaryForCellarPath,
   compareVersions,
   isBrewManagedPath,
   isStrayDefaultServer,
@@ -425,6 +426,28 @@ describe('isBrewManagedPath', () => {
     expect(isBrewManagedPath('/usr/local/bin/herdr')).toBe(false);
     // Another formula's Cellar is not herdr's.
     expect(isBrewManagedPath('/opt/homebrew/Cellar/other/1.0/bin/herdr')).toBe(false);
+  });
+});
+
+/**
+ * An Apple Silicon machine with a leftover Intel Homebrew has two `brew`s, and
+ * the service PATH lists `/usr/local/bin` first — so the one on PATH upgraded
+ * nothing and said `Error: herdr not installed`. Only the prefix the Cellar
+ * sits in owns the formula.
+ */
+describe('brewBinaryForCellarPath', () => {
+  it('derives brew from the prefix the Cellar sits in', () => {
+    expect(brewBinaryForCellarPath('/opt/homebrew/Cellar/herdr/0.8.2/bin/herdr')).toBe(
+      '/opt/homebrew/bin/brew',
+    );
+    expect(brewBinaryForCellarPath('/usr/local/Cellar/herdr/0.8.2/bin/herdr')).toBe('/usr/local/bin/brew');
+    expect(brewBinaryForCellarPath('/home/linuxbrew/.linuxbrew/Cellar/herdr/0.8.2/bin/herdr')).toBe(
+      '/home/linuxbrew/.linuxbrew/bin/brew',
+    );
+  });
+
+  it('has nothing to derive from outside a Cellar', () => {
+    expect(brewBinaryForCellarPath('/usr/local/bin/herdr')).toBeNull();
   });
 });
 

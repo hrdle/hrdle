@@ -277,6 +277,31 @@ function formatSpeed(bps: number): string {
  * as "the terminal won't connect". Applying costs every running command, so
  * the restart happens only when the user presses this button.
  */
+const APPLY_POLL_MS = 2000;
+/** Long enough for a bottle download on a slow link; short of forever. */
+const APPLY_POLL_LIMIT_MS = 15 * 60 * 1000;
+
+/**
+ * Waits out an apply the server answered 202 to, returning its error or null.
+ * Asked for rather than pushed because a reload mid-update must still be able
+ * to find out how it went.
+ */
+async function waitForHerdrApply(): Promise<string | null> {
+	const deadline = Date.now() + APPLY_POLL_LIMIT_MS;
+	while (Date.now() < deadline) {
+		await new Promise((resolve) => setTimeout(resolve, APPLY_POLL_MS));
+		try {
+			const res = await authFetch(`${API_BASE}/api/herdr/apply-status`);
+			if (!res.ok) continue;
+			const body = await res.json();
+			if (!body.applying) return (body.error as string | null) ?? null;
+		} catch {
+			// The restart drops connections; keep asking.
+		}
+	}
+	return null;
+}
+
 function HerdrUpdateNotice({
 	status,
 	allowApply,
@@ -301,6 +326,8 @@ function HerdrUpdateNotice({
 				const body = await res.json().catch(() => ({}));
 				throw new Error(body.error || `HTTP ${res.status}`);
 			}
+			const failure = await waitForHerdrApply();
+			if (failure) throw new Error(failure);
 			onApplied?.();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Unknown error");
