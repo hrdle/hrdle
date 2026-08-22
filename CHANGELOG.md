@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.185] - 2026-08-22
+
 ### Fixed
 - **hrdle called a crash-looping herdr "unmanaged".** The supervisor probe read
   `systemctl is-active`, and a unit systemd is restarting every two seconds
