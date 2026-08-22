@@ -154,6 +154,17 @@ export function isBrewManagedPath(resolvedBinaryPath: string): boolean {
 }
 
 /**
+ * The `brew` that owns a Cellar path. PATH is not it: the service environment
+ * lists `/usr/local/bin` first, so on an Apple Silicon machine that still has
+ * an Intel Homebrew around, `Bun.which('brew')` hands back the one that
+ * answers `Error: herdr not installed`. Null when the path is not in a Cellar.
+ */
+export function brewBinaryForCellarPath(resolvedBinaryPath: string): string | null {
+  const at = resolvedBinaryPath.indexOf(`${sep}Cellar${sep}`);
+  return at < 0 ? null : join(resolvedBinaryPath.slice(0, at), 'bin', 'brew');
+}
+
+/**
  * Running herdr sessions other than the default one, from
  * `herdr session list --json`. Anything unusable reads as an empty list: a
  * server we cannot see costs a refused update, while guessing at one costs
@@ -339,7 +350,14 @@ export function buildHerdrRestoreCommand(
  */
 function applyEnv(): Record<string, string> {
   const { HERDR_SOCKET_PATH: _socket, HERDR_SESSION: _session, ...rest } = process.env;
-  return rest as Record<string, string>;
+  return {
+    ...(rest as Record<string, string>),
+    // A 30-day `brew cleanup` picked the middle of an update someone is
+    // watching, and the env hints only crowd out the line that says why it
+    // failed.
+    HOMEBREW_NO_INSTALL_CLEANUP: '1',
+    HOMEBREW_NO_ENV_HINTS: '1',
+  };
 }
 
 /** The last thing a command said, which is where herdr puts its reason. */
@@ -373,6 +391,7 @@ async function runCapture(
 }
 
 let applying = false;
+let lastApplyError: string | undefined;
 
 /**
  * Whether an install is running right now. Anything that keeps a herdr server
@@ -382,6 +401,15 @@ let applying = false;
  */
 export function herdrUpdateInProgress(): boolean {
   return applying;
+}
+
+/**
+ * Why the last apply failed, kept until the next one starts. The request that
+ * asked for it is long gone by then — an install runs for minutes — so this is
+ * the only place the reason is still readable.
+ */
+export function lastHerdrApplyError(): string | undefined {
+  return lastApplyError;
 }
 
 export class HerdrUpdateService {
@@ -556,8 +584,8 @@ export class HerdrUpdateService {
 
   /**
    * The `brew` binary to upgrade herdr with, or undefined when herdr is not
-   * brew-managed. Falls back from PATH to `<prefix>/bin/brew` derived from the
-   * Cellar, for service environments that never saw the brew shellenv.
+   * brew-managed. The Cellar's own prefix comes first and PATH is the
+   * fallback, never the other way round.
    */
   private async detectBrewPath(): Promise<string | undefined> {
     try {
@@ -565,11 +593,9 @@ export class HerdrUpdateService {
       if (!binary) return undefined;
       const resolved = await realpath(binary);
       if (!isBrewManagedPath(resolved)) return undefined;
-      const onPath = Bun.which('brew');
-      if (onPath) return onPath;
-      const prefix = resolved.slice(0, resolved.indexOf(`${sep}Cellar${sep}`));
-      const candidate = join(prefix, 'bin', 'brew');
-      return (await Bun.file(candidate).exists()) ? candidate : undefined;
+      const owner = brewBinaryForCellarPath(resolved);
+      if (owner && (await Bun.file(owner).exists())) return owner;
+      return Bun.which('brew') ?? undefined;
     } catch {
       return undefined;
     }
@@ -608,8 +634,14 @@ export class HerdrUpdateService {
    */
   async apply(onPhase?: (phase: 'restarting' | 'restored' | 'failed') => void): Promise<HerdrApplyResult> {
     applying = true;
+    lastApplyError = undefined;
     try {
-      return await this.runApply(onPhase);
+      const result = await this.runApply(onPhase);
+      lastApplyError = result.ok ? undefined : result.error;
+      return result;
+    } catch (err) {
+      lastApplyError = err instanceof Error ? err.message : String(err);
+      throw err;
     } finally {
       applying = false;
     }
