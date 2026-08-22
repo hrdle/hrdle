@@ -64,7 +64,7 @@ test.describe('steward mode', () => {
   });
 
   test('opens the thread from the session list', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
 
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
@@ -84,6 +84,7 @@ test.describe('steward mode', () => {
     await bootApp(page, {
       steward: {
         enabled: true,
+        view: true,
         thread: [
           { id: 's1', at: 1, role: 'steward', kind: 'notify', text: 'w5Qのテストが落ちています', sessionId: 'w5Q' },
           { id: 'o1', at: 2, role: 'steward', kind: 'notify', text: '3件が止まっています' },
@@ -142,7 +143,7 @@ test.describe('steward mode', () => {
       });
     });
 
-    await bootApp(page, { ownsWebSocket: true, steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { ownsWebSocket: true, steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -150,7 +151,7 @@ test.describe('steward mode', () => {
   });
 
   test('a question offers its choices, and a way to walk away', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -161,7 +162,7 @@ test.describe('steward mode', () => {
   });
 
   test('answering posts the choice against the question', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -175,7 +176,7 @@ test.describe('steward mode', () => {
   });
 
   test('has a composer, unlike the read-only chat view', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -200,7 +201,7 @@ test.describe('tracing a summary back', () => {
 
   // A summary is only worth trusting if the thing it summarises can be reached.
   test('opens the real transcript from the turn that cites it', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     // After bootApp: a later route wins in Playwright, and bootApp's `**/api/**`
     // would otherwise answer this one with `{}`.
     await page.route('**/api/sessions/history/sess-1/conversation*', (route) =>
@@ -215,7 +216,7 @@ test.describe('tracing a summary back', () => {
   });
 
   test('a turn with no source offers nothing to open', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: [THREAD[0]] } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: [THREAD[0]] } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -234,7 +235,7 @@ test.describe('steward mode on a tablet', () => {
   });
 
   test('the entry point is in the session modal', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
 
     await page.getByTitle('スチュワード').click();
@@ -254,7 +255,7 @@ test.describe('steward mode on a tablet', () => {
   });
 
   test('a detail is behind a tap here too', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -266,7 +267,7 @@ test.describe('steward mode on a tablet', () => {
   // A conversation is read as a sequence of moments, and until this there was
   // nothing on any turn to say which moment.
   test('every turn says when it was said', async ({ page }) => {
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -745,8 +746,9 @@ test.describe('with the steward off, nothing changes', () => {
     await page.locator('[data-onboarding="session-list"]').click();
 
     await expect(page.getByText('この行は出てはいけない')).toHaveCount(0);
-    // The entry point is still there - the thread does not depend on the view.
-    await expect(page.getByTitle('スチュワード')).toBeVisible();
+    // Nor the way in. The switch says whether this device shows the steward at
+    // all, and a question left waiting is answered from the glasses.
+    await expect(page.getByTitle('スチュワード')).toHaveCount(0);
   });
 });
 
@@ -870,23 +872,25 @@ test.describe('two agents, on a tablet', () => {
 test.describe('the camera', () => {
   test('is offered beside the library on a touch device', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === 'responsive-desktop', 'no camera on a desktop pointer');
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
-    await expect(page.getByRole('button', { name: '写真を撮る' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '画像を添付' })).toBeVisible();
+    // The list keeps its own composer behind the thread, so the same component
+    // is mounted twice: the thread's is the one on top.
+    await expect(page.getByRole('button', { name: '写真を撮る' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: '画像を添付' }).first()).toBeVisible();
   });
 
   test('opens the camera rather than the library', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === 'responsive-desktop', 'no camera on a desktop pointer');
-    await bootApp(page, { steward: { enabled: true, thread: THREAD } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: THREAD } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
     // The attribute is the whole feature: without it the host opens its file
     // sheet and the button is a duplicate.
-    await expect(page.locator('input[type=file][capture="environment"]')).toHaveCount(1);
+    await expect(page.locator('input[type=file][capture="environment"]').first()).toBeAttached();
   });
 });
 
@@ -904,7 +908,7 @@ test.describe('the newest reply', () => {
 
   test('opens with its detail up, and the one before it stays shut', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === 'responsive-desktop', 'the thread opens from the phone list');
-    await bootApp(page, { steward: { enabled: true, thread: TWO_DETAILS } });
+    await bootApp(page, { steward: { enabled: true, view: true, thread: TWO_DETAILS } });
     await page.locator('[data-onboarding="session-list"]').click();
     await page.getByTitle('スチュワード').click();
 
@@ -923,6 +927,7 @@ test.describe('the newest reply', () => {
     await bootApp(page, {
       steward: {
         enabled: true,
+        view: true,
         thread: [...TWO_DETAILS, { id: 'u1', at: 3, role: 'user', kind: 'reply', text: 'ありがとう' }],
       },
     });
@@ -1091,6 +1096,7 @@ test.describe('a question waiting, seen from the list', () => {
     await bootApp(page, {
       steward: {
         enabled: true,
+        view: true,
         asks: [
           {
             id: 'g1',

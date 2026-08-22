@@ -45,6 +45,8 @@ let retryTimer: number | null = null;
 let pingTimer: number | null = null;
 let retryAttempt = 0;
 let subscribers = 0;
+/** Whether the socket has delivered a snapshot; see `seedStewardThread`. */
+let liveSnapshot = false;
 
 const RETRY_INITIAL_MS = 3_000;
 const RETRY_MAX_MS = 30_000;
@@ -76,6 +78,7 @@ function apply(msg: MuxServerMessage) {
 		case "steward-snapshot":
 			state.thread = msg.thread;
 			state.lines = msg.lines;
+			liveSnapshot = true;
 			break;
 		case "steward-thread":
 			upsertThread(msg.item);
@@ -176,6 +179,10 @@ function close() {
 	ws?.close();
 	ws = null;
 	retryAttempt = 0;
+	// The guard covers one subscription. With nobody listening the next screen
+	// starts again from REST, which is what a blocked socket has to fall back
+	// on - and a live snapshot arms it again the moment one arrives.
+	liveSnapshot = false;
 }
 
 export function subscribeSteward(onChange: () => void): () => void {
@@ -204,6 +211,12 @@ export function seedStewardThread(
 	thread: StewardThreadItem[],
 	lines: StewardSessionLine[],
 ): void {
+	// REST seeds the first paint, and a screen opened later starts its fetch
+	// after the socket has been delivering for a while - so this can arrive
+	// behind live items and, replacing outright, drop them. What the socket has
+	// sent is never older than what a fetch answers, so once it has spoken this
+	// has nothing to add.
+	if (liveSnapshot) return;
 	state.thread = thread;
 	state.lines = lines;
 	publish();

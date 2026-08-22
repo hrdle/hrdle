@@ -20,6 +20,21 @@ All notable changes to this project will be documented in this file.
   (it answers while the unit is not active) and stops it by name, between the
   supervisor's stop and the update. Nothing starts it again: the supervisor's
   own start is what should be holding that socket.
+- **The steward's button stayed in the header after its view was switched
+  off.** Two screens - the tablet's session modal and the phone's session list
+  - asked only whether the server runs a steward, and never read the switch
+  beside it, so turning the view off in the dashboard left the button there to
+  open a mode nobody had asked to see. Every other screen already required
+  both. The panel each one opens is gated the same way, so a view switched off
+  while it is open cannot strand it on screen. The switch now means what it
+  says on a phone or tablet - the steward is shown, or it is not - and a
+  question left waiting is answered from the glasses.
+- **A live thread item could be dropped by the fetch that seeded the screen.**
+  REST seeds the first paint, so a screen opened while the socket has already
+  been delivering finishes its fetch afterwards and replaced the thread with
+  the older answer. The seed now stands down once the socket has sent a
+  snapshot, and arms again when the last screen closes - a blocked socket still
+  falls back to REST.
 
 ## [0.3.184] - 2026-08-20
 
