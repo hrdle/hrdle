@@ -244,3 +244,52 @@ describe('what the host sends reaches the app', () => {
     expect(c.state.screenOff).toBeFalsy()
   })
 })
+
+describe('a panel darkened on request is still drawn to', () => {
+  /**
+   * The entry exists because the host's own screen-off backgrounds this app,
+   * so a notice arriving while the panel is dark is received and never drawn.
+   * Choosing an entry of the host's menu backgrounds it too - measured on
+   * device, the exit lands within a second - so taken at face value the entry
+   * would fail at exactly the thing it was added for.
+   */
+  test('the exit that follows the choice does not stop the drawing', () => {
+    const c = reading()
+    c.menuItem(MENU_SLEEP_ID)
+    c.onForegroundExit()
+    expect((c as unknown as { foreground: boolean }).foreground).toBe(true)
+  })
+
+  test('and a notice arriving then reaches the panel', () => {
+    let painted = 0
+    const c = new GlassesController({
+      ...platform(),
+      render() { painted++ },
+    } as unknown as GlassesPlatform)
+    c.state.sessions = [{ id: 's1', name: 'one', state: 'idle' }] as GlassesController['state']['sessions']
+    c.state.sessionIndex = 0
+    c.state.mode = 'conversation'
+    c.menuItem(MENU_SLEEP_ID)
+    c.onForegroundExit()
+    painted = 0
+    ;(c as unknown as { wake(render: boolean): void }).wake(true)
+    expect(painted).toBeGreaterThan(0)
+  })
+
+  test('leaving for something else is still leaving', () => {
+    // The window is what separates the two. Past it, an exit is the wearer
+    // going somewhere, and drawing into a panel that is not ours is BLE
+    // traffic reaching nobody.
+    const c = reading()
+    c.menuItem(MENU_SLEEP_ID)
+    ;(c as unknown as { menuItemAt: number }).menuItemAt = Date.now() - 60_000
+    c.onForegroundExit()
+    expect((c as unknown as { foreground: boolean }).foreground).toBe(false)
+  })
+
+  test('an exit with no menu choice behind it is taken as it comes', () => {
+    const c = reading()
+    c.onForegroundExit()
+    expect((c as unknown as { foreground: boolean }).foreground).toBe(false)
+  })
+})

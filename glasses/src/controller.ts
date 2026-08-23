@@ -316,19 +316,13 @@ interface ReplyTarget {
 export const MIC_SAMPLE_RATE = 16000
 
 /**
- * A long press this soon after a tap is the host's menu being opened.
+ * How long after a menu choice a "gone to the background" is the menu closing.
  *
- * The glasses OS answers `tap` then long press with its own menu, and it
- * delivers both to the app on the way past. Acting on that long press would
- * start a recording every time the wearer reached for the OS menu - and the
- * recording would then be hidden behind the menu that prompted it.
- *
- * Measured on device: the two arrive about a second apart when a person does
- * it deliberately, so the window is generous. The cost of it being too wide is
- * one deliberate long press ignored right after a tap; the cost of it being
- * too narrow is a recording nobody asked for.
+ * Measured on device: the host reports the exit within a second of the entry
+ * being chosen. Wide enough to cover that, and short enough that a wearer who
+ * leaves for another app in the same breath is still recognised as leaving.
  */
-const MENU_PREFIX_MS = 1200
+const MENU_CLOSE_MS = 2000
 
 /**
  * One phrase of the draft. `text` is null until the transcription answers.
@@ -906,7 +900,9 @@ export class GlassesController {
    * The timeout answers "I stopped looking"; this answers "not now" - a
    * wearer who is mid-conversation with a person and does not want a lit
    * panel between them. It is the same state either way, so a notice still
-   * relights it and any ring input still wakes it.
+   * relights it and a double tap still wakes it. Only that one does: every
+   * other gesture is swallowed while the panel is dark, so a sleeve against
+   * the ring in a pocket lights nothing.
    *
    * Sleeping is refused on the screens that ARE the input: darkening the
    * panel mid-utterance would leave the wearer speaking into nothing.
@@ -947,8 +943,16 @@ export class GlassesController {
    * is the divergence that only ever reproduces on a device.
    */
   menuItem(itemID: number): void {
+    this.menuItemAt = Date.now()
     if (itemID === MENU_SLEEP_ID) this.sleepNow()
   }
+
+  /**
+   * When the wearer last chose an entry of the host's menu.
+   *
+   * Read by `onForegroundExit`, which the host sends immediately afterwards.
+   */
+  private menuItemAt = 0
 
   /**
    * Show the next thing that does not fit.
@@ -1144,6 +1148,20 @@ export class GlassesController {
   }
 
   onForegroundExit(): void {
+    // The host sends this the moment an entry of its own menu is chosen, and
+    // by then the menu has closed and this app is what the wearer is looking
+    // at. Taken at face value it stops the drawing that the entry exists to
+    // make possible: the panel darkened on request is still ours to relight
+    // when something arrives, and a wearer who chose that entry and then saw
+    // a notice never drawn is exactly the case the host's own screen-off
+    // already fails at. Measured: the entry is followed by this within a
+    // second, and the panel then stayed dark through a notice it had already
+    // decided to show.
+    //
+    // The host's account of what is in front is unreliable in the other
+    // direction too - `onForegroundEnter` exists because gestures arrive
+    // while this app believes it is hidden.
+    if (Date.now() - this.menuItemAt < MENU_CLOSE_MS) return
     // Stop drawing. The host consumes render calls made from the background
     // and drops them before the display, so everything sent from here is BLE
     // traffic that reaches nobody — and a WebView burning its budget on that
@@ -1186,6 +1204,21 @@ export class GlassesController {
    *  where the whole point of the exit buttons is seeing that it took. */
   isStopped(): boolean {
     return this.stopped
+  }
+
+  /**
+   * Whether this app is still drawing.
+   *
+   * For the log. The host's own last word on the subject is traced as it
+   * arrives, and the two disagree by design - an exit that follows a menu
+   * choice is the menu closing - so the heartbeat carries this one, which is
+   * what actually decides whether a panel gets written to. It is on the
+   * heartbeat and the exit line rather than left to the transitions, because
+   * a death with no transition before it cannot otherwise be read as the
+   * front dying or the back dying long afterwards.
+   */
+  isForeground(): boolean {
+    return this.foreground
   }
 
   /**
@@ -1293,11 +1326,19 @@ export class GlassesController {
    * has a beginning and an end, and because the tap it replaces was the input
    * standing between a wearer and the host's own menu.
    *
-   * A long press that follows a tap within `MENU_PREFIX_MS` is the host's menu
-   * being opened and is not ours to act on.
+   * Taken as it arrives, including the one that opens the host's own menu
+   * (`tap` then long press, both of which reach the app). Telling those apart
+   * by the gap since the tap cannot work - measured across ten days of the
+   * event log, deliberate holds after a tap are spread continuously from 0.9
+   * to 3 seconds with the menu's own among them - and the attempt cost the
+   * first hold of every dictation, since the tap that opens the voice screen
+   * is itself the tap being counted from.
+   *
+   * What makes that affordable is the rule any screen giving this gesture a
+   * meaning has to keep: a press nobody meant must leave nothing behind. Here
+   * a phrase with nothing said in it sends no request and adds no line.
    */
   longPress(): void {
-    if (this.lastGestureKind === 'tap' && Date.now() - this.lastGestureAt < MENU_PREFIX_MS) return
     void this.handle('longPress')
   }
 
@@ -1309,9 +1350,8 @@ export class GlassesController {
    * a short one closes the moment they let go rather than waiting out a
    * silence rule they cannot see.
    *
-   * Only meaningful while a phrase is open. A release that follows the menu
-   * prefix, or one arriving on a screen that never started listening, has
-   * nothing to close.
+   * Only meaningful while a phrase is open. One arriving on a screen that
+   * never started listening has nothing to close.
    */
   longPressEnd(): void {
     if (this.state.mode !== 'voice' || !this.listening) return

@@ -137,19 +137,56 @@ describe('arming a phrase', () => {
   })
 })
 
-describe('the host menu keeps its prefix', () => {
-  test('a hold within a moment of a tap is the menu opening, not speech', async () => {
-    // The glasses OS answers `tap` then long press with its own menu and hands
-    // both to the app on the way past. The tap opens the voice screen, which
-    // is its own business; the hold must not then start recording behind the
-    // menu that prompted it.
-    const { c, d } = await recording()
+describe('a hold that arrives unasked', () => {
+  /**
+   * The glasses OS opens its own menu on `tap` then long press and hands both
+   * to the app on the way past, so a hold can always be the wearer reaching
+   * for the menu rather than speaking. There is no way to tell: the gap
+   * between the two is the same gap a person leaves when they tap into this
+   * screen and start talking.
+   *
+   * So the hold is taken either way, and what makes that safe is that an
+   * unmeant one leaves nothing behind.
+   */
+  test('the hold that follows the tap that opened the screen is speech', async () => {
+    // Through `tap()` rather than `startVoice` directly: the tap that opens
+    // this screen is the one a wearer makes, and it is the one a rule counting
+    // from the last tap would have counted from - dropping the first hold of
+    // every dictation while the panel said "Hold to speak".
+    const c = new GlassesController(platform())
+    c.state.sessions = [{ id: 's1', name: 'one', state: 'idle' }] as GlassesController['state']['sessions']
+    c.state.sessionIndex = 0
+    c.state.mode = 'conversation'
+    const d = inner(c)
+    c.tap()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(c.state.mode as string).toBe('voice')
+    c.longPress()
+    expect(d.listening).toBe(true)
+    feed(d, 5, SPEECH)
+    expect(d.phraseSamples).toBeGreaterThan(0)
+  })
+
+  test('one nobody spoke into leaves no phrase and no request', async () => {
+    // The wearer reached for the OS menu from this screen. A phrase opened
+    // behind it and closed when they lifted their finger to choose, and the
+    // draft is as they left it.
+    let asked = 0
+    const c = new GlassesController({
+      ...platform(),
+      async transcribeAudio() { asked++; return 'said' },
+    } as unknown as GlassesPlatform)
+    c.state.sessions = [{ id: 's1', name: 'one', state: 'idle' }] as GlassesController['state']['sessions']
+    c.state.sessionIndex = 0
+    const d = inner(c)
+    await d.startVoice({ sessionId: 's1' })
+    d.longPress()
+    feed(d, 10, 0)
     d.longPressEnd()
     await new Promise((r) => setTimeout(r, 0))
-    c.tap() // on the voice screen this is "done"
-    c.longPress()
-    await new Promise((r) => setTimeout(r, 0))
-    expect(d.listening).toBe(false)
+    expect(asked).toBe(0)
+    expect(c.state.voicePhrases ?? []).toHaveLength(0)
+    expect(c.state.voiceText ?? '').toBe('')
   })
 })
 
