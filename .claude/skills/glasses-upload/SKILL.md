@@ -290,6 +290,90 @@ the testing group, nor the store listing.
     agent-browser --session-name evenhub close
     ```
 
+## The store listing rides along with the build
+
+Editing the listing — app name, tagline, screenshots, description — is not a
+separate act from shipping a build. The moment anything is edited, the
+`Publish to hub` panel grows a `Listing information / Updated N ago / Basic Info
+/ Preview / Description` line, and `Submit for review` sends the build **and
+those edits together**.
+
+That is why the panel locks: between a submission and its promotion, the `Edit`
+controls for Basic info, Preview and Description are all `cursor-not-allowed`.
+**Approval alone does not unlock them — the promotion does.** They look like
+ordinary links while disabled, so a click that does nothing reads as a broken
+page; the way to tell is
+
+```bash
+agent-browser --session-name evenhub eval '(()=>{const e=document.elementFromPoint(x,y); return (e?.className||"").toString().includes("cursor-not-allowed");})()'
+```
+
+**So the order for changing the listing is: promote → edit the listing → submit
+the next build.** Miss that window and it waits a whole review round. Measured
+on 2026-08-15 and again on 2026-08-16.
+
+Field limits, all of which truncate silently:
+
+| Field | Limit |
+|---|---|
+| App name | 20 |
+| Tagline | 50 |
+| Description | 2000 |
+| Build changelog | 500 |
+
+`fill` reports success either way, so **read the value back and check its
+length** after every one of them. A tagline written at 62 characters arrived as
+`...without openin`, and a changelog written at exactly 500 lost its last four
+words — both caught only by reading back.
+
+## While a review is in flight
+
+- **The submitted build cannot be swapped.** `Submit for review` fails with
+  `Failed to submit / invalid parameter` and a reload restores the old
+  submission. There is no withdraw button either. Wait for `Approved`
+- **Swapping it afterwards erases the previous build's approval record** from
+  the panel — the approval is displayed against whichever build is selected,
+  not kept per build
+- Uploading a new ehpk and even promoting it to Beta does **not** disturb the
+  review: it is attached to the submitted build, not to whatever is Beta
+
+## When to stop at Beta
+
+The usual run is upload → Beta → submit in one sitting. Stop at Beta and have
+the build **worn** first when the change is one a browser cannot judge:
+
+- the input is held differently (0.0.84's push-to-talk)
+- a gesture is remapped
+- anything whose cost is comfort rather than correctness
+
+The simulator settles state transitions and nothing else. 0.0.84 is the worked
+example: every screen and every transition checked out here, and the defect that
+mattered — the first hold of each dictation being swallowed by a menu guard —
+only existed for a finger that presses within a second of tapping. A tester who
+pauses to set something up steps over it without noticing.
+
+## The review watcher, and delegating a promotion
+
+`evenhub-review-watch.timer` (every two hours) runs
+`/home/m0a/linux/evenhub-review-watch.sh`, which reads `Review status` directly
+and wakes a `claude -p` session only when there is something to decide. On
+`Approved` it notifies the phone and asks, through `droidctl confirm`, whether
+to promote. **No answer means no promotion.**
+
+A same-status approval is re-raised every six hours (`remindedat`), because a
+lingering `Approved` is itself proof nobody has acted — promotion makes the
+whole `Review status` section disappear. Without that, an approval that was
+missed once stayed silent indefinitely: v0.0.83 sat approved for two days behind
+24 consecutive "already reported" ticks.
+
+**To hand the promotion over for one build** — the user has said to take it all
+the way to Public and does not want to be asked at 3am — add a paragraph to the
+prompt inside that script naming the version, saying to skip `droidctl confirm`,
+promote, and report afterwards with `droidctl notify`, and **saying to delete
+that paragraph once promoted**. Done for v0.0.82 and v0.0.84. It is a paragraph
+rather than a flag on purpose: it names one version, it explains itself to
+whoever reads the script next, and it removes itself.
+
 ## Important Notes
 
 - **Setting the viewport is required**: agent-browser defaults to 393x852
