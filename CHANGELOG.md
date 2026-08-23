@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.188] - 2026-08-23
+
+### Changed
+- **Dictation on the glasses is push to talk.** A recording was a single
+  attempt at a sentence, and where a phrase stopped was decided by four rules
+  approximating one thing the wearer already knew: a second and a half of
+  quiet, a ten-second floor so a pause did not spend a request of its own, a
+  downward swipe to cut a phrase when that floor was in the way, and a
+  thirty-second self-stop. In a room with any noise in it the quiet never
+  arrived and phrases ran on; a pause where the wearer was thinking was
+  recorded and transcribed as speech. All four are gone. A press says where a
+  phrase begins and its release says where it ends, and nothing is taken in
+  between phrases - so the gap where the wearer is thinking is theirs rather
+  than the room's. A tap opens the screen and the hold opens the microphone,
+  and the gap between the two steps is where a line break goes, which is the
+  one character dictation cannot produce. Thanks to @Chapapon (#534)
+  - **One entry is added to the host's own menu**, darkening the panel without
+    backgrounding this app - the host's own screen-off backgrounds it, so a
+    notice arriving while the panel was dark was received and never drawn
+  - **Backgrounding no longer discards the draft.** The host's menu backgrounds
+    this app, so reaching for it cost a draft every time
+  - Fixed alongside: the idle timeout's disabled branch relit a panel the
+    wearer had just darkened by hand. The timeout is off by default, so that
+    branch ran on most installs every 2.5 seconds
+  - Needs SDK 0.0.14 and app 2.2.9. It reaches the G2 with a later glasses
+    build, not with this release
+
 ## [0.3.187] - 2026-08-23
 
 ### Fixed
