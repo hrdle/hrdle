@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.189] - 2026-08-23
+
+### Fixed
+- **Only this app's own menu entry holds the panel through the exit behind
+  it.** Choosing an entry of the glasses OS menu is followed by a
+  "gone to the background" from the host, and the Sleep entry added in 0.3.188
+  ignores that one for two seconds - the menu has closed and this app is what
+  the wearer is looking at, so the panel it darkened on request is still ours
+  to relight when a notice arrives. The window was armed by any entry the host
+  reported, including its own, and an exit swallowed for one of those is never
+  corrected: nothing arrives to correct it, so the app draws on behind
+  whatever replaced it and the microphone a voice screen opened stays open
+  under another app. The stamp now happens inside the branch that recognises
+  our entry
+  - Carried to the G2 by glasses build 0.0.84, which is in this release
+
 ## [0.3.188] - 2026-08-23
 
 ### Changed
