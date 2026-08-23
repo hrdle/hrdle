@@ -943,8 +943,17 @@ export class GlassesController {
    * is the divergence that only ever reproduces on a device.
    */
   menuItem(itemID: number): void {
+    // Stamped inside the branch, not ahead of it. The stamp arms the swallow
+    // in `onForegroundExit`, and what justifies swallowing that exit is a
+    // property only this entry has: the menu closes and the app comes back to
+    // the front, so the exit is a moment rather than a departure. The host's
+    // own entries do not come back, and an exit swallowed for one of those is
+    // never corrected - nothing arrives to correct it - so the app draws on
+    // behind whatever replaced it and the microphone `startVoice` opened stays
+    // open under another app.
+    if (itemID !== MENU_SLEEP_ID) return
     this.menuItemAt = Date.now()
-    if (itemID === MENU_SLEEP_ID) this.sleepNow()
+    this.sleepNow()
   }
 
   /**
