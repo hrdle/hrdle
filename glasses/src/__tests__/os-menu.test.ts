@@ -292,4 +292,16 @@ describe('a panel darkened on request is still drawn to', () => {
     c.onForegroundExit()
     expect((c as unknown as { foreground: boolean }).foreground).toBe(false)
   })
+
+  test("and neither is one behind an entry that is not ours", () => {
+    // The swallow is justified by a property only our entry has: the menu
+    // closes and the app comes back, so the exit is a moment. An entry of the
+    // host's own does not come back, and nothing arrives afterwards to correct
+    // a swallow taken on its behalf - the app would draw on behind whatever
+    // replaced it, with the microphone `startVoice` opened still open.
+    const c = reading()
+    c.menuItem(MENU_SLEEP_ID + 1)
+    c.onForegroundExit()
+    expect((c as unknown as { foreground: boolean }).foreground).toBe(false)
+  })
 })
