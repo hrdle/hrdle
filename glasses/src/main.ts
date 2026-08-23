@@ -231,7 +231,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       releaseHostResources()
     },
     onForegroundRegained() {
-      foreground = true
       trace('foreground: regained — a gesture arrived while we thought we were hidden')
       // Same reasoning as a real ENTER: the panel may have been taken down and
       // put back while we believed we were hidden, so trust nothing about it.
@@ -306,20 +305,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
   controller.connect()
   trace('ws connect issued')
   platform.render(controller.state)
-
-  /**
-   * Front or back, as far as the host has told us.
-   *
-   * The transitions were already traced, but only as events — so a death with
-   * no transition before it was unreadable: it could have been the foreground
-   * dying, or the background dying long after the last logged transition, and
-   * pairing them up after the fact turned out to depend entirely on how the
-   * pairing was written. Carried on the heartbeat and on the exit line
-   * instead, every death states which one it was.
-   *
-   * Starts true: the host launches the app into the foreground.
-   */
-  let foreground = true
 
   /**
    * What the glasses themselves are doing, as the host reports it.
@@ -542,7 +527,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   unsubEvents = setupEvents(bridge, {
     onForegroundEnter() {
-      foreground = true
       trace('foreground: entered — reconnecting after suspend')
       // The panel may not be ours any more; draw the next frame in full rather
       // than trusting a record of what it showed before the suspend.
@@ -550,7 +534,6 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       controller.onForegroundEnter()
     },
     onForegroundExit() {
-      foreground = false
       trace('foreground: exited — saving resume point')
       controller.onForegroundExit()
     },
@@ -567,7 +550,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
       // are the host's own account, and both were being thrown away here.
       const g = controller.lastGesture()
       trace(
-        `host exit: ${kind} fg=${foreground ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${powerNote}${deviceNote}${detail ?? ''}`,
+        `host exit: ${kind} fg=${controller.isForeground() ? 1 : 0} gesture=${g.kind}@${g.agoMs < 0 ? 'never' : `${Math.round(g.agoMs / 100) / 10}s`}${powerNote}${deviceNote}${detail ?? ''}`,
         'error',
       )
       // Traced first, released second: this is the last line the run gets to
@@ -581,6 +564,12 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     // and an exit is usually preceded by something.
     onRawEvent(raw) {
       trace(`event: ${raw}`)
+    },
+    onMenuItem(itemID) {
+      // Traced because the menu is drawn by the OS: nothing on this side can
+      // show what the wearer saw, so the log is the only account of it.
+      trace(`menu item: ${itemID}`)
+      controller.menuItem(itemID)
     },
     // Each gesture is also published for the recording before it acts,
     // so a replayed gesture marker lands just ahead of the frame it caused.
@@ -597,6 +586,13 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
     onTap: () => {
       controller.ws.publishInput('tap')
       controller.tap()
+    },
+    onLongPress: () => {
+      controller.ws.publishInput('longPress')
+      controller.longPress()
+    },
+    onLongPressEnd: () => {
+      controller.longPressEnd()
     },
     onDoubleTap: () => {
       controller.ws.publishInput('doubleTap')
@@ -652,7 +648,7 @@ async function startGlassesMode(bridge: NonNullable<Awaited<ReturnType<typeof in
 
   heartbeat = setInterval(() => {
     trace(
-      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${foreground ? 1 : 0} ws=${controller.ws.getState()}${heapNote()}${powerNote}${deviceNote}${drift.note()}`,
+      `alive ${((Date.now() - bootAt) / 1000).toFixed(1)}s renders=${renders} writes=${panelWrites()} drops=${panelDrops()} fg=${controller.isForeground() ? 1 : 0} ws=${controller.ws.getState()}${controller.screenNote()}${heapNote()}${powerNote}${deviceNote}${drift.note()}`,
     )
   }, HEARTBEAT_MS)
 }

@@ -4,6 +4,8 @@ import {
   CreateStartUpPageContainer,
   RebuildPageContainer,
   TextContainerUpgrade,
+  MenuContainerProperty,
+  MenuItemProperty,
   OsEventTypeList,
   AudioInputSource,
 } from '@evenrealities/even_hub_sdk'
@@ -33,6 +35,7 @@ import {
 // The give-up threshold, so the screen quotes the number the client actually
 // uses rather than a copy of it that can drift.
 import { GIVE_UP_AFTER_MS } from './ws-client.ts'
+import { t } from './i18n.ts'
 import { formatMessage, recapBlockLines } from './types.ts'
 import type { Session, Pane, RowMetrics, ConversationMessage, GlassesRelayItem } from './types.ts'
 
@@ -48,6 +51,23 @@ export type DraftPhraseView =
   | { kind: 'text'; text: string }
   | { kind: 'pending' }
   | { kind: 'lost' }
+  /** A line break the wearer asked for. */
+  | { kind: 'break' }
+
+/**
+ * How a wearer-inserted line break is drawn.
+ *
+ * The words, not a symbol. `⏎` and `↵` are dropped outright by the firmware's
+ * advances; `¶` renders and was read on the device as a character in the
+ * sentence; a bare rule says "a division" without saying which. Written out
+ * and run to the width of the body, it is the only thing on the screen it
+ * could be.
+ */
+function breakMark(): string {
+  const label = ' new line '
+  const rule = '─'.repeat(Math.max(1, Math.floor((BODY_WIDTH - textWidth(label)) / (2 * textWidth('─')))))
+  return `${rule}${label}${rule}`
+}
 
 /** Break text into the lines the body container will show. */
 function splitDisplayLines(text: string): string[] {
@@ -363,6 +383,12 @@ export interface AppState {
    * one thing that would not help.
    */
   voiceHeardSpeech?: boolean
+  /** Whether audio is being taken in. False between phrases, where the wearer
+   *  is thinking and the room is not being dictated. */
+  voiceListening?: boolean
+  /** The microphone has been asked for and has not answered yet. Only ever true
+   *  on the first phrase - after that it is already open. */
+  voiceOpening?: boolean
   /**
    * The microphone would not open, which is not a thing the wearer said wrong.
    *
@@ -1388,9 +1414,16 @@ function conversationContent(state: AppState): {
   const scrolled = state.conversationOffset > 0 || state.conversationPage > 0
   const back = pinned || scrolled ? 'dbl:top' : 'dbl:back'
   const answerable = state.relayWaiting.length > 0 || waiting
+  // One direction named and not the other reads as a rule about which way the
+  // conversation goes; both named fills a footer that has a page number to
+  // fit. Neither, then - the same as before, and the swipe is found the way
+  // every other scroll is.
+  // `input`, not `speak`: the tap arrives at the microphone's screen and the
+  // hold there is what opens it. A footer promising speech on a gesture that
+  // only changes screens is one the wearer finds out is wrong by trying it.
   const action = !pinned && state.relayWaiting.length > 0
     ? 'tap:respond  dbl:later'
-    : answerable ? `tap:respond  ${back}` : back
+    : answerable ? `tap:respond  tap:input  ${back}` : `tap:input  ${back}`
   // Who is speaking is in the body — the user's turn carries `$` and the
   // agent's carries nothing — so repeating it here said nothing twice. The
   // message counter went with it: its denominator was the number of messages
@@ -1777,6 +1810,40 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
   const draft = draftBody(state)
   switch (state.voicePhase) {
     case 'recording':
+      // Between phrases the microphone is not taking anything in, and the
+      // screen has to say so: the same header on a panel that is no longer
+      // listening is how a wearer talks to nothing for a while.
+      if (state.voiceListening === false) {
+        return {
+          headerText: withClock(`${name}  [paused]`, demoTail),
+          bodyText: pinToBottom(
+            draftBody(state, MAX_LINES - 1) ?? 'Hold to speak. Let go when the phrase is done.',
+            'not listening',
+            MAX_LINES - 1,
+          ),
+          // Named once, as the thing it is. `hold:speak` and `hold:more` were
+          // the same act under two labels, which is a second thing to learn
+          // for no second meaning.
+          footerText: draft
+            ? '[push to talk]  tap:send  dbl:cancel  up:undo  down:new line'
+            : '[push to talk]  dbl:cancel  down:new line',
+        }
+      }
+      // Said rather than left to be inferred. The panel claimed to be
+      // recording while the microphone was still being opened, so the first
+      // words of the first phrase went nowhere and the only sign of it was a
+      // level bar that had not moved yet.
+      if (state.voiceOpening) {
+        return {
+          headerText: withClock(`${name}  [opening]`, demoTail),
+          bodyText: pinToBottom(
+            draftBody(state, MAX_LINES - 1) ?? 'Opening the microphone...',
+            micLevelBar(0),
+            MAX_LINES - 1,
+          ),
+          footerText: 'wait for the bar',
+        }
+      }
       return {
         headerText: withClock(`${name}  [recording]`, demoTail),
         // The meter goes here rather than in the header, which a long session
@@ -1784,16 +1851,14 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
         // looking anyway, at the words appearing under what they are saying.
         bodyText: pinToBottom(
           draftBody(state, MAX_LINES - 1) ??
-            `Speak into the microphone. It waits while you think, and closes itself after ${Math.round(IDLE_STOP_MS / 1000)} seconds of quiet.`,
+            'Listening. Let go when the phrase is done.',
           micLevelBar(state.voiceLevel),
           MAX_LINES - 1,
         ),
-        // Undo is promised only once there is a phrase to take back. A footer
-        // that offers a gesture which does nothing has misled the one reader
-        // who tried it.
-        footerText: draft
-          ? 'tap:done  dbl:cancel  up:undo  down:new phrase'
-          : 'tap:done  dbl:cancel  down:new phrase',
+        // The only thing to promise while the finger is down is what letting
+        // go will do. Every other gesture needs the finger off first, so a
+        // footer offering them here would be listing what cannot be reached.
+        footerText: 'let go:end phrase',
       }
     case 'transcribing':
       return {
@@ -1840,10 +1905,10 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
         // and a microphone that will not open is the one failure trying again
         // cannot answer - that screen promises the way out instead.
         footerText: asked
-          ? `tap:send  dbl:say more${pages > 1 ? '  swipe:scroll' : ''}`
+          ? `tap:send  dbl:cancel${pages > 1 ? '  swipe:scroll' : ''}`
           : state.voiceMicFailed
             ? 'dbl:back'
-            : 'dbl:try again',
+            : 'dbl:cancel',
       }
     }
   }
@@ -1919,6 +1984,10 @@ function draftLines(state: AppState): string[] {
     // A phrase whose transcript came back empty is not a hole in the
     // instruction - there was nothing in it to lose - so it takes no line.
     if (phrase.kind === 'text' && !phrase.text) return []
+    // A break is the mark alone: it stands for the gap rather than for
+    // something that was said, and giving it the phrase bullet would offer it
+    // as a phrase to read.
+    if (phrase.kind === 'break') return [breakMark()]
     const body =
       phrase.kind === 'text' ? phrase.text : phrase.kind === 'pending' ? '...' : '(lost)'
     return splitLines(`· ${body}`, BODY_WIDTH)
@@ -1934,7 +2003,19 @@ function draftLines(state: AppState): string[] {
  * not what will be sent.
  */
 function sentLines(state: AppState): string[] {
-  return state.voiceText ? splitLines(state.voiceText, BODY_WIDTH) : []
+  if (!state.voiceText) return []
+  // The wearer's own breaks are kept and wrapped around, because this screen
+  // shows what will be sent and they are part of it. The marks the recording
+  // screen draws are not - those stand for where an undo would cut, which is
+  // not a question this screen asks.
+  return state.voiceText.split('\n').flatMap((line) => {
+    const wrapped = splitLines(line, BODY_WIDTH)
+    // A blank line is still a line. `splitLines` answers an empty string with
+    // no lines at all, which closes up the gap a wearer left with two breaks
+    // in a row - on the one screen whose job is to show what is being sent,
+    // and while the text underneath still carries it.
+    return wrapped.length ? wrapped : ['']
+  })
 }
 
 /**
@@ -2202,6 +2283,44 @@ function buildVoice(state: AppState): RebuildPageContainer {
  * which on this panel is the whole ask - the G2 has no screen-off call, so
  * "draw nothing" is how the display is put out.
  */
+/**
+ * The wearer's way out, on the one input every screen has left.
+ *
+ * The host's own contextual menu opens on `tap` then long press. This app
+ * spends `tap`, so the first one moves the screen and the sequence rarely
+ * arrives where the wearer meant it to - and the gesture table has no free
+ * slot to offer instead: swipe, tap and double-tap are taken on all seven
+ * screens. An entry here rides the host's menu rather than competing with it.
+ *
+ * One entry, and only one, because the host's own entries sit beside it: it
+ * offers closing the app and powering the panel down already, and repeating
+ * either would put two spellings of one act in a five-line menu.
+ *
+ * Sleep is not the host's screen-off in a different hat. Measured on device:
+ * the host's backgrounds this app, so a notice arriving while it is dark is
+ * received and never drawn - the wearer learns of it whenever they next look.
+ * This one leaves the app in front, drawing a dark panel it can relight the
+ * moment something arrives. Same darkness, opposite answer to being called.
+ *
+ * The same entry on every screen. Nothing here can show what a menu holds
+ * before it opens, so contents that follow the screen are contents the wearer
+ * must open the menu to learn - and opening it costs them what they were
+ * reading.
+ */
+export const MENU_SLEEP_ID = 1
+
+/** Attached to every container this file sends. A rebuild that omits it clears
+ *  the menu, so it is applied at the one exit rather than in each `build*`,
+ *  where the next screen added would silently lose it. */
+function withMenu<T extends { menuObject?: unknown }>(container: T): T {
+  container.menuObject = new MenuContainerProperty({
+    menuItems: [
+      new MenuItemProperty({ itemID: MENU_SLEEP_ID, itemName: t('menu.sleep') }),
+    ],
+  })
+  return container
+}
+
 function buildScreenOff(): RebuildPageContainer {
   const blank = new TextContainerProperty({
     xPosition: 0, yPosition: 0,
@@ -2374,7 +2493,7 @@ export async function initDisplay(
     })
 
     const created = await Promise.race([
-      bridge.createStartUpPageContainer(initial),
+      bridge.createStartUpPageContainer(withMenu(initial)),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('createStartUp timeout')), 3000)),
     ])
     // The host answers this one with a reason, and `outOfMemory` is the answer
@@ -2634,7 +2753,7 @@ export async function updateDisplay(bridge: Bridge | null, state: AppState): Pro
         case 'overlay': container = buildOverlay(state); break
       }
     }
-    const ok = await bridge.rebuildPageContainer(container)
+    const ok = await bridge.rebuildPageContainer(withMenu(container))
     if (ok === false) {
       noteDrop('rebuild')
       // The mode was recorded above on the assumption this would land. Undo
@@ -2755,6 +2874,12 @@ export function setupEvents(
      * which it was, and both were being discarded.
      */
     onExit?: (kind: 'abnormal' | 'system', detail?: string) => void
+    /** A top-level entry of the menu declared by `withMenu` was chosen. */
+    onMenuItem?: (itemID: number) => void
+    /** A sustained press began. The release arrives as `onLongPressEnd`, so a
+     *  caller can measure the hold rather than only learn that it happened. */
+    onLongPress?: () => void
+    onLongPressEnd?: () => void
   },
 ): () => void {
   if (!bridge) return () => {}
@@ -2787,12 +2912,32 @@ export function setupEvents(
     const raw = JSON.stringify(event).slice(0, 80)
     callbacks.onRawEvent?.(raw)
 
+    // The menu is drawn by the glasses OS, so a choice arrives as its own
+    // payload rather than as a gesture on one of our containers.
+    const menuItemID = event.menuItemClickEvent?.itemID
+    if (typeof menuItemID === 'number') {
+      callbacks.onMenuItem?.(menuItemID)
+      return
+    }
+
     const textType = event.textEvent?.eventType
     const sysType = event.sysEvent?.eventType
     const listType = event.listEvent?.eventType
     const eventType = textType ?? sysType ?? listType
 
     const now = Date.now()
+
+    // Not behind the ring debounce: a long press is one gesture reported
+    // twice, and the debounce would swallow the release of a short hold and
+    // leave the app believing the finger was still down.
+    if (eventType === OsEventTypeList.LONG_PRESS_EVENT) {
+      callbacks.onLongPress?.()
+      return
+    }
+    if (eventType === OsEventTypeList.LONG_PRESS_RELEASE_EVENT) {
+      callbacks.onLongPressEnd?.()
+      return
+    }
 
     if (eventType === OsEventTypeList.SCROLL_TOP_EVENT) {
       if (now - lastEventTime < EVENT_DEBOUNCE) return

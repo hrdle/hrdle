@@ -1333,7 +1333,7 @@ export interface GlassesScreen {
  * recorded — a mirror viewer needs the resulting frame, not the finger.
  */
 export interface GlassesInput {
-  kind: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown';
+  kind: 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown' | 'longPress';
   /** Epoch ms the device handled the gesture. */
   at: number;
 }
@@ -1752,7 +1752,7 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('glasses-input'),
     input: z.object({
-      kind: z.enum(['tap', 'doubleTap', 'swipeUp', 'swipeDown']),
+      kind: z.enum(['tap', 'doubleTap', 'swipeUp', 'swipeDown', 'longPress']),
       at: z.number(),
     }),
   }),

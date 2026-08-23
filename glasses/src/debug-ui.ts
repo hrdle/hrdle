@@ -24,7 +24,7 @@ import { setBaseUrl, transcribe } from './api.ts'
 import { settingsPanelHtml, wireSettingsPanel } from './settings-ui.ts'
 import { GlassesController, MIC_SAMPLE_RATE } from './controller.ts'
 import type { GlassesPlatform } from './controller.ts'
-import { screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
+import { MENU_SLEEP_ID, screenText, updateDisplay, updateHeader, wrapForPanel } from './display.ts'
 import { CARD_BORDER_COLOR, LINE_H, PANEL_H, PANEL_W, splitLines, textWidth } from './metrics.ts'
 import { BASELINE, createPanelPainter, inkColor, withExportInk } from './panel-paint.ts'
 import { clearStoredSync, readStoredSync, writeStoredSync } from './storage.ts'
@@ -287,6 +287,11 @@ export function startDebugUI(): void {
               <button type="button" id="btn-down">Swipe down</button>
               <button type="button" id="btn-tap">Tap</button>
               <button type="button" id="btn-dbl">Double tap</button>
+              <button type="button" id="btn-long">Hold (press &amp; release)</button>
+            </div>
+            <h2>OS menu</h2>
+            <div class="ring">
+              <button type="button" id="btn-menu-sleep">Sleep</button>
             </div>
             <h2>Host lifecycle</h2>
             <div class="ring">
@@ -1163,6 +1168,15 @@ export function startDebugUI(): void {
   el('btn-down').addEventListener('click', () => controller.swipeDown())
   el('btn-tap').addEventListener('click', () => controller.tap())
   el('btn-dbl').addEventListener('click', () => controller.doubleTap())
+  // Press and release rather than one click: the device's hold has two ends
+  // and the phrase closes on the second, so a simulator that only sent the
+  // first would never close one.
+  el('btn-long').addEventListener('pointerdown', () => controller.longPress())
+  el('btn-long').addEventListener('pointerup', () => controller.longPressEnd())
+  // The glasses OS draws this menu and hands back only the choice, so the
+  // simulator stands in for the drawing and takes the same two exits the
+  // device's entries do.
+  el('btn-menu-sleep').addEventListener('click', () => controller.menuItem(MENU_SLEEP_ID))
 
   // The host's own lifecycle, on demand. These paths used to be reachable only
   // by wearing the glasses and waiting for the host to close the app — which is

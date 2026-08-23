@@ -170,7 +170,7 @@ export interface GlassesScreen {
 
 /** A ring gesture published by the device for the recording.
  *  Mirror of GlassesInput in shared/types.ts. */
-export type GlassesInputKind = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown'
+export type GlassesInputKind = 'tap' | 'doubleTap' | 'swipeUp' | 'swipeDown' | 'longPress'
 
 /**
  * One line of the server's screen-mirror recording: a frame as it was
