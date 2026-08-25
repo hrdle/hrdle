@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.190] - 2026-08-25
+
+### Fixed
+- **Typing into a pane stops arriving after a few days, and this is why.** The
+  read that recovers a session's working directory from its transcript closed
+  the readline interface and left the file itself open, so the server
+  accumulated a descriptor on every session push for any session whose
+  directory does not map onto its Claude project directory - measured at 20,693
+  open handles on one transcript after five days. Past about ten thousand of
+  them a child spawned on macOS exits 0 within a millisecond, which is what a
+  pane controller does when its stdin reads as closed: `panes/input` answers
+  `success: true`, the pane never changes, and the log shows the controller
+  crash-looping on arrival. Restarting the server cleared it until it came
+  back. The read now gives the descriptor back, as the two transcript readers
+  beside it already did. Thanks to @Chapapon (#541)
+  - Why a child behaves that way past that count is measured rather than
+    explained, and is not what this changes
+
 ## [0.3.189] - 2026-08-23
 
 ### Fixed

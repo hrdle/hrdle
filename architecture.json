@@ -1,7 +1,7 @@
 {
   "name": "Hrdle",
-  "version": "0.3.189",
-  "generated": "2026-08-23",
+  "version": "0.3.190",
+  "generated": "2026-08-25",
   "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi, OpenCode). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones, plus a companion app for the EVEN G2 glasses",
   "stack": {
     "backend": "Bun runtime + Hono",
