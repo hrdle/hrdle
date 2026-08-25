@@ -498,9 +498,8 @@ export class ClaudeCodeService {
 
   /** The first `cwd` recorded in a transcript; it appears within the head. */
   private async readRecordedCwd(filePath: string): Promise<string | null> {
-    const rl = createInterface({
-      input: createReadStream(filePath, { start: 0, end: 262_144 }),
-    });
+    const stream = createReadStream(filePath, { start: 0, end: 262_144 });
+    const rl = createInterface({ input: stream });
     try {
       let scanned = 0;
       for await (const line of rl) {
@@ -517,7 +516,13 @@ export class ClaudeCodeService {
     } catch {
       // unreadable file
     } finally {
+      // `rl.close()` leaves the file open: a read that returns early holds its
+      // descriptor until the process exits, and this runs on every session
+      // push. Past about ten thousand of them, `Bun.spawn` on macOS hands a
+      // child a stdin that reads as closed, and a pane controller dies on
+      // arrival with exit code 0 and nothing on stderr.
       rl.close();
+      stream.destroy();
     }
     return null;
   }
