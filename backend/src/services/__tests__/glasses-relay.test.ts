@@ -434,6 +434,49 @@ describe('postAgentRelay store rules', () => {
     expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(mustItem(posted).id);
   });
 
+  // An agent's question had no epoch and no TTL, so it waited for an answer
+  // for as long as the server stayed up. Fifteen of them, four to six days
+  // old, were handed to a wearer opening the app on 2026-08-26.
+  test("an agent's waiting question expires and is swept off the glasses", async () => {
+    const sock = new FakeSocket();
+    glassesRelayDeps.listWorkspaces = async () => [];
+    await subscribeGlassesRelay(sock);
+
+    const posted = postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'decide?' });
+    expect(mustItem(posted).expiresAt).toBeGreaterThan(Date.now());
+    // The returned item IS the stored object — age it past the TTL.
+    mustItem(posted).expiresAt = Date.now() - 1;
+    sock.messages = [];
+
+    const snapshot = await buildGlassesRelaySnapshot();
+    expect(snapshot).toHaveLength(0);
+    expect(sock.ofType('glasses-relay-remove').map((m) => m.id)).toContain(mustItem(posted).id);
+  });
+
+  // Between two sweeps an expired question would otherwise still hold the
+  // pane's one slot, and the live question replacing it would 409.
+  // A pane blocked for a week is still blocked: expiring its item would only
+  // have the next snapshot synthesize it again.
+  test("a pane's own blocked item carries no expiry", async () => {
+    glassesRelayDeps.listWorkspaces = async () => [ws('w1', [{ paneId: '%1', agentStatus: 'blocked' }])];
+    glassesRelayDeps.readPaneText = async () => 'Do you want to proceed?';
+    // Assembly is gated on the glasses being there at all.
+    await subscribeGlassesRelay(new FakeSocket());
+    const snapshot = await buildGlassesRelaySnapshot();
+    expect(snapshot).toHaveLength(1);
+    expect(snapshot[0]?.source).toBe('auto');
+    expect(snapshot[0]?.expiresAt).toBeUndefined();
+  });
+
+  test('an expired question does not block the next one', () => {
+    const first = postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'decide?' });
+    mustItem(first).expiresAt = Date.now() - 1;
+
+    const second = postAgentRelay({ sessionId: 's1', kind: 'waiting', text: 'the live one?' });
+    expect(second.status).toBe(200);
+    expect(second.item?.id).not.toBe(first.item?.id);
+  });
+
   test('rate limit: 12 posts/min/session, the 13th is rejected', () => {
     for (let i = 0; i < 12; i++) {
       expect(postAgentRelay({ sessionId: 'flood', kind: 'info', text: `n${i}` }).status).toBe(200);
@@ -836,6 +879,46 @@ describe('snapshot ordering', () => {
     postAgentRelay({ sessionId: 'b', kind: 'waiting', text: 'decide?' });
     const snapshot = await buildGlassesRelaySnapshot();
     expect(snapshot.map((i) => i.kind)).toEqual(['waiting', 'info']);
+  });
+
+  test('one pending question still takes the screen', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [];
+    postAgentRelay({ sessionId: 'a', kind: 'waiting', text: 'decide?' });
+    const snapshot = await buildGlassesRelaySnapshot();
+    expect(snapshot.map((i) => i.present)).toEqual(['takeover']);
+  });
+
+  // The app hands a queue over one at a time, each dismissal revealing the
+  // next, so a backlog that takes the screen is a procession of questions from
+  // the moment the app is opened.
+  test('a backlog of questions waits in the list instead of seizing the panel', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [];
+    postAgentRelay({ sessionId: 'a', kind: 'waiting', text: 'one?' });
+    postAgentRelay({ sessionId: 'b', kind: 'waiting', text: 'two?' });
+    postAgentRelay({ sessionId: 'c', kind: 'info', text: 'fyi' });
+
+    const snapshot = await buildGlassesRelaySnapshot();
+    expect(snapshot.filter((i) => i.kind === 'waiting').map((i) => i.present)).toEqual([
+      'banner',
+      'banner',
+    ]);
+    // Demoted for the wearer, not dropped: the list still counts them.
+    expect(snapshot.filter((i) => i.kind === 'waiting')).toHaveLength(2);
+    // An info item is not part of the queue and keeps its own rule.
+    expect(snapshot.find((i) => i.kind === 'info')?.present).toBe('takeover-if-elsewhere');
+  });
+
+  // The demotion travels on a copy: the queue draining must leave the last
+  // question able to interrupt again.
+  test('the stored item keeps its takeover once the backlog clears', async () => {
+    glassesRelayDeps.listWorkspaces = async () => [];
+    const first = postAgentRelay({ sessionId: 'a', kind: 'waiting', text: 'one?' });
+    postAgentRelay({ sessionId: 'b', kind: 'waiting', text: 'two?' });
+    await buildGlassesRelaySnapshot();
+
+    dismissRelayItem(mustItem(first).id);
+    const snapshot = await buildGlassesRelaySnapshot();
+    expect(snapshot.map((i) => i.present)).toEqual(['takeover']);
   });
 
   test('unsubscribe stops deliveries', async () => {

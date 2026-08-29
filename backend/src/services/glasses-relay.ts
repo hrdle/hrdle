@@ -83,6 +83,21 @@ function detailWidthFor(_optionRows: number): number {
 
 const INFO_TTL_MS = 5 * 60_000;
 /**
+ * How long an agent's own question stays worth interrupting for.
+ *
+ * An `auto` item has a blocked epoch to end it and an `info` item has minutes;
+ * an agent's `waiting` note had neither, so it waited for an answer forever.
+ * Measured on 2026-08-26: a wearer opening the app was handed fifteen
+ * questions in twenty-five seconds, asked four to six days earlier, and put
+ * every one of them off - which is what a question nobody can act on any more
+ * looks like from the other end. A day is long enough for one to survive a
+ * night away and short enough that a stale one is gone before it is a pile.
+ *
+ * It expires from the glasses, not from existence: the steward's thread still
+ * holds the question, and its screens are where an old one is answered.
+ */
+const AGENT_WAITING_TTL_MS = 24 * 60 * 60_000;
+/**
  * Hook-sourced info items expire far sooner than agent self-notes.
  *
  * An agent's `hrdle glasses` note is something it chose to say and wants read;
@@ -174,7 +189,12 @@ const store = new Map<string, RelaySlot>();
 
 /** An item that is still asking, as opposed to absent or dismissed. */
 function isActive(item: GlassesRelayItem | undefined): item is GlassesRelayItem {
-  return item !== undefined && !item.dismissed;
+  if (item === undefined || item.dismissed) return false;
+  // Expiry is checked here rather than only in the sweep: the sweep runs on a
+  // tick, and between two of them an expired question would still answer for
+  // its pane - blocking the 409 slot and suppressing enter-blocked, so the
+  // live question that replaced it would never be assembled.
+  return item.expiresAt === undefined || item.expiresAt > Date.now();
 }
 
 /**
@@ -1117,7 +1137,11 @@ function makeItem(
       }
     }
   }
-  if (kind === 'info') item.expiresAt = Date.now() + ttlMs;
+  // Every item an agent posted expires. An `auto` waiting item is deliberately
+  // left alone: its pane's blocked epoch is what ends it, and a pane that has
+  // been blocked for a week is still blocked - the snapshot would re-synthesize
+  // whatever this expired.
+  if (kind === 'info' || source === 'agent') item.expiresAt = Date.now() + ttlMs;
   return item;
 }
 
@@ -1180,9 +1204,16 @@ export function postAgentRelay(input: {
     if (isActive(existing)) {
       return { status: 409, error: 'an active waiting item already exists', item: existing };
     }
-    const item = makeItem(input.sessionId, 'waiting', 'agent', input.text, input.paneId, input.choices, INFO_TTL_MS, {
-      choiceDetails: input.choiceDetails,
-    });
+    const item = makeItem(
+      input.sessionId,
+      'waiting',
+      'agent',
+      input.text,
+      input.paneId,
+      input.choices,
+      AGENT_WAITING_TTL_MS,
+      { choiceDetails: input.choiceDetails },
+    );
     slot.waiting.set(key, item);
     broadcastUpsert(item);
     return { status: 200, item };
@@ -1314,16 +1345,21 @@ export function dismissRelayItem(id: string): GlassesRelayItem | null {
   return null;
 }
 
-/** Sweep expired info items; returns removed ids (broadcasts each removal). */
-function sweepExpiredInfo(): void {
+/** Sweep expired items - an agent's own question as well as info (broadcasts each removal). */
+function sweepExpired(): void {
   const now = Date.now();
   for (const [sessionId, slot] of store) {
+    for (const [paneId, item] of [...slot.waiting]) {
+      if (item.expiresAt === undefined || item.expiresAt > now) continue;
+      slot.waiting.delete(paneId);
+      broadcastRemove(item.id);
+    }
     if (slot.info?.expiresAt !== undefined && slot.info.expiresAt <= now) {
       const id = slot.info.id;
       delete slot.info;
-      dropSlotIfEmpty(sessionId, slot);
       broadcastRemove(id);
     }
+    dropSlotIfEmpty(sessionId, slot);
   }
 }
 
@@ -1488,7 +1524,7 @@ function exitBlocked(sessionId: string, paneId: string): void {
  * events + the 5s tick), so a missed event self-heals on the next tick.
  */
 export async function trackGlassesRelay(): Promise<void> {
-  sweepExpiredInfo();
+  sweepExpired();
   const workspaces = await glassesRelayDeps.listWorkspaces();
   const seen = new Set<string>();
 
@@ -1565,7 +1601,7 @@ export function resetGlassesRelayTracker(): void {
  * workspace reached the glasses with two of its three questions invisible.
  */
 export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
-  sweepExpiredInfo();
+  sweepExpired();
   const workspaces = await glassesRelayDeps.listWorkspaces();
 
   for (const ws of workspaces) {
@@ -1603,7 +1639,33 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
     const rank = (i: GlassesRelayItem) => (i.kind === 'waiting' ? 0 : 1);
     return rank(a) - rank(b) || a.createdAt - b.createdAt;
   });
-  return items;
+  return items.map(withBacklogPresentation(items));
+}
+
+/**
+ * One question waiting takes the screen on connecting; a backlog of them does
+ * not.
+ *
+ * A single pending decision is news a wearer would have been shown a moment
+ * earlier, and a reconnect is no reason to show them less. Several is not more
+ * news - it is a queue, and the app hands it over one at a time, each dismissal
+ * revealing the next. Measured on 2026-08-26: fifteen questions in twenty-five
+ * seconds, from opening the app.
+ *
+ * So a backlog is demoted to `banner` and waits in the session list, which
+ * already counts it (`!N`) and marks which sessions are asking. Nothing is
+ * dropped - what changes is only whether it seizes the panel.
+ *
+ * The demotion is applied to copies. The stored item keeps its `takeover`,
+ * because the same item arriving on its own later - the queue having drained -
+ * is a single question again.
+ */
+function withBacklogPresentation(
+  items: GlassesRelayItem[],
+): (item: GlassesRelayItem) => GlassesRelayItem {
+  const waiting = items.filter((i) => i.kind === 'waiting').length;
+  if (waiting < 2) return (item) => item;
+  return (item) => (item.kind === 'waiting' ? { ...item, present: 'banner' } : item);
 }
 
 /**

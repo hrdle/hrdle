@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Opening the glasses handed the wearer a queue of questions.** Measured from
+  the screen recording of 2026-08-26: fifteen ask screens in twenty-five
+  seconds from the moment the app connected, and every one of them put off
+  rather than answered - they had been asked four to six days earlier. Two
+  things made that: an agent's own `waiting` note (`hrdle glasses --kind
+  waiting`, which is how the steward asks) had no expiry at all, unlike an
+  `info` item's minutes or an `auto` item's blocked epoch, so questions
+  accumulated for as long as the server stayed up; and every one of them
+  arrived marked `takeover`, which the app hands over one at a time, each
+  dismissal revealing the next. An agent's question now expires after a day,
+  and a *backlog* no longer seizes the panel - two or more waiting questions
+  are demoted to `banner` on connecting and wait in the session list, which
+  already counts them (`!N`) and marks which sessions are asking. A single
+  pending question still takes the screen, because a reconnect is no reason to
+  show less than a moment earlier would have. Nothing is dropped: the question
+  stays in the steward's thread, where an old one is answered
+
 ## [0.3.190] - 2026-08-25
 
 ### Fixed
