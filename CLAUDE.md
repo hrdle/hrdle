@@ -1037,7 +1037,18 @@ the screen" rule out of the app after a question sat behind a banner for ten
 minutes. `choiceKeys` moved "which key answers this row" out after grok turned
 out to write its own, and now carries the arrow walk that reaches claude's
 multi-select text field. `choiceFieldRows` says which rows are a field rather
-than letting the app infer it from a label's shape.
+than letting the app infer it from a label's shape. And `present` earned its
+keep a second time: a wearer opening the app was handed fifteen questions in
+twenty-five seconds, because the app takes the queue one at a time and each
+dismissal reveals the next - demoting a *backlog* to `banner` in the snapshot
+stopped it without an ehpk, and the questions stayed in the list, which counts
+them already.
+
+**An item an agent posted expires; an item a pane's blocked epoch owns does
+not.** The epoch is what ends the second kind, and a pane blocked for a week is
+still blocked - expiring it would only have the next snapshot synthesize it
+again. The first kind has nothing to end it, which is how a question from six
+days ago was still asking.
 
 When a fix seems to need app logic, look for the version of it that is a field
 on `GlassesRelayItem` and a reader on this side. Reach for an ehpk rebuild only
