@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.191] - 2026-08-29
+
 ### Fixed
 - **Opening the glasses handed the wearer a queue of questions.** Measured from
   the screen recording of 2026-08-26: fifteen ask screens in twenty-five
