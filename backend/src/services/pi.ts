@@ -117,12 +117,26 @@ const PI_RECAP_MAX_CHARS = 500;
  */
 export interface PiTail {
   tokenUsage?: AgentTokenUsage;
+  /** The provider of the model in `tokenUsage`: model ids repeat across
+   *  providers, so a window cannot be looked up by the id alone. */
+  provider?: string;
   recap?: string;
   recapAt?: string;
 }
 
+/** What pi itself counts as the context after a turn (`calculateContextTokens`). */
+function contextTokensOf(usage: PiUsage): number {
+  const total = numberOrUndefined(usage.totalTokens);
+  if (total) return total;
+  return (numberOrUndefined(usage.input) ?? 0)
+    + (numberOrUndefined(usage.output) ?? 0)
+    + (numberOrUndefined(usage.cacheRead) ?? 0)
+    + (numberOrUndefined(usage.cacheWrite) ?? 0);
+}
+
 export function parsePiTail(lines: string[]): PiTail {
   let tokenUsage: AgentTokenUsage | undefined;
+  let provider: string | undefined;
   let recap: string | undefined;
   let recapAt: string | undefined;
   let totalInput = 0;
@@ -131,6 +145,12 @@ export function parsePiTail(lines: string[]): PiTail {
   let sawUsage = false;
   for (const line of lines) {
     const record = parsePiRecord(line);
+    if (record?.type === 'compaction' && tokenUsage) {
+      // The usage before a compaction measures a context that no longer
+      // exists; pi shows nothing either until the next answer reports the new one.
+      tokenUsage = { ...tokenUsage, contextTokens: undefined };
+      continue;
+    }
     const message = record?.message;
     if (record?.type !== 'message' || message?.role !== 'assistant') continue;
     const usage = message.usage;
@@ -143,10 +163,10 @@ export function parsePiTail(lines: string[]): PiTail {
       totalCacheRead += cacheRead;
       totalOutput += output;
       sawUsage = true;
+      provider = typeof message.provider === 'string' ? message.provider : undefined;
       tokenUsage = {
         model: typeof message.model === 'string' ? message.model : undefined,
-        // What the model was handed on this turn, which is the context it sits in.
-        contextTokens: input + cacheRead + cacheWrite,
+        contextTokens: contextTokensOf(usage),
         totalInputTokens: totalInput,
         totalCacheReadTokens: totalCacheRead,
         totalOutputTokens: totalOutput,
@@ -159,7 +179,58 @@ export function parsePiTail(lines: string[]): PiTail {
       recapAt = record.timestamp;
     }
   }
-  return { tokenUsage: sawUsage ? tokenUsage : undefined, recap, recapAt };
+  return { tokenUsage: sawUsage ? tokenUsage : undefined, provider, recap, recapAt };
+}
+
+/** pi's own catalog: `~/.pi/agent/models-store.json`, provider -> models with their windows. */
+export function piModelsStorePath(): string {
+  return join(homedir(), '.pi', 'agent', 'models-store.json');
+}
+
+interface PiModelsFile {
+  [provider: string]: { models?: { id?: string; contextWindow?: number }[] } | undefined;
+}
+
+/**
+ * The context window of each model pi has resolved, read from the catalog pi
+ * keeps for itself. That file is the only table consulted: hrdle carrying its
+ * own would fall behind every model pi adds, and pi's built-in default for a
+ * model without a declared window is a guess a percentage must not be built on.
+ */
+export class PiModelsStore {
+  private cache: { mtimeMs: number; windows: Map<string, number> } | null = null;
+
+  constructor(private readonly path = piModelsStorePath()) {}
+
+  async contextWindow(provider: string, model: string): Promise<number | undefined> {
+    return (await this.windows()).get(`${provider}\0${model}`);
+  }
+
+  private async windows(): Promise<Map<string, number>> {
+    let mtimeMs: number;
+    try {
+      mtimeMs = (await stat(this.path)).mtimeMs;
+    } catch {
+      return new Map();
+    }
+    if (this.cache?.mtimeMs === mtimeMs) return this.cache.windows;
+    const windows = new Map<string, number>();
+    try {
+      const file = JSON.parse(await readFile(this.path, 'utf8')) as PiModelsFile;
+      for (const [provider, entry] of Object.entries(file ?? {})) {
+        for (const m of entry?.models ?? []) {
+          const window = numberOrUndefined(m?.contextWindow);
+          if (typeof m?.id === 'string' && window && window > 0) windows.set(`${provider}\0${m.id}`, window);
+        }
+      }
+    } catch {
+      // A file mid-write or not JSON: no windows this round, and the next
+      // mtime change reads it again.
+      return new Map();
+    }
+    this.cache = { mtimeMs, windows };
+    return windows;
+  }
 }
 
 /** Read the last `bytes` of a file as whole lines (the cut-off first one dropped). */
@@ -276,7 +347,22 @@ export class PiSessionStore {
 }
 
 export class PiService implements AgentThreadService {
-  constructor(private readonly store = new PiSessionStore()) {}
+  constructor(
+    private readonly store = new PiSessionStore(),
+    private readonly models = new PiModelsStore(),
+  ) {}
+
+  /** The usage with its window and percent, when pi has recorded a window for that model. */
+  private async withWindow(tail: PiTail): Promise<AgentTokenUsage | undefined> {
+    const usage = tail.tokenUsage;
+    if (!usage?.model || !tail.provider) return usage;
+    const contextMaxTokens = await this.models.contextWindow(tail.provider, usage.model);
+    if (!contextMaxTokens) return usage;
+    const contextPercent = usage.contextTokens === undefined
+      ? undefined
+      : Math.min(100, Math.round((usage.contextTokens / contextMaxTokens) * 1000) / 10);
+    return { ...usage, contextMaxTokens, contextPercent };
+  }
 
   async getThreadsByIds(sessionIds: string[]): Promise<Map<string, AgentThread>> {
     const wanted = new Set(sessionIds.filter(Boolean));
@@ -288,7 +374,7 @@ export class PiService implements AgentThreadService {
       result.set(s.sessionId, {
         sessionId: s.sessionId,
         firstPrompt: s.firstPrompt,
-        tokenUsage: tail.tokenUsage,
+        tokenUsage: await this.withWindow(tail),
         recap: tail.recap,
         recapAt: tail.recapAt,
         cwd: s.cwd,
