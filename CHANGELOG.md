@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.193] - 2026-09-09
+
+### Added
+- **A pi session shows how full its context is.** pi already reported the
+  tokens; what was missing was the model's window. It comes from
+  `~/.pi/agent/models-store.json` - the catalog pi keeps for every model it has
+  resolved - looked up by provider *and* model id, because the same id exists
+  under more than one provider with different windows. A model the catalog has
+  no window for shows no percent rather than one measured against a guess, and
+  the token count follows pi's own reckoning so the figure agrees with the
+  footer pi draws next to it. After a compaction the context is unknown until
+  the next answer reports the new one, which is how pi treats it too. Thanks to
+  @Chapapon (#548)
+
 ## [0.3.192] - 2026-09-06
 
 ### Added
