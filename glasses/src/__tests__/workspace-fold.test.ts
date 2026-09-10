@@ -80,10 +80,7 @@ describe('a workspace id handed out again', () => {
         id: 'w7',
         name: 'something else entirely',
         state: 'idle',
-        panes: [
-          { paneId: '%1', cwd: '/tmp' },
-          { paneId: '%2', cwd: '/tmp' },
-        ],
+        panes: [{ paneId: '%1' }, { paneId: '%2' }],
       } as Session,
     ]
     arrive(reused)
