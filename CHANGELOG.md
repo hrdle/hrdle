@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.196] - 2026-09-10
+
+### Fixed
+- **A workspace nobody has opened no longer arrives on the glasses already
+  unfolded.** The fold added in 0.3.195 is remembered against a workspace id,
+  and herdr hands the same id out again: it stores no counter, only the live
+  workspaces, so a restarted server numbers from what it restored and a closed
+  `w7` is the next `w7`. Measured on herdr 0.9.0 - three creates in one process
+  gave `w7`/`w8`/`w9`, and the first create after a restart gave `w7` back. The
+  glasses app is restarted by none of that, being what the glasses are running,
+  so the entry outlived the workspace it was about. Forgotten now when the
+  workspace leaves the session list, which is the moment a close reaches this
+  side at all
+
 ## [0.3.195] - 2026-09-10
 
 ### Changed
