@@ -22,7 +22,7 @@ import { OpenCodeHistoryService } from '../services/opencode-history';
 import { PiService } from '../services/pi';
 import { PiHistoryService } from '../services/pi-history';
 import { piTurnWatcher } from '../services/pi-turn-notify';
-import type { AgentHistoryProvider, AgentThread, AgentThreadService } from '../services/agent-providers';
+import { threadSessionIdsOf, withThreadUsage, type AgentHistoryProvider, type AgentThread, type AgentThreadService } from '../services/agent-providers';
 import { PromptHistoryService } from '../services/prompt-history';
 import { getAllSessionMetadata, setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, addSessionSttTerms, getLastKnownSessions, saveLastKnownSessions, removeLastKnownSession, type LastKnownSession } from '../services/session-metadata';
 import { STT_PROMPT_MAX_CHARS, seedWorkspaceVocabulary, sessionPromptTerms } from '../services/stt-prompt';
@@ -255,10 +255,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
   // never guess from cwd, where multiple sessions are ambiguous.
   const threadsByAgent = new Map<AgentProvider, Map<string, AgentThread>>();
   await Promise.all((Object.entries(threadServices) as [AgentProvider, AgentThreadService][]).map(async ([agentId, service]) => {
-    const sessionIds = herdrSessions
-      .filter((s): s is typeof s & { agentSessionId: string } =>
-        (s.agent ?? s.currentCommand) === agentId && !!s.agentSessionId)
-      .map(s => s.agentSessionId);
+    const sessionIds = threadSessionIdsOf(agentId, herdrSessions);
     if (sessionIds.length === 0) return;
     threadsByAgent.set(agentId, await service.getThreadsByIds(sessionIds));
   }));
@@ -420,13 +417,17 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         // Per-pane metrics + recap only for agent panes of a multi workspace
         // (see isMultiWorkspace); Claude panes get ctx/model/recap from their
         // own .jsonl, any agent pane gets memory from its pid.
+        const paneThreadAgent = isMultiWorkspace ? threadAgentOf(p.agent) : undefined;
+        const paneThread = paneThreadAgent && p.agentSessionId
+          ? threadsByAgent.get(paneThreadAgent)?.get(p.agentSessionId)
+          : undefined;
         const paneMetrics =
           isMultiWorkspace && isSessionAgentOnPane
-            ? await computeSessionMetrics({
+            ? withThreadUsage(await computeSessionMetrics({
                 ccSessionId: p.agent === 'claude' ? p.agentSessionId : undefined,
                 workingDir: p.path,
                 pids: p.pid ? [p.pid] : [],
-              })
+              }), paneThread)
             : undefined;
         const paneClaude =
           isMultiWorkspace && p.agent === 'claude' && p.agentSessionId && p.path
@@ -455,8 +456,8 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
               : undefined,
           pid: p.pid,
           metrics: paneMetrics,
-          recap: paneClaude?.lastRecap?.content,
-          recapAt: paneClaude?.lastRecap?.timestamp,
+          recap: paneClaude?.lastRecap?.content ?? paneThread?.recap,
+          recapAt: paneClaude?.lastRecap?.timestamp ?? paneThread?.recapAt,
         };
         return pane;
       })) : undefined,
