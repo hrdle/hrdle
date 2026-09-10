@@ -2811,6 +2811,17 @@ export class GlassesController {
     } else {
       st.sessions = this.sortSessions(sessions)
     }
+    // A fold is remembered against a workspace id, and herdr hands the same id
+    // out again: ids are not stored with a counter, so a restarted server
+    // numbers from the workspaces it restored and a closed w7 is the next w7.
+    // Measured on herdr 0.9.0 - three creates in one process gave w7/w8/w9,
+    // and the first create after a restart gave w7 back. The app outlives that
+    // restart (it is what the glasses are running), so without this the wearer
+    // meets a workspace they have never opened already unfolded.
+    if (st.expandedWorkspaces?.length) {
+      const live = new Set(st.sessions.map((s) => s.id))
+      st.expandedWorkspaces = st.expandedWorkspaces.filter((id) => live.has(id))
+    }
     // Re-find the previously selected session
     if (prevId) {
       const newIdx = st.sessions.findIndex((s) => s.id === prevId)
