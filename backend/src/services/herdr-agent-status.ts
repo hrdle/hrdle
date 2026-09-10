@@ -187,9 +187,9 @@ async function subscribeToPanes(): Promise<void> {
  * Watch until the returned function is called. `listener` fires (debounced)
  * whenever herdr reports an agent status change or a pane appears/disappears.
  *
- * More than one listener, because the two callers stop for different reasons:
- * the session push only matters while a browser is connected, while the steward
- * has to keep being woken precisely when nobody is watching a screen.
+ * More than one listener: a caller that only matters while a browser is
+ * connected and one that has to keep working when nobody is watching a screen
+ * stop for different reasons.
  */
 export function addAgentStatusListener(listener: () => void): () => void {
   listeners.add(listener);

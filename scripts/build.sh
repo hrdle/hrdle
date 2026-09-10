@@ -45,13 +45,6 @@ cd glasses
 bun run build:web
 cd ..
 
-# The steward glasses app's simulator, mounted at /glasses-steward. Its own
-# app, its own ehpk, its own simulator.
-echo "Building steward glasses simulator..."
-cd glasses-steward
-bun run build:web
-cd ..
-
 # Generate embedded static assets
 echo "Generating embedded assets..."
 bun run scripts/generate-static-assets.ts

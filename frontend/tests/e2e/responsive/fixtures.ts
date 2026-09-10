@@ -7,14 +7,13 @@ import type { Page } from '@playwright/test';
  * run anywhere — including CI, where there is no backend and no herdr. Every
  * /api call is answered from here instead, and every WebSocket is refused.
  *
- * Refusing them is not tidiness. `subscribe-steward` carries the whole thread,
- * and a socket that connects replaces every stub in this file with whatever
- * that server holds: run against a dev server pointed at a real backend, three
- * of these specs failed on a live thread of 222 entries where the fixture
- * supplies three. Nothing was wrong with the code, and the failures were
- * reported as if something were. A suite whose data depends on where the dev
- * server happens to point is not a suite, so the dependency is cut here rather
- * than left to whoever runs it.
+ * Refusing them is not tidiness. A socket that connects replaces every stub in
+ * this file with whatever that server holds: run against a dev server pointed
+ * at a real backend, specs failed on live data where the fixture supplies its
+ * own. Nothing was wrong with the code, and the failures were reported as if
+ * something were. A suite whose data depends on where the dev server happens to
+ * point is not a suite, so the dependency is cut here rather than left to
+ * whoever runs it.
  */
 
 const SESSIONS = [
@@ -53,23 +52,6 @@ const ROUTES: Array<[RegExp, unknown]> = [
 ];
 
 export interface BootOptions {
-  /** What `/api/steward/enabled` answers. Off by default, which is what a
-   *  server without the flag reports and what every other spec expects. */
-  steward?: {
-    enabled: boolean;
-    thread?: unknown[];
-    lines?: unknown[];
-    /** What `demo` has written about it. */
-    turns?: unknown[];
-    /** What the second pane has written about it, when the workspace runs two
-     *  agents and each keeps its own history. Answered for a request that
-     *  names that pane; `turns` answers the rest. */
-    secondPaneTurns?: unknown[];
-    /** Questions still waiting, as `GET /asks` answers them. */
-    asks?: unknown[];
-    /** Set the localStorage view switch before the app boots. */
-    view?: boolean;
-  };
   /** What `demo`'s agent is doing, as the sessions list reports it. */
   indicatorState?: 'processing' | 'waiting_input' | 'idle' | 'completed';
   /** The tool call it is on, as `claudeActivity` reads it from the transcript. */
@@ -78,9 +60,8 @@ export interface BootOptions {
    *  Opt-in: with panes present a row renders differently, and the specs that
    *  measure the row were written without them. */
   withAgentPane?: boolean;
-  /** A second agent pane in the same workspace. The phone draws a tab per pane
-   *  then, which is the case the steward's chat has to answer for: it writes
-   *  one history per workspace, so the tabs cannot switch it. */
+  /** A second agent pane in the same workspace, which draws a tab per pane on
+   *  the phone. */
   withSecondAgentPane?: boolean;
   /** What the second pane is doing, as its own row of the sessions list
    *  reports it - and it becomes the picked pane.
@@ -117,9 +98,8 @@ const SECOND_AGENT_PANE = {
   paneId: '%6',
   isActive: false,
   agent: 'claude',
-  // A different conversation in the same workspace, which is the whole point:
-  // the raw transcript switches with the pane and the steward's history does
-  // not, because it is written per workspace.
+  // A different conversation in the same workspace: the transcript switches
+  // with the pane.
   agentSessionId: 'sess-2',
   currentCommand: 'claude',
   currentPath: '/home/dev/project',
@@ -128,14 +108,11 @@ const SECOND_AGENT_PANE = {
 export async function bootApp(page: Page, options: BootOptions = {}): Promise<void> {
   // Onboarding is a full-screen overlay; skipping it exposes the real UI, which
   // is what these specs are measuring.
-  const view = options.steward?.view === true;
-  await page.addInitScript((stewardView: boolean) => {
+  await page.addInitScript(() => {
     localStorage.setItem('hrdle-onboarding-completed', 'true');
     localStorage.setItem('hrdle-onboarding-sessionlist-completed', 'true');
-    if (stewardView) localStorage.setItem('hrdle-steward-view', 'true');
-  }, view);
+  });
 
-  const steward = options.steward ?? { enabled: false };
   const first = {
     ...SESSIONS[0],
     ...(options.indicatorState ? { indicatorState: options.indicatorState } : {}),
@@ -154,16 +131,7 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
     options.withAgentPane || options.withSecondAgentPane
       ? [{ ...first, agentSessionId: 'sess-1', panes }, ...SESSIONS.slice(1)]
       : [first, ...SESSIONS.slice(1)];
-  const stewardRoutes: Array<[RegExp, unknown]> = [
-    [/\/api\/steward\/enabled$/, { enabled: steward.enabled }],
-    [/\/api\/steward$/, { thread: steward.thread ?? [], lines: steward.lines ?? [] }],
-    // The pane rides as a query parameter, so the pattern has to stop at the
-    // path: with `$` after `turns` a pane's request fell through to `{}` and
-    // the screen showed nothing, which is not what an unwritten history looks
-    // like either.
-    [/\/api\/steward\/sessions\/[^/]+\/turns(\?|$)/, { turns: steward.turns ?? [] }],
-    [/\/api\/steward\/asks/, { asks: steward.asks ?? [] }],
-    [/\/api\/steward\/observer$/, { present: true, status: 'idle' }],
+  const sessionRoutes: Array<[RegExp, unknown]> = [
     [/\/api\/workspaces$/, { sessions }],
     [/\/api\/sessions$/, { sessions }],
   ];
@@ -177,17 +145,7 @@ export async function bootApp(page: Page, options: BootOptions = {}): Promise<vo
 
   await page.route('**/api/**', async (route) => {
     const url = route.request().url();
-    // A pane's history is its own. Matched before the table, which cannot see
-    // a query string it was written without.
-    if (steward.secondPaneTurns && /\/turns/.test(url) && url.includes(`pane=${encodeURIComponent(SECOND_AGENT_PANE.paneId)}`)) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ turns: steward.secondPaneTurns }),
-      });
-      return;
-    }
-    const match = [...stewardRoutes, ...ROUTES].find(([pattern]) => pattern.test(url));
+    const match = [...sessionRoutes, ...ROUTES].find(([pattern]) => pattern.test(url));
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

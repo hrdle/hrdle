@@ -167,8 +167,8 @@ export const TerminalComponent = memo(
 		const [fontSize, setFontSize] = useState(() => loadFontSize(sessionId));
 		const [keyboardOffset, setKeyboardOffset] = useState(0);
 		/** How tall the fixed bottom bar is, so an overlay can leave room for it.
-		 *  Measured rather than assumed: the steward's composer grows with a
-		 *  thumbnail row, a question and a progress line. */
+		 *  Measured rather than assumed: what the bar holds varies with the
+		 *  session, and a fixed guess leaves a gap or clips the last row. */
 		const barRef = useRef<HTMLDivElement>(null);
 		const [barHeight, setBarHeight] = useState(0);
 		useEffect(() => {
