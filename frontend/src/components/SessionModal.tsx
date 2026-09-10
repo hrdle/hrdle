@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SessionResponse } from "../../../shared/types";
-import { useStewardEnabled, useStewardView } from "../hooks/useSteward";
 import { DashboardPanel } from "./DashboardPanel";
-import { StewardView } from "./steward/StewardView";
 import { WorkspaceList } from "./WorkspaceList";
 
 interface SessionModalProps {
@@ -19,13 +17,6 @@ export function SessionModal({
 	isTablet,
 }: SessionModalProps) {
 	const [showDashboard, setShowDashboard] = useState(false);
-	const [showSteward, setShowSteward] = useState(false);
-	// Tablet only. A desktop reaches the steward through herdr - what hrdle is
-	// for there is the part herdr has no answer to, and that list is shrinking.
-	// The switch is this screen's own: a steward the server runs is not one
-	// somebody asked to see, and every other screen already reads both.
-	const [stewardView] = useStewardView();
-	const stewardAvailable = useStewardEnabled() && stewardView && !!isTablet;
 
 	// Close on Escape
 	useEffect(() => {
@@ -70,16 +61,8 @@ export function SessionModal({
 					onClose={onClose}
 					onToggleDashboard={() => setShowDashboard((v) => !v)}
 					dashboardOpen={showDashboard}
-					onToggleSteward={
-						stewardAvailable ? () => setShowSteward((v) => !v) : undefined
-					}
-					stewardOpen={showSteward}
 				/>
 			</div>
-
-			{stewardAvailable && showSteward && (
-				<StewardView onClose={() => setShowSteward(false)} />
-			)}
 
 			{/* Dashboard side panel (right) */}
 			{showDashboard && (

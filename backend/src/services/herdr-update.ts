@@ -238,14 +238,12 @@ export function withStrayServerStop(commands: string[][], herdrPath: string): st
 /**
  * Stops for the servers the supervisor does not own. `herdr update` replaces
  * nothing while *any* herdr server answers — it lists them, says `Herdr was
- * not updated.` and exits 0 — and the steward keeps a session of its own
- * running for as long as it is enabled, so on a machine with it on the button
- * could never install anything.
+ * not updated.` and exits 0 — so one named session left running anywhere is
+ * enough for the button to install nothing, every time.
  *
- * They are not started again afterwards. The steward's own supervisor brings
- * its session back when the steward is enabled, which is the only place that
- * knows whether it should exist; anything else that was running was somebody's
- * dev server, and hrdle has no business resurrecting one.
+ * They are not started again afterwards: whatever was running was started by
+ * something that knows whether it should exist, and hrdle has no business
+ * resurrecting a server it did not start.
  */
 export function buildHerdrSessionStopCommands(herdrPath: string, sessions: string[]): string[][] {
   return sessions.map((name) => [herdrPath, 'session', 'stop', name]);
@@ -396,8 +394,8 @@ let lastApplyError: string | undefined;
 /**
  * Whether an install is running right now. Anything that keeps a herdr server
  * alive has to stand down while it is: the update has just stopped every
- * server it found, and one restarted underneath it makes herdr refuse to
- * replace the binary at all.
+ * server it found, and one started underneath it makes herdr refuse to replace
+ * the binary at all.
  */
 export function herdrUpdateInProgress(): boolean {
   return applying;

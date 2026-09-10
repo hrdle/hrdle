@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- **The steward is gone.** It was an experiment that stopped being used, so the
+  gate, both CLI verb groups (`steward`, `steward-do`), the store and its
+  runtime, the REST routes, the WebSocket subscription, every screen it drew and
+  the G2 app written for it (`glasses-steward`, `com.hrdle.steward`) are
+  deleted rather than left switched off. What it wrote is still on disk under
+  the data directory - nothing here reads it, and nothing here deletes it.
+
+  Two things it had paid for stay, because they were never really its: the chat
+  view's font size is still shared by every screen that reads a conversation,
+  and the herdr update path still stops named sessions the supervisor does not
+  own, which was written for the steward's session and is right for any of them.
+
 ## [0.3.195] - 2026-09-10
 
 ### Changed

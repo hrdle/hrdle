@@ -7,15 +7,13 @@
     "backend",
     "frontend",
     "shared",
-    "glasses",
-    "glasses-steward"
+    "glasses"
   ],
   "scripts": {
     "dev": "bun run stop; bun run dev:backend & bun run dev:frontend",
     "dev:auth": "bun run stop; bun run --filter backend dev:auth & bun run --filter frontend dev",
     "dev:backend": "bun run --filter backend dev",
     "dev:frontend": "bun run --filter frontend dev",
-    "dev:steward": "bash scripts/dev-steward.sh",
     "stop": "bash scripts/stop.sh",
     "build": "bun run --filter '*' build",
     "build:binary": "bash scripts/build.sh",

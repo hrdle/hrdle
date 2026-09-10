@@ -15,7 +15,6 @@ import type { LayoutVariant } from "../actions/sessionActions";
 import { useMultiplexedTerminal } from "../hooks/useMultiplexedTerminal";
 import { usePeerConnection } from "../hooks/usePeerConnection";
 import { useRemoteControlMode } from "../hooks/useRemoteControlMode";
-import { useStewardEnabled, useStewardView } from "../hooks/useSteward";
 import { SessionActionBar } from "./SessionActionBar";
 import { sessionFetch } from "../services/peer-fetch";
 import { nukeClientCache } from "../utils/nuke-cache";
@@ -406,8 +405,6 @@ export function DesktopLayout({
 }: DesktopLayoutProps) {
 	const isTablet = variant === "tablet";
 	const isMobile = variant === "mobile";
-	const stewardAvailable = useStewardEnabled();
-	const [stewardView] = useStewardView();
 	const isMobileRef = useRef(isMobile);
 	isMobileRef.current = isMobile;
 	const { t } = useTranslation();
@@ -1831,11 +1828,6 @@ export function DesktopLayout({
 	const chatPaneOnScreen = chatOpenPanes.has(desktopState.activePane)
 		? desktopState.activePane
 		: null;
-	// The floating keyboard types into the pane, and the steward's chat has a
-	// composer of its own - so with both on screen the tablet had two places to
-	// type and the visible one was not the one listening. Same rule the phone
-	// applies with `lockInputHidden`; this is where the tablet's input lives.
-	const stewardChatOnScreen = stewardAvailable && stewardView && chatPaneOnScreen !== null;
 	useEffect(() => {
 		if (!isMobile) return;
 		const handlePopState = () => {
@@ -2158,7 +2150,7 @@ export function DesktopLayout({
 
 					<FloatingKeyboard
 						ref={floatingKeyboardRef}
-						visible={showKeyboard && !stewardChatOnScreen}
+						visible={showKeyboard}
 						onClose={() => setShowKeyboard(false)}
 						onSend={handleKeyboardSend}
 						onFilePicker={handleFilePicker}

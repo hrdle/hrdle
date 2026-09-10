@@ -93,8 +93,8 @@ const INFO_TTL_MS = 5 * 60_000;
  * looks like from the other end. A day is long enough for one to survive a
  * night away and short enough that a stale one is gone before it is a pile.
  *
- * It expires from the glasses, not from existence: the steward's thread still
- * holds the question, and its screens are where an old one is answered.
+ * It expires from the glasses, not from existence: the pane still holds the
+ * question, and it is answered there.
  */
 const AGENT_WAITING_TTL_MS = 24 * 60 * 60_000;
 /**
