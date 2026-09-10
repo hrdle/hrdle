@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.194] - 2026-09-10
+
+### Fixed
+- **A session's context bar no longer jumps to 100% and back every few
+  seconds.** The window a percentage is measured against comes from the
+  Anthropic model listing, and two separate things could take it away between
+  one refresh and the next, both answered by the flat 200,000 fallback -
+  measured on a live session as 416,221 tokens reading 41.6% of 1,000,000 on
+  one refresh and 100% of 200,000 on the next. A window once read is now
+  remembered for the process and answers a later listing that leaves the model
+  out, while a listing that still carries it wins as before, so a window that
+  genuinely changes is picked up. And every caller of a failed refresh gets the
+  last good catalog rather than only the caller that started the refresh - the
+  session list computes every session at once, so one failure handed different
+  sessions different windows in the same pass. A model no listing has ever
+  carried still gets the fallback. Thanks to @Chapapon (#550)
+
 ## [0.3.193] - 2026-09-09
 
 ### Added
