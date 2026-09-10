@@ -337,6 +337,10 @@ export interface AppState {
    *  session. Kept separately because the cursor's position is otherwise
    *  expressed as a session and a pane, and that row is neither. */
   listOnNotifications?: boolean
+  /** Workspaces whose panes are listed under their heading, by id. Shut is
+   *  the default: a tap on the heading opens one. `expandedSet` is what the
+   *  list reads, since a pane under the cursor opens its workspace too. */
+  expandedWorkspaces?: string[]
   /**
    * The run is ending on its own, and why.
    *
@@ -663,6 +667,10 @@ const WS_CLOSE = ']'
  * clear spaces asked for.
  */
 const PANE_INDENT = '     '
+/** `×2` after a shut heading: how many panes are folded under it. A glyph the
+ *  panel draws (it is what a cross mark is substituted with), and one that
+ *  reads as a count rather than as a control. */
+const FOLD_MARK = '×'
 
 /** The rule between a question's text and its choices, inside the card. Cut to
  *  the card's width rather than the panel's, or it runs under the border. */
@@ -798,12 +806,13 @@ export interface ListRow {
   /** Absent on the workspace's own row. */
   paneId?: string
   /**
-   * A label, not a target.
+   * A fold, not a target.
    *
    * A multi-pane workspace's own row has nothing to open: it would fall back
    * to the representative agent the server picked, which is one of the panes
    * chosen arbitrarily — exactly the ambiguity the pane rows exist to remove.
-   * So the name becomes a heading over them and the cursor passes it by.
+   * So a tap on it shows or hides the panes instead, and only a pane's row
+   * leads into a conversation.
    */
   header?: boolean
   /**
@@ -829,9 +838,11 @@ export interface ListRow {
  * carries is a level of hierarchy that says nothing, and lines are the
  * scarcest thing on this screen. Two or more panes are separate agent
  * conversations with separate session ids, and only then does the workspace
- * row stop being the whole story.
+ * row stop being the whole story — and even then its panes are listed only
+ * while it is open: listed always, three workspaces of three panes were
+ * twelve rows on a seven-line screen, most of them panes nobody was looking for.
  */
-export function listRows(sessions: Session[], withNotifications = false): ListRow[] {
+export function listRows(sessions: Session[], withNotifications = false, expanded: ReadonlySet<string> = new Set()): ListRow[] {
   const rows: ListRow[] = []
   // First, and pinned there by `sessionListBody` — a notice that scrolled out of
   // sight would be worse than the banner it replaces. `sessionIndex` is -1
@@ -845,14 +856,29 @@ export function listRows(sessions: Session[], withNotifications = false): ListRo
       return
     }
     rows.push({ sessionIndex, header: true })
+    if (!expanded.has(s.id)) return
     for (const p of panes) rows.push({ sessionIndex, paneId: p.paneId })
   })
   return rows
 }
 
-/** Rows the cursor can rest on. */
-export function selectableRows(sessions: Session[], withNotifications = false): ListRow[] {
-  return listRows(sessions, withNotifications).filter((r) => !r.header)
+/**
+ * Which workspaces the list shows open.
+ *
+ * The ones opened by hand, plus the one whose pane the cursor is on: a
+ * question jumps the cursor straight onto its pane, and a fold that then hid
+ * that pane would leave the cursor on a row that is not drawn.
+ */
+export function expandedSet(state: AppState): Set<string> {
+  const set = new Set(state.expandedWorkspaces ?? [])
+  const current = state.sessions[state.sessionIndex]
+  if (current && state.selectedPaneId) set.add(current.id)
+  return set
+}
+
+/** Whether the list shows the workspace's panes, when it has several. */
+function isFolded(s: Session, expanded: ReadonlySet<string>): boolean {
+  return (s.panes?.length ?? 0) >= 2 && !expanded.has(s.id)
 }
 
 /** Whether the list is showing a way in to the relay items — one line, and only
@@ -865,20 +891,19 @@ export function hasNotificationRow(state: AppState): boolean {
 /** Index of the row the cursor is on. */
 export function rowCursor(state: AppState): number {
   const withNotifications = hasNotificationRow(state)
-  const rows = listRows(state.sessions, withNotifications)
+  const rows = listRows(state.sessions, withNotifications, expandedSet(state))
   // A stale flag — the notices cleared while the cursor sat on them — falls
   // through to the session lookup below rather than pointing at a row that is
   // no longer there.
   if (state.listOnNotifications && withNotifications) return 0
+  // No pane chosen and the workspace has several: that is its heading.
   const found = rows.findIndex(
-    (r) =>
-      !r.header && !r.notifications &&
-      r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
+    (r) => !r.notifications && r.sessionIndex === state.sessionIndex && r.paneId === state.selectedPaneId,
   )
   if (found >= 0) return found
-  // Landed on a workspace that turned out to have panes — a fresh state, or a
-  // pane count that grew underneath. Its first pane is what the row meant.
-  const fallback = rows.findIndex((r) => !r.header && r.sessionIndex === state.sessionIndex)
+  // The pane went away underneath the cursor. The workspace's own row is what
+  // is left of what the row meant.
+  const fallback = rows.findIndex((r) => r.sessionIndex === state.sessionIndex)
   return fallback >= 0 ? fallback : 0
 }
 
@@ -904,12 +929,21 @@ function paneStatusLabel(p: Pane, frame: string): string {
  * `%3` is an address, not a name: it says where the pane sits in the split
  * tree and nothing about what is running there. herdr lets the user name one
  * (`herdr pane rename`), and once they have, the name is the whole reason they
- * bothered. The id stays as the fallback, because most panes are never named
- * and an empty label would leave the row pointing at nothing.
+ * bothered. Most panes are never named, but the tab they sit in usually is -
+ * one pane per tab is the common shape, and the tab's name is what the
+ * terminal shows for it - so that comes next. Two panes of one named tab keep
+ * their addresses after it, since the name alone would not tell them apart. A
+ * tab's default label is its number, which names nothing, so it is passed
+ * over. The id stays as the last resort, because an empty row points at nothing.
  */
-function paneName(p: Pane | undefined, paneId: string): string {
+function paneName(p: Pane | undefined, paneId: string, s?: Session): string {
   const label = p?.label?.trim()
-  return label || paneId
+  if (label) return label
+  const tab = p?.tabId ? s?.tabs?.find((t) => t.id === p.tabId) : undefined
+  const tabName = tab?.label.trim()
+  if (!tabName || /^\d+$/.test(tabName)) return paneId
+  const shared = (s?.panes ?? []).filter((x) => x.tabId === p?.tabId).length > 1
+  return shared ? `${tabName} ${paneId}` : tabName
 }
 
 /**
@@ -968,13 +1002,23 @@ function modelShort(model: string | undefined): string {
  */
 function ctxMark(m: RowMetrics | undefined): string {
   const pct = m?.contextPercent
-  return pct != null ? ctxGlyph(pct) : ''
+  // The glyph and the figure: the glyph is for the eye running down the
+  // list (the tall one is the one running out), the figure for the eye that
+  // has stopped on a row. Eight heights alone left the reader unable to say
+  // how close to the top a bar was, which is the question it is there for.
+  return pct != null ? `${ctxGlyph(pct)} ${Math.round(pct)}%` : ''
 }
 
-/** The figures behind the glyph, for the one row the cursor is on. */
+/** The same mark the row carries, labelled, for a bar of its own. */
+function ctxFigure(m: RowMetrics | undefined): string {
+  const mark = ctxMark(m)
+  return mark ? `ctx:${mark}` : ''
+}
+
+/** The model behind the glyph, for the one row the cursor is on. The percent
+ *  is not repeated here - it is on the row itself, beside the glyph. */
 function metricsDetail(m: RowMetrics | undefined): string {
-  const pct = m?.contextPercent
-  return [modelShort(m?.model), pct != null ? `${Math.round(pct)}%` : ''].filter(Boolean).join(' ')
+  return modelShort(m?.model)
 }
 
 /**
@@ -1088,7 +1132,8 @@ function sessionListBody(state: AppState): string {
   // The strip itself is drawn by `sessionListNotice` into a container of its
   // own; what is counted here is the row it costs the list.
   const pinned = hasNotificationRow(state) ? 1 : 0
-  const rows = listRows(sessions, pinned === 1)
+  const expanded = expandedSet(state)
+  const rows = listRows(sessions, pinned === 1, expanded)
   const scrollable = rows.slice(pinned)
   if (!scrollable.length) return '(no sessions)'
   const listLines = LIST_LINES - pinned
@@ -1111,8 +1156,11 @@ function sessionListBody(state: AppState): string {
       // agent's own declared wait. It cannot see the other direction, so the
       // indicator is consulted too rather than instead.
       const label = relayWaitingIds.has(s.id) ? WAITING_BADGE : workspaceLabel(s, frame)
-      // A heading takes no cursor, so it never carries the marker.
-      const name = `${row.header ? CURSOR_NONE : here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}`
+      // Shut, a heading says how many panes it hides: every workspace is
+      // bracketed, so without this a two-pane workspace shut looks exactly
+      // like a one-pane workspace, and a tap on each does a different thing.
+      const hidden = isFolded(s, expanded) ? ` ${FOLD_MARK}${s.panes?.length}` : ''
+      const name = `${here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}${hidden}`
       // A heading's panes carry their own mark on the rows underneath it, and
       // one bar covering three agents would be a level describing none of them.
       return row.header ? name : withCtx(name, ctxMark(s.metrics))
@@ -1120,7 +1168,7 @@ function sessionListBody(state: AppState): string {
     const panes = s.panes ?? []
     const p = panes.find((x) => x.paneId === row.paneId)
     const dir = p ? paneDetail(p, panes) : ''
-    const name = `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${PANE_INDENT}${paneName(p, row.paneId)}`
+    const name = `${here}${p ? paneStatusLabel(p, frame) : BADGE_BLANK}${PANE_INDENT}${paneName(p, row.paneId, s)}`
     return withCtx(`${name}${dir ? ` ${dir}` : ''}`, ctxMark(p?.metrics))
   })
 
@@ -1412,8 +1460,19 @@ function conversationContent(state: AppState): {
   // not going to leave.
   const pinned = state.autoAdvance === false
   const scrolled = state.conversationOffset > 0 || state.conversationPage > 0
-  const back = pinned || scrolled ? 'dbl:top' : 'dbl:back'
-  const answerable = state.relayWaiting.length > 0 || waiting
+  // What a tap does is decided by one thing: whether a question card is
+  // queued (the tap answers it, or jumps to it when it is another session's).
+  // herdr calling the pane blocked is not that - claude sits blocked between
+  // turns, and an agent with no reader for its prompt is blocked with no card
+  // - and on such a pane the tap opens the input, so the footer says so
+  // rather than promising a response that will not come. The demo has no
+  // cards and answers on the session's own state, so it is the exception.
+  const hasCard = state.relayWaiting.length > 0
+  const responds = hasCard || (state.demo === true && waiting)
+  // The double-tap, in the order the controller takes it: a pin comes off
+  // first, then a card is put off, then a read scrolls back to the top, and
+  // only then does it leave.
+  const dbl = pinned ? 'dbl:top' : hasCard ? 'dbl:later' : scrolled ? 'dbl:top' : 'dbl:back'
   // One direction named and not the other reads as a rule about which way the
   // conversation goes; both named fills a footer that has a page number to
   // fit. Neither, then - the same as before, and the swipe is found the way
@@ -1421,9 +1480,7 @@ function conversationContent(state: AppState): {
   // `input`, not `speak`: the tap arrives at the microphone's screen and the
   // hold there is what opens it. A footer promising speech on a gesture that
   // only changes screens is one the wearer finds out is wrong by trying it.
-  const action = !pinned && state.relayWaiting.length > 0
-    ? 'tap:respond  dbl:later'
-    : answerable ? `tap:respond  tap:input  ${back}` : `tap:input  ${back}`
+  const action = `${responds ? 'tap:respond' : 'tap:input'}  ${dbl}`
   // Who is speaking is in the body — the user's turn carries `$` and the
   // agent's carries nothing — so repeating it here said nothing twice. The
   // message counter went with it: its denominator was the number of messages
@@ -1440,14 +1497,24 @@ function conversationContent(state: AppState): {
   // else - and shown as its presence rather than its absence, so the reader who
   // stopped it sees the word go and knows their gesture landed.
   const auto = state.autoAdvance === false ? '' : '  auto'
+  // How full the context of the conversation being read is, the same figure
+  // the list shows on its row. The pane's when a pane is being read.
+  const metrics = pane ? pane.metrics : session?.metrics
+  const ctx = ctxFigure(metrics)
+  const hints = `${pageInfo ? `${action}  ${pageInfo.trim()}` : action}${auto}${ctx ? `  ${ctx}` : ''}`
+  // The model too, while it fits. This bar has no clock to give up and no
+  // way to clip, so a footer past the edge wraps onto a second line and
+  // takes it from the conversation; the model is the part that yields.
+  const model = modelShort(metrics?.model)
+  const withModel = model ? `${hints}  ${model}` : hints
   return {
     noticeText,
     headerText: withClock(
-      `${session ? sName(session) : '---'}${pane ? ` ${paneName(pane, pane.paneId)}` : ''}`,
+      `${session ? sName(session) : '---'}${pane ? ` ${paneName(pane, pane.paneId, session)}` : ''}`,
       `${statusBadge}${noticeMark}${demoTail}`,
     ),
     bodyText,
-    footerText: `${pageInfo ? `${action}  ${pageInfo.trim()}` : action}${auto}`,
+    footerText: textWidth(withModel) <= HEADER_WIDTH ? withModel : hints,
   }
 }
 
@@ -1470,24 +1537,29 @@ function cursorMetrics(state: AppState, row: ListRow | undefined): RowMetrics | 
 
 /** Everything the list screen has to say, in the one bar it still has. */
 function sessionListFooter(state: AppState): string {
-  // Counted among what can be opened; headings are not places to be.
-  const rows = listRows(state.sessions, hasNotificationRow(state))
-  const at = rows[rowCursor(state)]
-  const selectable = rows.filter((r) => !r.header)
-  const cursor = selectable.findIndex((r) => r === at) + 1
-  const total = selectable.length
+  const expanded = expandedSet(state)
+  const rows = listRows(state.sessions, hasNotificationRow(state), expanded)
+  const cursor = rowCursor(state)
+  const at = rows[cursor]
+  const total = rows.length
   const badge = state.relayWaiting.length > 0 ? `  !${state.relayWaiting.length}` : ''
   // The gesture does something different on that row, so it says so. A footer
   // that promises `tap:open` and then shows a notice queue has misled the reader
   // about the only control they have.
-  const open = at?.notifications ? 'tap:notices' : 'tap:open'
+  const heading = at?.header ? state.sessions[at.sessionIndex] : undefined
+  const open = at?.notifications ? 'tap:notices'
+    : heading ? (isFolded(heading, expanded) ? 'tap:unfold' : 'tap:fold')
+    : 'tap:open'
   // Which model, and how full, for the one row being pointed at. It rides as
   // the tail so it outlives the gesture hints when the bar runs short: the
   // hints say what every row does and can be learned once, where this changes
   // with every swipe and is the reason to swipe at all.
-  const detail = metricsDetail(cursorMetrics(state, at))
+  // A heading has no detail: its workspace's figures are one pane's - the
+  // pane the server picked to stand for it - shown as if they were the
+  // workspace's, and the reader cannot tell whose. The rows underneath say.
+  const detail = at?.header ? '' : metricsDetail(cursorMetrics(state, at))
   const demoTail = state.demo ? DEMO_TAIL : ''
-  return withClock(`${open}  swipe:nav  ${cursor}/${total}${badge}`, `${detail ? `  ${detail}` : ''}${demoTail}`)
+  return withClock(`${open}  swipe:nav  ${cursor + 1}/${total}${badge}`, `${detail ? `  ${detail}` : ''}${demoTail}`)
 }
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 /** Double-tap means "leave" on every screen, so a multi-select's third verb

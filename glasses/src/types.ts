@@ -36,6 +36,9 @@ export interface Session {
   ccRecapKind?: 'summary' | 'last-message'
   /** Tab the terminal is showing. Panes outside it are marked in the list. */
   activeTabId?: string
+  /** The workspace's tabs, sent only when there are two or more. A pane's row
+   *  borrows its tab's name, since a pane is rarely named and a tab usually is. */
+  tabs?: { id: string; label: string; paneCount: number; active: boolean }[]
   ccFirstPrompt?: string
   ccSessionId?: string
   /** Which agent runs here. Decides how the conversation is read. */

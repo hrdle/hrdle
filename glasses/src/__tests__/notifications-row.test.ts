@@ -12,7 +12,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { GlassesController } from '../controller.ts'
-import { hasNotificationRow, listRows, rowCursor, screenText, selectableRows } from '../display.ts'
+import { hasNotificationRow, listRows, rowCursor, screenText } from '../display.ts'
 import { BODY_WIDTH, textWidth as width } from '../metrics.ts'
 import type { AppState } from '../display.ts'
 import type { GlassesRelayItem, Session } from '../types.ts'
@@ -94,7 +94,6 @@ describe('the notifications row exists only when there is something behind it', 
   test('it is first, and it is selectable', () => {
     const rows = listRows(sessions(3), true)
     expect(rows[0].notifications).toBe(true)
-    expect(selectableRows(sessions(3), true)[0].notifications).toBe(true)
     expect(rows).toHaveLength(4)
   })
 })

@@ -27,7 +27,7 @@
 
 import { getConversation, getGlassesSettings, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, MENU_SLEEP_ID, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MENU_SLEEP_ID, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, expandedSet, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -1441,17 +1441,13 @@ export class GlassesController {
   // ── session_list ──
 
   /** Walk the list one row at a time. Rows are workspaces and, where a
-   *  workspace holds more than one, its panes — so the same gesture moves
-   *  between workspaces and into them without a second control. */
+   *  workspace holds more than one and is open, its panes — so the same
+   *  gesture moves between workspaces and into them without a second control. */
   private moveListCursor(step: number): void {
     const st = this.state
-    const rows = listRows(st.sessions, hasNotificationRow(st))
+    const rows = listRows(st.sessions, hasNotificationRow(st), expandedSet(st))
     if (!rows.length) return
-    // Step over headings: a multi-pane workspace's name has nothing to open.
-    let i = rowCursor(st)
-    do {
-      i += step
-    } while (i >= 0 && i < rows.length && rows[i].header)
+    const i = rowCursor(st) + step
     if (i < 0 || i >= rows.length) return
     const row = rows[i]
     // The notices row is neither a session nor a pane, so where the cursor is
@@ -1485,6 +1481,17 @@ export class GlassesController {
         }
         const s = this.currentSession()
         if (!s) return
+        // A heading opens or shuts; only a pane's own row leads in. The
+        // cursor stays on the heading either way, which is where a reader
+        // shutting a fold expects to still be.
+        if ((s.panes?.length ?? 0) >= 2 && !st.selectedPaneId) {
+          const open = new Set(st.expandedWorkspaces ?? [])
+          if (open.has(s.id)) open.delete(s.id)
+          else open.add(s.id)
+          st.expandedWorkspaces = [...open]
+          this.render()
+          return
+        }
         // A tap on a row is the wearer choosing, so it outbids a tablet left
         // visible on a desk. The subscribe below cannot say that on its own -
         // following the focus makes the identical call.
@@ -2520,6 +2527,11 @@ export class GlassesController {
   private async jumpToItem(item: GlassesRelayItem): Promise<void> {
     const idx = this.state.sessions.findIndex((s) => s.id === item.sessionId)
     if (idx >= 0) this.state.sessionIndex = idx
+    // The item names its pane, or none. Left as it stood, the previous
+    // workspace's pane id came along: pane ids repeat across workspaces, so
+    // it matched a pane of this one and, with the fold reading a chosen pane
+    // as "open", showed this workspace unfolded for no reason.
+    this.state.selectedPaneId = item.paneId
     // Reached only by a tap on the item, so this is a choice like any other.
     this.ws.claimFocus(item.sessionId)
     this.ws.subscribe(item.sessionId)
@@ -2835,6 +2847,9 @@ export class GlassesController {
     if (idx < 0) return false
 
     st.sessionIndex = idx
+    // A focus names a workspace, never a pane. The pane chosen in the
+    // previous workspace is not one of this one's (see `jumpToItem`).
+    st.selectedPaneId = undefined
     if (st.mode === 'session_list') {
       // Move the cursor only; entering a session stays a deliberate tap.
       this.render()

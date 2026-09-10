@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { OsEventTypeList } from '@evenrealities/even_hub_sdk'
 import { sanitizeForG2, formatMessage } from '../types.ts'
+import type { GlassesRelayItem } from '../types.ts'
 import { invalidatePanel, panelDrops, screenText, updateDisplay, updateHeader, wrapForPanel, wrapHeader } from '../display.ts'
 import {
   BAR_H,
@@ -15,7 +16,7 @@ import {
   cardBox,
   textWidth as width,
 } from '../metrics.ts'
-import { listRows, rowCursor, selectableRows } from '../display.ts'
+import { expandedSet, listRows, rowCursor } from '../display.ts'
 import { GlassesController, NOTICE_DISMISS_MS } from '../controller.ts'
 import { NOTICE_SCROLL_CHARS, noticeHeight, noticeScrollSteps } from '../display.ts'
 import { SPACE_W } from '../metrics.ts'
@@ -759,44 +760,85 @@ describe('workspace and pane list', () => {
     expect(listRows(sessions).filter((r) => r.sessionIndex === 0)).toEqual([{ sessionIndex: 0 }])
   })
 
-  test('a workspace with two panes lists them under a heading', () => {
-    expect(listRows(sessions).filter((r) => r.sessionIndex === 1)).toEqual([
+  test('a workspace with two panes is one folded heading until it is opened', () => {
+    expect(listRows(sessions).filter((r) => r.sessionIndex === 1)).toEqual([{ sessionIndex: 1, header: true }])
+    expect(listRows(sessions, false, new Set(['b'])).filter((r) => r.sessionIndex === 1)).toEqual([
       { sessionIndex: 1, header: true },
       { sessionIndex: 1, paneId: '%1' },
       { sessionIndex: 1, paneId: '%2' },
     ])
   })
 
-  test('the heading is not a place the cursor can be', () => {
-    // Its own row would open the representative pane the server picked — one
-    // of them, arbitrarily, which is the ambiguity the pane rows remove.
-    expect(selectableRows(sessions).some((r) => r.sessionIndex === 1 && !r.paneId)).toBe(false)
+  test('the heading is where the cursor rests for a workspace with no pane chosen', () => {
+    expect(rowCursor(st(1))).toBe(1)
+    expect(listRows(sessions)[rowCursor(st(1))]).toEqual({ sessionIndex: 1, header: true })
   })
 
-  test('a heading carries no cursor marker', () => {
-    const line = screenText(st(1, '%1')).body.split('\n')[1]
-    expect(line.startsWith('>')).toBe(false)
+  test('a heading under the cursor carries the marker', () => {
+    const line = screenText(st(1)).body.split('\n')[1]
+    expect(line.startsWith('>')).toBe(true)
     expect(line).toContain('2脚ロボ開発')
   })
 
-  test('the cursor walks workspaces and panes with one gesture', () => {
+  test('a folded heading says how many panes it hides', () => {
+    // Every workspace is bracketed, so without this a two-pane workspace shut
+    // looks exactly like a one-pane workspace, and a tap on each does a
+    // different thing.
+    const body = screenText(st(1)).body.split('\n')
+    expect(body[1]).toContain('[2脚ロボ開発] ×2')
+    expect(body[0]).not.toContain('×')
+    expect(screenText({ ...st(1), expandedWorkspaces: ['b'] }).body.split('\n')[1]).not.toContain('×')
+  })
+
+  test('a chosen pane opens its workspace whether or not it was opened by hand', () => {
+    // A question jumps the cursor onto a pane; the fold it sits under must not
+    // swallow it.
     expect(rowCursor(st(1, '%2'))).toBe(3)
-    // A workspace with panes resolves to its first one, never to the heading.
-    expect(listRows(sessions)[rowCursor(st(1))].paneId).toBe('%1')
+    expect(listRows(sessions, false, expandedSet(st(1, '%2')))[3].paneId).toBe('%2')
   })
 
   test('a workspace is bracketed and its panes are indented under it', () => {
     // Bracketed is a workspace, bare and indented is a pane of the one above.
     // The rule only works if it holds for every workspace, so the single-pane
     // one is bracketed too - otherwise it reads as a pane of nothing.
-    const body = screenText(st(1)).body.split('\n')
+    const body = screenText(st(1, '%1')).body.split('\n')
     expect(body[0]).toContain('[グラス開発]')
     expect(body[1]).toContain('[2脚ロボ開発]')
     expect(body[2]).toContain('     %1')
     expect(body[3]).toContain('     %2')
     // The tree it replaces: the branch said which pane was last, which was not
     // the question anyone was asking of this screen.
-    expect(screenText(st(1)).body).not.toMatch(/[├└]/)
+    expect(screenText(st(1, '%1')).body).not.toMatch(/[├└]/)
+  })
+
+  test('a pane is called by its tab when the tab has a name', () => {
+    const tabbed = [{
+      id: 'b', name: 'b', state: 'idle' as const,
+      tabs: [{ id: 'w1:t1', label: 'リベース', paneCount: 1, active: true }, { id: 'w1:t2', label: '2', paneCount: 2, active: false }],
+      panes: [
+        { paneId: '%1', tabId: 'w1:t1' },
+        { paneId: '%2', tabId: 'w1:t2' },
+        { paneId: '%3', tabId: 'w1:t2', label: 'reviewer' },
+      ],
+    }]
+    const body = screenText({ ...st(0, '%1'), sessions: tabbed }).body
+    // The pane's own name outranks the tab's. A tab's default label is its
+    // number, which names nothing, so that pane keeps its address.
+    expect(body).toContain('     リベース')
+    expect(body).toContain('     %2')
+    expect(body).toContain('     reviewer')
+  })
+
+  test('two panes of one named tab keep their addresses to tell them apart', () => {
+    const tabbed = [{
+      id: 'b', name: 'b', state: 'idle' as const,
+      tabs: [{ id: 'w1:t1', label: 'リベース', paneCount: 2, active: true }, { id: 'w1:t2', label: 'x', paneCount: 1, active: false }],
+      panes: [{ paneId: '%1', tabId: 'w1:t1' }, { paneId: '%2', tabId: 'w1:t1' }, { paneId: '%3', tabId: 'w1:t2' }],
+    }]
+    const body = screenText({ ...st(0, '%1'), sessions: tabbed }).body
+    expect(body).toContain('     リベース %1')
+    expect(body).toContain('     リベース %2')
+    expect(body).toContain('     x')
   })
 
   test('the list gets the row the header used to occupy', () => {
@@ -816,11 +858,66 @@ describe('workspace and pane list', () => {
 
   test('the footer carries the position and the clock', () => {
     const footer = screenText(st(1)).footer
-    // Four selectable rows: the single-pane workspace, two panes, and the
-    // workspace with none. The heading is not among them.
-    expect(footer).toMatch(/2\/4/)
+    // Three rows while the fold is shut: the single-pane workspace, the
+    // heading, and the workspace with no panes. Five once it is open.
+    expect(footer).toMatch(/2\/3/)
+    expect(screenText(st(1, '%2')).footer).toMatch(/4\/5/)
     expect(footer).toMatch(/ \d\d:\d\d$/)
     expect(width(footer)).toBeLessThanOrEqual(HEADER_WIDTH)
+  })
+
+  test('a heading carries no model or context in the footer', () => {
+    // The workspace's figures are one pane's, chosen by the server, and the
+    // reader cannot tell whose. A pane row says its own, on the row.
+    expect(screenText(st(1)).footer).not.toMatch(/%|ctx/)
+    expect(screenText(st(1, '%1')).body).toMatch(/30%/)
+  })
+
+  test('the footer says what a tap does on a heading', () => {
+    expect(screenText(st(1)).footer).toContain('tap:unfold')
+    expect(screenText({ ...st(1), expandedWorkspaces: ['b'] }).footer).toContain('tap:fold')
+    expect(screenText(st(1, '%1')).footer).toContain('tap:open')
+  })
+
+  test('a row says how full in figures as well as in height', () => {
+    // Eight heights alone could not say how close to the top a bar was.
+    const body = screenText(st(1, '%1')).body
+    expect(body).toContain('ctx:▃ 30%')
+    expect(body).toContain('ctx:▂ 15%')
+  })
+
+  test('the footer names the one thing a tap does', () => {
+    // A pane herdr calls blocked with no question card behind it: the tap
+    // opens the input, so that is the verb - not a pair of them.
+    const blocked = { ...st(1, '%1'), mode: 'conversation' as const, sessions: sessions.map((s) => s.id === 'b' ? { ...s, panes: (s.panes ?? []).map((p) => ({ ...p, indicatorState: 'waiting_input' as const })) } : s) }
+    expect(screenText(blocked).footer).toMatch(/^tap:input  dbl:back/)
+    expect(screenText(blocked).footer).not.toContain('tap:respond')
+    // A card queued and the read pinned: the tap answers, the double-tap unpins.
+    const card = { id: 'q', sessionId: 'b', paneId: '%1', kind: 'waiting', text: 'which?', source: 'auto', createdAt: 1 } as GlassesRelayItem
+    const pinnedCard = { ...blocked, relayWaiting: [card], autoAdvance: false }
+    expect(screenText(pinnedCard).footer).toMatch(/^tap:respond  dbl:top/)
+    expect(screenText(pinnedCard).footer).not.toContain('tap:input')
+    // A card while scrolled back: the double-tap puts the card off first.
+    expect(screenText({ ...blocked, relayWaiting: [card], conversationPage: 2 }).footer).toMatch(/^tap:respond  dbl:later/)
+    // The demo scripts its own picker off the session's state, with no card.
+    expect(screenText({ ...blocked, demo: true }).footer).toMatch(/^tap:respond  dbl:back/)
+  })
+
+  test('the conversation footer carries the context of what is being read, and the model while it fits', () => {
+    const conv = { ...st(1, '%2'), mode: 'conversation' as const }
+    expect(screenText(conv).footer).toMatch(/ctx:▂ 15%$/)
+    const withModel = (model: string) => ({
+      ...conv,
+      sessions: [sessions[0], { ...sessions[1], panes: (sessions[1].panes ?? []).map((p) => ({ ...p, metrics: { ...p.metrics, model } })) }, sessions[2]],
+    })
+    expect(screenText(withModel('claude-fable-5-1')).footer).toMatch(/ctx:▂ 15%  Fable 5\.1$/)
+    // A name that would push the bar past its edge wraps onto a second line,
+    // which this bar cannot clip; the model is what goes, the context stays.
+    const footer = screenText(withModel('vendor/a-model-with-a-very-long-name-that-cannot-fit-on-the-bar-at-all')).footer
+    expect(width(footer)).toBeLessThanOrEqual(HEADER_WIDTH)
+    expect(footer).toMatch(/ctx:▂ 15%$/)
+    // The workspace's own figure when no pane is chosen, and nothing when there is none.
+    expect(screenText({ ...st(2), mode: 'conversation' as const }).footer).not.toContain('ctx:')
   })
 
   test('the list screen has no header', () => {
@@ -830,8 +927,8 @@ describe('workspace and pane list', () => {
   test('a pane row drops the directory its siblings share', () => {
     // Two panes of one repo repeat the same folder name; the second one
     // teaches the reader nothing.
-    const body = screenText(st(1)).body
-    expect(body).toContain('     %1 ctx:▃')
+    const body = screenText(st(1, '%1')).body
+    expect(body).toContain('     %1 ctx:▃ 30%')
     expect(body).not.toContain('wheel-leg-bot')
   })
 
@@ -839,20 +936,20 @@ describe('workspace and pane list', () => {
     // Parked at the right edge it read as a chart of its own, which the eye had
     // to travel to and back from to see whose row it was. The label is what
     // makes a lone block legible.
-    const lines = screenText(st(1)).body.split('\n')
-    const marked = lines.filter((l) => /ctx:[▁▂▃▄▅▆▇█]$/.test(l))
+    const lines = screenText(st(1, '%1')).body.split('\n')
+    const marked = lines.filter((l) => /ctx:[▁▂▃▄▅▆▇█] \d+%$/.test(l))
     expect(marked.length).toBeGreaterThan(1)
     for (const line of marked) expect(width(line)).toBeLessThanOrEqual(BODY_WIDTH)
   })
 
-  test('the list shows how full without spelling it out', () => {
+  test('the list shows how full in height and in figures', () => {
     // Eight block heights, filling as the context does - the tall row is the
     // one running out, findable without reading a single number. The figure
-    // itself is one row's worth of detail and lives in the footer.
-    const body = screenText(st(1)).body
-    expect(body).toContain('▃')
-    expect(body).toContain('▂')
-    expect(body).not.toMatch(/\d+%/)
+    // rides beside it: heights alone could not say how close to the top a
+    // bar was, which is what a reader stopping on a row wants to know.
+    const body = screenText(st(1, '%1')).body
+    expect(body).toContain('▃ 30%')
+    expect(body).toContain('▂ 15%')
   })
 
   test('a heading leaves the mark to the panes under it', () => {
@@ -885,6 +982,7 @@ describe('panes across tabs', () => {
     mode: 'session_list' as const,
     sessions,
     sessionIndex: 0,
+    selectedPaneId: '%1',
     conversation: [],
     conversationOffset: 0,
     conversationPage: 0,
@@ -902,7 +1000,7 @@ describe('panes across tabs', () => {
     // It was marked while a reply to it could not land. The server switches
     // tabs to deliver now, so the tab is a fact with no decision attached.
     const body = screenText(st).body
-    expect(body).toContain('%1 ctx:▃')
+    expect(body).toContain('%1 ctx:▃ 31%')
     expect(body).toContain('%4 ctx:▁')
     expect(body).not.toContain('別タブ')
   })
@@ -933,14 +1031,15 @@ describe('what a list row says about the agent', () => {
     )
   })
 
-  test('the figures belong to the row being pointed at', () => {
-    // Printed on all thirteen rows they are the same two facts thirteen times;
-    // the model rarely differs, and nobody compares percents digit by digit
-    // while walking a list.
+  test('the model belongs to the footer, the percent to the row', () => {
+    // The model is the same fact on every row and rarely differs, so it sits
+    // in the footer for the row being pointed at; the percent is on the row,
+    // beside the glyph, and is not repeated in the footer.
     const { body, footer } = screenText(mk({ contextPercent: 42.1, model: 'claude-opus-5' }))
-    expect(footer).toContain('Opus 5 42%')
+    expect(footer).toContain('Opus 5')
+    expect(footer).not.toMatch(/42%/)
     expect(body).not.toContain('Opus')
-    expect(body).not.toContain('42%')
+    expect(body).toContain('42%')
   })
 
   test('the model is the family and its version, not the id', () => {
@@ -960,7 +1059,7 @@ describe('what a list row says about the agent', () => {
     // Rounded to the figure the footer shows, so 99.6% is not a full bar
     // beside a number that says otherwise.
     expect(screenText(mk({ contextPercent: 99.6 })).body).toContain('█')
-    expect(screenText(mk({ contextPercent: 99.6 })).footer).toContain('100%')
+    expect(screenText(mk({ contextPercent: 99.6 })).body).toContain('100%')
   })
 
   test('a workspace with neither says nothing in their place', () => {
@@ -979,7 +1078,8 @@ describe('what a list row says about the agent', () => {
         { id: 'r1', sessionId: 'a', kind: 'waiting' as const, text: 'x', source: 'auto' as const, createdAt: 0 },
       ],
     }).footer
-    expect(footer).toContain('Opus 5 42%')
+    expect(footer).toContain('Opus 5')
+    expect(footer).not.toMatch(/42%/)
     expect(width(footer)).toBeLessThanOrEqual(HEADER_WIDTH)
   })
 
@@ -990,7 +1090,7 @@ describe('what a list row says about the agent', () => {
       sessions: [{ id: 'a', name: long, state: 'idle' as const, metrics: { contextPercent: 42, model: 'claude-opus-5' } }],
     }).body
     // The mark was the part added; a clipped name still names its row.
-    expect(body).toMatch(/ctx:▄$/)
+    expect(body).toMatch(/ctx:▄ 42%$/)
     expect(body).toContain('…')
     expect(width(body)).toBeLessThanOrEqual(BODY_WIDTH)
   })
@@ -1451,6 +1551,7 @@ describe('a pane is called what the user called it', () => {
       },
     ],
     sessionIndex: 0,
+    expandedWorkspaces: ['a'],
     conversation: [],
     conversationOffset: 0, conversationPage: 0, conversationLastLoaded: 0,
     conversationHasMore: false, conversationLoading: false,
@@ -2114,7 +2215,7 @@ describe('the list marks the sessions that want you', () => {
   }
   type Ind = 'waiting_input' | 'processing' | 'completed' | 'idle'
   const rows = (sessions: unknown[]) =>
-    screenText({ ...base, sessions } as never).body.split('\n')
+    screenText({ ...base, sessions, expandedWorkspaces: (sessions as { id: string }[]).map((s) => s.id) } as never).body.split('\n')
   const ws = (id: string, indicatorState: Ind, panes?: unknown[]) => ({
     id, name: id, state: 'idle' as const, indicatorState, panes,
   })
