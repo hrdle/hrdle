@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.195] - 2026-09-10
+
+### Changed
+- **A workspace's panes are folded under its heading on the glasses, and named
+  after their tabs.** Listed always, three workspaces of three panes were twelve
+  rows on a seven-line screen, most of them panes nobody was looking for. The
+  heading is one row now, shut by default and marked with how many it hides; a
+  tap opens or shuts it, and only a pane's own row leads into a conversation. A
+  pane borrows its tab's name, since a pane is rarely named and a tab usually
+  is. A fold never hides a pane that is waiting - the heading carries that
+  badge itself. Thanks to @Chapapon (#551)
+  - **The context figure is on every row**, not only in the footer: the bar
+    heights alone had no visible ceiling. A folded heading carries none, since
+    its figures would be one pane's, chosen by the server, with no way to tell
+    whose
+  - **The conversation footer names the one thing a tap does.** It offered two
+    verbs whenever a pane was called blocked with no question behind it; what a
+    tap does depends only on whether a card is queued, so the footer follows
+    that alone. The double-tap is listed in the order the controller takes it,
+    so a branch that moves cannot leave the label describing the branch beneath
+    it
+  - Reaches the G2 with a later glasses build, not with this release
+
 ## [0.3.194] - 2026-09-10
 
 ### Fixed
