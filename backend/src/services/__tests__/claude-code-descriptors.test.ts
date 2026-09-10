@@ -19,6 +19,25 @@ const openDescriptorsOf = (file: string) =>
     }
   }).length;
 
+/**
+ * The count once the close has landed, or the last count if it never does.
+ *
+ * `readRecordedCwd` calls `stream.destroy()` without awaiting it, so the
+ * descriptor goes back on a later tick - and on a loaded machine that tick is
+ * after the assertion. Read once, this passed on an idle laptop and failed in
+ * CI at random. A leak still fails: nothing hands the descriptor back, so the
+ * count never reaches zero and this returns it after the wait.
+ */
+async function settledDescriptorsOf(file: string): Promise<number> {
+  const deadline = Date.now() + 2_000;
+  let count = openDescriptorsOf(file);
+  while (count > 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10));
+    count = openDescriptorsOf(file);
+  }
+  return count;
+}
+
 function transcript(lines: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), 'hrdle-transcript-'));
   const file = join(dir, 'session.jsonl');
@@ -35,13 +54,13 @@ describe.skipIf(!canCount)('reading the recorded cwd releases the file', () => {
     const file = transcript([JSON.stringify({ cwd: '/work/here' }), ...Array(50).fill('{}')]);
     expect(await read(file)).toBe('/work/here');
     for (let i = 0; i < 20; i++) await read(file);
-    expect(openDescriptorsOf(file)).toBe(0);
+    expect(await settledDescriptorsOf(file)).toBe(0);
   });
 
   test('when the head runs out before any cwd', async () => {
     const file = transcript(Array(300).fill(JSON.stringify({ type: 'progress' })));
     expect(await read(file)).toBeNull();
     for (let i = 0; i < 20; i++) await read(file);
-    expect(openDescriptorsOf(file)).toBe(0);
+    expect(await settledDescriptorsOf(file)).toBe(0);
   });
 });
