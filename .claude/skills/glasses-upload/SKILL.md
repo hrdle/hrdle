@@ -337,6 +337,27 @@ words — both caught only by reading back.
 - Uploading a new ehpk and even promoting it to Beta does **not** disturb the
   review: it is attached to the submitted build, not to whatever is Beta
 
+## What cannot be taken back
+
+Measured on 2026-09-10, taking a project down:
+
+- **`Delist from Even HUB` only exists on a project that has been published.** An
+  app that never reached Public has no delist control and no way to delete the
+  project at all - the Store listing tab offers `Submit for review` and nothing
+  else. `com.hrdle.steward` had eight builds and no way to remove itself
+- **A build that is currently Beta cannot be deleted.** The confirm dialog
+  appears and reads `This build will be permanently removed. This action cannot
+  be undone.`, and the build is still there afterwards. Private builds delete
+  properly from the same control
+- **There is no way found to remove a member from the Testing group** - the tab
+  has `Add user` and no counterpart
+
+So a retired app stays on the Hub: the project, whatever is on Beta, and the
+testers it was given to. That is survivable, because a plugin whose server
+endpoints are gone draws nothing. It also means **the Plugin ID is kept**, which
+is the one thing worth having if the idea is ever restarted - the ID cannot be
+changed, and a new project inherits neither the build history nor the testers.
+
 ## When to stop at Beta
 
 The usual run is upload → Beta → submit in one sitting. Stop at Beta and have
