@@ -122,6 +122,12 @@ export class StatsService {
       if (mtimeMs < cutoffMs) continue;
 
       try {
+        // Read to the end every time - the loop below only ever `continue`s -
+        // so the stream terminates on its own and `autoClose` hands the
+        // descriptor back. The reads in `claude-code.ts` destroy theirs because
+        // each of them stops early: two on finding what they came for, one on a
+        // line budget. A stream abandoned mid-file is the one that has to be
+        // told; this one is not.
         const rl = createInterface({
           input: createReadStream(filePath, { encoding: 'utf-8' }),
           crlfDelay: Number.POSITIVE_INFINITY,
