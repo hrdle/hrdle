@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.197] - 2026-09-11
+
 ### Removed
 - **The steward is gone.** It was an experiment that stopped being used, so the
   gate, both CLI verb groups (`steward`, `steward-do`), the store and its
