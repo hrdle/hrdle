@@ -341,6 +341,11 @@ export interface AppState {
    *  the default: a tap on the heading opens one. `expandedSet` is what the
    *  list reads, since a pane under the cursor opens its workspace too. */
   expandedWorkspaces?: string[]
+  /** The list is showing the machines rather than one machine's
+   *  sessions. Only meaningful with two or more machines (`showingMachines`). */
+  machinePick?: boolean
+  /** Which machine row the cursor is on. */
+  machineCursor?: number
   /**
    * The run is ending on its own, and why.
    *
@@ -881,6 +886,114 @@ function isFolded(s: Session, expanded: ReadonlySet<string>): boolean {
   return (s.panes?.length ?? 0) >= 2 && !expanded.has(s.id)
 }
 
+// ─── Machines ───
+//
+// The server this app talks to merges its peers' sessions into the one list
+// it serves, each tagged with the machine it runs on. One column of three
+// machines' sessions is a long walk to any of them, so with peers the list
+// opens on the machines and shows one machine's sessions at a time. The
+// grouping is read off the list; nothing is asked of the server.
+
+const LOCAL_MACHINE = 'local'
+
+export function machineOf(s: Session): string {
+  return s.peerId ?? LOCAL_MACHINE
+}
+
+export interface MachineGroup {
+  id: string
+  label: string
+  /** Index in `state.sessions` of the machine's first session. */
+  firstIndex: number
+  count: number
+  waiting: number
+  working: boolean
+}
+
+/** The machines, in the order the list already has them (the peers' order). */
+export function machineGroups(state: AppState): MachineGroup[] {
+  const relayIds = new Set(state.relayWaiting.map((i) => i.sessionId))
+  const groups: MachineGroup[] = []
+  state.sessions.forEach((s, i) => {
+    const id = machineOf(s)
+    let g = groups.find((x) => x.id === id)
+    if (!g) {
+      g = { id, label: s.peerNickname ?? id, firstIndex: i, count: 0, waiting: 0, working: false }
+      groups.push(g)
+    }
+    g.count++
+    const panes = s.panes ?? []
+    if (relayIds.has(s.id) || s.indicatorState === 'waiting_input' || panes.some((p) => p.indicatorState === 'waiting_input')) g.waiting++
+    if (s.indicatorState === 'processing' || panes.some((p) => p.indicatorState === 'processing')) g.working = true
+  })
+  return groups
+}
+
+/** One machine has nothing to choose between, so it gets no screen. */
+export function hasMachineScreen(state: AppState): boolean {
+  return machineGroups(state).length >= 2
+}
+
+export function showingMachines(state: AppState): boolean {
+  return state.mode === 'session_list' && state.machinePick === true && hasMachineScreen(state)
+}
+
+/**
+ * The list's rows, narrowed to the machine of the session the cursor is on.
+ *
+ * The cursor's machine rather than a stored choice, so a jump to a session on
+ * another machine (a question, the tablet's focus) lands in that machine's
+ * list with nothing to keep in step. The notices row is on every machine.
+ */
+export function listRowsFor(state: AppState): ListRow[] {
+  const rows = listRows(state.sessions, hasNotificationRow(state), expandedSet(state))
+  const current = state.sessions[state.sessionIndex]
+  if (!current || !hasMachineScreen(state)) return rows
+  const machine = machineOf(current)
+  return rows.filter((r) => r.notifications || machineOf(state.sessions[r.sessionIndex]) === machine)
+}
+
+/** The name as the row shows it: the machine's prefix is the screen's, not the row's. */
+function listName(s: Session): string {
+  const name = sName(s)
+  const prefix = s.peerNickname ? `${s.peerNickname}/` : ''
+  return prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name
+}
+
+/** Where the cursor is on the machine screen: -1 on the notices row. */
+function machineCursor(state: AppState): number {
+  if (state.listOnNotifications && hasNotificationRow(state)) return -1
+  const n = machineGroups(state).length
+  return Math.min(Math.max(0, state.machineCursor ?? 0), Math.max(0, n - 1))
+}
+
+function machineListBody(state: AppState): string {
+  const groups = machineGroups(state)
+  if (!groups.length) return '(no sessions)'
+  const cursor = machineCursor(state)
+  const frame = spinnerFrame(state)
+  // Windowed around the cursor, the notices strip taking one line when it is
+  // there - the session list's shape, so a ninth machine is reachable.
+  const lines = LIST_LINES - (hasNotificationRow(state) ? 1 : 0)
+  const start = Math.max(0, Math.min(Math.max(0, cursor) - 3, groups.length - lines))
+  return groups.slice(start, start + lines).map((g, j) => {
+    const i = start + j
+    const here = i === cursor ? CURSOR_HERE : CURSOR_NONE
+    const label = g.waiting > 0 ? WAITING_BADGE : g.working ? padBadge(frame) : BADGE_BLANK
+    const waiting = g.waiting > 0 ? `  !${g.waiting}` : ''
+    return `${here}${label} ${g.label}  ${g.count}${waiting}`
+  }).join('\n')
+}
+
+function machineListFooter(state: AppState): string {
+  const groups = machineGroups(state)
+  const cursor = machineCursor(state)
+  const open = cursor < 0 ? 'tap:notices' : 'tap:open'
+  const badge = state.relayWaiting.length > 0 ? `  !${state.relayWaiting.length}` : ''
+  const demoTail = state.demo ? DEMO_TAIL : ''
+  return withClock(`${open}  swipe:nav  ${cursor + 1}/${groups.length}${badge}`, demoTail)
+}
+
 /** Whether the list is showing a way in to the relay items — one line, and only
  *  when there is something behind it. Seven lines is not enough to keep an empty
  *  row for later. */
@@ -891,7 +1004,7 @@ export function hasNotificationRow(state: AppState): boolean {
 /** Index of the row the cursor is on. */
 export function rowCursor(state: AppState): number {
   const withNotifications = hasNotificationRow(state)
-  const rows = listRows(state.sessions, withNotifications, expandedSet(state))
+  const rows = listRowsFor(state)
   // A stale flag — the notices cleared while the cursor sat on them — falls
   // through to the session lookup below rather than pointing at a row that is
   // no longer there.
@@ -1116,7 +1229,8 @@ function notificationRowText(state: AppState, marker: string): string {
  */
 function sessionListNotice(state: AppState): string {
   if (!hasNotificationRow(state)) return ''
-  return notificationRowText(state, rowCursor(state) === 0 ? CURSOR_HERE : CURSOR_NONE)
+  const onRow = showingMachines(state) ? machineCursor(state) < 0 : rowCursor(state) === 0
+  return notificationRowText(state, onRow ? CURSOR_HERE : CURSOR_NONE)
 }
 
 function sessionListBody(state: AppState): string {
@@ -1131,9 +1245,10 @@ function sessionListBody(state: AppState): string {
   // down thirteen workspaces would be a worse thing than the banner was.
   // The strip itself is drawn by `sessionListNotice` into a container of its
   // own; what is counted here is the row it costs the list.
+  if (showingMachines(state)) return machineListBody(state)
   const pinned = hasNotificationRow(state) ? 1 : 0
   const expanded = expandedSet(state)
-  const rows = listRows(sessions, pinned === 1, expanded)
+  const rows = listRowsFor(state)
   const scrollable = rows.slice(pinned)
   if (!scrollable.length) return '(no sessions)'
   const listLines = LIST_LINES - pinned
@@ -1160,7 +1275,7 @@ function sessionListBody(state: AppState): string {
       // bracketed, so without this a two-pane workspace shut looks exactly
       // like a one-pane workspace, and a tap on each does a different thing.
       const hidden = isFolded(s, expanded) ? ` ${FOLD_MARK}${s.panes?.length}` : ''
-      const name = `${here}${label} ${WS_OPEN}${sName(s)}${WS_CLOSE}${hidden}`
+      const name = `${here}${label} ${WS_OPEN}${listName(s)}${WS_CLOSE}${hidden}`
       // A heading's panes carry their own mark on the rows underneath it, and
       // one bar covering three agents would be a level describing none of them.
       return row.header ? name : withCtx(name, ctxMark(s.metrics))
@@ -1537,8 +1652,9 @@ function cursorMetrics(state: AppState, row: ListRow | undefined): RowMetrics | 
 
 /** Everything the list screen has to say, in the one bar it still has. */
 function sessionListFooter(state: AppState): string {
+  if (showingMachines(state)) return machineListFooter(state)
   const expanded = expandedSet(state)
-  const rows = listRows(state.sessions, hasNotificationRow(state), expanded)
+  const rows = listRowsFor(state)
   const cursor = rowCursor(state)
   const at = rows[cursor]
   const total = rows.length
@@ -1559,7 +1675,13 @@ function sessionListFooter(state: AppState): string {
   // workspace's, and the reader cannot tell whose. The rows underneath say.
   const detail = at?.header ? '' : metricsDetail(cursorMetrics(state, at))
   const demoTail = state.demo ? DEMO_TAIL : ''
-  return withClock(`${open}  swipe:nav  ${cursor + 1}/${total}${badge}`, `${detail ? `  ${detail}` : ''}${demoTail}`)
+  // Which machine this list is. The list has no header and the
+  // rows drop the machine's prefix, so without this a machine's list looks
+  // like every other machine's. In the tail because the tail is what the bar
+  // keeps when it runs short.
+  const current = state.sessions[state.sessionIndex]
+  const machine = current && hasMachineScreen(state) ? `  ${current.peerNickname ?? machineOf(current)}` : ''
+  return withClock(`${open}  swipe:nav  ${cursor + 1}/${total}${badge}`, `${machine}${detail ? `  ${detail}` : ''}${demoTail}`)
 }
 const FOOTER_CHOICE = 'swipe:select  tap:confirm  dbl:skip'
 /** Double-tap means "leave" on every screen, so a multi-select's third verb

@@ -52,6 +52,11 @@ export interface Session {
   gitBranch?: string
   metrics?: RowMetrics
   panes?: Pane[]
+  /** Which machine the session runs on, when the server merges
+   *  its peers' lists into this one: the peer's id, or `local` for the
+   *  server's own. Absent when there are no peers. */
+  peerId?: string
+  peerNickname?: string
 }
 
 /**

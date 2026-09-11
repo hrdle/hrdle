@@ -30,6 +30,7 @@ import { computeSessionMetrics } from '../services/session-metrics';
 import { claudeActivity } from '../services/agent-activity';
 import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
+import { forwardToPeer, parsePeerSessionId, peerSessionPath, sessionsWithPeers } from '../services/peer-sessions';
 import { detectPaneState, stripAnsi, type DetectedPaneState } from '../services/pane-state';
 
 const herdrService = new HerdrService();
@@ -557,7 +558,15 @@ const ResumeSessionSchema = z.object({
 // GET /sessions - List all sessions (debug/fallback only, frontend uses WS push)
 sessions.get('/', async (c) => {
   const sessionsList = await buildSessionsList();
-  return c.json({ sessions: sessionsList });
+  // The glasses learn the list from here and from the WebSocket push and from
+  // nowhere else, so the peers' sessions are merged in by default (see
+  // services/peer-sessions.ts). `?local=1` is the promise to answer with this
+  // server's own sessions only, which is what the peers' fanout asks for: a
+  // merged answer would hand a peer its own sessions back.
+  if (c.req.query('local') === '1') {
+    return c.json({ sessions: sessionsList });
+  }
+  return c.json({ sessions: await sessionsWithPeers(sessionsList) });
 });
 
 // POST /sessions - Create a new session
@@ -770,6 +779,16 @@ sessions.get('/history', async (c) => {
 // ?agent=<provider> routes to that thread agent's reader instead of Claude's jsonl
 sessions.get('/history/:sessionId/conversation', async (c) => {
   const sessionId = c.req.param('sessionId');
+  // A conversation exists only on the host that holds its transcript. A peer's
+  // conversation id is forwarded there as it came, query and all.
+  const peerRef = parsePeerSessionId(sessionId);
+  if (peerRef) {
+    const query = new URL(c.req.url).search;
+    return forwardToPeer(
+      peerRef,
+      `/api/sessions/history/${encodeURIComponent(peerRef.localId)}/conversation${query}`,
+    );
+  }
   const projectDirName = c.req.query('projectDirName');
   const lastQuery = c.req.query('last');
   const last = lastQuery ? parseInt(lastQuery, 10) : undefined;
@@ -1284,6 +1303,15 @@ sessions.post('/:id/tabs/close', async (c) => {
 // POST /sessions/:id/panes/input - Send raw input bytes to a specific pane
 sessions.post('/:id/panes/input', async (c) => {
   const id = c.req.param('id');
+  // As for /prompt: the paneId is the peer's own value and travels untouched.
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, '/panes/input'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await c.req.text(),
+    });
+  }
   const body = await c.req.json().catch(() => ({}));
   const parsed = PaneInputSchema.safeParse(body);
 
@@ -1377,6 +1405,17 @@ sessions.get('/:id/panes/:paneId/viewport', async (c) => {
 // in a multi-pane workspace the blocked pane is not necessarily the active one.
 sessions.post('/:id/prompt', async (c) => {
   const id = c.req.param('id');
+  // Addressed to a peer's session, the body goes to the same endpoint on that
+  // machine unread; the checks (text present, pane named) run there, in this
+  // same code.
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, '/prompt'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await c.req.text(),
+    });
+  }
   const body = await c.req.json().catch(() => ({}));
   const text = body.text as string | undefined;
   const paneId = body.paneId as string | undefined;

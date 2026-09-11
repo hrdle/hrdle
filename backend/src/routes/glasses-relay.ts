@@ -13,7 +13,13 @@ import { dismissRelayItem, postAgentRelay } from '../services/glasses-relay';
 
 // Same alphabet as SessionIdSchema / the notify flood guard.
 const SESSION_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
-const ITEM_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+// `peer:<peerId>:<their id>` is an item id here too, and the
+// wearer's "later"/"close" is the only thing that can retire one - the machine
+// that raised it keeps reporting it, correctly, because its pane is still
+// blocked. Rejected on the colons, every dismissal of another machine's card
+// returned 400 and the card came back on the next sweep, with nothing on the
+// glasses able to shift it (measured 2026-08-18).
+const ITEM_ID_RE = /^(peer:[A-Za-z0-9_-]{1,40}:)?[A-Za-z0-9-]{1,64}$/;
 // Base36 like herdr's own pane token, not digits (`%A` is the tenth pane).
 const PANE_ID_RE = /^%[0-9A-Za-z]+$/;
 const MAX_TEXT_LEN = 4000; // pre-clamp; the service trims to one G2 page

@@ -118,6 +118,17 @@ describe('a cursor moved by something other than the ring', () => {
   })
 })
 
+describe('a fold outlives nothing', () => {
+  test('a workspace that went away takes its remembered fold with it', () => {
+    const c = controllerOn(state({ sessionIndex: 0, expandedWorkspaces: ['b'] }))
+    ;(c as unknown as { onSessionsUpdated(s: Session[]): void }).onSessionsUpdated(sessions.filter((s) => s.id !== 'b'))
+    expect(c.state.expandedWorkspaces).toEqual([])
+    // Back under the same id, it is a new workspace and comes up shut.
+    ;(c as unknown as { onSessionsUpdated(s: Session[]): void }).onSessionsUpdated(sessions)
+    expect(expandedSet(c.state).has('b')).toBe(false)
+  })
+})
+
 describe('the fold', () => {
   test('the cursor stops on a heading rather than stepping over it', () => {
     const c = controllerOn(state({ sessionIndex: 0 }))

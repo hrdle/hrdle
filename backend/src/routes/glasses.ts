@@ -23,7 +23,7 @@ import {
   readRateLimitHeaders,
   wavSeconds,
 } from '../services/stt-usage';
-import { notifyGlassesSettingsChanged } from '../services/glasses-relay';
+import { buildGlassesRelaySnapshot, notifyGlassesSettingsChanged } from '../services/glasses-relay';
 import {
   glassesRecordingEnabled,
   listRecordingDays,
@@ -398,6 +398,26 @@ const GlassesSettingsPatchSchema = z.object({
  * endpoints sit inside the auth glob (unlike `/relay*`). Reading works even
  * with recording switched off — old footage stays replayable.
  */
+/**
+ * What this machine is currently asking its wearer.
+ *
+ * Read by another hrdle so a question raised here can reach glasses connected
+ * to that one - the app talks to a single server, and until this the card was
+ * built only from that server's own panes.
+ */
+glasses.get('/relay', async (c) => {
+  // The snapshot, which is the same thing a wearer gets on connecting: it
+  // assembles an item for any pane blocked right now rather than reading what
+  // a tracker happened to see, and the tracker on a machine nobody is watching
+  // is not running at all.
+  //
+  // `peers: false` because the machine asking is merging this into its own set.
+  // `force` because the wearer is on the machine that is asking, not this one:
+  // the assembly is otherwise skipped whenever nothing is subscribed here, and
+  // nothing ever is.
+  return c.json({ items: await buildGlassesRelaySnapshot({ peers: false, force: true }) });
+});
+
 glasses.get('/recording', async (c) => {
   return c.json({ enabled: glassesRecordingEnabled(), days: await listRecordingDays() });
 });

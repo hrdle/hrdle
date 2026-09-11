@@ -18,6 +18,7 @@ import { ConversationWatcher } from '../services/conversation-watcher';
 import type {
   ClientFocus,
   ControlClientMessage,
+  ExtendedSessionResponse,
   GlassesScreen,
   MuxClientMessage,
   MuxServerMessage,
@@ -26,6 +27,7 @@ import type {
 } from '../../../shared/types';
 import { MuxClientMessageSchema } from '../../../shared/types';
 import { buildSessionsList, invalidateWorkspacesCache } from './sessions';
+import { sessionsWithPeers } from '../services/peer-sessions';
 
 // Output → push debounce. Wait this long after the last %output for a pane
 // before recapturing. Shorter = lower latency; longer = fewer captures.
@@ -399,19 +401,142 @@ function maybePushFocus(): void {
   pushSessionsNow();
 }
 
-function sessionsUpdatedPayload(sessions: SessionResponse[]): string {
+/** Elect the focus for one push and record it. Called once per push: the
+ *  glasses' frame carries the same election as the browsers', so it must not
+ *  re-run this. */
+function pushFocus(): ClientFocus | undefined {
   const focus = computeClientFocus();
   lastFocusKey = focusKey(focus);
   // Every payload passes through here (periodic and pushed), so this is the
   // one place the demo recording learns which session the user is
   // working in. The recorder dedups; unchanged focus costs nothing.
   recordGlassesFocus(focus);
+  return focus;
+}
+
+function sessionsUpdatedPayload(sessions: SessionResponse[], focus: ClientFocus | undefined): string {
   return JSON.stringify({
     type: 'sessions-updated',
     sessions,
     version: VERSION,
     ...(focus ? { focus } : {}),
   });
+}
+
+/**
+ * The one rule every sessions frame obeys:
+ *
+ *   **a glasses connection is sent the merged list, or nothing at all.**
+ *
+ * The app treats each frame as the whole truth and drops any session the frame
+ * does not mention. So a single plain frame deletes every peer session it holds,
+ * and the next merged frame re-adds them at the end — which is how the group
+ * order came out wrong on the device (renders of 17 → 4 → 17 sessions, measured
+ * 2026-08-13). Sending nothing costs a stale list for a few seconds; sending the
+ * plain list corrupts what the wearer sees.
+ *
+ * Browsers get the plain list, always: each holds a WebSocket to every peer
+ * itself, so a merged list here would show those sessions a second time.
+ */
+type GlassesList = ExtendedSessionResponse[] | null;
+
+function anyGlassesConnected(): boolean {
+  for (const ws of activeMuxConnections) {
+    if (ws.data.isGlasses) return true;
+  }
+  return false;
+}
+
+/** The merged list, or null when there is none to send. Never the plain list —
+ *  see the rule above: a failed merge must not reach the glasses as a frame. */
+async function glassesSessions(local: ExtendedSessionResponse[]): Promise<GlassesList> {
+  // No glasses, no fanout: nobody would read the result.
+  if (!anyGlassesConnected()) return null;
+  try {
+    return await sessionsWithPeers(local);
+  } catch {
+    return null;
+  }
+}
+
+/** Send one election's frames to every client, each audience its own list.
+ *  `to` narrows it to the audience whose list actually changed. */
+function broadcastSessions(
+  local: ExtendedSessionResponse[],
+  forGlasses: GlassesList,
+  to: { browsers: boolean; glasses: boolean } = { browsers: true, glasses: true },
+): void {
+  const focus = pushFocus();
+  const payload = sessionsUpdatedPayload(local, focus);
+  const glassesPayload = forGlasses ? sessionsUpdatedPayload(forGlasses, focus) : null;
+  for (const ws of activeMuxConnections) {
+    if (ws.data.isGlasses) {
+      if (!to.glasses) continue;
+      // No merged frame prepared — this connection said "glasses" after the
+      // merge was decided. It gets its own, rather than the plain list.
+      if (!glassesPayload) { void sendSessionsTo(ws, local); continue; }
+      try { ws.send(glassesPayload); } catch { /* disconnected */ }
+      continue;
+    }
+    if (!to.browsers) continue;
+    try { ws.send(payload); } catch { /* disconnected */ }
+  }
+}
+
+/**
+ * Send one connection the list it should see.
+ *
+ * The audience is read here, immediately before the frame is built — not
+ * earlier. A connection announces itself as the glasses (`subscribe-glasses-relay`)
+ * while the first list is still being assembled, so anything that decided the
+ * audience before that assembly sends a plain frame to a connection that has
+ * meanwhile become the glasses. That was the bug: the frame `muxOpen` sends
+ * never consulted `isGlasses` at all.
+ *
+ * `isGlasses` only ever goes false → true (nothing clears it), so re-reading it
+ * after an await cannot take the merged list away from a glasses connection.
+ *
+ * `merge` is the test's way in; production always uses the real merge.
+ */
+export async function sendSessionsTo(
+  ws: ServerWebSocket<MuxData>,
+  local: ExtendedSessionResponse[],
+  merge: (l: ExtendedSessionResponse[]) => Promise<ExtendedSessionResponse[]> = sessionsWithPeers,
+): Promise<void> {
+  if (!ws.data.isGlasses) {
+    // Nothing is awaited between the check and the send, so the audience
+    // cannot change underneath it.
+    try { ws.send(sessionsUpdatedPayload(local, computeClientFocus())); } catch { /* disconnected */ }
+    return;
+  }
+  let merged: ExtendedSessionResponse[];
+  try {
+    merged = await merge(local);
+  } catch {
+    return; // the rule: no merged list, no frame
+  }
+  try { ws.send(sessionsUpdatedPayload(merged, computeClientFocus())); } catch { /* disconnected */ }
+}
+
+/**
+ * The sessions frame a freshly opened connection gets.
+ *
+ * Split out of `muxOpen` so the race it exists to close can be driven in a
+ * test: `build` is where the glasses' announcement lands in production.
+ */
+export async function sendInitialSessions(
+  ws: ServerWebSocket<MuxData>,
+  build: () => Promise<ExtendedSessionResponse[]> = buildSessionsList,
+  merge: (l: ExtendedSessionResponse[]) => Promise<ExtendedSessionResponse[]> = sessionsWithPeers,
+): Promise<void> {
+  try {
+    await sendSessionsTo(ws, await build(), merge);
+  } catch { /* best effort: the 5s push carries it otherwise */ }
+}
+
+/** The comparison the push dedup runs on: a minute ticking over is not news. */
+function stableSessionsJson(sessions: SessionResponse[]): string {
+  return JSON.stringify(sessions, (key, value) => (key === 'durationMinutes' ? undefined : value));
 }
 
 // Zombie detection: if no client ping for 60s, assume connection is dead.
@@ -434,6 +559,9 @@ setInterval(() => {
 const SESSIONS_PUSH_INTERVAL = 5000;
 let sessionsPushTimer: ReturnType<typeof setInterval> | null = null;
 let lastSessionsJson = '';
+/** The same dedup for the glasses' list, which carries the peers'
+ *  sessions and therefore changes when theirs do. */
+let lastGlassesSessionsJson = '';
 
 function startSessionsPush() {
   if (sessionsPushTimer) return;
@@ -453,15 +581,19 @@ function startSessionsPush() {
     void trackGlassesRelay(); // self-heal any missed status event
     try {
       const sessions = await buildSessionsList();
-      const stableJson = JSON.stringify(sessions, (key, value) =>
-        key === 'durationMinutes' ? undefined : value
-      );
-      if (stableJson === lastSessionsJson) return;
-      lastSessionsJson = stableJson;
-      const payload = sessionsUpdatedPayload(sessions);
-      for (const ws of activeMuxConnections) {
-        try { ws.send(payload); } catch { /* disconnected */ }
-      }
+      const forGlasses = await glassesSessions(sessions);
+      const localJson = stableSessionsJson(sessions);
+      // Nothing merged this round: leave the glasses dedup where it is, so the
+      // next round that does merge still counts as news for them.
+      const glassesJson = forGlasses ? stableSessionsJson(forGlasses) : lastGlassesSessionsJson;
+      // Two lists, two dedups: a peer's agent changing state is news for the
+      // glasses and nothing at all for a browser, which watches that peer itself.
+      const browsers = localJson !== lastSessionsJson;
+      const glasses = glassesJson !== lastGlassesSessionsJson;
+      if (!browsers && !glasses) return;
+      lastSessionsJson = localJson;
+      lastGlassesSessionsJson = glassesJson;
+      broadcastSessions(sessions, forGlasses, { browsers, glasses });
     } catch (err) {
       console.warn('[mux] sessions push error:', err);
     }
@@ -479,15 +611,14 @@ function stopSessionsPush() {
   // subscribe-time snapshot prunes any whose blocked epoch ended meanwhile.
   resetGlassesRelayTracker();
   lastSessionsJson = '';
+  lastGlassesSessionsJson = '';
 }
 
 export function pushSessionsNow() {
   lastSessionsJson = '';
-  buildSessionsList().then(sessions => {
-    const payload = sessionsUpdatedPayload(sessions);
-    for (const ws of activeMuxConnections) {
-      try { ws.send(payload); } catch { /* disconnected */ }
-    }
+  lastGlassesSessionsJson = '';
+  buildSessionsList().then(async sessions => {
+    broadcastSessions(sessions, await glassesSessions(sessions));
   }).catch(() => {});
 }
 
@@ -514,10 +645,10 @@ export async function muxOpen(ws: ServerWebSocket<MuxData>) {
   activeMuxConnections.add(ws);
   startSessionsPush();
 
-  try {
-    const sessions = await buildSessionsList();
-    ws.send(sessionsUpdatedPayload(sessions));
-  } catch { /* best effort */ }
+  // This frame races the connection's "I am the glasses" announcement, which
+  // lands while the list is being built - so which list it gets is decided
+  // after the build, in sendSessionsTo.
+  await sendInitialSessions(ws);
 
   ws.send(JSON.stringify({ type: 'ready' }));
 }
@@ -580,6 +711,8 @@ export async function muxMessage(ws: ServerWebSocket<MuxData>, message: string |
     // two messages happen to be sent in.
     ws.data.focusSessionId = undefined;
     ws.data.focusAt = undefined;
+    // The merged list is wanted from this moment; the next push is up to 5s away.
+    void sendInitialSessions(ws);
     // Absent means device: an ehpk predating the field is on a face, while the
     // simulator ships inside the server binary that reads it, so it can never
     // be the older of the two.

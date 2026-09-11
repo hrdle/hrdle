@@ -1,4 +1,4 @@
-import { Plus, Trash2, RefreshCw, Pencil, Server, Wifi, WifiOff, AlertTriangle, X, Search, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Pencil, Server, Wifi, WifiOff, AlertTriangle, X, Search, CheckCircle2, ChevronUp, ChevronDown } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import {
 	LOCAL_PEER_ID,
@@ -260,7 +260,7 @@ function EditPeerForm({ peer, onSubmit, onCancel }: EditFormProps) {
 }
 
 export function PeerManager() {
-	const { peers, isLoading, error, refresh, addPeer, updatePeer, deletePeer, verifyPeer } = usePeers();
+	const { peers, isLoading, error, refresh, addPeer, updatePeer, deletePeer, verifyPeer, reorderPeers } = usePeers();
 	const [adding, setAdding] = useState(false);
 	const [addPrefill, setAddPrefill] = useState<{ nickname: string; url: string } | null>(null);
 	const [editingId, setEditingId] = useState<string | null>(null);
@@ -314,6 +314,17 @@ export function PeerManager() {
 		if (peer.id === LOCAL_PEER_ID) return;
 		if (!confirm(`Remove ${peer.nickname}?`)) return;
 		await deletePeer(peer.id);
+	};
+
+	// The order is not only how this list is drawn: it is the order of machines
+	// in the merged list the glasses receive (backend/src/services/peer-sessions.ts),
+	// and Local moves like any other because "that machine first" is decided
+	// here. Buttons rather than drag, so a ring mouse can work them.
+	const handleMove = async (index: number, delta: number) => {
+		const next = [...peers];
+		const [moved] = next.splice(index, 1);
+		next.splice(index + delta, 0, moved);
+		await reorderPeers(next.map((p) => p.id));
 	};
 
 	const handleVerify = async (peer: PeerClientView) => {
@@ -452,7 +463,7 @@ export function PeerManager() {
 				<div className="text-th-text-muted text-sm">Loading...</div>
 			) : (
 				<ul className="space-y-2">
-					{peers.map((peer) => (
+					{peers.map((peer, index) => (
 						<li
 							key={peer.id}
 							className="bg-th-surface border-l-4 border border-th-border rounded-md overflow-hidden"
@@ -479,6 +490,24 @@ export function PeerManager() {
 										)}
 									</div>
 									<div className="flex items-center gap-1 shrink-0">
+										<button
+											type="button"
+											onClick={() => handleMove(index, -1)}
+											disabled={index === 0}
+											className="p-2 rounded hover:bg-th-surface-hover text-th-text-muted disabled:opacity-30"
+											title="Move up"
+										>
+											<ChevronUp className="w-4 h-4" />
+										</button>
+										<button
+											type="button"
+											onClick={() => handleMove(index, 1)}
+											disabled={index === peers.length - 1}
+											className="p-2 rounded hover:bg-th-surface-hover text-th-text-muted disabled:opacity-30"
+											title="Move down"
+										>
+											<ChevronDown className="w-4 h-4" />
+										</button>
 										{peer.id !== LOCAL_PEER_ID && (
 											<button
 												type="button"

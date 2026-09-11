@@ -27,7 +27,7 @@
 
 import { getConversation, getGlassesSettings, sendPrompt, sendPaneInput, dismissRelayItem, reportLog } from './api.ts'
 import { moveTo, type InlineChoices } from '../../shared/inline-choices'
-import { ANSWER_ECHO_MS, CHECK_MARK, MENU_SLEEP_ID, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, expandedSet, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRows, looksMultiSelect, noticeScrollSteps, onChoiceSend, rowCursor } from './display.ts'
+import { ANSWER_ECHO_MS, CHECK_MARK, MENU_SLEEP_ID, SPEECH_RMS, confirmDraftPages, micLevel, SPINNER_INTERVAL_MS, choiceRows, conversationPageBudget, hasMachineScreen, isChecked, getTotalPagesAt, getMultiCountAt, hasCheckbox, hasNotificationRow, listRowsFor, looksMultiSelect, machineGroups, machineOf, noticeScrollSteps, onChoiceSend, rowCursor, showingMachines } from './display.ts'
 import type { AppState } from './display.ts'
 import {
   DEMO_REPLY_MS,
@@ -1445,7 +1445,7 @@ export class GlassesController {
    *  gesture moves between workspaces and into them without a second control. */
   private moveListCursor(step: number): void {
     const st = this.state
-    const rows = listRows(st.sessions, hasNotificationRow(st), expandedSet(st))
+    const rows = listRowsFor(st)
     if (!rows.length) return
     const i = rowCursor(st) + step
     if (i < 0 || i >= rows.length) return
@@ -1460,8 +1460,60 @@ export class GlassesController {
     st.selectedPaneId = row.paneId
   }
 
+  // ── machines ──
+
+  /** Walk the machine screen: the notices row (when there is one) above the
+   *  machines, the same shape as the session list. */
+  private moveMachineCursor(step: number): void {
+    const st = this.state
+    const n = machineGroups(st).length
+    const onNotices = st.listOnNotifications === true && hasNotificationRow(st)
+    const at = onNotices ? -1 : Math.min(Math.max(0, st.machineCursor ?? 0), n - 1)
+    const next = at + step
+    if (next < 0) {
+      if (hasNotificationRow(st)) st.listOnNotifications = true
+      return
+    }
+    if (next >= n) return
+    st.listOnNotifications = false
+    st.machineCursor = next
+  }
+
+  private async onMachineListAction(action: RingAction): Promise<void> {
+    const st = this.state
+    switch (action) {
+      case 'swipeUp':
+        this.moveMachineCursor(-1)
+        this.render()
+        return
+      case 'swipeDown':
+        this.moveMachineCursor(1)
+        this.render()
+        return
+      case 'tap': {
+        if (st.listOnNotifications && hasNotificationRow(st)) {
+          this.enterOverlay()
+          return
+        }
+        const group = machineGroups(st)[Math.min(Math.max(0, st.machineCursor ?? 0), machineGroups(st).length - 1)]
+        if (!group) return
+        st.sessionIndex = group.firstIndex
+        st.selectedPaneId = undefined
+        st.machinePick = false
+        this.render()
+        return
+      }
+      case 'doubleTap':
+        // The machines are the root when there are any: the exit dialogue
+        // the host expects of a root page (see the session list's double-tap).
+        this.platform.requestExit()
+        return
+    }
+  }
+
   private async onSessionListAction(action: RingAction): Promise<void> {
     const st = this.state
+    if (showingMachines(st)) return this.onMachineListAction(action)
     switch (action) {
       case 'swipeUp':
         this.moveListCursor(-1)
@@ -1525,6 +1577,18 @@ export class GlassesController {
         // there. Routing it back to the setup screen instead would make the
         // one screen a reviewer reaches first the one place the gesture means
         // something else.
+        //
+        // With peers the machines are the root and this list is
+        // one level down, so the same gesture goes up to them instead.
+        if (hasMachineScreen(st)) {
+          const current = st.sessions[st.sessionIndex]
+          const idx = current ? machineGroups(st).findIndex((g) => g.id === machineOf(current)) : 0
+          st.machineCursor = Math.max(0, idx)
+          st.listOnNotifications = false
+          st.machinePick = true
+          this.render()
+          return
+        }
         this.platform.requestExit()
         return
     }
@@ -1687,6 +1751,9 @@ export class GlassesController {
           return
         }
         st.mode = 'session_list'
+        // One level up from a conversation is its machine's
+        // list, whatever screen the jump into it was made from.
+        st.machinePick = false
         // The one moment the order is allowed to change: whatever started
         // waiting while this conversation was open should be at the top when
         // the list comes back, and the cursor is not moving yet.
@@ -2784,6 +2851,7 @@ export class GlassesController {
   private onSessionsUpdated(sessions: Session[], focus?: ClientFocus): void {
     const st = this.state
     const prevId = st.sessions[st.sessionIndex]?.id
+    const prevMachineOf = st.sessions[st.sessionIndex] ? machineOf(st.sessions[st.sessionIndex]) : undefined
     // Update the session data in place and hold the order the list is already
     // in. A refresh never re-sorts.
     //
@@ -2810,6 +2878,20 @@ export class GlassesController {
       }
     } else {
       st.sessions = this.sortSessions(sessions)
+      // With peers the list opens on the machines. Decided on
+      // the first list only: a later refresh must not throw the reader back up.
+      if (st.mode === 'session_list' && hasMachineScreen(st)) {
+        st.machinePick = true
+        st.machineCursor = 0
+      }
+    }
+    // A fold remembered for a workspace that is gone is dropped with it.
+    // herdr's ids advance and are not reused while a server runs, but a
+    // server started from nothing counts from the beginning again, and a
+    // new workspace under an old id must not come up open for something
+    // the wearer did to its predecessor.
+    if (st.expandedWorkspaces?.length) {
+      st.expandedWorkspaces = st.expandedWorkspaces.filter((id) => st.sessions.some((s) => s.id === id))
     }
     // A fold is remembered against a workspace id, and herdr hands the same id
     // out again: ids are not stored with a counter, so a restarted server
@@ -2825,7 +2907,12 @@ export class GlassesController {
     // Re-find the previously selected session
     if (prevId) {
       const newIdx = st.sessions.findIndex((s) => s.id === prevId)
-      st.sessionIndex = newIdx >= 0 ? newIdx : Math.min(st.sessionIndex, Math.max(0, st.sessions.length - 1))
+      // A session that went away leaves the cursor on its
+      // machine when the machine still has one, rather than on whatever
+      // sits at that index now.
+      const prevMachine = prevMachineOf
+      const sameMachine = prevMachine === undefined ? -1 : st.sessions.findIndex((s) => machineOf(s) === prevMachine)
+      st.sessionIndex = newIdx >= 0 ? newIdx : sameMachine >= 0 ? sameMachine : Math.min(st.sessionIndex, Math.max(0, st.sessions.length - 1))
     } else if (st.sessionIndex >= st.sessions.length) {
       st.sessionIndex = Math.max(0, st.sessions.length - 1)
     }
@@ -2856,6 +2943,15 @@ export class GlassesController {
     if (focus.sessionId === st.sessions[st.sessionIndex]?.id) return false
     const idx = st.sessions.findIndex((s) => s.id === focus.sessionId)
     if (idx < 0) return false
+    // The list shows the machine of the session the cursor is
+    // on, so a cursor moved onto another machine's session swaps the whole
+    // list under a reader who did nothing. A phone opening a session on
+    // another machine is not a reason to leave the one they chose; in the
+    // conversation the switch is on screen and stays as it was.
+    if (st.mode === 'session_list' && hasMachineScreen(st)) {
+      const current = st.sessions[st.sessionIndex]
+      if (current && machineOf(st.sessions[idx]) !== machineOf(current)) return false
+    }
 
     st.sessionIndex = idx
     // A focus names a workspace, never a pane. The pane chosen in the
