@@ -32,6 +32,8 @@ import {
 } from './pane-readers/shared';
 import { HerdrService, type WorkspaceInfo } from './herdr';
 import { detectPaneState } from './pane-state';
+// The glasses talk to one machine, so the other machines' questions join here.
+import { listPeerRelayItems } from './peer-sessions';
 import { readPane, readPaneText, toHerdrPaneId } from './herdr-client';
 
 // =============================================================================
@@ -1294,7 +1296,18 @@ export function postHookRelay(input: {
   text: string;
   paneId?: string;
 }): boolean {
-  if (subscribers.size === 0) return false;
+  // Not dropped when nothing is subscribed here.
+  //
+  // The gate was right while a wearer could only be on this machine: an item
+  // nobody would ever read is work and memory spent on nobody. It is wrong now
+  // that another machine reads these on its wearer's behalf - and unlike a
+  // question, which is still there to be assembled later because the pane is
+  // still blocked, a completion happens once and is gone. Dropped here it
+  // cannot be recovered, so a peer's session finishing has never reached the
+  // glasses at all.
+  //
+  // Bounded the way it already was: the rate limit below, the store eviction,
+  // and the item's own ninety-second life.
   const reachesAWearer = deviceSubscribers.size > 0;
 
   // An unanswered question already outranks anything a hook can say, and it is
@@ -1332,7 +1345,27 @@ export function postHookRelay(input: {
 /** "Later / on PC": flag the item so snapshots skip it but the same blocked
  *  epoch is not re-synthesized on reconnect. herdr-side state is untouched —
  *  the PC UI keeps showing the session as waiting. */
+/**
+ * Peer items the wearer has put off, by id.
+ *
+ * "Later" is answered here rather than on the machine that asked: that machine
+ * keeps reporting the question - it is still blocked, and rightly so - and
+ * without this the card came straight back on the next sweep. Answered from
+ * the glasses it goes away on its own, because the pane stops being blocked.
+ *
+ * Bounded by the sweep that forgets an id the peer no longer reports, so this
+ * cannot grow past the questions actually in flight.
+ */
+const dismissedPeerItems = new Set<string>();
+
 export function dismissRelayItem(id: string): GlassesRelayItem | null {
+  const peerItem = peerRelay.get(id);
+  if (peerItem) {
+    dismissedPeerItems.add(id);
+    peerRelay.delete(id);
+    broadcastRemove(id);
+    return peerItem;
+  }
   for (const slot of store.values()) {
     for (const item of [...slot.waiting.values(), slot.info]) {
       if (item?.id === id) {
@@ -1374,8 +1407,16 @@ function statusKey(sessionId: string, paneId: string): string {
   return `${sessionId}/${paneId}`;
 }
 
-async function enterBlocked(ws: WorkspaceInfo, paneId: string): Promise<void> {
-  if (subscribers.size === 0) return; // presence gate: only track, never assemble
+async function enterBlocked(ws: WorkspaceInfo, paneId: string, force = false): Promise<void> {
+  // Presence gate: only track, never assemble. Reading a pane and composing a
+  // card for a screen nobody is wearing is work spent on nobody.
+  //
+  // `force` is the case that broke it: the wearer is on *another*
+  // machine, asking this one what it wants. Nobody is subscribed here and
+  // nobody ever will be, so the gate refused every question this machine had -
+  // the pane read fine, the screen classified as a question, and the answer was
+  // still empty (measured 2026-08-17 against a live picker).
+  if (!force && subscribers.size === 0) return;
   const slot = getSlot(ws.id);
   if (isActive(slot.waiting.get(paneId))) return; // this pane is already asking
   // A dismissed item belongs to an older epoch: this is a fresh blocked
@@ -1575,6 +1616,12 @@ export async function trackGlassesRelay(): Promise<void> {
       store.delete(sessionId);
     }
   }
+
+  // Last, so a slow machine delays only the sweep after this one -
+  // the questions raised here are already out by the time it runs. Swallowed
+  // for the same reason the local sweep survives an RPC blip: an unreachable
+  // machine is not news about the pane in front of the wearer.
+  await trackPeerRelay().catch(() => {});
 }
 
 /**
@@ -1600,9 +1647,32 @@ export function resetGlassesRelayTracker(): void {
  * an agent of their own, and picking one of them was how a three-pane
  * workspace reached the glasses with two of its three questions invisible.
  */
-export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
+export async function buildGlassesRelaySnapshot(
+  opts?: { peers?: boolean; force?: boolean },
+): Promise<GlassesRelayItem[]> {
   sweepExpired();
   const workspaces = await glassesRelayDeps.listWorkspaces();
+
+  // A workspace that is gone takes its questions with it.
+  //
+  // The tracker has this rule too, and on a machine somebody is watching that
+  // is enough. On one that assembles only when a peer asks, the tracker never
+  // runs - so a closed workspace's question stayed in the store and was handed
+  // out for ever. Nothing could answer it either: the pane it belonged to no
+  // longer existed, so the wearer was left with a card that would not go
+  // (measured 2026-08-17, a scratch workspace closed mid-question).
+  //
+  // Skipped on an empty list, the same way the tracker skips it: that is also
+  // what an unreachable herdr returns, and an RPC blip must not wipe every
+  // pending decision.
+  const alive = new Set(workspaces.map((w) => w.id));
+  for (const [sessionId, slot] of workspaces.length > 0 ? [...store] : []) {
+    if (alive.has(sessionId)) continue;
+    for (const item of [...slot.waiting.values(), slot.info]) {
+      if (item) broadcastRemove(item.id);
+    }
+    store.delete(sessionId);
+  }
 
   for (const ws of workspaces) {
     const slot = store.get(ws.id);
@@ -1624,7 +1694,7 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
     // re-synthesis for the same epoch.
     for (const paneId of blocked) {
       if (store.get(ws.id)?.waiting.has(paneId)) continue;
-      await enterBlocked(ws, paneId);
+      await enterBlocked(ws, paneId, opts?.force);
     }
   }
 
@@ -1635,6 +1705,10 @@ export async function buildGlassesRelaySnapshot(): Promise<GlassesRelayItem[]> {
     }
     if (slot.info && !slot.info.dismissed) items.push(slot.info);
   }
+  // Left out when another machine is the one asking: it is
+  // merging these into its own set, and handing it back what it already has
+  // would put its wearer's questions in a loop between the two.
+  if (opts?.peers !== false) items.push(...peerRelay.values());
   items.sort((a, b) => {
     const rank = (i: GlassesRelayItem) => (i.kind === 'waiting' ? 0 : 1);
     return rank(a) - rank(b) || a.createdAt - b.createdAt;
@@ -1666,6 +1740,56 @@ function withBacklogPresentation(
   const waiting = items.filter((i) => i.kind === 'waiting').length;
   if (waiting < 2) return (item) => item;
   return (item) => (item.kind === 'waiting' ? { ...item, present: 'banner' } : item);
+}
+
+/**
+ * What the other machines are asking, as of the last sweep.
+ *
+ * Held rather than fetched on demand: the glasses are told about a question by
+ * a push, and a push needs something to compare against to know a question is
+ * new. Keyed by the item's namespaced id, which is what the app dedupes on.
+ */
+const peerRelay = new Map<string, GlassesRelayItem>();
+
+/**
+ * Fold the peers' items in, telling the glasses about the differences.
+ *
+ * The pane statuses above are this machine's own, and a wearer looking at one
+ * screen does not care which machine raised the question on it. Failure is
+ * silence rather than an empty set: one unreachable peer must not retract the
+ * questions of the ones that answered, and `listPeerRelayItems` already
+ * returns nothing for a peer it could not reach - so a sweep that reached
+ * nobody leaves what is on screen alone.
+ */
+async function trackPeerRelay(): Promise<void> {
+  const items = await glassesRelayDeps.listPeerRelayItems();
+  // Nothing to fold in and nothing held: including what was put off, which
+  // has to be forgotten once the machine stops asking or the same question
+  // could never be raised again.
+  if (items.length === 0 && peerRelay.size === 0 && dismissedPeerItems.size === 0) return;
+  const seen = new Set<string>();
+  for (const item of items) {
+    seen.add(item.id);
+    // Put off by the wearer. Still being asked over there, which is why it
+    // keeps arriving, and still not something they want on their face.
+    if (dismissedPeerItems.has(item.id)) continue;
+    const prev = peerRelay.get(item.id);
+    peerRelay.set(item.id, item);
+    // The same question re-read is not news. Its text can change while it is
+    // up - the pane is scraped again each sweep - so the comparison is on what
+    // the wearer would see rather than on the object.
+    if (!prev || prev.text !== item.text || prev.dismissed !== item.dismissed) broadcastUpsert(item);
+  }
+  for (const [id] of [...peerRelay]) {
+    if (seen.has(id)) continue;
+    peerRelay.delete(id);
+    broadcastRemove(id);
+  }
+  // The question is over there and it is gone, so the note that it was put off
+  // has nothing left to suppress.
+  for (const id of [...dismissedPeerItems]) {
+    if (!seen.has(id)) dismissedPeerItems.delete(id);
+  }
 }
 
 /**
@@ -1708,6 +1832,8 @@ const herdrService = new HerdrService();
 /** Dependency seams — unit tests swap these so no herdr RPC fires. */
 export const glassesRelayDeps = {
   listWorkspaces: (): Promise<WorkspaceInfo[]> => herdrService.listWorkspaces(),
+  /** The other machines' questions - see `trackPeerRelay`. */
+  listPeerRelayItems: (): Promise<GlassesRelayItem[]> => listPeerRelayItems(),
   readPaneText: (herdrPaneId: string): Promise<string | null> =>
     readPaneText(herdrPaneId, 'recent', 30),
   /** The agent's own record of what it is asking — see agent-question.ts. */
@@ -1738,6 +1864,8 @@ export function resetGlassesRelayForTest(): void {
   store.clear();
   postLog.clear();
   paneStatus.clear();
+  peerRelay.clear();
+  dismissedPeerItems.clear();
   subscribers.clear();
   deviceSubscribers.clear();
 }

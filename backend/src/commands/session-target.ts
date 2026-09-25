@@ -31,7 +31,12 @@ export interface ResolvedTarget {
 /** Sessions from the first server that answers, or null if none does. */
 export async function fetchSessions(port: number): Promise<SessionEntry[] | null> {
   try {
-    const res = await fetch(`https://localhost:${port}/api/sessions`);
+    // `?local=1`: this host's own sessions. The default list carries the
+    // peers' as well (for the glasses), but the question here is which session
+    // this pane belongs to, and that is always one of this host's. Matched
+    // against the merged list, another host's session in the same directory
+    // breaks the uniqueness check and its pids join the ancestry match.
+    const res = await fetch(`https://localhost:${port}/api/sessions?local=1`);
     if (!res.ok) return null; // e.g. 401 when the server has a password set
     const json = (await res.json()) as { sessions?: SessionEntry[] };
     return json.sessions ?? null;

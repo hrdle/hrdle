@@ -26,6 +26,7 @@ import {
 } from '../services/peer-registry';
 import { loginToPeer, verifyPeer, peerFetch, PeerAuthError } from '../services/peer-auth';
 import { isSafePeerUrl } from '../services/peer-url';
+import { isPeerSessionId } from '../services/peer-sessions';
 import { discoverPeers } from '../services/peer-discovery';
 import { buildSessionsList, sessionHistoryService, agentHistoryProviders } from './sessions';
 import { getDashboard } from './dashboard';
@@ -519,7 +520,10 @@ peers.get('/sessions', async (c) => {
     }
 
     try {
-      const res = await peerFetch(peer.id, peer.url, peer.wsToken, '/api/sessions');
+      // `?local=1`: that host's own sessions. `/api/sessions` answers with the
+      // peers' sessions too by default (for the glasses), so without it the
+      // peer would hand back this server's own sessions and they would show twice.
+      const res = await peerFetch(peer.id, peer.url, peer.wsToken, '/api/sessions?local=1');
       if (!res.ok) {
         errors.push({ peerId: peer.id, message: `HTTP ${res.status}` });
         return [];
@@ -529,7 +533,9 @@ peers.get('/sessions', async (c) => {
         errors.push({ peerId: peer.id, message: 'Invalid response' });
         return [];
       }
-      return data.sessions.map(enrich);
+      // A peer from before `?local=1` still answers with a merged list; its
+      // borrowed sessions are not this server's to show.
+      return data.sessions.filter(s => !isPeerSessionId(s.id)).map(enrich);
     } catch (err) {
       errors.push({ peerId: peer.id, message: err instanceof Error ? err.message : 'Fetch failed' });
       return [];

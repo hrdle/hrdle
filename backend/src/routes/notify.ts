@@ -5,7 +5,6 @@ import { broadcastToMuxClients } from './terminal-mux';
 import type { IndicatorState } from '../../../shared/types';
 import { getHookStatus } from '../services/hook-status';
 import {
-  glassesRelaySubscriberCount,
   postHookRelay,
   resolveHookTarget,
 } from '../services/glasses-relay';
@@ -377,7 +376,17 @@ notify.post('/', async (c) => {
       // per-session rate limit — leaves this false and the push goes out as it
       // always did. Losing a notification is the worse failure of the two.
       let deliveredToGlasses = false;
-      if (glassesRelaySubscriberCount() > 0) {
+      // Recorded whether or not glasses are on *this* machine.
+      //
+      // The count is the wearers here, and a wearer on another machine reads
+      // these through it. A completion happens once, so skipping the record
+      // because nobody is looking here is the same as never having been told -
+      // which is what a peer's session finishing did, every time.
+      //
+      // `deliveredToGlasses` still comes from `postHookRelay`, which counts
+      // only wearers here: this machine cannot know whether the one on the
+      // other machine saw it, and losing a notification is the worse failure.
+      {
         try {
           const target = await resolveHookTarget(sessionId, cwd);
           if (target) {
