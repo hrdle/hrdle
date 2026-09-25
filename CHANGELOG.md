@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.199] - 2026-09-25
+
+### Added
+- **The glasses see every registered machine's sessions through the one server
+  they talk to.** That server merges its peers' lists into the one it serves,
+  and the conversation, replies and pane input for another machine's session
+  are forwarded to that machine. A question or notice raised on another machine
+  reaches the wearer too, and "later" on it is remembered where the wearer is.
+  Browsers and the `hrdle` CLI still get this machine's sessions only
+  (`GET /api/sessions?local=1` is the explicit form); a browser already asks
+  every peer itself.
+- **With peers, the glasses' session list opens on a machine screen**: one row
+  per machine with its session and waiting counts, a tap for that machine's
+  sessions, double-tap to go back up. Nothing changes without peers. This part
+  is in the glasses app, so it reaches the G2 with the next glasses build.
+- The peer manager lists this machine as Local, and it can be moved like any
+  peer; the glasses list machines in that order.
+
 ## [0.3.198] - 2026-09-25
 
 ### Fixed
