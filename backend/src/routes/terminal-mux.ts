@@ -464,9 +464,9 @@ async function glassesSessions(local: ExtendedSessionResponse[]): Promise<Glasse
 function broadcastSessions(
   local: ExtendedSessionResponse[],
   forGlasses: GlassesList,
-  to: { browsers: boolean; glasses: boolean } = { browsers: true, glasses: true },
+  to: { browsers: boolean; glasses: boolean },
+  focus: ClientFocus | undefined,
 ): void {
-  const focus = pushFocus();
   const payload = sessionsUpdatedPayload(local, focus);
   const glassesPayload = forGlasses ? sessionsUpdatedPayload(forGlasses, focus) : null;
   for (const ws of activeMuxConnections) {
@@ -581,19 +581,26 @@ function startSessionsPush() {
     void trackGlassesRelay(); // self-heal any missed status event
     try {
       const sessions = await buildSessionsList();
-      const forGlasses = await glassesSessions(sessions);
-      const localJson = stableSessionsJson(sessions);
-      // Nothing merged this round: leave the glasses dedup where it is, so the
-      // next round that does merge still counts as news for them.
-      const glassesJson = forGlasses ? stableSessionsJson(forGlasses) : lastGlassesSessionsJson;
       // Two lists, two dedups: a peer's agent changing state is news for the
       // glasses and nothing at all for a browser, which watches that peer itself.
-      const browsers = localJson !== lastSessionsJson;
-      const glasses = glassesJson !== lastGlassesSessionsJson;
-      if (!browsers && !glasses) return;
-      lastSessionsJson = localJson;
+      // The browsers' frame goes out before the merge is awaited: a peer that
+      // is down holds the merge for its whole timeout, and that must not stall
+      // a machine that never asked for the peers.
+      const localJson = stableSessionsJson(sessions);
+      let focus: ClientFocus | undefined;
+      if (localJson !== lastSessionsJson) {
+        lastSessionsJson = localJson;
+        focus = pushFocus();
+        broadcastSessions(sessions, null, { browsers: true, glasses: false }, focus);
+      }
+      const forGlasses = await glassesSessions(sessions);
+      // Nothing merged this round: leave the glasses dedup where it is, so the
+      // next round that does merge still counts as news for them.
+      if (!forGlasses) return;
+      const glassesJson = stableSessionsJson(forGlasses);
+      if (glassesJson === lastGlassesSessionsJson) return;
       lastGlassesSessionsJson = glassesJson;
-      broadcastSessions(sessions, forGlasses, { browsers, glasses });
+      broadcastSessions(sessions, forGlasses, { browsers: false, glasses: true }, focus ?? pushFocus());
     } catch (err) {
       console.warn('[mux] sessions push error:', err);
     }
@@ -618,7 +625,9 @@ export function pushSessionsNow() {
   lastSessionsJson = '';
   lastGlassesSessionsJson = '';
   buildSessionsList().then(async sessions => {
-    broadcastSessions(sessions, await glassesSessions(sessions));
+    const focus = pushFocus();
+    broadcastSessions(sessions, null, { browsers: true, glasses: false }, focus);
+    broadcastSessions(sessions, await glassesSessions(sessions), { browsers: false, glasses: true }, focus);
   }).catch(() => {});
 }
 

@@ -392,18 +392,13 @@ const GlassesSettingsPatchSchema = z.object({
 });
 
 /**
- * The screen-mirror recording, for the simulator's replay player.
- *
- * Recorded frames are this user's own prompts and notification text, so both
- * endpoints sit inside the auth glob (unlike `/relay*`). Reading works even
- * with recording switched off — old footage stays replayable.
- */
-/**
  * What this machine is currently asking its wearer.
  *
  * Read by another hrdle so a question raised here can reach glasses connected
- * to that one - the app talks to a single server, and until this the card was
- * built only from that server's own panes.
+ * to that one - the app talks to a single server.
+ *
+ * Inside the auth glob, unlike the posts to `/relay*`: this is every pending
+ * question's text.
  */
 glasses.get('/relay', async (c) => {
   // The snapshot, which is the same thing a wearer gets on connecting: it
@@ -418,6 +413,13 @@ glasses.get('/relay', async (c) => {
   return c.json({ items: await buildGlassesRelaySnapshot({ peers: false, force: true }) });
 });
 
+/**
+ * The screen-mirror recording, for the simulator's replay player.
+ *
+ * Recorded frames are this user's own prompts and notification text, so both
+ * endpoints sit inside the auth glob (unlike the posts to `/relay*`). Reading works even
+ * with recording switched off — old footage stays replayable.
+ */
 glasses.get('/recording', async (c) => {
   return c.json({ enabled: glassesRecordingEnabled(), days: await listRecordingDays() });
 });

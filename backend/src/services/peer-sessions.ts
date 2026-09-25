@@ -36,8 +36,7 @@ const PEER_SESSIONS_TTL_MS = 4_000;
  *  peer that went unreachable must not hold it. */
 const PEER_LIST_TIMEOUT_MS = 2_500;
 
-/** Mirrors the cooldown in routes/peers.ts (kept here rather than shared, to
- *  keep the diff against upstream inside this file). */
+/** Mirrors the cooldown in routes/peers.ts. */
 const PEER_ERROR_COOLDOWN_MS = 60_000;
 
 export interface PeerSessionRef {

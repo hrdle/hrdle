@@ -175,10 +175,12 @@ app.use('/api/dashboard', conditionalAuthMiddleware);
 app.use('/api/peers', conditionalAuthMiddleware);
 app.use('/api/peers/*', conditionalAuthMiddleware);
 app.use('/api/herdr/*', conditionalAuthMiddleware);
-// `/api/glasses/relay*` stays OUTSIDE the auth glob: local agents post
+// Posts to `/api/glasses/relay*` stay OUTSIDE the auth glob: local agents post
 // self-notes via `hrdle glasses` from inside panes where no token exists —
-// unauthenticated local trust, same pattern as /api/notify. The STT and any
-// other glasses endpoints remain protected.
+// unauthenticated local trust, same pattern as /api/notify. Only the posts:
+// `GET /api/glasses/relay` hands out every question and notice pending here,
+// which is the wearer's own text. The STT and any other glasses endpoints
+// remain protected.
 // Adding a device to the push list is a browser asking for a copy of every
 // notification, so it needs the same password the UI does. The exception is the
 // service worker's re-subscribe after a push service rotates an endpoint: a
@@ -191,7 +193,7 @@ app.use('/api/push/*', (c, next) => {
   return conditionalAuthMiddleware(c, next);
 });
 app.use('/api/glasses/*', (c, next) => {
-  if (c.req.path.startsWith('/api/glasses/relay')) return next();
+  if (c.req.method === 'POST' && c.req.path.startsWith('/api/glasses/relay')) return next();
   return conditionalAuthMiddleware(c, next);
 });
 

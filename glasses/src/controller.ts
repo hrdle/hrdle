@@ -2885,14 +2885,6 @@ export class GlassesController {
         st.machineCursor = 0
       }
     }
-    // A fold remembered for a workspace that is gone is dropped with it.
-    // herdr's ids advance and are not reused while a server runs, but a
-    // server started from nothing counts from the beginning again, and a
-    // new workspace under an old id must not come up open for something
-    // the wearer did to its predecessor.
-    if (st.expandedWorkspaces?.length) {
-      st.expandedWorkspaces = st.expandedWorkspaces.filter((id) => st.sessions.some((s) => s.id === id))
-    }
     // A fold is remembered against a workspace id, and herdr hands the same id
     // out again: ids are not stored with a counter, so a restarted server
     // numbers from the workspaces it restored and a closed w7 is the next w7.
