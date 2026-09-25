@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.198] - 2026-09-25
+
+### Fixed
+- **A codex, grok, kimi, opencode or pi pane in a multi-pane workspace shows its
+  own context, model and recap.** Only the workspace's own session id was looked
+  up in the thread agents' stores, so every other pane running one of them got
+  only what its process id could say, while a Claude pane beside it showed all
+  three.
+
 ## [0.3.197] - 2026-09-11
 
 ### Removed
