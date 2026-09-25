@@ -263,10 +263,10 @@ describe('parseRunningNamedSessions', () => {
       },
       {
         default: false,
-        name: 'steward',
+        name: 'promo',
         running: true,
-        session_dir: '/home/u/.config/herdr/sessions/steward',
-        socket_path: '/home/u/.config/herdr/sessions/steward/herdr.sock',
+        session_dir: '/home/u/.config/herdr/sessions/promo',
+        socket_path: '/home/u/.config/herdr/sessions/promo/herdr.sock',
       },
       {
         default: false,
@@ -279,7 +279,7 @@ describe('parseRunningNamedSessions', () => {
   });
 
   it('takes the running named sessions and leaves the supervised one alone', () => {
-    expect(parseRunningNamedSessions(listing)).toEqual(['steward']);
+    expect(parseRunningNamedSessions(listing)).toEqual(['promo']);
   });
 
   /** Guessing at a server costs somebody's panes; not seeing one costs a refused update. */
@@ -292,15 +292,15 @@ describe('parseRunningNamedSessions', () => {
 
 describe('buildHerdrSessionStopCommands', () => {
   it('stops each named session by name', () => {
-    expect(buildHerdrSessionStopCommands('/home/u/.local/bin/herdr', ['steward', 'dev'])).toEqual([
-      ['/home/u/.local/bin/herdr', 'session', 'stop', 'steward'],
+    expect(buildHerdrSessionStopCommands('/home/u/.local/bin/herdr', ['promo', 'dev'])).toEqual([
+      ['/home/u/.local/bin/herdr', 'session', 'stop', 'promo'],
       ['/home/u/.local/bin/herdr', 'session', 'stop', 'dev'],
     ]);
   });
 
-  /** They are the steward's to bring back, and only while the steward is enabled. */
+  /** They belong to whatever started them, which is the only thing that knows. */
   it('never starts one again', () => {
-    expect(buildHerdrSessionStopCommands('herdr', ['steward']).flat()).not.toContain('server');
+    expect(buildHerdrSessionStopCommands('herdr', ['promo']).flat()).not.toContain('server');
   });
 
   it('runs nothing when every other session is down', () => {
@@ -314,12 +314,12 @@ describe('buildHerdrSessionStopCommands', () => {
    */
   it('leaves the supervised stop immediately before the update', () => {
     const commands = [
-      ...buildHerdrSessionStopCommands('herdr', ['steward']),
+      ...buildHerdrSessionStopCommands('herdr', ['promo']),
       ...(buildHerdrApplyCommands('systemd', 'herdr', 1000, 'install') ?? []),
     ];
     const updateAt = commands.findIndex((cmd) => cmd.includes('update'));
     expect(commands[updateAt - 1].join(' ')).toBe('systemctl --user stop herdr');
-    expect(commands[0]).toEqual(['herdr', 'session', 'stop', 'steward']);
+    expect(commands[0]).toEqual(['herdr', 'session', 'stop', 'promo']);
   });
 });
 

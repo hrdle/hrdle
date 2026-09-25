@@ -14,8 +14,6 @@ import { shortTailscaleIp, startDiscoveryServer } from './services/discovery';
 import { migrateSessionIds } from './services/session-id-migration';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
-import { steward } from './routes/steward';
-import { startStewardRuntime } from './services/steward-runtime';
 import { glassesRelay } from './routes/glasses-relay';
 import { push } from './routes/push';
 import { muxOpen, muxMessage, muxClose, type MuxData } from './routes/terminal-mux';
@@ -196,8 +194,6 @@ app.use('/api/glasses/*', (c, next) => {
   if (c.req.path.startsWith('/api/glasses/relay')) return next();
   return conditionalAuthMiddleware(c, next);
 });
-app.use('/api/steward', conditionalAuthMiddleware);
-app.use('/api/steward/*', conditionalAuthMiddleware);
 
 app.route('/api/logs', logs);
 app.route('/api/sessions', sessions);
@@ -212,7 +208,6 @@ app.route('/api/herdr', herdr);
 app.route('/api/push', push);
 app.route('/api/glasses/relay', glassesRelay);
 app.route('/api/glasses', glasses);
-app.route('/api/steward', steward);
 
 // Static files handling
 const staticRoot = process.env.STATIC_ROOT || '../frontend/dist';
@@ -249,9 +244,7 @@ if (EMBEDDED_MODE && getStaticAsset) {
           // manual cache clear.
           'Cache-Control':
             isAssetHit &&
-            (path.startsWith('/assets/') ||
-              path.startsWith('/glasses/assets/') ||
-              path.startsWith('/glasses-steward/assets/'))
+            (path.startsWith('/assets/') || path.startsWith('/glasses/assets/'))
               ? 'public, max-age=31536000, immutable'
               : 'no-cache, must-revalidate',
         },
@@ -265,17 +258,6 @@ if (EMBEDDED_MODE && getStaticAsset) {
   // Glasses simulator first: it has its own dist and must not fall through to
   // the frontend's SPA index.html.
   const glassesRoot = process.env.GLASSES_STATIC_ROOT || '../glasses/dist-web';
-  // The steward app's simulator is mounted first: `/glasses-steward` would
-  // otherwise be swallowed by the `/glasses/*` pattern below it.
-  const stewardGlassesRoot = process.env.GLASSES_STEWARD_STATIC_ROOT || '../glasses-steward/dist-web';
-  app.use(
-    '/glasses-steward/*',
-    serveStatic({
-      root: stewardGlassesRoot,
-      rewriteRequestPath: (p) => p.replace(/^\/glasses-steward/, ''),
-    })
-  );
-  app.get('/glasses-steward', serveStatic({ root: stewardGlassesRoot, path: '/index.html' }));
   app.use(
     '/glasses/*',
     serveStatic({ root: glassesRoot, rewriteRequestPath: (p) => p.replace(/^\/glasses/, '') })
@@ -640,11 +622,6 @@ if (discovery) {
     console.log(`   Short address: ${short}   (for the glasses app's setup screen)`);
   }
 }
-
-// The steward runs whether or not anyone has a screen open — that is the point
-// of it — so it starts here rather than off the first client connecting. A no-op
-// unless the gate is on.
-startStewardRuntime(port);
 
 // Build the dashboard payload once in the background so the first client to ask
 // is served from cache like every one after it. Everything downstream of this

@@ -49,7 +49,7 @@ describe('what reaches the transcript', () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]).toMatchObject({ role: 'user', content: 'hello', timestamp: '2026-08-16T00:00:00Z' });
     expect(messages[1]).toMatchObject({ role: 'assistant', content: 'hi' });
-    // The anchor a steward turn points back at.
+    // The anchor a summary points back at.
     expect(messages.map((m) => m.id)).toEqual(['u1', 'a1']);
   });
 

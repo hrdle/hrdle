@@ -5,12 +5,10 @@ import { storageKey } from "../utils/app-storage";
  * How big the text is on the screens where a conversation is read.
  *
  * This lived inside `ConversationViewer` — state, storage, the pinch handler
- * and the -/A/+ buttons — and covered exactly one screen. The steward's own
- * chat, which is where someone actually reads all day, had no size at all: its
- * bubbles were `text-sm` and stayed that way whatever anyone did in the viewer
- * behind them.
+ * and the -/A/+ buttons — and covered exactly one screen, so any other screen
+ * showing a conversation had no size at all.
  *
- * So the machinery moves here and the screens share it. **The same key it
+ * So the machinery lives here and the screens share it. **The same key it
  * always used**, deliberately: a person who had already sized the viewer to
  * suit them keeps that size, and there is one answer to "how big is the chat"
  * rather than one per screen.

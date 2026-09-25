@@ -26,35 +26,10 @@ describe("the chat's font size", () => {
 		);
 	});
 
-	// The point of the change: the steward's chat is where reading happens, and
-	// it had no size of its own at all.
-	test("reaches the steward's screens, not just the raw transcript", () => {
-		for (const file of [
-			"components/chat/StewardSessionView.tsx",
-			"components/steward/StewardView.tsx",
-		]) {
-			const source = read(file);
-			expect(source).toContain("useChatFontSize");
-			expect(source).toContain("chatFontStyle");
-		}
-	});
-
-	// A bubble at `text-sm` stays 12.25px whatever the container says, because
-	// Tailwind's sizes are rem and rem is the root's. Only a relative size
-	// follows the surface it is drawn on.
-	test("the message text is sized relative to its surface", () => {
-		const view = read("components/chat/StewardSessionView.tsx");
-		const bubble = view.slice(view.indexOf('max-w-[90%] rounded-xl'));
-		expect(bubble.slice(0, 120)).toContain("text-[1em]");
-	});
-
 	// Secondary text trails the body rather than tracking it: at 24px a caption
 	// scaled proportionally is as loud as the message it belongs to.
 	test("captions read through their own variable", () => {
 		expect(read("hooks/useChatFontSize.ts")).toContain("--cv-fs-meta");
-		expect(read("components/steward/StewardView.tsx")).toContain(
-			"var(--cv-fs-meta",
-		);
 	});
 
 	// The dashboard's control and an open chat are two mounts of the same

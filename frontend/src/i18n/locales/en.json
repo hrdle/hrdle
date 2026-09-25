@@ -66,7 +66,6 @@
     "resuming": "Resuming...",
     "navigate": "Go to",
     "goToTerminal": "Go to this terminal",
-    "goToChat": "Go to this chat",
     "openInClaudeApp": "Open in Claude app",
     "colorTheme": "Color Theme",
     "workspaceName": "Workspace name",
@@ -467,32 +466,5 @@
     "reload": "Reload",
     "later": "Later",
     "pending": "Update ready"
-  },
-  "steward": {
-    "title": "Steward",
-    "empty": "Nothing yet. The steward writes here when something needs you.",
-    "placeholder": "Say something to the steward",
-    "seeOriginal": "See the original",
-    "answered": "Answered",
-    "dismissed": "dismissed",
-    "dismiss": "Not now",
-    "originalTitle": "The original",
-    "thinking": "Thinking...",
-    "wholeWorkspace": "This pane's own history - the workspace runs {{count}} agents",
-    "viewToggle": "Steward view",
-    "writingSession": "Reading this session...",
-    "sessionEmpty": "Nothing written yet.",
-    "attachImage": "Attach image",
-    "removeImage": "Remove image",
-    "working": "Working... ({{seconds}}s)",
-    "agentWorking": "This session is working",
-    "agentWaiting": "This session is waiting for you",
-    "takePhoto": "Take a photo",
-    "detailShow": "Detail",
-    "detailHide": "Hide detail"
-  },
-  "chat": {
-    "summary": "Summary",
-    "transcript": "Conversation"
   }
 }

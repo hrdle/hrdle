@@ -24,12 +24,6 @@ import {
 	type SessionState,
 	type SessionTheme,
 } from "../../../shared/types";
-import {
-	stewardViewEnabled,
-	useStewardEnabled,
-	useStewardView,
-} from "../hooks/useSteward";
-import { StewardSessionComposer } from "./steward/StewardSessionComposer";
 import { openClaudeAppSession } from "../utils/claude-app";
 import { makeSessionKey, parseSessionKey } from "../utils/sessionKey";
 import { toHomeShortPath } from "../utils/path";
@@ -240,8 +234,6 @@ function TerminalPane({
 	const { t } = useTranslation();
 	const isTablet = variant === "tablet";
 	const isMobile = variant === "mobile";
-	const stewardAvailable = useStewardEnabled();
-	const [stewardView] = useStewardView();
 	// Which of this pane's controls this layout draws here rather than in the
 	// session bar. The answer is `SESSION_ACTIONS`, not a condition written at
 	// each button - that is what #8 fixed for the bar and this finishes.
@@ -263,16 +255,10 @@ function TerminalPane({
 	const conversationModeKey = sessionKey
 		? storageKey(`pane-conv-mode:${sessionKey}:${paneId}`)
 		: null;
-	// Steward mode makes the summary the session's front page: the terminal is
-	// already on screen in herdr, and what a phone is for is the reading. Read
-	// straight from localStorage rather than the hook - this runs before the
-	// first paint, and the flag is only ever true because someone set it.
 	const [showConversation, setShowConversationState] = useState<boolean>(() => {
 		if (!conversationModeKey) return false;
 		try {
-			const stored = localStorage.getItem(conversationModeKey);
-			if (stored !== null) return stored === "1";
-			return stewardViewEnabled();
+			return localStorage.getItem(conversationModeKey) === "1";
 		} catch {
 			return false;
 		}
@@ -378,8 +364,7 @@ function TerminalPane({
 			return;
 		}
 		try {
-			const stored = localStorage.getItem(conversationModeKey);
-			setShowConversationState(stored !== null ? stored === "1" : stewardViewEnabled());
+			setShowConversationState(localStorage.getItem(conversationModeKey) === "1");
 		} catch {
 			setShowConversationState(false);
 		}
@@ -397,11 +382,6 @@ function TerminalPane({
 	const conversationAvailable = !!(
 		activeTmuxPane?.agent && activeTmuxPane.agentSessionId
 	);
-	// How many agents are running in this workspace. The steward's history
-	// covers all of them together, and with two `claude` panes there is nothing
-	// on the screen to say so - which reads as the chat being stuck on one of
-	// them.
-	const agentPaneCount = session?.panes?.filter((p) => p.agent).length ?? 0;
 	const panesLoaded = !!session?.panes;
 	useEffect(() => {
 		if (!panesLoaded) return;
@@ -418,10 +398,6 @@ function TerminalPane({
 	const handleToggleConversation = useCallback(() => {
 		setShowConversation((prev) => !prev);
 	}, []);
-
-	// Only where the terminal is not already on a screen of its own: a desktop
-	// has herdr next to it, and this rearranges nothing there.
-	const stewardMode = isMobile && stewardAvailable && stewardView;
 
 	// Nothing to switch to: no agent has been running in this pane.
 	const chatDisabled = !showConversation && !conversationAvailable;
@@ -448,22 +424,6 @@ function TerminalPane({
 	// while the soft keyboard comes and goes.
 	const bottomBar = isMobile ? (
 		<>
-		{/* Above the bar rather than inside the chat overlay: the bar is fixed
-		    for the soft keyboard, so a composer in the overlay sat behind it. */}
-		{stewardMode && showConversation && conversationAvailable && sessionTarget && (
-			<StewardSessionComposer
-				sessionId={sessionTarget.id}
-				// The history this screen is reading, so what is typed lands in it.
-				paneId={agentPaneCount > 1 ? activeTmuxPane?.paneId : undefined}
-				peerId={sessionTarget.peerId}
-				// The picked pane's, not the workspace's. This line is the whole of
-				// what picking a pane changes while the summary is up - the history
-				// below it belongs to the workspace - and on the phone it is here,
-				// in the bar, rather than in the chat.
-				agentState={activeTmuxPane?.indicatorState ?? session?.indicatorState}
-				activity={activeTmuxPane?.activity ?? session?.activity}
-			/>
-		)}
 		<div className="flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border-b border-white/[0.06]">
 			{/* Session selector. Takes the bar's free space so the name gets every
 			    pixel the action buttons don't need - a fixed cap truncated names
@@ -493,18 +453,6 @@ function TerminalPane({
 				<ChevronDown className="w-3 h-3 text-zinc-500 shrink-0" />
 			</button>
 
-			{/* Steward mode moves the terminal a level down: the summary is what a
-			    phone is for, and a one-tap toggle beside it made them peers. */}
-			{stewardMode ? (
-				<PaneMoreMenu
-					showConversation={showConversation}
-					conversationAvailable={conversationAvailable}
-					onToggleConversation={handleToggleConversation}
-					onOpenFiles={openFileViewer}
-					onOpenDashboard={() => controlModeContext.onShowDashboard?.()}
-					onReload={reloadTerminal}
-				/>
-			) : (
 			<SessionActionBar
 				variant="mobile"
 				handlers={{
@@ -527,7 +475,6 @@ function TerminalPane({
 					reload: { onSelect: reloadTerminal },
 				}}
 			/>
-			)}
 		</div>
 		</>
 	) : null;
@@ -538,24 +485,16 @@ function TerminalPane({
 	const mobileChat =
 		isMobile && sessionTarget && conversationAvailable ? (
 			<div className="h-full flex flex-col bg-cv-bg">
-				{/* Steward mode drops this: the bar at the bottom already carries the
-				    session's name, its state and the way to switch - so the phone was
-				    showing both twice, for 51px of a 852px screen. */}
-				{!stewardMode && (
 				<div className="flex items-center gap-2 px-3 py-2 border-b border-cv-border shrink-0">
-					{/* Steward mode keeps the terminal in the bar's menu instead - here
-					    it sat next to the summary as its equal. */}
-					{!stewardMode && (
-						<button
-							type="button"
-							onClick={() => setShowConversation(false)}
-							className="p-1.5 text-cv-text-muted hover:text-cv-text shrink-0"
-							title="Switch to terminal"
-							aria-label="Switch to Terminal"
-						>
-							<TerminalIcon className="w-5 h-5" />
-						</button>
-					)}
+					<button
+						type="button"
+						onClick={() => setShowConversation(false)}
+						className="p-1.5 text-cv-text-muted hover:text-cv-text shrink-0"
+						title="Switch to terminal"
+						aria-label="Switch to Terminal"
+					>
+						<TerminalIcon className="w-5 h-5" />
+					</button>
 					<div className="flex-1 min-w-0">
 						<div className="flex items-center gap-2">
 							<h2 className="text-[13px] font-medium text-cv-text truncate">
@@ -578,21 +517,10 @@ function TerminalPane({
 						</p>
 					</div>
 				</div>
-				)}
 
 				<div className="flex-1 min-h-0">
 					<ChatView
 						sessionId={sessionTarget.id}
-						composerInBar={stewardMode}
-						agentPaneCount={agentPaneCount}
-						paneId={activeTmuxPane?.paneId}
-						// The pane the tabs picked, falling back to the workspace for the
-						// ordinary one-pane case. The history below is the workspace's
-						// either way - the steward writes one per session - so this line
-						// is what a tab changes, and without it tapping one changed
-						// nothing on the screen at all.
-						agentState={activeTmuxPane?.indicatorState ?? session?.indicatorState}
-						activity={activeTmuxPane?.activity ?? session?.activity}
 						title={session?.name}
 						subtitle={
 							session?.currentPath
@@ -917,16 +845,6 @@ function TerminalPane({
 						enabled={showConversation}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
-						// The same four the phone's chat takes. They were added there
-						// and not here, so a tablet read the workspace's history for
-						// both panes of a two-agent workspace and reported the split as
-						// not working - which it was not, on that screen. A phone and a
-						// tablet render this from two call sites, and a prop added to
-						// one of them is a fix for one of them.
-						agentPaneCount={agentPaneCount}
-						paneId={activeTmuxPane?.paneId}
-						agentState={activeTmuxPane?.indicatorState ?? session?.indicatorState}
-						activity={activeTmuxPane?.activity ?? session?.activity}
 					/>
 				)}
 				{sessionTarget ? (
@@ -939,9 +857,6 @@ function TerminalPane({
 							// The phone keeps its InputBar and soft keyboard; the other two
 							// type into the pane directly or through FloatingKeyboard.
 							hideKeyboard={!isMobile}
-							// The steward's screen has a composer of its own, and it is not
-							// this one: typing here reached the agent and showed nothing.
-							lockInputHidden={stewardMode && showConversation}
 							overlayContent={
 								bottomBar ? (
 									<>
@@ -996,90 +911,6 @@ function TerminalPane({
 				)}
 			</div>
 		</div>
-	);
-}
-
-/**
- * Everything the phone's bar used to hold, one level down.
- *
- * In steward mode the summary is the session's front page and the terminal is
- * somewhere you go into and come back from, so it lives here beside the rest
- * rather than as a toggle next to the thing it replaces.
- */
-function PaneMoreMenu({
-	showConversation,
-	conversationAvailable,
-	onToggleConversation,
-	onOpenFiles,
-	onOpenDashboard,
-	onReload,
-}: {
-	showConversation: boolean;
-	conversationAvailable: boolean;
-	onToggleConversation: () => void;
-	onOpenFiles: () => void;
-	onOpenDashboard: () => void;
-	onReload: () => void;
-}) {
-	const { t } = useTranslation();
-	const [open, setOpen] = useState(false);
-
-	const run = (action: () => void) => () => {
-		setOpen(false);
-		action();
-	};
-
-	const items: { key: string; label: string; onSelect: () => void; hidden?: boolean }[] = [
-		{
-			key: "terminal",
-			label: showConversation ? t("action.terminal") : t("action.chat"),
-			onSelect: run(onToggleConversation),
-			hidden: !conversationAvailable,
-		},
-		{ key: "files", label: t("action.files"), onSelect: run(onOpenFiles) },
-		{ key: "dashboard", label: t("action.dashboard"), onSelect: run(onOpenDashboard) },
-		{ key: "reload", label: t("action.reload"), onSelect: run(onReload) },
-	];
-
-	return (
-		<>
-			<button
-				type="button"
-				onClick={() => setOpen(true)}
-				className="p-3 text-zinc-300 hover:text-white active:text-white"
-				title={t("common.more", "その他")}
-				aria-label={t("common.more", "その他")}
-				data-testid="pane-more"
-			>
-				<MoreHorizontal className="w-5 h-5" />
-			</button>
-
-			{open && (
-				<div className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/50">
-					<button
-						type="button"
-						aria-label={t("common.close", "閉じる")}
-						className="flex-1"
-						onClick={() => setOpen(false)}
-					/>
-					<div className="rounded-t-2xl bg-th-bg pb-[env(safe-area-inset-bottom)]">
-						{items
-							.filter((item) => !item.hidden)
-							.map((item) => (
-								<button
-									key={item.key}
-									type="button"
-									onClick={item.onSelect}
-									data-testid={`pane-more-${item.key}`}
-									className="block w-full border-th-border border-b px-4 py-4 text-left text-[15px] text-th-text last:border-b-0"
-								>
-									{item.label}
-								</button>
-							))}
-					</div>
-				</div>
-			)}
-		</>
 	);
 }
 

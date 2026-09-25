@@ -1121,10 +1121,8 @@ export interface ConversationMessage {
   /**
    * The transcript's own id for this message, where its format has one.
    *
-   * Carried so a summary can point at what it summarised: a steward turn names
-   * the messages behind it, and the reader taps through to them. Absent for a
-   * provider whose records are not individually identified, and for anything
-   * the parser synthesised rather than read.
+   * Absent for a provider whose records are not individually identified, and
+   * for anything the parser synthesised rather than read.
    */
   id?: string;
   role: 'user' | 'assistant';
@@ -1672,10 +1670,6 @@ export type MuxClientMessage =
   // footage shows the wearer driving, and a debugging trail shows whether the
   // user was mid-interaction right before an app death.
   | { type: 'glasses-input'; input: GlassesInput }
-  // No sessionId: one subscription carries the thread and every session's
-  // line and turns, because the overview needs all of them at once.
-  | { type: 'subscribe-steward' }
-  | { type: 'unsubscribe-steward' }
   | (ControlClientMessage & { sessionId: string });
 
 // Runtime validation for client→server /ws/mux frames. The unions above are
@@ -1785,8 +1779,6 @@ export const MuxClientMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('subscribe-glasses-screen') }),
   z.object({ type: z.literal('unsubscribe-glasses-screen') }),
-  z.object({ type: z.literal('subscribe-steward') }),
-  z.object({ type: z.literal('unsubscribe-steward') }),
   z.object({
     type: z.literal('glasses-input'),
     input: z.object({
@@ -1837,100 +1829,4 @@ export type MuxServerMessage =
   // is the cue to re-subscribe and ask for a fresh viewport rather than waiting
   // for output that will never be prompted.
   | { type: 'herdr-restart'; phase: 'restarting' | 'restored' | 'failed' }
-  // Steward output, only to `subscribe-steward` connections. Upserts keyed by
-  // id, so a snapshot and a live edit arriving out of order converge.
-  | { type: 'steward-snapshot'; thread: StewardThreadItem[]; lines: StewardSessionLine[] }
-  | { type: 'steward-thread'; item: StewardThreadItem }
-  | { type: 'steward-line'; line: StewardSessionLine }
-  // `paneId` when the workspace runs several agents and this history is one
-  // pane's. Absent for a workspace with one, which is most of them and every
-  // one that existed before the split.
-  | { type: 'steward-turns'; sessionId: string; paneId?: string; turns: StewardTurn[] }
-  | { type: 'steward-session-removed'; sessionId: string }
   | (ControlServerMessage & { sessionId: string });
-
-// ── steward ──
-//
-// What the resident steward agent writes for a person to read. Held by the
-// server so a screen opens onto words that are already there, rather than onto
-// an agent starting to think.
-
-/** One event, written twice: `text` for the G2's one page, `detail` for a
- *  phone that can hold code and diffs. "Continue on mobile" is this field
- *  being present, not a separate mechanism. */
-export interface StewardTurn {
-  id: string;
-  at: number;
-  /** `user` is also written by the server: a spoken instruction sent straight
-   *  to a pane bypasses the steward, and unrecorded it leaves the steward with
-   *  a transition it cannot explain. */
-  role: 'agent' | 'user' | 'steward';
-  text: string;
-  detail?: string;
-  /**
-   * Image paths on the host, attached to this entry rather than written into
-   * the sentence. A path pasted into the text is a wall of characters on a
-   * phone and a picture nowhere; as a field a screen can draw it and the
-   * steward can still hand the path to an agent that opens files.
-   */
-  images?: string[];
-  refs?: { file?: string; line?: number; url?: string };
-  /** Where in the real transcript this was summarised from, so the mobile view
-   *  can offer "see the original". The glasses have nowhere to open it. */
-  source?: { agentSessionId: string; messageIds?: string[] };
-}
-
-export type StewardAskAnswer =
-  | { kind: 'choice'; indices: number[] }
-  | { kind: 'text'; text: string }
-  /** Walked away. A value rather than an absent answer, or an abandoned ask
-   *  reads as still pending on every wake-up. */
-  | { kind: 'dismissed' };
-
-export interface StewardAsk {
-  id: string;
-  mode: 'single' | 'multi' | 'freeText';
-  choices: string[];
-  /** Position in a chain, e.g. 2 of 3. Steps are separate asks - the next
-   *  question depends on this answer - so the chain is only this label. */
-  step?: { index: number; total: number };
-  answer?: StewardAskAnswer;
-  answeredAt?: number;
-}
-
-/** One entry in the steward thread: its own conversation with its owner, which
- *  is not any agent's transcript. */
-export type StewardThreadItem = StewardTurn & {
-  /**
-   * Which session this entry is about, when it is about one.
-   *
-   * The thread is global and a person reads it out of context, so an entry has
-   * to say what it belongs to. Without the field the steward wrote the id into
-   * the text itself ("w4H: ..."), which spends the page budget on it and
-   * leaves nothing for a screen to link. A person writing from a session's own
-   * screen carries it the same way, so the answer knows where it is going.
-   */
-  sessionId?: string;
-  /**
-   * Which pane of that session, when it runs more than one agent.
-   *
-   * A workspace running several agents keeps a history per pane, and an entry
-   * about one of them belongs in that one. Without it, everything said from a
-   * pane's own screen landed in the workspace's history - which that screen no
-   * longer reads - so a person's own words vanished from the conversation they
-   * had just typed them into.
-   */
-  paneId?: string;
-} & (
-    | { kind: 'notify' }
-    | { kind: 'ask'; ask: StewardAsk }
-    /** Belongs to no single session (what is stuck, what finished). */
-    | { kind: 'report'; rows: string[] }
-    | { kind: 'reply'; askId?: string }
-  );
-
-export interface StewardSessionLine {
-  sessionId: string;
-  text: string;
-  at: number;
-}

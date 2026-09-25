@@ -4,6 +4,98 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.198] - 2026-09-25
+
+### Fixed
+- **A codex, grok, kimi, opencode or pi pane in a multi-pane workspace shows its
+  own context, model and recap.** Only the workspace's own session id was looked
+  up in the thread agents' stores, so every other pane running one of them got
+  only what its process id could say, while a Claude pane beside it showed all
+  three.
+
+## [0.3.197] - 2026-09-11
+
+### Removed
+- **The steward is gone.** It was an experiment that stopped being used, so the
+  gate, both CLI verb groups (`steward`, `steward-do`), the store and its
+  runtime, the REST routes, the WebSocket subscription, every screen it drew and
+  the G2 app written for it (`glasses-steward`, `com.hrdle.steward`) are
+  deleted rather than left switched off. What it wrote is still on disk under
+  the data directory - nothing here reads it, and nothing here deletes it.
+
+  Two things it had paid for stay, because they were never really its: the chat
+  view's font size is still shared by every screen that reads a conversation,
+  and the herdr update path still stops named sessions the supervisor does not
+  own, which was written for the steward's session and is right for any of them.
+
+## [0.3.196] - 2026-09-10
+
+### Fixed
+- **A workspace nobody has opened no longer arrives on the glasses already
+  unfolded.** The fold added in 0.3.195 is remembered against a workspace id,
+  and herdr hands the same id out again: it stores no counter, only the live
+  workspaces, so a restarted server numbers from what it restored and a closed
+  `w7` is the next `w7`. Measured on herdr 0.9.0 - three creates in one process
+  gave `w7`/`w8`/`w9`, and the first create after a restart gave `w7` back. The
+  glasses app is restarted by none of that, being what the glasses are running,
+  so the entry outlived the workspace it was about. Forgotten now when the
+  workspace leaves the session list, which is the moment a close reaches this
+  side at all
+
+## [0.3.195] - 2026-09-10
+
+### Changed
+- **A workspace's panes are folded under its heading on the glasses, and named
+  after their tabs.** Listed always, three workspaces of three panes were twelve
+  rows on a seven-line screen, most of them panes nobody was looking for. The
+  heading is one row now, shut by default and marked with how many it hides; a
+  tap opens or shuts it, and only a pane's own row leads into a conversation. A
+  pane borrows its tab's name, since a pane is rarely named and a tab usually
+  is. A fold never hides a pane that is waiting - the heading carries that
+  badge itself. Thanks to @Chapapon (#551)
+  - **The context figure is on every row**, not only in the footer: the bar
+    heights alone had no visible ceiling. A folded heading carries none, since
+    its figures would be one pane's, chosen by the server, with no way to tell
+    whose
+  - **The conversation footer names the one thing a tap does.** It offered two
+    verbs whenever a pane was called blocked with no question behind it; what a
+    tap does depends only on whether a card is queued, so the footer follows
+    that alone. The double-tap is listed in the order the controller takes it,
+    so a branch that moves cannot leave the label describing the branch beneath
+    it
+  - Reaches the G2 with a later glasses build, not with this release
+
+## [0.3.194] - 2026-09-10
+
+### Fixed
+- **A session's context bar no longer jumps to 100% and back every few
+  seconds.** The window a percentage is measured against comes from the
+  Anthropic model listing, and two separate things could take it away between
+  one refresh and the next, both answered by the flat 200,000 fallback -
+  measured on a live session as 416,221 tokens reading 41.6% of 1,000,000 on
+  one refresh and 100% of 200,000 on the next. A window once read is now
+  remembered for the process and answers a later listing that leaves the model
+  out, while a listing that still carries it wins as before, so a window that
+  genuinely changes is picked up. And every caller of a failed refresh gets the
+  last good catalog rather than only the caller that started the refresh - the
+  session list computes every session at once, so one failure handed different
+  sessions different windows in the same pass. A model no listing has ever
+  carried still gets the fallback. Thanks to @Chapapon (#550)
+
+## [0.3.193] - 2026-09-09
+
+### Added
+- **A pi session shows how full its context is.** pi already reported the
+  tokens; what was missing was the model's window. It comes from
+  `~/.pi/agent/models-store.json` - the catalog pi keeps for every model it has
+  resolved - looked up by provider *and* model id, because the same id exists
+  under more than one provider with different windows. A model the catalog has
+  no window for shows no percent rather than one measured against a guess, and
+  the token count follows pi's own reckoning so the figure agrees with the
+  footer pi draws next to it. After a compaction the context is unknown until
+  the next answer reports the new one, which is how pi treats it too. Thanks to
+  @Chapapon (#548)
+
 ## [0.3.192] - 2026-09-06
 
 ### Added

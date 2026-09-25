@@ -58,6 +58,36 @@ function controllerOn(st: AppState) {
   return c
 }
 
+describe('a workspace id handed out again', () => {
+  // herdr numbers workspaces from the ones it restored rather than from a
+  // stored counter, so a restarted server gives a closed id back: measured on
+  // 0.9.0, three creates in one process were w7/w8/w9 and the first create
+  // after a restart was w7 again. The app is not restarted by any of that, so
+  // a fold left behind would greet the wearer on a workspace they never opened.
+  test('does not arrive already unfolded', () => {
+    const c = controllerOn(state({ expandedWorkspaces: ['w7'] }))
+    const arrive = (sessions: Session[]) =>
+      (c as unknown as { onSessionsUpdated(s: Session[]): void }).onSessionsUpdated(sessions)
+
+    // w7 closes: gone from the list, and with it the memory of its fold.
+    arrive(sessions)
+    expect(c.state.expandedWorkspaces).not.toContain('w7')
+
+    // The next one to be created takes the id back, with two panes of its own.
+    const reused: Session[] = [
+      ...sessions,
+      {
+        id: 'w7',
+        name: 'something else entirely',
+        state: 'idle',
+        panes: [{ paneId: '%1' }, { paneId: '%2' }],
+      } as Session,
+    ]
+    arrive(reused)
+    expect(expandedSet(c.state).has('w7')).toBe(false)
+  })
+})
+
 describe('a cursor moved by something other than the ring', () => {
   // Seen on the device (2026-09-10): back on the list after a conversation in
   // one workspace, another workspace at the top stood open. A phone had that

@@ -11,8 +11,6 @@ import {
 	threadAgentOf,
 } from "../../shared/types";
 import { MobileDashboard } from "./components/dashboard/MobileDashboard";
-import { StewardView } from "./components/steward/StewardView";
-import { useStewardEnabled, useStewardView } from "./hooks/useSteward";
 import { DesktopLayout } from "./components/DesktopLayout";
 import { LoginForm } from "./components/LoginForm";
 import { Onboarding, useOnboarding } from "./components/Onboarding";
@@ -258,14 +256,6 @@ export function App() {
 	// The dashboard reached from the session list's own header. The one the
 	// session bar opens belongs to the layout.
 	const [listDashboardOpen, setListDashboardOpen] = useState(false);
-	const [stewardOpen, setStewardOpen] = useState(false);
-	// A server setting, so it is asked once - a mode that appears while someone
-	// is looking at the screen is worse than one that waits for a reload. The
-	// switch beside it is this screen's: a steward the server runs is not one
-	// somebody asked to see.
-	const stewardEnabled = useStewardEnabled();
-	const [stewardView] = useStewardView();
-	const stewardOnScreen = stewardEnabled && stewardView;
 
 	// The session list can name a pane, not just a workspace. The layout owns
 	// which pane is in front, so this is a request rather than a value.
@@ -707,16 +697,9 @@ export function App() {
 					isOnboarding={showSessionListOnboarding}
 					onToggleDashboard={() => setListDashboardOpen((v) => !v)}
 					dashboardOpen={listDashboardOpen}
-					onToggleSteward={
-						stewardOnScreen ? () => setStewardOpen((v) => !v) : undefined
-					}
-					stewardOpen={stewardOpen}
 				/>
 				{listDashboardOpen && (
 					<MobileDashboard onClose={() => setListDashboardOpen(false)} />
-				)}
-				{stewardOnScreen && stewardOpen && (
-					<StewardView onClose={() => setStewardOpen(false)} />
 				)}
 				{showSessionListOnboarding && (
 					<Onboarding

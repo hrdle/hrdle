@@ -64,7 +64,6 @@
     "resuming": "再開中...",
     "navigate": "移動",
     "goToTerminal": "このターミナルへ移動",
-    "goToChat": "このチャットへ移動",
     "openInClaudeApp": "Claudeアプリで開く",
     "colorTheme": "テーマカラー",
     "workspaceName": "ワークスペース名",
@@ -464,32 +463,5 @@
     "reload": "再読み込み",
     "later": "後で",
     "pending": "更新あり"
-  },
-  "steward": {
-    "title": "スチュワード",
-    "empty": "まだ何もありません。あなたに要ることが起きたら、ここに書かれます。",
-    "placeholder": "スチュワードに話しかける",
-    "seeOriginal": "元の会話を見る",
-    "answered": "回答済み",
-    "dismissed": "見送り",
-    "dismiss": "あとで",
-    "originalTitle": "元の会話",
-    "thinking": "考えています…",
-    "wholeWorkspace": "このペインの記録です（このワークスペースにはエージェントが{{count}}つ）",
-    "viewToggle": "スチュワード表示",
-    "writingSession": "スチュワードがこのセッションを読んでいます…",
-    "sessionEmpty": "まだ何も書かれていません。",
-    "attachImage": "画像を添付",
-    "removeImage": "画像を外す",
-    "working": "処理中…（経過 {{seconds}} 秒）",
-    "agentWorking": "このセッションは作業中です",
-    "agentWaiting": "このセッションは入力を待っています",
-    "takePhoto": "写真を撮る",
-    "detailShow": "詳細",
-    "detailHide": "詳細を閉じる"
-  },
-  "chat": {
-    "summary": "要約",
-    "transcript": "会話"
   }
 }

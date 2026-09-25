@@ -38,10 +38,10 @@ describe("the update notice", () => {
 		expect(mod).not.toMatch(/^import .*virtual:pwa-register/m);
 	});
 
-	test("both sockets that carry the push report it", () => {
-		for (const file of ["services/steward-socket.ts", "hooks/usePeerSessionsWatcher.ts"]) {
-			expect(readFileSync(join(SRC, file), "utf8")).toContain("noteServerVersion");
-		}
+	test("the socket that carries the push reports it", () => {
+		expect(
+			readFileSync(join(SRC, "hooks/usePeerSessionsWatcher.ts"), "utf8"),
+		).toContain("noteServerVersion");
 	});
 
 	// A phone on last release's bundle showed the server's number and read as up

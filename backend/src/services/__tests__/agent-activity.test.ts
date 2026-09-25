@@ -32,13 +32,13 @@ describe('claudeActivity', () => {
   test('reports the newest call, not the first', async () => {
     const id = await transcript([
       call('Read', { file_path: '/home/dev/project/old.ts' }),
-      call('Edit', { file_path: '/home/dev/project/src/components/StewardView.tsx' }),
+      call('Edit', { file_path: '/home/dev/project/src/components/DashboardPanel.tsx' }),
     ]);
     // The file name alone: the directory is the session's own nine times in
     // ten, and on a phone it is the part that gets cut.
     expect(await claudeActivity(id, join(dir, 'projects'))).toEqual({
       tool: 'Edit',
-      target: 'StewardView.tsx',
+      target: 'DashboardPanel.tsx',
     });
   });
 
@@ -74,10 +74,10 @@ describe('claudeActivity', () => {
   });
 
   test('a tail that opens mid-record does not throw', async () => {
-    const id = await transcript(['{"type":"assis', call('Grep', { pattern: 'steward' })]);
+    const id = await transcript(['{"type":"assis', call('Grep', { pattern: 'viewport' })]);
     expect(await claudeActivity(id, join(dir, 'projects'))).toEqual({
       tool: 'Grep',
-      target: 'steward',
+      target: 'viewport',
     });
   });
 

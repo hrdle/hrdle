@@ -6,7 +6,7 @@ import { useServiceWorkerUpdate } from "../hooks/useServiceWorkerUpdate";
  * Asks before reloading onto a new release, and keeps saying so if waved away.
  *
  * At the top, not the bottom. Every layout puts something it needs at the
- * bottom edge - the phone's session bar, the steward's composer - so a bottom
+ * bottom edge - the phone's session bar, the input bar - so a bottom
  * sheet covered the control the person was reaching for, and waving it away to
  * get at that control used to also throw away the only sign the page was on an
  * old build. The fix then looked like a fix that had not worked.
