@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.200] - 2026-10-17
+
+### Changed
+- **Built with Bun 1.4.3** (from 1.4.2). The server itself is unchanged; the
+  runtime underneath it fixes, among others, `fetch` closing surplus keep-alive
+  connections with a reset past 64 concurrent requests (a 1.4.1 regression),
+  `node:net` sockets that failed to connect never being collected, and an idle
+  server spending CPU on a once-a-second GC timer.
+
 ## [0.3.199] - 2026-09-25
 
 ### Added
