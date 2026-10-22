@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.201] - 2026-10-22
+
+### Fixed
+- **Ctrl+Enter reaches the pane as Ctrl+Enter.** On the on-screen keyboard,
+  CTRL followed by the return key used to send a plain Enter, and a hardware
+  Ctrl+Enter was turned into one by the terminal as well. Both now send the
+  chord itself, which herdr encodes for whatever is running in the pane: Claude
+  Code sends a queued message immediately, and a shell still gets an ordinary
+  Enter.
+
 ## [0.3.200] - 2026-10-17
 
 ### Changed
