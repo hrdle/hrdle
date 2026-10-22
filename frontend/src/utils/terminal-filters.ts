@@ -100,6 +100,7 @@ export function isAppShortcut(e: {
  */
 export type InterceptAction =
 	| "shift-enter"
+	| "ctrl-enter"
 	| "paste"
 	| "copy"
 	| "app-shortcut"
@@ -121,6 +122,11 @@ export function shouldInterceptKeyEvent(
 	// Shift+Enter → send literal backslash + carriage return
 	if (e.shiftKey && e.key === "Enter") {
 		return "shift-enter";
+	}
+
+	// xterm sends Ctrl+Enter as a plain "\r", so the Ctrl never arrives
+	if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === "Enter") {
+		return "ctrl-enter";
 	}
 
 	if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {

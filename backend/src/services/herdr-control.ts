@@ -19,7 +19,7 @@
  *    poc/herdr/FINDINGS.md).
  */
 
-import type { PaneCursor, PaneDemand, PaneModes, PaneViewport, TmuxLayoutNode } from '../../../shared/types';
+import { CTRL_ENTER_INPUT, type PaneCursor, type PaneDemand, type PaneModes, type PaneViewport, type TmuxLayoutNode } from '../../../shared/types';
 import { type ClientPaneDemands, reconcilePaneSizes, resolveTargetSizes } from './pane-sizing';
 import {
   closeTab as herdrCloseTab,
@@ -36,6 +36,7 @@ import {
   listWorkspaces,
   PaneController,
   readPane,
+  sendPaneKeys,
   toHerdrPaneId,
   toTmuxPaneId,
 } from './herdr-client';
@@ -763,6 +764,13 @@ export class HerdrControlSession {
   async sendInput(paneId: string, data: Buffer): Promise<void> {
     assertPaneId(paneId);
     if (data.length === 0) return;
+    // See CTRL_ENTER_INPUT. It goes over RPC rather than the control stream,
+    // so it is not ordered against bytes written there; a key pressed on its
+    // own is far enough behind whatever was typed before it.
+    if (data.toString('latin1') === CTRL_ENTER_INPUT) {
+      await sendPaneKeys(this.toHerdr(paneId), ['ctrl+enter']);
+      return;
+    }
     // Writing requires a control stream; take one lazily for input-only
     // access (REST sends into an unwatched session). stdin pipe buffering
     // delivers the bytes once the client finishes attaching.

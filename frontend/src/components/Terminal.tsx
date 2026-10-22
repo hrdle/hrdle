@@ -14,7 +14,7 @@ import {
 	useState,
 } from "react";
 import "@xterm/xterm/css/xterm.css";
-import type { PaneViewport, SessionTheme } from "../../../shared/types";
+import { CTRL_ENTER_INPUT, type PaneViewport, type SessionTheme } from "../../../shared/types";
 import { useSelectionMode } from "../hooks/useSelectionMode";
 import { bench } from "../utils/bench";
 import { copyText } from "../utils/clipboard";
@@ -531,6 +531,11 @@ export const TerminalComponent = memo(
 				if (action === "shift-enter") {
 					e.preventDefault();
 					sendRef.current("\\\r");
+					return false;
+				}
+				if (action === "ctrl-enter") {
+					e.preventDefault();
+					sendRef.current(CTRL_ENTER_INPUT);
 					return false;
 				}
 				if (action === "copy" || action === "paste") {

@@ -96,6 +96,12 @@ describe("shouldInterceptKeyEvent", () => {
 		).toBe("shift-enter");
 	});
 
+	test('intercepts Ctrl+Enter as "ctrl-enter"', () => {
+		expect(
+			shouldInterceptKeyEvent(mkEvent({ ctrlKey: true, key: "Enter" })),
+		).toBe("ctrl-enter");
+	});
+
 	test('intercepts Ctrl+V as "paste"', () => {
 		expect(shouldInterceptKeyEvent(mkEvent({ ctrlKey: true, key: "v" }))).toBe(
 			"paste",
