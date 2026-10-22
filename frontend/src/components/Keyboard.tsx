@@ -1,5 +1,6 @@
 import { CornerDownLeft } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { CTRL_ENTER_INPUT } from "../../../shared/types";
 
 // Keyboard key definition
 interface KeyDef {
@@ -206,6 +207,12 @@ export function Keyboard({
 			if (shiftPressed && keyDef.key === "\r") {
 				onSend("\\\r"); // Backslash + Enter for line continuation
 				setShiftPressed(false);
+				return;
+			}
+
+			if (ctrlPressed && keyDef.key === "\r") {
+				onSend(CTRL_ENTER_INPUT);
+				setCtrlPressed(false);
 				return;
 			}
 

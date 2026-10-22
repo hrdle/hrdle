@@ -1205,6 +1205,17 @@ export interface PaneViewport {
   atTail: boolean;         // offset === 0
 }
 
+/**
+ * Ctrl+Enter as an `input` payload of its own, in xterm's modifyOtherKeys form.
+ *
+ * A browser cannot tell whether the pane's application has asked for extended
+ * keys, and the answer decides the bytes: Claude Code reads this as its
+ * send-now key, while a shell that never asked prints `;5;13~`. So the server
+ * hands a payload that is exactly this to herdr as the named key, and herdr,
+ * which tracks the mode the application set, encodes it for that application.
+ */
+export const CTRL_ENTER_INPUT = '\x1b[27;5;13~';
+
 // Client → Server messages
 export type ControlClientMessage =
   | { type: 'input'; paneId: string; data: string } // base64

@@ -407,6 +407,12 @@ export async function listTabs(workspaceId: string): Promise<HerdrTab[]> {
   }
 }
 
+/** Press named keys (`ctrl+enter`) in a pane, encoded for the mode its
+ *  application has set rather than as fixed bytes. */
+export async function sendPaneKeys(herdrPaneId: string, keys: string[]): Promise<void> {
+  await herdrRpc('pane.send_keys', { pane_id: herdrPaneId, keys });
+}
+
 /** Focus (switch to) a tab. */
 export async function focusTab(tabId: string): Promise<void> {
   await herdrRpc('tab.focus', { tab_id: tabId });
