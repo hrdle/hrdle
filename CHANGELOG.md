@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.205] - 2026-11-18
+
+### Added
+- **A board view of your workspaces.** A new button in the workspace list's
+  header regroups the list by what each agent needs from you - needs you,
+  done but not yet looked at, working, idle - with a count for each and one
+  line per workspace. Opening a workspace from it marks it as looked at, on
+  every device at once.
+
+### Fixed
+- **Opening a pane from the workspace list focuses that pane on desktop and
+  tablet too.** It only did so on the phone; elsewhere the session opened and
+  herdr's focus stayed where it was.
+- **A pane picked while its session was still opening is no longer ignored.**
+  The request could go out before the session was ready and was dropped.
+
 ## [0.3.204] - 2026-11-18
 
 ### Added
