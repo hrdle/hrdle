@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.203] - 2026-11-18
+
+### Added
+- **Left and right arrow keys on the floating keyboard.** The Input row and the
+  minimized bar had only up, down and Enter, so moving the cursor within a line
+  meant opening the full keyboard. Both now have all four arrows.
+
 ## [0.3.202] - 2026-11-18
 
 ### Fixed
