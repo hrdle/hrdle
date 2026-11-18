@@ -223,7 +223,9 @@ export const PaneIdSchema = z.string().regex(/^%[0-9A-Za-z]+$/, 'Invalid pane ID
 
 // herdr tab id validation (e.g. "w1:t2", "w1W:t3"). Server-provided and echoed
 // back by the client to select/close a tab; bounded to the herdr id shape.
-export const TabIdSchema = z.string().regex(/^[A-Za-z0-9]+:t\d+$/, 'Invalid tab ID');
+// The part after `t` is base-36 like a pane's, not a decimal count: herdr hands
+// out `w7T:tD`, and a digits-only pattern rejects every such tab at the boundary.
+export const TabIdSchema = z.string().regex(/^[A-Za-z0-9]+:t[0-9A-Za-z]+$/, 'Invalid tab ID');
 
 // Agent session id validation. Claude/Codex session ids are UUID-like; this
 // also bounds them to shell-safe characters because the id is typed into an

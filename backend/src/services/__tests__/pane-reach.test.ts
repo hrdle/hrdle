@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { PaneIdSchema } from '../../../../shared/types';
+import { PaneIdSchema, TabIdSchema } from '../../../../shared/types';
 import { toTmuxPaneId } from '../herdr-client';
 import { HerdrControlSession } from '../herdr-control';
 
@@ -47,6 +47,22 @@ describe('pane ids accepted at the wire boundary', () => {
     expect(PaneIdSchema.safeParse('%').success).toBe(false);
     expect(PaneIdSchema.safeParse('1').success).toBe(false);
     expect(PaneIdSchema.safeParse('%../x').success).toBe(false);
+  });
+});
+
+describe('tab ids accepted at the wire boundary', () => {
+  test('TabIdSchema accepts the ids herdr hands out', () => {
+    expect(TabIdSchema.safeParse('w1:t1').success).toBe(true);
+    expect(TabIdSchema.safeParse('w7T:tD').success).toBe(true);
+    expect(TabIdSchema.safeParse('w7T:t10').success).toBe(true);
+  });
+
+  test('and still rejects anything that is not one tab of one workspace', () => {
+    expect(TabIdSchema.safeParse('w7T:t').success).toBe(false);
+    expect(TabIdSchema.safeParse('w7T:pD').success).toBe(false);
+    expect(TabIdSchema.safeParse('w7T:tD:p1').success).toBe(false);
+    expect(TabIdSchema.safeParse('tD').success).toBe(false);
+    expect(TabIdSchema.safeParse('w7T:t../x').success).toBe(false);
   });
 });
 
