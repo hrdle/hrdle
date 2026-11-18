@@ -41,6 +41,13 @@
     "remoteControlOn": "Remote control mode ON - terminal rendered by local herdr",
     "remoteControlOff": "Remote control mode OFF"
   },
+  "board": {
+    "toggle": "Group by status",
+    "needsYou": "needs you",
+    "unseen": "done · unseen",
+    "working": "working",
+    "idle": "idle"
+  },
   "session": {
     "title": "Workspaces",
     "list": "Workspace List",

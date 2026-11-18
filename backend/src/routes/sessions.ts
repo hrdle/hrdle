@@ -205,6 +205,11 @@ export function herdrStatusToIndicator(status?: string): IndicatorState | null {
   }
 }
 
+/** `true` or absent, so a seen pane adds nothing to the payload. */
+export function isUnseen(status?: string): true | undefined {
+  return status === 'done' ? true : undefined;
+}
+
 /**
  * Per-pane indicator: herdr's per-pane status is the source of truth and hook
  * state only fills in what herdr cannot see.
@@ -386,6 +391,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
         ? (ccSession?.lastRecap ? 'summary' : undefined)
         : (agentThread?.recap ? 'last-message' : undefined)) as 'summary' | 'last-message' | undefined,
       indicatorState: sessionIndicatorState,
+      unseen: s.panes ? s.panes.some((p) => isUnseen(p.agentStatus)) || undefined : isUnseen(s.agentStatus),
       // Only while it is working, and only for Claude: this is a tail read of
       // its transcript, and a pane that has stopped has nothing to report.
       activity:
@@ -444,6 +450,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           tabId: p.tabId,
           label: p.label,
           indicatorState: paneIndicator,
+          unseen: isUnseen(p.agentStatus),
           // What THIS pane is doing, not what the workspace is doing.
           //
           // The session-level field is read from the workspace's primary agent,
@@ -492,6 +499,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       ccRecapAt: undefined,
       ccRecapKind: undefined,
       indicatorState: undefined,
+      unseen: undefined,
       activity: undefined,
       ccSessionId: lost.ccSessionId,
       bridgeSessionId: undefined,
