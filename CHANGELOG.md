@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.204] - 2026-11-18
+
+### Added
+- **Left and right arrow keys on the phone's input bar too.** 0.3.203 added them
+  to the floating keyboard and missed the phone, which has the same row of keys.
+  All four arrows are there now, and the row still fits a narrow screen.
+
 ## [0.3.203] - 2026-11-18
 
 ### Added
