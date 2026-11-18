@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: legacy click-on-div UI; keyboard navigation provided via main shortcuts */
 import {
 	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
 	ChevronUp,
 	Clock,
 	CornerDownLeft,
@@ -579,17 +581,31 @@ export const InputBar = memo(
 								<div className="flex-1" />
 								<button
 									type="button"
+									onClick={() => sendRef.current("\x1b[D")}
+									className="h-9 w-10 shrink-0 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
+								>
+									<ChevronLeft className="w-4 h-4" />
+								</button>
+								<button
+									type="button"
 									onClick={() => sendRef.current("\x1b[A")}
-									className="h-9 w-14 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
+									className="h-9 w-10 shrink-0 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
 								>
 									<ChevronUp className="w-4 h-4" />
 								</button>
 								<button
 									type="button"
 									onClick={() => sendRef.current("\x1b[B")}
-									className="h-9 w-14 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
+									className="h-9 w-10 shrink-0 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
 								>
 									<ChevronDown className="w-4 h-4" />
+								</button>
+								<button
+									type="button"
+									onClick={() => sendRef.current("\x1b[C")}
+									className="h-9 w-10 shrink-0 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
+								>
+									<ChevronRight className="w-4 h-4" />
 								</button>
 								<button
 									type="button"
