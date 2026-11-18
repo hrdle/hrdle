@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.202] - 2026-11-18
+
+### Fixed
+- **Every tab of a workspace can be switched to and closed.** herdr gives a
+  workspace's later tabs ids like `w7T:tD`, and the server only accepted ids
+  ending in digits, so tapping such a tab did nothing - the request was refused
+  before it reached herdr.
+
 ## [0.3.201] - 2026-10-22
 
 ### Fixed
