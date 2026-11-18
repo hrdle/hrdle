@@ -369,7 +369,7 @@ export class HerdrService {
                 }));
             }
           } else if (ws.active_tab_id) {
-            const num = ws.active_tab_id.match(/:t(\d+)$/)?.[1] ?? '1';
+            const num = ws.active_tab_id.match(/:t([0-9A-Za-z]+)$/)?.[1] ?? '1';
             tabs = [
               { id: ws.active_tab_id, label: num, paneCount: activeWsPanes.length, active: true },
             ];
