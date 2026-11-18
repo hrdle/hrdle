@@ -1,6 +1,8 @@
 /** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: legacy click-on-div UI; keyboard navigation provided via main shortcuts */
 import {
 	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
 	ChevronUp,
 	Clock,
 	CornerDownLeft,
@@ -382,6 +384,16 @@ export const FloatingKeyboard = forwardRef<
 					</div>
 					{/* Divider */}
 					<div className="w-px h-6 bg-th-surface-active" />
+					{/* Arrow Left */}
+					<button
+						type="button"
+						onClick={() => onSend("\x1b[D")}
+						className={miniKeyClass}
+						onMouseDown={(e) => e.stopPropagation()}
+						onTouchStart={(e) => e.stopPropagation()}
+					>
+						<ChevronLeft className="w-5 h-5" />
+					</button>
 					{/* Arrow Up */}
 					<button
 						type="button"
@@ -401,6 +413,16 @@ export const FloatingKeyboard = forwardRef<
 						onTouchStart={(e) => e.stopPropagation()}
 					>
 						<ChevronDown className="w-5 h-5" />
+					</button>
+					{/* Arrow Right */}
+					<button
+						type="button"
+						onClick={() => onSend("\x1b[C")}
+						className={miniKeyClass}
+						onMouseDown={(e) => e.stopPropagation()}
+						onTouchStart={(e) => e.stopPropagation()}
+					>
+						<ChevronRight className="w-5 h-5" />
 					</button>
 					{/* Enter */}
 					<button
@@ -621,7 +643,14 @@ export const FloatingKeyboard = forwardRef<
 
 							<div className="flex-1" />
 
-							{/* Right group: arrow up, arrow down, send */}
+							{/* Right group: arrows, send */}
+							<button
+								type="button"
+								onClick={() => onSend("\x1b[D")}
+								className="h-9 w-9 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
+							>
+								<ChevronLeft className="w-4 h-4" />
+							</button>
 							<button
 								type="button"
 								onClick={() => onSend("\x1b[A")}
@@ -635,6 +664,13 @@ export const FloatingKeyboard = forwardRef<
 								className="h-9 w-9 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
 							>
 								<ChevronDown className="w-4 h-4" />
+							</button>
+							<button
+								type="button"
+								onClick={() => onSend("\x1b[C")}
+								className="h-9 w-9 flex items-center justify-center rounded-md bg-white/[0.06] text-zinc-400 active:bg-white/[0.1]"
+							>
+								<ChevronRight className="w-4 h-4" />
 							</button>
 							<button
 								type="button"
