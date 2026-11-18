@@ -257,6 +257,14 @@ export interface PaneInfo {
   label?: string;
   indicatorState?: IndicatorState;
   /**
+   * The agent here finished a turn that nobody has looked at yet.
+   *
+   * herdr's own distinction, relayed: it reports `done` for a pane that went
+   * quiet while unfocused and `idle` once the pane has been focused, and
+   * `indicatorState` folds both into `completed`.
+   */
+  unseen?: boolean;
+  /**
    * The tool call this pane is on, while it is on one.
    *
    * The session-level field of the same name is read from the workspace's
@@ -984,6 +992,8 @@ export interface DashboardResponse {
 
 export interface ExtendedSessionResponse extends SessionResponse {
   indicatorState?: IndicatorState;
+  /** Some pane of this workspace is `unseen` (see `PaneInfo.unseen`). */
+  unseen?: boolean;
   /**
    * What the agent is doing right now, while it is doing it.
    *

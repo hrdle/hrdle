@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { herdrStatusToIndicator, paneIndicatorState } from '../../routes/sessions';
+import { herdrStatusToIndicator, isUnseen, paneIndicatorState } from '../../routes/sessions';
 import { parseHookJson, parseHookToml } from '../hook-status';
 import { HOOK_COMMAND } from '../../../../shared/identity';
 
@@ -24,6 +24,22 @@ describe('herdrStatusToIndicator', () => {
     expect(herdrStatusToIndicator('unknown')).toBeNull();
     expect(herdrStatusToIndicator(undefined)).toBeNull();
     expect(herdrStatusToIndicator('thinking_very_hard')).toBeNull();
+  });
+});
+
+describe('isUnseen', () => {
+  it('is what separates the two states the indicator folds together', () => {
+    // Measured on herdr 0.9.5: a pane reported idle while unfocused reads
+    // `done`, and `pane.focus` turns it to `idle`.
+    expect(isUnseen('done')).toBe(true);
+    expect(isUnseen('idle')).toBeUndefined();
+  });
+
+  it('says nothing about a pane that has not finished', () => {
+    expect(isUnseen('working')).toBeUndefined();
+    expect(isUnseen('blocked')).toBeUndefined();
+    expect(isUnseen('unknown')).toBeUndefined();
+    expect(isUnseen(undefined)).toBeUndefined();
   });
 });
 

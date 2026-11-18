@@ -1778,12 +1778,19 @@ export function DesktopLayout({
 		appliedPaneFocusRef.current = paneFocusRequest.requestId;
 		setPendingPaneFocus(paneFocusRequest.paneId);
 	}, [paneFocusRequest]);
+	// Pane ids repeat across workspaces (`%1` is in most of them), so finding
+	// the pane in the tree is not evidence the tree is the right session's: a
+	// request made while opening a session matched the one being left, and the
+	// focus went out before the subscribe it depended on. The REST path of
+	// remote-control mode needs no subscription.
+	const paneFocusReady =
+		remoteControl || controlTerminal.connectedSessionId === controlSessionId;
 	useEffect(() => {
-		if (!pendingPaneFocus) return;
+		if (!pendingPaneFocus || !paneFocusReady) return;
 		if (!findPaneById(desktopState.root, pendingPaneFocus)) return;
 		setPendingPaneFocus(null);
 		handleFocusPaneRef.current(pendingPaneFocus);
-	}, [pendingPaneFocus, desktopState.root]);
+	}, [pendingPaneFocus, desktopState.root, paneFocusReady]);
 
 	// A reload restores whatever the server had zoomed. Follow it once so the
 	// tab bar marks the pane that is actually on screen; after that the bar owns
@@ -1907,6 +1914,17 @@ export function DesktopLayout({
 				paneId,
 				makeSessionKey(session.id, session.peerId),
 			);
+		},
+		[handleSelectSessionForPane],
+	);
+
+	const handleModalSelectPane = useCallback(
+		(session: { id: string; peerId?: string }, paneId: string) => {
+			handleSelectSessionForPane(
+				activePaneRef.current,
+				makeSessionKey(session.id, session.peerId),
+			);
+			setPendingPaneFocus(paneId);
 		},
 		[handleSelectSessionForPane],
 	);
@@ -2102,6 +2120,7 @@ export function DesktopLayout({
 					isOpen={showSessionModal}
 					onClose={() => setShowSessionModal(false)}
 					onSelectSession={handleModalSelectSession}
+					onSelectPane={handleModalSelectPane}
 					isTablet={variant === "tablet"}
 				/>
 			)}

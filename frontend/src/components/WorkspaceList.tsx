@@ -10,14 +10,15 @@ import type { TFunction } from "i18next";
 import {
 	ArrowRight,
 	BarChart3,
-	MessagesSquare,
 	ChevronLeft,
 	ChevronRight,
 	ExternalLink,
 	Folder,
 	GripVertical,
+	MessagesSquare,
 	Play,
 	Plus,
+	Rows3,
 	Search,
 	X,
 } from "lucide-react";
@@ -118,6 +119,7 @@ import { SessionHistory } from "./SessionHistory";
 import { SessionHistoryV2 } from "./history/SessionHistoryV2";
 import { HOOK_COMMAND } from "../../../shared/identity";
 import { storageKey } from "../utils/app-storage";
+import { WorkspaceBoard } from "./WorkspaceBoard";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -1820,6 +1822,21 @@ export function WorkspaceList({
 		"sessions",
 	);
 	const historyV2 = useHistoryV2Flag();
+	const [boardView, setBoardView] = useState(
+		() =>
+			typeof localStorage !== "undefined" &&
+			localStorage.getItem(storageKey("workspace-board")) === "1",
+	);
+	const toggleBoardView = () => {
+		setBoardView((prev) => {
+			try {
+				localStorage.setItem(storageKey("workspace-board"), prev ? "0" : "1");
+			} catch {
+				// private mode: the choice lasts for this page only
+			}
+			return !prev;
+		});
+	};
 	const [showSearch, setShowSearch] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [hookConfigured, setHookConfigured] = useState<boolean | null>(null);
@@ -2276,7 +2293,7 @@ export function WorkspaceList({
 								<button
 									type="button"
 									onClick={() => setActiveTab("sessions")}
-									className={`px-5 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200 ${
+									className={`px-3 sm:px-5 py-1.5 text-[13px] font-medium whitespace-nowrap rounded-md transition-all duration-200 ${
 										activeTab === "sessions"
 											? "bg-white/[0.09] text-white shadow-sm"
 											: "text-zinc-500 hover:text-zinc-400"
@@ -2287,7 +2304,7 @@ export function WorkspaceList({
 								<button
 									type="button"
 									onClick={() => setActiveTab("history")}
-									className={`px-5 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200 ${
+									className={`px-3 sm:px-5 py-1.5 text-[13px] font-medium whitespace-nowrap rounded-md transition-all duration-200 ${
 										activeTab === "history"
 											? "bg-white/[0.09] text-white shadow-sm"
 											: "text-zinc-500 hover:text-zinc-400"
@@ -2311,6 +2328,21 @@ export function WorkspaceList({
 									title={t("dashboard.title")}
 								>
 									<BarChart3 className="w-[18px] h-[18px]" />
+								</button>
+							)}
+							{activeTab === "sessions" && (
+								<button
+									type="button"
+									onClick={toggleBoardView}
+									className={`p-2 rounded-lg transition-colors ${
+										boardView
+											? "text-blue-400 bg-blue-500/20"
+											: "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+									}`}
+									title={t("board.toggle")}
+									aria-pressed={boardView}
+								>
+									<Rows3 className="w-[18px] h-[18px]" />
 								</button>
 							)}
 							<button
@@ -2464,6 +2496,12 @@ export function WorkspaceList({
 									<div className="text-center text-zinc-600 py-12">
 										<p className="text-[13px]">No matching sessions</p>
 									</div>
+								) : boardView ? (
+									<WorkspaceBoard
+										sessions={filteredSessions}
+										onSelectSession={onSelectSession}
+										onSelectPane={onSelectPane}
+									/>
 								) : (
 									<>
 										<DndContext
