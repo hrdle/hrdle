@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.206] - 2026-11-20
+
+### Added
+- **The board shows background work.** A row carries the count Claude Code
+  shows at the bottom of its own screen - `bg: 1 shell`, `bg: 1 shell, 1 monitor`
+  - so a session that looks idle but still has something running says so.
+
+### Fixed
+- **The board's time column is no longer blank for almost every row.** It now
+  says how long a workspace has been in the state it is listed under - waiting
+  for 12 minutes, finished 5 hours ago. A session that was already working when
+  the server last restarted shows no time until its state next changes.
+
 ## [0.3.205] - 2026-11-18
 
 ### Added
