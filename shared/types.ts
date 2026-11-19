@@ -265,6 +265,20 @@ export interface PaneInfo {
    */
   unseen?: boolean;
   /**
+   * When this pane entered the state it is in (ISO).
+   *
+   * Absent when nobody saw it happen: the server dates a state from the poll
+   * that first noticed the change, so a pane already working when the server
+   * started has no time until it next changes. A pane that had already
+   * finished is dated from its transcript's last write instead.
+   */
+  statusSince?: string;
+  /**
+   * Background work the agent reports for itself, in its own words
+   * (`"1 shell"`, `"1 monitor"`). Claude Code only; absent when there is none.
+   */
+  background?: string[];
+  /**
    * The tool call this pane is on, while it is on one.
    *
    * The session-level field of the same name is read from the workspace's

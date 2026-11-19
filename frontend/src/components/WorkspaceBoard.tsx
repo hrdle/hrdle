@@ -128,7 +128,9 @@ export function WorkspaceBoard({
 								session.ccSummary ||
 								session.ccFirstPrompt ||
 								"";
-							const spokeAt = pane?.recapAt || session.ccRecapAt;
+							const since =
+								pane?.statusSince || pane?.recapAt || session.ccRecapAt;
+							const background = pane?.background;
 							const agent = pane?.agent ?? session.agent;
 							const agentLabel =
 								agent && isAgentProvider(agent)
@@ -152,23 +154,32 @@ export function WorkspaceBoard({
 									/>
 									<span
 										className={`text-[14px] font-medium text-zinc-100 truncate ${
-											title ? "" : "sm:col-span-2"
+											title || background ? "" : "sm:col-span-2"
 										}`}
 									>
 										{session.name}
 									</span>
-									{title && (
-										<span className="text-[13px] text-zinc-400 truncate max-sm:col-start-2 max-sm:row-start-2 max-sm:col-span-2">
-											{title}
+									{(title || background) && (
+										<span className="flex items-center gap-2 min-w-0 max-sm:col-start-2 max-sm:row-start-2 max-sm:col-span-2">
+											{title && (
+												<span className="text-[13px] text-zinc-400 truncate">
+													{title}
+												</span>
+											)}
+											{background && (
+												<span className="shrink-0 px-1.5 py-px rounded border border-blue-400/40 text-[11px] text-blue-300 whitespace-nowrap">
+													{t("board.background", {
+														what: background.join(", "),
+													})}
+												</span>
+											)}
 										</span>
 									)}
 									<span className="text-[12px] text-zinc-600 truncate max-sm:hidden">
 										{where}
 									</span>
 									<span className="text-[12px] text-zinc-600 tabular-nums whitespace-nowrap max-sm:col-start-3 max-sm:row-start-1">
-										{spokeAt
-											? formatRelativeTime(spokeAt, t, i18n.language)
-											: ""}
+										{since ? formatRelativeTime(since, t, i18n.language) : ""}
 									</span>
 								</button>
 							);

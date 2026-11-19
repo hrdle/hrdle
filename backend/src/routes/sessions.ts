@@ -1,4 +1,7 @@
 import { Hono } from 'hono';
+import { ClaudeBackgroundReader } from '../services/claude-footer';
+import { readPaneText, toHerdrPaneId } from '../services/herdr-client';
+import { paneStatusClock } from '../services/pane-status-since';
 import { z } from 'zod';
 import { homedir } from 'node:os';
 import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
@@ -246,6 +249,8 @@ export function paneIndicatorState(opts: {
 export const sessions = new Hono();
 
 /** Build the full sessions list (shared by HTTP handler and WS push) */
+const claudeBackground = new ClaudeBackgroundReader((id) => readPaneText(id, 'visible'));
+
 export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
   const herdrSessions = await herdrService.listWorkspaces();
   // pi has no hook to announce a finished turn; its live session files are watched instead.
@@ -270,6 +275,9 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
   // Read once per build (cheap: a handful of small ~/.claude/sessions/*.json).
   const bridgeSessionIds = await claudeCodeService.getBridgeSessionIds();
 
+  const now = Date.now();
+  const livePaneKeys = new Set<string>();
+  const liveClaudePanes = new Set<string>();
   const results = await Promise.all(herdrSessions.map(async (s) => {
     let ccSession: Awaited<ReturnType<typeof claudeCodeService.getSessionForPath>> | undefined;
     const threadAgent = threadAgentOf(s.agent ?? s.currentCommand);
@@ -440,6 +448,21 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           isMultiWorkspace && p.agent === 'claude' && p.agentSessionId && p.path
             ? await claudeCodeService.getSessionById(p.agentSessionId, p.path)
             : null;
+        const herdrPaneId = toHerdrPaneId(s.id, p.paneId);
+        livePaneKeys.add(herdrPaneId);
+        const witnessed = p.agent ? paneStatusClock.observe(herdrPaneId, p.agentStatus, now) : null;
+        // Finished before this server was watching: the transcript's last
+        // write is when it stopped. No such stand-in exists for a pane still
+        // working, whose transcript is being written right now.
+        const finished = p.agentStatus === 'idle' || p.agentStatus === 'done';
+        const lastWrite = isMultiWorkspace
+          ? (paneClaude?.modified ?? paneThread?.updatedAt)
+          : (ccSession?.modified ?? agentThread?.updatedAt);
+        const statusSince = witnessed !== null
+          ? new Date(witnessed).toISOString()
+          : (p.agent && finished ? lastWrite : undefined);
+        const background = p.agent === 'claude' ? claudeBackground.get(herdrPaneId, now) : [];
+        if (p.agent === 'claude') liveClaudePanes.add(herdrPaneId);
         const pane: PaneInfo = {
           paneId: p.paneId,
           currentCommand: p.command,
@@ -451,6 +474,8 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
           label: p.label,
           indicatorState: paneIndicator,
           unseen: isUnseen(p.agentStatus),
+          statusSince,
+          background: background.length > 0 ? background : undefined,
           // What THIS pane is doing, not what the workspace is doing.
           //
           // The session-level field is read from the workspace's primary agent,
@@ -473,6 +498,9 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       activeTabId: s.activeTabId,
     };
   }));
+
+  paneStatusClock.retain(livePaneKeys);
+  claudeBackground.retain(liveClaudePanes);
 
   // Add lost sessions (existed before reboot but not in herdr now)
   const activeIds = new Set(results.map(s => s.id));
