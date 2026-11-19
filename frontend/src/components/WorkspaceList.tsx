@@ -1026,7 +1026,6 @@ function CollapsedWorkspaceSummary({
 function PaneRow({
 	session,
 	pane,
-	bridgePaneId,
 	onSelect,
 	onSelectPane,
 	onClosePane,
@@ -1034,7 +1033,6 @@ function PaneRow({
 }: {
 	session: ExtendedSessionResponse;
 	pane: PaneInfo;
-	bridgePaneId?: string;
 	onSelect: (session: ExtendedSessionResponse) => void;
 	onSelectPane?: (session: ExtendedSessionResponse, paneId: string) => void;
 	onClosePane?: (sessionId: string, paneId: string, name: string) => void;
@@ -1114,11 +1112,11 @@ function PaneRow({
 					)}
 				</p>
 			)}
-			{pane.paneId === bridgePaneId && (
+			{pane.bridgeSessionId && (
 				<button
 					type="button"
 					onClick={() => {
-						const bridgeId = session.bridgeSessionId;
+						const bridgeId = pane.bridgeSessionId;
 						if (!bridgeId) return;
 						openClaudeAppSession(bridgeId);
 					}}
@@ -1342,13 +1340,6 @@ function SessionItem({
 
 	const extSession = session;
 	const agent = extSession.agent ?? extSession.currentCommand;
-	// Multi-pane Remote Control: the Claude-app link belongs to the pane running
-	// the session's agent (same detection as the backend's isClaudeOnPane), so
-	// nest it under that row instead of the session-level jump menu.
-	const bridgePaneId =
-		extSession.bridgeSessionId && extSession.panes
-			? extSession.panes.find((p) => p.currentCommand === agent)?.paneId
-			: undefined;
 	const supportsConversationMetadata = agentSupportsConversationMetadata(agent);
 	const agentLabel =
 		agent && isAgentProvider(agent)
@@ -1736,7 +1727,6 @@ function SessionItem({
 															key={pane.paneId}
 															session={extSession}
 															pane={pane}
-															bridgePaneId={bridgePaneId}
 															onSelect={onSelect}
 															onSelectPane={onSelectPane}
 															onClosePane={onClosePane}
@@ -1757,7 +1747,6 @@ function SessionItem({
 									key={pane.paneId}
 									session={extSession}
 									pane={pane}
-									bridgePaneId={bridgePaneId}
 									onSelect={onSelect}
 									onSelectPane={onSelectPane}
 									onClosePane={onClosePane}

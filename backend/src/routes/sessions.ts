@@ -487,6 +487,10 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
             p.agent === 'claude' && p.agentSessionId && paneIndicator === 'processing'
               ? await claudeActivity(p.agentSessionId)
               : undefined,
+          bridgeSessionId:
+            p.agent === 'claude' && p.agentSessionId
+              ? bridgeSessionIds.get(p.agentSessionId)
+              : undefined,
           pid: p.pid,
           metrics: paneMetrics,
           recap: paneClaude?.lastRecap?.content ?? paneThread?.recap,
