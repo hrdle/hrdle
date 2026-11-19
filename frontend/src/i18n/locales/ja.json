@@ -42,6 +42,7 @@
     "remoteControlOff": "リモートコントロール OFF"
   },
   "board": {
+    "background": "bg: {{what}}",
     "toggle": "状態ごとにまとめる",
     "needsYou": "対応待ち",
     "unseen": "完了・未確認",

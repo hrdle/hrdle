@@ -42,6 +42,7 @@
     "remoteControlOff": "Remote control mode OFF"
   },
   "board": {
+    "background": "bg: {{what}}",
     "toggle": "Group by status",
     "needsYou": "needs you",
     "unseen": "done · unseen",
