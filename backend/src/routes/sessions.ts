@@ -90,6 +90,14 @@ export function findDuplicateAgentWorkingDirSession<T extends { agent?: string; 
   return sessions.find(s => (s.agent ?? s.currentCommand) === agent && s.currentPath === workingDir);
 }
 
+export function findWorkspaceRunningConversation<
+  T extends { agentSessionId?: string; panes?: Array<{ agentSessionId?: string }> },
+>(sessions: T[], agentSessionId: string): T | undefined {
+  return sessions.find(
+    (s) => s.agentSessionId === agentSessionId || s.panes?.some((p) => p.agentSessionId === agentSessionId),
+  );
+}
+
 /** Notify mux clients of session changes after mutations */
 function notifySessionChange(): void {
   pushSessionsNow();
@@ -905,6 +913,22 @@ sessions.post('/history/resume', async (c) => {
     const projectName = projectPath.split('/').pop() || 'session';
     const herdrSessions = await herdrService.listWorkspaces();
 
+    // The conversation is already live in a workspace: that workspace is what
+    // was asked for. It also trips the directory guard below, by definition,
+    // so without this the one conversation that needs no resuming is the one
+    // that can never be reached from history.
+    const open = findWorkspaceRunningConversation(herdrSessions, sessionId);
+    if (open) {
+      return c.json({
+        success: true,
+        tmuxSessionId: open.id,
+        name: open.name,
+        ccSessionId: sessionId,
+        agent,
+        alreadyOpen: true,
+      });
+    }
+
     // Guard: reject if the same agent is already running in the same directory
     const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, projectPath);
     if (conflicting) {
@@ -917,7 +941,7 @@ sessions.post('/history/resume', async (c) => {
     }
 
     // Create new session
-    await herdrService.createWorkspace(sessionName);
+    const workspaceId = await herdrService.createWorkspace(sessionName);
 
     // Change to project directory and run the agent's resume command
     const command = `cd ${shellQuote(expandHome(projectPath))} && ${agentResumeCommand(agent, sessionId)}`;
@@ -929,9 +953,12 @@ sessions.post('/history/resume', async (c) => {
       return c.json({ error: 'Failed to start agent session' }, 500);
     }
 
+    // The id, not the label: callers look the new session up by it, and a
+    // session's id is its workspace id.
     return c.json({
       success: true,
-      tmuxSessionId: sessionName,
+      tmuxSessionId: workspaceId,
+      name: sessionName,
       ccSessionId: sessionId,
       agent,
     });

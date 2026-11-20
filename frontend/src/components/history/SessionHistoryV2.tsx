@@ -420,6 +420,7 @@ export function SessionHistoryV2({
 					onClose={closeModal}
 					onResume={() => handleResume(selectedSession)}
 					isResuming={resumingId === selectedSession.sessionId}
+					resumeError={resumeError}
 					scrollToBottom={true}
 				/>
 			)}

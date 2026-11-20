@@ -1905,7 +1905,7 @@ export function WorkspaceList({
 							// searching `sessions` (which is stale inside this closure).
 							onSelectSession({
 								id: data.tmuxSessionId,
-								name: data.tmuxSessionId,
+								name: data.name ?? data.tmuxSessionId,
 								createdAt: "",
 								lastAccessedAt: "",
 								state: "working",
