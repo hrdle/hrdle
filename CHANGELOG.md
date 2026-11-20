@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **`hrdle send local:`, `hrdle peek local:`, `hrdle stt-prompt` and `hrdle
+  glasses` work on a server with a password.** They were turned away as not
+  authorized. They now sign in with the server's own key, which the same user
+  can already read. A server given `JWT_SECRET` in its environment does not
+  keep that key on disk, and the error now says so instead of only "not
+  authorized".
+
 ## [0.3.206] - 2026-11-20
 
 ### Added

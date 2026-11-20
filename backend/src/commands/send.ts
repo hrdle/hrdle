@@ -10,6 +10,7 @@
  */
 
 import { listPeers, type StoredPeer } from '../services/peer-registry';
+import { LOCAL_AUTH_HINT, localAuthHeaders } from './local-auth';
 
 export interface SendOptions {
   target: string;
@@ -78,10 +79,25 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-async function resolvePeer(name: string, localPort: number): Promise<{ url: string; token?: string }> {
+interface ResolvedPeer {
+  url: string;
+  token?: string;
+  local: boolean;
+}
+
+async function localPeer(localPort: number): Promise<ResolvedPeer> {
+  // HTTPS on loopback too: the server serves nothing else.
+  const auth = await localAuthHeaders();
+  return {
+    url: `https://localhost:${localPort}`,
+    token: auth.Authorization?.slice('Bearer '.length),
+    local: true,
+  };
+}
+
+async function resolvePeer(name: string, localPort: number): Promise<ResolvedPeer> {
   if (name === 'local' || name === 'self') {
-    // hrdle serves HTTPS on localhost (Tailscale cert). notify.ts uses the same pattern.
-    return { url: `https://localhost:${localPort}` };
+    return localPeer(localPort);
   }
   const peers = await listPeers();
   const match = peers.find(
@@ -92,9 +108,9 @@ async function resolvePeer(name: string, localPort: number): Promise<{ url: stri
     throw new Error(`peer "${name}" not found. Registered peers: ${known || '(none)'}`);
   }
   if (match.url === 'self') {
-    return { url: `http://localhost:${localPort}`, token: undefined };
+    return localPeer(localPort);
   }
-  return { url: match.url.replace(/\/+$/, ''), token: match.wsToken };
+  return { url: match.url.replace(/\/+$/, ''), token: match.wsToken, local: false };
 }
 
 export async function runSend(options: SendOptions): Promise<void> {
@@ -176,6 +192,7 @@ export async function runSend(options: SendOptions): Promise<void> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
+    if (res.status === 401 && peer.local) throw new Error(LOCAL_AUTH_HINT);
     throw new Error(`send failed: HTTP ${res.status} ${errText}`);
   }
 
@@ -210,6 +227,7 @@ export async function runPeek(options: PeekOptions): Promise<void> {
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
+    if (res.status === 401 && peer.local) throw new Error(LOCAL_AUTH_HINT);
     throw new Error(`peek failed: HTTP ${res.status} ${errText}`);
   }
 
