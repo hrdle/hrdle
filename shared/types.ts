@@ -286,6 +286,15 @@ export interface PaneInfo {
    * screen showing one of them for both is reporting the wrong pane's work.
    */
   activity?: { tool: string; target?: string };
+  /**
+   * This pane's Remote Control bridge session id, for the "Open in Claude app"
+   * link. Same reason as `activity`: the session-level field belongs to the
+   * workspace's primary agent, so in a workspace with two Claude panes it
+   * addresses one of them, and a button drawn per pane from it opens that one
+   * from every pane. Absent for a pane whose Claude has Remote Control off,
+   * whatever its neighbours have.
+   */
+  bridgeSessionId?: string;
   pid?: number;            // shell/subprocess PID of the pane's foreground group
   /** Per-pane agent metrics (model / context% / memory). Populated only for
    *  agent panes of a multi-pane/multi-tab workspace, where a single
