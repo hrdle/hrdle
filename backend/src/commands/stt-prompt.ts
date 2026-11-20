@@ -25,6 +25,7 @@
  */
 
 import { IDENTITY } from '../../../shared/identity';
+import { LOCAL_AUTH_HINT, localAuthHeaders } from './local-auth';
 import { resolveOwnSession } from './session-target';
 
 const PRODUCTION_PORT = IDENTITY.defaultPort;
@@ -60,13 +61,13 @@ async function putSttPrompt(
       `https://localhost:${port}/api/sessions/${encodeURIComponent(sessionId)}/stt-prompt`,
       {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await localAuthHeaders()) },
         body: JSON.stringify(body),
       },
     );
     if (res.ok) return { ok: true };
     if (res.status === 404) return { ok: false, error: `No session ${sessionId}` };
-    if (res.status === 401) return { ok: false, error: 'Not authorized (the server has a password set)' };
+    if (res.status === 401) return { ok: false, error: LOCAL_AUTH_HINT };
     return { ok: false, error: `Server returned ${res.status}` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'request failed' };
@@ -87,7 +88,7 @@ async function addSttTerms(
       `https://localhost:${port}/api/sessions/${encodeURIComponent(sessionId)}/stt-prompt`,
       {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await localAuthHeaders()) },
         body: JSON.stringify({ add }),
       },
     );
@@ -107,7 +108,7 @@ async function addSttTerms(
       };
     }
     if (res.status === 404) return { ok: false, error: `No session ${sessionId}` };
-    if (res.status === 401) return { ok: false, error: 'Not authorized (the server has a password set)' };
+    if (res.status === 401) return { ok: false, error: LOCAL_AUTH_HINT };
     return { ok: false, error: `Server returned ${res.status}` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'request failed' };
@@ -143,6 +144,7 @@ async function printSttRequest(port: number, sessionId: string): Promise<void> {
   try {
     const res = await fetch(
       `https://localhost:${port}/api/glasses/stt-preview?session=${encodeURIComponent(sessionId)}`,
+      { headers: await localAuthHeaders() },
     );
     if (!res.ok) throw new Error(`server returned ${res.status}`);
     preview = (await res.json()) as Preview;

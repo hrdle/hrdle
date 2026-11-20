@@ -21,12 +21,19 @@ declare module 'hono' {
 // and bypass password auth entirely.
 let jwtSecret: string | null = process.env.JWT_SECRET || null;
 
+// Read by the local CLI as well (`commands/local-auth.ts`), which signs its own
+// token with it rather than needing a second credential or an unauthenticated
+// route.
+export function jwtSecretPath(): string {
+  return join(getDataDir(), 'jwt-secret');
+}
+
 // Resolve (and if necessary generate + persist) the JWT signing secret.
 // Must be awaited once at server startup before any request is served.
 export async function initJwtSecret(): Promise<void> {
   if (jwtSecret) return;
   const dataDir = getDataDir();
-  const secretPath = join(dataDir, 'jwt-secret');
+  const secretPath = jwtSecretPath();
   try {
     const existing = (await readFile(secretPath, 'utf-8')).trim();
     if (existing) {
