@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.207] - 2026-11-20
+
+### Fixed
+- **"Open in Claude app" opens the session of the pane it is on.** In a
+  workspace with two Claude panes, the button opened the same one of them from
+  every pane, and appeared on a pane whose Claude had Remote Control off. Each
+  pane's button now opens its own session, and only a pane with Remote Control
+  on has one.
+
 ## [0.3.206] - 2026-11-20
 
 ### Added
