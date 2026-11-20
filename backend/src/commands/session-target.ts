@@ -8,6 +8,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { localAuthHeaders, localUnauthorizedMessage } from './local-auth';
 
 export interface SessionPane {
   paneId: string;
@@ -28,16 +29,22 @@ export interface ResolvedTarget {
   paneId?: string;
 }
 
-/** Sessions from the first server that answers, or null if none does. */
-export async function fetchSessions(port: number): Promise<SessionEntry[] | null> {
+/**
+ * Sessions from the server on `port`: the list, `null` when it does not
+ * answer, or `'unauthorized'` when it answers but refuses us.
+ */
+export async function fetchSessions(port: number): Promise<SessionEntry[] | null | 'unauthorized'> {
   try {
     // `?local=1`: this host's own sessions. The default list carries the
     // peers' as well (for the glasses), but the question here is which session
     // this pane belongs to, and that is always one of this host's. Matched
     // against the merged list, another host's session in the same directory
     // breaks the uniqueness check and its pids join the ancestry match.
-    const res = await fetch(`https://localhost:${port}/api/sessions?local=1`);
-    if (!res.ok) return null; // e.g. 401 when the server has a password set
+    const res = await fetch(`https://localhost:${port}/api/sessions?local=1`, {
+      headers: await localAuthHeaders(),
+    });
+    if (res.status === 401) return 'unauthorized';
+    if (!res.ok) return null;
     const json = (await res.json()) as { sessions?: SessionEntry[] };
     return json.sessions ?? null;
   } catch {
@@ -129,17 +136,24 @@ export async function resolveOwnSession(
 ): Promise<{ target: ResolvedTarget; sessions: SessionEntry[]; port: number } | { error: string }> {
   let sessions: SessionEntry[] | null = null;
   let port: number | undefined;
+  let refused = false;
   for (const candidate of ports) {
-    sessions = await fetchSessions(candidate);
-    if (sessions) {
+    const answer = await fetchSessions(candidate);
+    if (answer === 'unauthorized') {
+      refused = true;
+      continue;
+    }
+    if (answer) {
+      sessions = answer;
       port = candidate;
       break;
     }
   }
   if (!sessions || port === undefined) {
     return {
-      error:
-        'Cannot fetch the session list (server not running, or auth is enabled). Pass `--session <id>`',
+      error: refused
+        ? `${localUnauthorizedMessage()}. Pass \`--session <id>\``
+        : 'Cannot fetch the session list (is the server running?). Pass `--session <id>`',
     };
   }
   const resolved = resolveSessionTarget(sessions, process.cwd(), ancestorPids());

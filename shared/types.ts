@@ -1467,9 +1467,9 @@ export interface RecordedSttRequest {
  */
 export interface GlassesRelayItem {
   id: string;
-  /** Workspace label of the originating session. */
+  /** Workspace id (`w5Q`) of the originating session, never its label. */
   sessionId: string;
-  /** tmux pane id ("%N") of the blocked pane — reply routing for multi-pane. */
+  /** Pane id ("%N") of the blocked pane — reply routing for multi-pane. */
   paneId?: string;
   kind: 'waiting' | 'info';
   /** display-width-clamped text (≈ one G2 page, 189 Japanese chars). */

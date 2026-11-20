@@ -10,6 +10,7 @@
  */
 
 import { listPeers, type StoredPeer } from '../services/peer-registry';
+import { localAuthHeaders, localUnauthorizedMessage } from './local-auth';
 
 export interface SendOptions {
   target: string;
@@ -78,10 +79,17 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString('utf-8');
 }
 
-async function resolvePeer(name: string, localPort: number): Promise<{ url: string; token?: string }> {
+interface ResolvedPeer {
+  url: string;
+  token?: string;
+  /** This host's own server: sign a token locally, and explain a 401 as such. */
+  local?: boolean;
+}
+
+async function resolvePeer(name: string, localPort: number): Promise<ResolvedPeer> {
   if (name === 'local' || name === 'self') {
     // hrdle serves HTTPS on localhost (Tailscale cert). notify.ts uses the same pattern.
-    return { url: `https://localhost:${localPort}` };
+    return { url: `https://localhost:${localPort}`, local: true };
   }
   const peers = await listPeers();
   const match = peers.find(
@@ -92,9 +100,14 @@ async function resolvePeer(name: string, localPort: number): Promise<{ url: stri
     throw new Error(`peer "${name}" not found. Registered peers: ${known || '(none)'}`);
   }
   if (match.url === 'self') {
-    return { url: `http://localhost:${localPort}`, token: undefined };
+    return { url: `https://localhost:${localPort}`, local: true };
   }
   return { url: match.url.replace(/\/+$/, ''), token: match.wsToken };
+}
+
+async function peerAuthHeaders(peer: ResolvedPeer): Promise<Record<string, string>> {
+  if (peer.local) return localAuthHeaders();
+  return peer.token ? { Authorization: `Bearer ${peer.token}` } : {};
 }
 
 export async function runSend(options: SendOptions): Promise<void> {
@@ -162,10 +175,10 @@ export async function runSend(options: SendOptions): Promise<void> {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (peer.token) {
-    headers.Authorization = `Bearer ${peer.token}`;
-  }
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(await peerAuthHeaders(peer)),
+  };
 
   const url = `${peer.url}/api/sessions/${encodeURIComponent(target.sessionId)}/panes/input`;
   const res = await fetch(url, {
@@ -175,6 +188,7 @@ export async function runSend(options: SendOptions): Promise<void> {
   });
 
   if (!res.ok) {
+    if (res.status === 401 && peer.local) throw new Error(`send failed: ${localUnauthorizedMessage()}`);
     const errText = await res.text().catch(() => '');
     throw new Error(`send failed: HTTP ${res.status} ${errText}`);
   }
@@ -200,15 +214,13 @@ export async function runPeek(options: PeekOptions): Promise<void> {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   }
 
-  const headers: Record<string, string> = {};
-  if (peer.token) {
-    headers.Authorization = `Bearer ${peer.token}`;
-  }
+  const headers = await peerAuthHeaders(peer);
 
   const url = `${peer.url}/api/sessions/${encodeURIComponent(target.sessionId)}/panes/${encodeURIComponent(target.paneId)}/viewport?lines=${options.lines}`;
   const res = await fetch(url, { headers });
 
   if (!res.ok) {
+    if (res.status === 401 && peer.local) throw new Error(`peek failed: ${localUnauthorizedMessage()}`);
     const errText = await res.text().catch(() => '');
     throw new Error(`peek failed: HTTP ${res.status} ${errText}`);
   }

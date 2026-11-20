@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **`hrdle send`, `hrdle peek`, `hrdle stt-prompt` and `hrdle glasses` work on
+  a server with a password.** They called this machine's own server without
+  logging in and were turned away. They now sign in on their own, with nothing
+  to set up. A server given `JWT_SECRET` in its environment is the one case they
+  cannot sign for, and the error now says so instead of only "Not authorized".
+
 ## [0.3.207] - 2026-11-20
 
 ### Fixed
