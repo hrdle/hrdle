@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.208] - 2026-11-20
+
 ### Fixed
 - **`hrdle send`, `hrdle peek`, `hrdle stt-prompt` and `hrdle glasses` work on
   a server with a password.** They called this machine's own server without
