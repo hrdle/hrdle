@@ -324,11 +324,17 @@ export interface SessionMetrics {
 // alphabet as SessionIdSchema so a label stays safe to use wherever a
 // session id appears (URLs, logs, RPC params) without escaping.
 export const CreateSessionSchema = z.object({
+  // The name is the herdr workspace label, not the session id (that is the
+  // workspace_id), so it takes what a rename takes: the labels people and
+  // agents actually write are Japanese, spaced and dashed. Control characters
+  // stay out because a label is drawn on terminals and the glasses.
   name: z
     .string()
+    .trim()
     .min(1)
-    .max(64)
-    .regex(/^[A-Za-z0-9._-]+$/, 'Session name must be alphanumerics, dot, underscore, or hyphen')
+    .max(100)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
+    .regex(/^[^\u0000-\u001f\u007f]+$/, 'Session name must not contain control characters')
     .optional(),
   workingDir: z.string().optional(),
   initialPrompt: z.string().max(1000).optional(),
