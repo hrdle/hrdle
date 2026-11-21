@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.209] - 2026-11-21
+
+### Fixed
+- **A pane can be closed from the workspace list when each tab holds one
+  pane.** Only the tab on screen was counted, so every pane looked like the
+  workspace's last one and the close was refused without a word. A tab's only
+  pane now closes with its tab, and only the workspace's last pane is kept.
+  When a close is refused, the dialog stays open and says why.
+
 ## [0.3.208] - 2026-11-20
 
 ### Fixed
