@@ -770,6 +770,11 @@ interface ConversationViewerProps {
 	onClose: () => void;
 	onResume?: () => void;
 	isResuming?: boolean;
+	/**
+	 * Why the last resume did not happen. Shown here because this view covers
+	 * the list the caller would otherwise report it on.
+	 */
+	resumeError?: string | null;
 	scrollToBottom?: boolean;
 	isActive?: boolean; // Whether the session is actively running
 	onRefresh?: () => void; // Callback to refresh conversation
@@ -786,6 +791,7 @@ export function ConversationViewer({
 	onClose,
 	onResume,
 	isResuming,
+	resumeError,
 	scrollToBottom = false,
 	isActive = false,
 	onRefresh,
@@ -1072,6 +1078,15 @@ export function ConversationViewer({
 					)}
 				</div>
 			</div>
+
+			{!inline && resumeError && (
+				<div
+					role="alert"
+					className="shrink-0 border-t border-cv-border bg-red-500/15 px-3 py-2 text-[12px] text-red-400"
+				>
+					{resumeError}
+				</div>
+			)}
 
 			{/* Footer - only show in modal mode */}
 			{!inline && (

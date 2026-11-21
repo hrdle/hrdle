@@ -405,6 +405,7 @@ export function SessionHistory({
 	};
 
 	const handleTap = async (session: HistorySession, projectDirName: string) => {
+		setResumeError(null);
 		setSelectedSession(session);
 		setLoadingConversation(true);
 		setConversation([]);
@@ -456,6 +457,7 @@ export function SessionHistory({
 
 	// Handle tap on search result
 	const handleSearchResultTap = async (session: HistorySession) => {
+		setResumeError(null);
 		setSelectedSession(session);
 		setLoadingConversation(true);
 		setConversation([]);
@@ -588,6 +590,7 @@ export function SessionHistory({
 					onClose={() => setSelectedSession(null)}
 					onResume={() => handleResume(selectedSession)}
 					isResuming={resumingId === selectedSession.sessionId}
+					resumeError={resumeError}
 					scrollToBottom={true}
 				/>
 			)}

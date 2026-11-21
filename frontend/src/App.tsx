@@ -481,7 +481,7 @@ export function App() {
 						}
 						const data = await response.json();
 						newSessionId = data.tmuxSessionId;
-						newSessionName = data.tmuxSessionId;
+						newSessionName = data.name ?? data.tmuxSessionId;
 					} else {
 						// No conversation id: fall back to a fresh session in the same agent.
 						const newSession = await createSession(
