@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { herdrStatusToIndicator, isUnseen, paneIndicatorState } from '../../routes/sessions';
+import { herdrStatusToIndicator, isUnseen, paneIndicatorState, sessionStateOf } from '../../routes/sessions';
 import { parseHookJson, parseHookToml } from '../hook-status';
 import { HOOK_COMMAND } from '../../../../shared/identity';
 
@@ -24,6 +24,25 @@ describe('herdrStatusToIndicator', () => {
     expect(herdrStatusToIndicator('unknown')).toBeNull();
     expect(herdrStatusToIndicator(undefined)).toBeNull();
     expect(herdrStatusToIndicator('thinking_very_hard')).toBeNull();
+  });
+});
+
+describe('sessionStateOf', () => {
+  it('reports working only while the agent is processing', () => {
+    expect(sessionStateOf('processing')).toBe('working');
+  });
+
+  it('reports a question waiting on the user as waiting_input', () => {
+    expect(sessionStateOf('waiting_input')).toBe('waiting_input');
+  });
+
+  it('reports a finished turn as idle, whoever has the workspace focused', () => {
+    expect(sessionStateOf('completed')).toBe('idle');
+    expect(sessionStateOf('idle')).toBe('idle');
+  });
+
+  it('reports a workspace with no agent as idle', () => {
+    expect(sessionStateOf(undefined)).toBe('idle');
   });
 });
 

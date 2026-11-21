@@ -95,7 +95,6 @@ function ws(
     name: id,
     instanceId: `w-${id}`,
     createdAt: '',
-    attached: false,
     panes: panes.map((p) => ({ ...p, command: 'claude', path: `/tmp/${id}`, isActive: true })),
   } as unknown as WorkspaceInfo;
 }
@@ -947,7 +946,6 @@ function hookWs(
     name: id,
     instanceId: `w-${id}`,
     createdAt: '',
-    attached: false,
     agentSessionId,
     panes: panes.map((p) => ({
       paneId: p.paneId,
