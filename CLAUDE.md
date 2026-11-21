@@ -177,7 +177,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 
 **Sessions** (`/api/sessions`):
 - `GET /` - List all sessions with Claude Code state and pane info
-- `POST /` - Create new Claude Code session
+- `POST /` - Create a workspace (`{ name?, workingDir?, agent?, initialPrompt?, wait? }`). With `workingDir`, the workspace opens there and the agent is started through herdr's `agent.start`; whether it accepts input is herdr's `interactive_ready`, never an `idle` status read by us (herdr's own settle delay exists because the first idle comes before the TUI is drawn). `wait: true` answers only once it is ready and `initialPrompt` (sent with `agent.prompt`) has gone in, reporting `agentReady` / `agentError` in the 201 - the workspace exists either way. The name is a label: free text, not unique, never the id
 - `GET /:id` - Get session details
 - `DELETE /:id` - Close session
 - `POST /:id/resume` - Resume Claude Code session with `claude -r`
@@ -191,7 +191,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/tabs/close` - Close a tab and all its panes (`{ tabId }`)
 - `POST /:id/prompt` - Send a prompt to the session's agent
 - `PUT /:id/theme` - Set session color theme
-- `PUT /:id/title` - Rename the session's herdr workspace (the label is the name *and* the public session id, so the response carries the new `id`)
+- `PUT /:id/title` - Rename the session's herdr workspace. Labels need not be unique; the id is the workspace id and does not change
 - `PUT /:id/stt-prompt` - Set the words this session's speech is made of (leads its STT vocabulary bias)
 - `POST /:id/move` - Move a session to `{ index }` in the display order (writes straight through to herdr's workspace order — hrdle stores no order of its own)
 - `GET /prompts/search` - Search prompt history

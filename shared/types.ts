@@ -337,7 +337,9 @@ export const CreateSessionSchema = z.object({
     .regex(/^[^\u0000-\u001f\u007f]+$/, 'Session name must not contain control characters')
     .optional(),
   workingDir: z.string().optional(),
-  initialPrompt: z.string().max(1000).optional(),
+  initialPrompt: z.string().min(1).optional(),
+  /** Answer only once the agent accepts input (and the initial prompt, if any, is sent). */
+  wait: z.boolean().optional(),
   agent: z.enum(AGENT_PROVIDER_IDS).optional().default(DEFAULT_AGENT_PROVIDER),
 });
 

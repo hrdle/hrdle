@@ -436,21 +436,26 @@ export class HerdrService {
     this.processCmdCache.clear();
   }
 
-  async createWorkspace(name: string): Promise<string> {
+  async createWorkspace(name: string, cwd?: string): Promise<string> {
+    return (await this.createWorkspaceWithRoot(name, cwd)).workspaceId;
+  }
+
+  /** Also answers the root pane, which is where an agent gets started. */
+  async createWorkspaceWithRoot(
+    name: string,
+    cwd?: string,
+  ): Promise<{ workspaceId: string; rootPaneId?: string }> {
     this.invalidateCache();
-    // Asked by name, so the check is by name - and *any* number of matches
-    // means taken. `resolveWorkspace` would answer null for two of them, which
-    // is the right answer to "which one" and the wrong one to "is it free".
-    const existing = workspacesLabelled(await listWorkspaces().catch(() => []), name);
-    if (existing.length > 0) {
-      throw new Error(`Failed to create session: workspace "${name}" already exists`);
-    }
-    await herdrRpc('workspace.create', {
+    const res = await herdrRpc<{
+      workspace?: { workspace_id?: string };
+      root_pane?: { pane_id?: string };
+    }>('workspace.create', {
       label: name,
-      cwd: process.env.HOME || '/tmp',
+      cwd: cwd ?? (process.env.HOME || '/tmp'),
     });
-    const created = await this.resolveWorkspace(name);
-    return created?.workspace_id ?? name;
+    const workspaceId = res?.workspace?.workspace_id;
+    if (!workspaceId) throw new Error('herdr workspace.create returned no workspace id');
+    return { workspaceId, rootPaneId: res?.root_pane?.pane_id };
   }
 
   /**
@@ -502,12 +507,6 @@ export class HerdrService {
     const ws = await this.resolveWorkspace(sessionId);
     if (!ws) {
       throw new Error(`Failed to rename session: workspace not found: ${sessionId}`);
-    }
-    const clash = workspacesLabelled(await listWorkspaces(), name).find(
-      (w) => w.workspace_id !== ws.workspace_id,
-    );
-    if (clash) {
-      throw new Error(`Failed to rename session: workspace "${name}" already exists`);
     }
     await renameHerdrWorkspace(ws.workspace_id, name);
     this.invalidateCache();
