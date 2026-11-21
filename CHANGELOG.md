@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.210] - 2026-11-21
+
+### Fixed
+- **Resuming a conversation from history works when it is already open.** A
+  conversation still running in a workspace was refused as a second agent in
+  the same directory, and the refusal was shown behind the conversation, so
+  the button seemed to do nothing. Resume now switches to the workspace it is
+  running in. A failed resume says why inside the conversation view.
+
 ## [0.3.209] - 2026-11-21
 
 ### Fixed
