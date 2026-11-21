@@ -615,13 +615,17 @@ sessions.post('/', async (c) => {
   notifySessionChange();
   const body = await c.req.json().catch(() => ({}));
   const parsed = CreateSessionSchema.safeParse(body);
-  const agent = parsed.success ? parsed.data.agent : DEFAULT_AGENT_PROVIDER;
+  // A body that does not validate is refused, not defaulted. Falling back
+  // field by field dropped the name, the directory and the agent together,
+  // and answered 201 with a bare shell under `session-N`: the caller had no
+  // way to tell, and its next prompt ran as a shell command.
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request', details: parsed.error.issues }, 400);
+  }
+  const { agent, workingDir, initialPrompt } = parsed.data;
 
-  // Generate session name
   const herdrSessions = await herdrService.listWorkspaces();
-  const name = parsed.success && parsed.data.name
-    ? parsed.data.name
-    : `session-${herdrSessions.length + 1}`;
+  const name = parsed.data.name ?? `session-${herdrSessions.length + 1}`;
 
   // Check if session already exists
   const exists = await herdrService.workspaceExists(name);
@@ -630,8 +634,8 @@ sessions.post('/', async (c) => {
   }
 
   // Guard: reject if the same agent is already running in the same directory
-  if (parsed.success && parsed.data.workingDir) {
-    const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, parsed.data.workingDir);
+  if (workingDir) {
+    const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, workingDir);
     if (conflicting) {
       return c.json({ error: 'duplicate_working_dir', existingSession: conflicting.name }, 409);
     }
@@ -647,24 +651,24 @@ sessions.post('/', async (c) => {
     await seedWorkspaceVocabulary(instanceId ?? name).catch(() => {});
 
     // Start the selected agent if workingDir is specified
-    if (parsed.success && parsed.data.workingDir) {
-      await sendTextToSession(name, agentStartCommand(agent, parsed.data.workingDir));
+    // Addressed by workspace id from here on: the label is free text now, and
+    // a label another workspace also carries resolves to nothing.
+    if (workingDir) {
+      await sendTextToSession(instanceId, agentStartCommand(agent, workingDir));
 
       // Send initial prompt after the agent starts (interactive mode)
-      if (parsed.data.initialPrompt) {
-        const prompt = parsed.data.initialPrompt;
-        const sessionName = name;
+      if (initialPrompt) {
         // Poll until the selected agent process is running in the session
         (async () => {
           for (let i = 0; i < 30; i++) { // up to 30 seconds
             await new Promise(r => setTimeout(r, 1000));
             const sessions = await herdrService.listWorkspaces();
-            const session = sessions.find(s => s.name === sessionName);
+            const session = sessions.find(s => s.instanceId === instanceId);
             if (session?.currentCommand === agent) {
               // Wait a bit more for the TUI to be fully ready, then submit
               // via bracketed paste (multi-line prompts stay multi-line).
               await new Promise(r => setTimeout(r, 2000));
-              await sendTextToSession(sessionName, prompt, { bracketed: true });
+              await sendTextToSession(instanceId, initialPrompt, { bracketed: true });
               return;
             }
           }
