@@ -821,8 +821,18 @@ export class HerdrControlSession {
 
   async closePane(paneId: string): Promise<void> {
     assertPaneId(paneId);
-    if (this.tree.paneIds().length <= 1) {
-      throw new Error('Cannot close the last pane');
+    // The tree holds the active tab only, so it cannot say whether this is the
+    // workspace's last pane: with two tabs of one pane each it holds one, and
+    // every pane looked like the last. Closing a tab's only pane closes the
+    // tab, which herdr does itself; only the workspace's last pane is refused.
+    if (this.tree.paneIds().length <= 1 || !this.tree.paneIds().includes(paneId)) {
+      const all = this.workspaceId ? await listPanes(this.workspaceId) : [];
+      const target = all.find((p) => (toTmuxPaneId(p.pane_id) ?? p.pane_id) === paneId);
+      if (!target) throw new Error(`Pane ${paneId} not found`);
+      if (all.length <= 1) throw new Error('Cannot close the last pane');
+      await herdrRpc('pane.close', { pane_id: target.pane_id });
+      await this.reconcilePanes();
+      return;
     }
     await herdrRpc('pane.close', { pane_id: this.toHerdr(paneId) });
     this.tree.remove(paneId);

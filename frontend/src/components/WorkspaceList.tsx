@@ -1801,6 +1801,7 @@ export function WorkspaceList({
 		paneId: string;
 		name: string;
 	} | null>(null);
+	const [closePaneError, setClosePaneError] = useState<string | null>(null);
 	const [tabToClose, setTabToClose] = useState<{
 		sessionId: string;
 		tabId: string;
@@ -2590,39 +2591,53 @@ export function WorkspaceList({
 			{paneToClose && (
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] animate-backdrop-in"
-					onClick={() => setPaneToClose(null)}
+					onClick={() => {
+						setPaneToClose(null);
+						setClosePaneError(null);
+					}}
 				>
 					<div
 						className="bg-th-surface rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl animate-modal-in"
 						onClick={(e) => e.stopPropagation()}
 					>
-						<h3 className="text-lg font-bold text-th-text mb-2">Close Pane</h3>
+						<h3 className="text-lg font-bold text-th-text mb-2">
+							{t("session.closePaneTitle")}
+						</h3>
 						<p className="text-th-text-secondary mb-4">
-							<span className="font-medium text-th-text">
-								{paneToClose.name}
-							</span>{" "}
-							will be closed. Continue?
+							{t("session.closePaneBody", { name: paneToClose.name })}
 						</p>
+						{closePaneError && (
+							<p
+								role="alert"
+								className="mb-4 rounded-md bg-red-500/15 px-3 py-2 text-[13px] text-red-400"
+							>
+								{closePaneError}
+							</p>
+						)}
 						<div className="flex gap-3 justify-end">
 							<button
 								type="button"
-								onClick={() => setPaneToClose(null)}
+								onClick={() => {
+									setPaneToClose(null);
+									setClosePaneError(null);
+								}}
 								className="px-4 py-2 bg-th-surface-active hover:bg-th-surface-hover rounded font-medium transition-colors text-th-text"
 							>
-								Cancel
+								{t("common.cancel")}
 							</button>
 							<button
 								type="button"
 								onClick={async () => {
+									// Route to the owning Hub/peer instead of always the
+									// local Hub — otherwise closing a pane on a remote
+									// peer's session silently fails (or, on id collision,
+									// closes the wrong pane).
+									const session = sessions.find(
+										(s) => s.id === paneToClose.sessionId,
+									);
+									let failure: string | null = null;
 									try {
-										// Route to the owning Hub/peer instead of always the
-										// local Hub — otherwise closing a pane on a remote
-										// peer's session silently fails (or, on id collision,
-										// closes the wrong pane).
-										const session = sessions.find(
-											(s) => s.id === paneToClose.sessionId,
-										);
-										await sessionFetch(
+										const res = await sessionFetch(
 											session,
 											peers,
 											`/api/workspaces/${encodeURIComponent(paneToClose.sessionId)}/panes/close`,
@@ -2632,12 +2647,33 @@ export function WorkspaceList({
 												body: JSON.stringify({ paneId: paneToClose.paneId }),
 											},
 										);
-									} catch {}
+										if (!res.ok) {
+											const body = (await res.json().catch(() => ({}))) as {
+												error?: string;
+											};
+											failure = body.error?.includes("last pane")
+												? t("session.closePaneLast")
+												: t("session.closePaneFailed", {
+														reason: body.error || res.status,
+													});
+										}
+									} catch (err) {
+										failure = t("session.closePaneFailed", {
+											reason: err instanceof Error ? err.message : String(err),
+										});
+									}
+									// A refusal has to be seen: closing the dialog on it
+									// looks exactly like the tap not registering.
+									if (failure) {
+										setClosePaneError(failure);
+										return;
+									}
+									setClosePaneError(null);
 									setPaneToClose(null);
 								}}
 								className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-medium transition-colors text-white"
 							>
-								Close
+								{t("session.closePaneAction")}
 							</button>
 						</div>
 					</div>
