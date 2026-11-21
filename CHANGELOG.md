@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **A session's `state` now says what its agent is doing.** It used to say
+  `working` for whichever workspace herdr had focused, so a finished agent
+  could sit at `working` indefinitely and anything polling the API had to read
+  `indicatorState` as well. It is now `working` while the agent works,
+  `waiting_input` while it waits on you, and `idle` otherwise - in the session
+  list and in `GET /api/sessions/:id`, which also carries `indicatorState` and
+  `unseen` now.
+
 ## [0.3.208] - 2026-11-20
 
 ### Fixed
