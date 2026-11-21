@@ -43,7 +43,8 @@
   },
   "board": {
     "background": "bg: {{what}}",
-    "toggle": "状態ごとにまとめる",
+    "list": "リスト",
+    "board": "ボード",
     "needsYou": "対応待ち",
     "unseen": "完了・未確認",
     "working": "作業中",

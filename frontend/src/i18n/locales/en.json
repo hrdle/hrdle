@@ -43,7 +43,8 @@
   },
   "board": {
     "background": "bg: {{what}}",
-    "toggle": "Group by status",
+    "list": "List",
+    "board": "Board",
     "needsYou": "needs you",
     "unseen": "done · unseen",
     "working": "working",
