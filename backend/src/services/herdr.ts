@@ -43,7 +43,6 @@ export interface WorkspaceInfo {
   name: string;
   instanceId?: string;
   createdAt: string;
-  attached: boolean;
   currentCommand?: string;
   agent?: AgentProvider;
   currentPath?: string;
@@ -380,7 +379,6 @@ export class HerdrService {
             name: workspaceDisplayName(ws),
             instanceId: ws.workspace_id,
             createdAt: new Date(0).toISOString(),
-            attached: ws.focused,
             currentCommand: agent ?? panes[0]?.command,
             agent,
             currentPath,
