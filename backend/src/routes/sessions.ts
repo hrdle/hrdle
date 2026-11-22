@@ -682,10 +682,13 @@ sessions.post('/', async (c) => {
       const agentRef = { ...started, kind: agent };
       const readyThenPrompt = async () => {
         const result = await waitForAgentReady(agentRef);
-        if (!result.ready) return { result, promptSent: false };
-        if (!initialPrompt) return { result, promptSent: false };
+        if (!result.ready || !initialPrompt || result.blocked) return { result, promptSent: false };
         await promptAgent(agentRef.name, initialPrompt);
         return { result, promptSent: true };
+      };
+      const blockedError = {
+        code: 'blocked',
+        message: 'the agent is asking a question first, so the initial prompt was not sent',
       };
 
       if (wait) {
@@ -693,6 +696,7 @@ sessions.post('/', async (c) => {
           const { result, promptSent } = await readyThenPrompt();
           launch.agentReady = result.ready;
           if (!result.ready) launch.agentError = { code: result.code, message: result.message };
+          else if (initialPrompt && result.blocked) launch.agentError = blockedError;
           if (initialPrompt) launch.promptSent = promptSent;
         } catch (err) {
           // Ready, but the prompt did not go through.
@@ -703,8 +707,9 @@ sessions.post('/', async (c) => {
       } else if (initialPrompt) {
         readyThenPrompt()
           .then(({ result }) => {
-            if (!result.ready) {
-              console.warn(`[sessions] initial prompt not sent for ${instanceId}: ${result.code} ${result.message}`);
+            const why = !result.ready ? result : result.blocked ? blockedError : null;
+            if (why) {
+              console.warn(`[sessions] initial prompt not sent for ${instanceId}: ${why.code} ${why.message}`);
             }
           })
           .catch((err) => {

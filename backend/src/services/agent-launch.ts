@@ -24,6 +24,7 @@ interface HerdrAgentInfo {
   agent?: string;
   launch_pending?: boolean;
   interactive_ready?: boolean;
+  agent_status?: string;
 }
 
 export type AgentLaunchFailure =
@@ -34,7 +35,12 @@ export type AgentLaunchFailure =
   | 'timeout';
 
 export type AgentReadyResult =
-  | { ready: true }
+  /**
+   * `blocked`: the agent is up but asking something first (a folder trust
+   * check, an update offer). A prompt typed then answers that question with
+   * its Enter, so it is not sent.
+   */
+  | { ready: true; blocked: boolean }
   | { ready: false; code: AgentLaunchFailure; message: string };
 
 export const DEFAULT_AGENT_START_TIMEOUT_MS = 30_000;
@@ -144,7 +150,11 @@ export async function waitForAgentReady(
       if (info.agent && info.agent !== agent.kind) {
         return { ready: false, code: 'kind_mismatch', message: `expected ${agent.kind}, detected ${info.agent}` };
       }
-      if (info.interactive_ready) return { ready: true };
+      // herdr leaves an agent that came up asking something (codex's update
+      // offer) launch-pending until someone answers, so waiting for
+      // `interactive_ready` there only runs the clock out.
+      if (info.agent === agent.kind && info.agent_status === 'blocked') return { ready: true, blocked: true };
+      if (info.interactive_ready) return { ready: true, blocked: false };
       if (!info.launch_pending) {
         return { ready: false, code: 'exited', message: 'agent exited before becoming interactive' };
       }

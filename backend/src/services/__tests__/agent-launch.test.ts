@@ -80,8 +80,23 @@ describe('waitForAgentReady', () => {
         interactive_ready: n >= 4,
       },
     }));
-    expect(await waitForAgentReady(agent, { rpc, ...c })).toEqual({ ready: true });
+    expect(await waitForAgentReady(agent, { rpc, ...c })).toEqual({ ready: true, blocked: false });
     expect(calls).toHaveLength(4);
+  });
+
+  test('an agent that comes up asking a question is ready but blocked', async () => {
+    const { rpc } = scriptedRpc(() => ({
+      agent: { terminal_id: 't1', name: 'claude-0001', agent: 'claude', interactive_ready: true, agent_status: 'blocked' },
+    }));
+    expect(await waitForAgentReady(agent, { rpc, ...clock() })).toEqual({ ready: true, blocked: true });
+  });
+
+  test('a launch still pending on a question is reported without waiting for the timeout', async () => {
+    const { rpc, calls } = scriptedRpc(() => ({
+      agent: { terminal_id: 't1', name: 'claude-0001', agent: 'claude', launch_pending: true, agent_status: 'blocked' },
+    }));
+    expect(await waitForAgentReady(agent, { rpc, ...clock() })).toEqual({ ready: true, blocked: true });
+    expect(calls).toHaveLength(1);
   });
 
   test('a launch that stops pending without becoming ready has exited', async () => {
@@ -125,6 +140,6 @@ describe('waitForAgentReady', () => {
         ? new Error('ECONNRESET')
         : { agent: { terminal_id: 't1', name: 'claude-0001', agent: 'claude', interactive_ready: true } },
     );
-    expect(await waitForAgentReady(agent, { rpc, ...clock() })).toEqual({ ready: true });
+    expect(await waitForAgentReady(agent, { rpc, ...clock() })).toEqual({ ready: true, blocked: false });
   });
 });
