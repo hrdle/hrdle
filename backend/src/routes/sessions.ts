@@ -216,6 +216,39 @@ export function herdrStatusToIndicator(status?: string): IndicatorState | null {
   }
 }
 
+/**
+ * The workspace-level indicator: herdr's status first, then the hook. Absent
+ * for a workspace with no agent, which has nothing to indicate.
+ */
+export function sessionIndicatorOf(
+  agent: string | undefined,
+  agentStatus: string | undefined,
+  hookState: IndicatorState | null,
+): IndicatorState | undefined {
+  const herdrState = herdrStatusToIndicator(agentStatus);
+  if (agentSupportsConversationMetadata(agent)) return herdrState ?? hookState ?? 'completed';
+  if (threadAgentOf(agent)) return herdrState ?? hookState ?? undefined;
+  return undefined;
+}
+
+/**
+ * The session's `state`, read from the same indicator the cards show.
+ *
+ * A delegating agent polls this field to learn whether the work it handed off
+ * is finished, so it has to follow the agent rather than the terminal. A
+ * finished turn is `idle`: whether anyone has looked at it yet is `unseen`.
+ */
+export function sessionStateOf(indicator?: IndicatorState): SessionState {
+  switch (indicator) {
+    case 'processing':
+      return 'working';
+    case 'waiting_input':
+      return 'waiting_input';
+    default:
+      return 'idle';
+  }
+}
+
 /** `true` or absent, so a seen pane adds nothing to the payload. */
 export function isUnseen(status?: string): true | undefined {
   return status === 'done' ? true : undefined;
@@ -315,8 +348,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
     const hookResult = conversationSessionId ? getIndicatorOverride(conversationSessionId) : null;
     const hookState = hookResult?.state ?? null;
     const hookToolName = hookResult?.toolName;
-    const herdrState = herdrStatusToIndicator(s.agentStatus);
-    const indicatorState: IndicatorState = herdrState ?? hookState ?? 'completed';
+    const indicatorState: IndicatorState = herdrStatusToIndicator(s.agentStatus) ?? hookState ?? 'completed';
     // Only while the pane is actually waiting, and herdr is what says so.
     //
     // The transcript-derived name is whatever tool the record stopped on, and a
@@ -358,11 +390,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
     // the moment it fired. Thread agents used to read hooks first, which left a
     // Kimi pane at `completed` for a whole turn — its only registered hook is
     // `Stop`, so "finished" was the only thing hrdle ever heard.
-    const sessionIndicatorState = includeClaudeInfo
-      ? indicatorState
-      : includeThreadInfo
-        ? (herdrState ?? hookState ?? undefined)
-        : undefined;
+    const sessionIndicatorState = sessionIndicatorOf(s.agent ?? s.currentCommand, s.agentStatus, hookState);
 
     const panePids: (number | undefined)[] = s.panes ? s.panes.map((p: { pid?: number }) => p.pid) : [];
     const metrics = await computeSessionMetrics({
@@ -389,7 +417,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       instanceId: s.instanceId,
       createdAt: s.createdAt,
       lastAccessedAt: s.createdAt,
-      state: (s.attached ? 'working' : 'idle') as SessionState,
+      state: sessionStateOf(sessionIndicatorState),
       currentCommand: s.currentCommand,
       agent: s.agent,
       currentPath: s.currentPath,
@@ -981,12 +1009,21 @@ sessions.get('/:id', async (c) => {
     return c.json({ error: ambiguous ? 'Ambiguous session name' : 'Session not found' }, 404);
   }
 
+  const agentSessionId = session.agentSessionId;
+  const indicatorState = sessionIndicatorOf(
+    session.agent ?? session.currentCommand,
+    session.agentStatus,
+    agentSessionId ? (getIndicatorOverride(agentSessionId)?.state ?? null) : null,
+  );
+
   return c.json({
     id: session.id,
     name: session.name,
     createdAt: session.createdAt,
     lastAccessedAt: session.createdAt,
-    state: session.attached ? 'working' : 'idle',
+    state: sessionStateOf(indicatorState),
+    indicatorState,
+    unseen: isUnseen(session.agentStatus),
     currentCommand: session.currentCommand,
     agent: session.agent,
     currentPath: session.currentPath,

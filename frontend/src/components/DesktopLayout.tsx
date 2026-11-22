@@ -440,6 +440,7 @@ export function DesktopLayout({
 								panes: apiSession.panes,
 								peerId: apiSession.peerId ?? propSession.peerId,
 								bridgeSessionId: apiSession.bridgeSessionId,
+								state: apiSession.state,
 								indicatorState: apiSession.indicatorState,
 								activity: apiSession.activity,
 							}
