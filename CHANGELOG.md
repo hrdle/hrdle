@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.214] - 2026-11-23
+
+### Changed
+- **A link tapped in the installed app asks what to do with it.** A sheet
+  offers Share, Copy and Open in the app. Share hands the link to the phone's
+  share sheet, where choosing Chrome opens it in your browser tabs rather than
+  inside the app. In a browser tab links behave as before, and long-press is
+  unchanged.
+
 ## [0.3.213] - 2026-11-22
 
 ### Added
