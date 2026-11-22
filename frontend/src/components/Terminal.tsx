@@ -22,6 +22,7 @@ import {
 	filterMouseTrackingInput,
 	shouldInterceptKeyEvent,
 } from "../utils/terminal-filters";
+import { handleExternalLinkClick } from "../utils/link-menu";
 import { extractViewportUrls } from "../utils/terminal-links";
 import { viewportToVTSequence } from "../utils/viewport-render";
 import { InputBar, type InputBarRef, type InputMode } from "./InputBar";
@@ -1572,7 +1573,10 @@ export const TerminalComponent = memo(
 														target="_blank"
 														rel="noreferrer"
 														className="rounded bg-gray-600 px-3 py-1 text-xs font-medium text-white active:bg-gray-700"
-														onClick={(e) => e.stopPropagation()}
+														onClick={(e) => {
+															e.stopPropagation();
+															handleExternalLinkClick(e);
+														}}
 													>
 														Open
 													</a>

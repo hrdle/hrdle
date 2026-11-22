@@ -40,6 +40,7 @@ import type {
 import { prepareMath } from "../utils/math-content";
 import { TMP_PATHS } from "../../../shared/identity";
 import { agentBadge } from "../utils/agentDisplay";
+import { handleExternalLinkClick } from "../utils/link-menu";
 import {
 	chatFontStyle,
 	useChatFontSize,
@@ -242,6 +243,7 @@ const markdownComponents = {
 			className="text-cv-accent underline underline-offset-2"
 			target="_blank"
 			rel="noopener noreferrer"
+			onClick={handleExternalLinkClick}
 		>
 			{children}
 		</a>

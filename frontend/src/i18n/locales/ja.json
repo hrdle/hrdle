@@ -392,7 +392,12 @@
     "copy": "コピー",
     "open": "開く",
     "prev": "前へ",
-    "next": "次へ"
+    "next": "次へ",
+    "menuTitle": "リンク",
+    "share": "共有",
+    "shareHint": "Chrome を選ぶとブラウザで開けます",
+    "copied": "コピーしました",
+    "openHere": "アプリ内で開く"
   },
   "prompt": {
     "searchPlaceholder": "プロンプトを検索...",
