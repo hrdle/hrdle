@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "highlight.js/styles/github-dark.css";
 import { usePinchZoom } from "../../hooks/usePinchZoom";
+import { handleExternalLinkClick } from "../../utils/link-menu";
 import { useScrollRatio } from "../../hooks/useScrollRatio";
 import {
 	MAX_FONTSIZE,
@@ -161,6 +162,7 @@ export function MarkdownViewer({
 							className="text-blue-400 hover:text-blue-300 underline"
 							target="_blank"
 							rel="noopener noreferrer"
+							onClick={handleExternalLinkClick}
 						>
 							{children}
 						</a>

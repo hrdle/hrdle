@@ -395,7 +395,12 @@
     "copy": "Copy",
     "open": "Open",
     "prev": "Prev",
-    "next": "Next"
+    "next": "Next",
+    "menuTitle": "Link",
+    "share": "Share",
+    "shareHint": "Choose Chrome to open it in your browser",
+    "copied": "Copied",
+    "openHere": "Open in the app"
   },
   "prompt": {
     "searchPlaceholder": "Search prompts...",

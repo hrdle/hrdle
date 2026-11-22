@@ -22,6 +22,7 @@ import {
 } from "./utils/sessionKey";
 import { useAuth } from "./hooks/useAuth";
 import { useWorkspaces } from "./hooks/useWorkspaces";
+import { LinkMenu } from "./components/LinkMenu";
 import { ServerUnreachableHint } from "./components/ServerUnreachable";
 import { authFetch, isTransientNetworkError } from "./services/api";
 import {
@@ -731,6 +732,8 @@ export function App() {
 			/>
 
 			{sessionListOverlay}
+
+			<LinkMenu />
 
 			{showOnboarding && (
 				<Onboarding
