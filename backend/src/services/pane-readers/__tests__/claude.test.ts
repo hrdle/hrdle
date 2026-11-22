@@ -317,6 +317,37 @@ describe('the screen Send opens', () => {
   });
 });
 
+/**
+ * The same screen from Claude Code 2.1.330, captured live on 2026-11-22: the
+ * closing `Ready to submit your answers?` line is no longer drawn.
+ */
+const REVIEW_PANE_2_1_330 = [
+  '────────────────────────────────────────',
+  '←  ☒ 好きな果物  ✔ Submit  →',
+  '',
+  'Review your answers',
+  '',
+  ' ● 好きな果物はどれですか？（複数選択可）',
+  '   → Apple, Cherry, マンゴー',
+  '',
+  '❯ 1. Submit answers',
+  '  2. Cancel',
+];
+
+describe('the screen Send opens, without its closing question', () => {
+  test('the heading names it when the rows under it are its own', () => {
+    const review = readClaudePicker(REVIEW_PANE_2_1_330);
+    expect(review?.options.map((o) => o.label)).toEqual(['Submit answers', 'Cancel']);
+    expect(review?.choiceCursor).toBe(0);
+  });
+
+  test('the heading alone, over other rows, is not the screen', () => {
+    expect(
+      readClaudePicker(['Review your answers', '', '❯ 1. Yes', '  2. No']),
+    ).toBeUndefined();
+  });
+});
+
 describe('a list the pane draws no Submit button under', () => {
   test('nothing is named, and the app keeps its own Tab', () => {
     // A single pick is finished by picking, so there is no button to walk to.
