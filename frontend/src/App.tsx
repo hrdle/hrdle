@@ -306,6 +306,7 @@ export function App() {
 					agent: apiSession.agent,
 					agentSessionId: apiSession.agentSessionId,
 					panes: apiSession.panes,
+					state: apiSession.state,
 					indicatorState: apiSession.indicatorState,
 					activity: apiSession.activity,
 				};
@@ -318,6 +319,7 @@ export function App() {
 					next.agent === session.agent &&
 					next.agentSessionId === session.agentSessionId &&
 					next.panes === session.panes &&
+					next.state === session.state &&
 					next.indicatorState === session.indicatorState
 				) {
 					return session;
