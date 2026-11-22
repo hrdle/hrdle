@@ -35,6 +35,14 @@ import { getIndicatorOverride } from './notify';
 import { pushSessionsNow } from './terminal-mux';
 import { forwardToPeer, parsePeerSessionId, peerSessionPath, sessionsWithPeers } from '../services/peer-sessions';
 import { detectPaneState, stripAnsi, type DetectedPaneState } from '../services/pane-state';
+import {
+  executeAnswer,
+  planAnswer,
+  publicRead,
+  readStructuredQuestion,
+  SETTLE_MS,
+  type PaneSnapshot,
+} from '../services/pane-question';
 
 const herdrService = new HerdrService();
 
@@ -1503,6 +1511,112 @@ sessions.get('/:id/panes/:paneId/viewport', async (c) => {
   } catch (_error) {
     return c.json({ error: 'Failed to capture viewport' }, 500);
   }
+});
+
+/**
+ * The pane as the question reader needs it, or why it cannot be had. Read
+ * fresh each time: the answer path calls it again after keys have landed, and
+ * the screen is what changed.
+ */
+async function questionSnapshot(
+  id: string,
+  paneId: string,
+): Promise<{ snapshot: PaneSnapshot } | { error: string; status: 404 }> {
+  const { session: ws, ambiguous } = findSessionByAddress(await herdrService.listWorkspaces(), id);
+  if (!ws) {
+    return {
+      error: ambiguous ? `"${id}" names more than one session - address it by session id` : 'Session not found',
+      status: 404,
+    };
+  }
+  const pane = ws.panes?.find((p) => p.paneId === paneId);
+  if (!pane || !ws.instanceId) return { error: 'Pane not found', status: 404 };
+  // More than the glasses' 30: a picker whose options carry descriptions can
+  // push its own chip out of a shorter window, and without the chip there is
+  // no picker.
+  const text = await readPaneText(toHerdrPaneId(ws.instanceId, paneId), 'recent', 60);
+  return {
+    snapshot: {
+      agent: pane.agent,
+      agentSessionId: pane.agentSessionId,
+      agentStatus: pane.agentStatus,
+      text,
+    },
+  };
+}
+
+// GET /sessions/:id/panes/:paneId/question - The question the pane is waiting on
+sessions.get('/:id/panes/:paneId/question', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/question`));
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const got = await questionSnapshot(id, paneId);
+  if ('error' in got) return c.json({ error: got.error }, got.status);
+  return c.json(publicRead(await readStructuredQuestion(got.snapshot)));
+});
+
+const AnswerBodySchema = z.object({
+  questionId: z.string().min(1).max(64),
+  choices: z.array(z.number().int().min(0)).min(1).max(32),
+  text: z.string().max(4000).optional(),
+});
+
+// POST /sessions/:id/panes/:paneId/answer - Answer the question the pane is waiting on
+sessions.post('/:id/panes/:paneId/answer', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/answer`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await c.req.text(),
+    });
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const parsed = AnswerBodySchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request', issues: parsed.error.issues }, 400);
+  }
+
+  const got = await questionSnapshot(id, paneId);
+  if ('error' in got) return c.json({ error: got.error }, got.status);
+  // Read again here rather than trusting what the caller saw: the questionId
+  // is checked against the pane as it is now.
+  const read = await readStructuredQuestion(got.snapshot);
+  const plan = planAnswer(read, parsed.data);
+  if (!plan.ok) return c.json({ error: plan.error, current: publicRead(read) }, plan.status);
+
+  const reread = async () => {
+    const again = await questionSnapshot(id, paneId);
+    return 'error' in again ? ({ status: 'none' } as const) : readStructuredQuestion(again.snapshot);
+  };
+  try {
+    const result = await withControlSession(id, async (cs) => {
+      await cs.ensurePaneReachable(paneId);
+      return executeAnswer(plan.steps, {
+        write: (data) => cs.sendInput(paneId, Buffer.from(data, 'utf-8')),
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+        reread,
+      });
+    });
+    if (!result.ok) return c.json({ error: result.error }, 409);
+  } catch (_error) {
+    return c.json({ error: 'Failed to send answer' }, 500);
+  }
+
+  // What the pane shows now: the call's next question, the review screen, or
+  // nothing - the caller answers again or is done.
+  await new Promise((r) => setTimeout(r, SETTLE_MS));
+  return c.json({ success: true, next: publicRead(await reread()) });
 });
 
 // POST /sessions/:id/prompt - Send a prompt text to the session's active pane.

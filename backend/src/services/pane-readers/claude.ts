@@ -178,6 +178,15 @@ const MAX_QUESTION_LINES = 4;
 const REVIEW = /^\s*Ready to submit your answers\?/i;
 
 /**
+ * The same screen as Claude Code 2.1.330 draws it: the closing `Ready to
+ * submit your answers?` is gone and the heading above the answers is all that
+ * names it. A heading is words a transcript can also contain, so it only counts
+ * when the rows under it are the screen's own two.
+ */
+const REVIEW_HEADING = /^\s*Review your answers\s*$/i;
+const REVIEW_ROWS = /^Submit answers$/i;
+
+/**
  * The picker on this pane, if one is on it.
  *
  * `undefined` means "not this screen" and is the answer for every pane that is
@@ -187,6 +196,11 @@ const REVIEW = /^\s*Ready to submit your answers\?/i;
 export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
   const review = lastIndex(lines, (l) => REVIEW.test(l));
   if (review >= 0) return readReview(lines, review);
+  const heading = lastIndex(lines, (l) => REVIEW_HEADING.test(l));
+  if (heading >= 0) {
+    const drawn = readReview(lines, heading);
+    if (drawn?.options.some((o) => REVIEW_ROWS.test(o.label))) return drawn;
+  }
   const footer = lastIndex(lines, (l) => FOOTER.test(l));
   if (footer < 0) return undefined;
   const chip = lastIndex(lines.slice(0, footer), (l) => CHIP.test(l));
