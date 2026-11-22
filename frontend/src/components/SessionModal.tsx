@@ -7,6 +7,7 @@ interface SessionModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	onSelectSession: (session: SessionResponse) => void;
+	onSelectPane?: (session: SessionResponse, paneId: string) => void;
 	isTablet?: boolean;
 }
 
@@ -14,6 +15,7 @@ export function SessionModal({
 	isOpen,
 	onClose,
 	onSelectSession,
+	onSelectPane,
 	isTablet,
 }: SessionModalProps) {
 	const [showDashboard, setShowDashboard] = useState(false);
@@ -40,6 +42,14 @@ export function SessionModal({
 		[onSelectSession, onClose],
 	);
 
+	const handleSelectPane = useCallback(
+		(session: SessionResponse, paneId: string) => {
+			onSelectPane?.(session, paneId);
+			onClose();
+		},
+		[onSelectPane, onClose],
+	);
+
 	if (!isOpen) return null;
 
 	// Desktop only: scale up. Tablet keeps native size so touch targets are
@@ -58,6 +68,7 @@ export function SessionModal({
 			>
 				<WorkspaceList
 					onSelectSession={handleSelectSession}
+					onSelectPane={onSelectPane ? handleSelectPane : undefined}
 					onClose={onClose}
 					onToggleDashboard={() => setShowDashboard((v) => !v)}
 					dashboardOpen={showDashboard}

@@ -257,6 +257,28 @@ export interface PaneInfo {
   label?: string;
   indicatorState?: IndicatorState;
   /**
+   * The agent here finished a turn that nobody has looked at yet.
+   *
+   * herdr's own distinction, relayed: it reports `done` for a pane that went
+   * quiet while unfocused and `idle` once the pane has been focused, and
+   * `indicatorState` folds both into `completed`.
+   */
+  unseen?: boolean;
+  /**
+   * When this pane entered the state it is in (ISO).
+   *
+   * Absent when nobody saw it happen: the server dates a state from the poll
+   * that first noticed the change, so a pane already working when the server
+   * started has no time until it next changes. A pane that had already
+   * finished is dated from its transcript's last write instead.
+   */
+  statusSince?: string;
+  /**
+   * Background work the agent reports for itself, in its own words
+   * (`"1 shell"`, `"1 monitor"`). Claude Code only; absent when there is none.
+   */
+  background?: string[];
+  /**
    * The tool call this pane is on, while it is on one.
    *
    * The session-level field of the same name is read from the workspace's
@@ -264,6 +286,15 @@ export interface PaneInfo {
    * screen showing one of them for both is reporting the wrong pane's work.
    */
   activity?: { tool: string; target?: string };
+  /**
+   * This pane's Remote Control bridge session id, for the "Open in Claude app"
+   * link. Same reason as `activity`: the session-level field belongs to the
+   * workspace's primary agent, so in a workspace with two Claude panes it
+   * addresses one of them, and a button drawn per pane from it opens that one
+   * from every pane. Absent for a pane whose Claude has Remote Control off,
+   * whatever its neighbours have.
+   */
+  bridgeSessionId?: string;
   pid?: number;            // shell/subprocess PID of the pane's foreground group
   /** Per-pane agent metrics (model / context% / memory). Populated only for
    *  agent panes of a multi-pane/multi-tab workspace, where a single
@@ -984,6 +1015,8 @@ export interface DashboardResponse {
 
 export interface ExtendedSessionResponse extends SessionResponse {
   indicatorState?: IndicatorState;
+  /** Some pane of this workspace is `unseen` (see `PaneInfo.unseen`). */
+  unseen?: boolean;
   /**
    * What the agent is doing right now, while it is doing it.
    *
@@ -1434,9 +1467,9 @@ export interface RecordedSttRequest {
  */
 export interface GlassesRelayItem {
   id: string;
-  /** Workspace label of the originating session. */
+  /** Workspace id (`w5Q`) of the originating session, never its label. */
   sessionId: string;
-  /** tmux pane id ("%N") of the blocked pane — reply routing for multi-pane. */
+  /** Pane id ("%N") of the blocked pane — reply routing for multi-pane. */
   paneId?: string;
   kind: 'waiting' | 'info';
   /** display-width-clamped text (≈ one G2 page, 189 Japanese chars). */

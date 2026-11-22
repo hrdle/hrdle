@@ -41,6 +41,15 @@ interface UseMultiplexedTerminalOptions {
 interface UseMultiplexedTerminalReturn {
 	isConnected: boolean;
 	/**
+	 * The session `isConnected` is true of, or null.
+	 *
+	 * `isConnected` alone lags a session switch by a render: it still reads
+	 * true, from the session being left, in the commit that asks for the new
+	 * one. Anything sent on the strength of it then is refused as "Not
+	 * subscribed to session".
+	 */
+	connectedSessionId: string | null;
+	/**
 	 * This host is restarting herdr and every pane PTY with it. The socket
 	 * stays up throughout, so without this the UI has no way to tell that the
 	 * terminal it is showing has stopped being live.
@@ -625,6 +634,9 @@ export function useMultiplexedTerminal(
 ): UseMultiplexedTerminalReturn {
 	const { sessionId, sessionInstanceId, token, peerWsBase } = options;
 	const [isConnected, setIsConnected] = useState(false);
+	const [connectedSessionId, setConnectedSessionId] = useState<string | null>(
+		null,
+	);
 	/** True between this host's `herdr restarting` and `restored` broadcasts. */
 	const [herdrRestarting, setHerdrRestarting] = useState(false);
 
@@ -655,7 +667,10 @@ export function useMultiplexedTerminal(
 			onSessionExit: (reason) => onSessionExitRef.current?.(reason),
 			onError: (e, p) => onErrorRef.current?.(e, p),
 			onHerdrRestart: (phase) => setHerdrRestarting(phase === "restarting"),
-			setIsConnected,
+			setIsConnected: (v) => {
+				setIsConnected(v);
+				setConnectedSessionId(v ? sessionId : null);
+			},
 			sessionId,
 			sessionInstanceId,
 			live: options.live ?? true,
@@ -699,6 +714,7 @@ export function useMultiplexedTerminal(
 			subscribedSessionInstance = null;
 		}
 		setIsConnected(false);
+		setConnectedSessionId(null);
 	}, []);
 
 	const sendInput = useCallback((paneId: string, data: string) => {
@@ -798,6 +814,7 @@ export function useMultiplexedTerminal(
 
 	return {
 		isConnected,
+		connectedSessionId,
 		herdrRestarting,
 		connect,
 		disconnect,

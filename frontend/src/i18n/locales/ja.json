@@ -41,6 +41,15 @@
     "remoteControlOn": "リモートコントロール ON — ターミナルはローカルの herdr が描画",
     "remoteControlOff": "リモートコントロール OFF"
   },
+  "board": {
+    "background": "bg: {{what}}",
+    "list": "リスト",
+    "board": "ボード",
+    "needsYou": "対応待ち",
+    "unseen": "完了・未確認",
+    "working": "作業中",
+    "idle": "待機"
+  },
   "session": {
     "title": "ワークスペース",
     "list": "ワークスペース一覧",
@@ -52,6 +61,11 @@
     "panes_other": "{{count}} ペイン",
     "paneFocused": "フォーカス中",
     "newTab": "新規タブ",
+    "closePaneTitle": "ペインを閉じる",
+    "closePaneBody": "{{name}} を閉じます。よろしいですか？",
+    "closePaneAction": "閉じる",
+    "closePaneLast": "ワークスペースに残る最後のペインです。閉じるにはワークスペースごと閉じてください。",
+    "closePaneFailed": "ペインを閉じられませんでした（{{reason}}）",
     "closeTabTitle": "タブを閉じる",
     "closeTabConfirm": "タブ {{label}} と、その中のすべてのペインを閉じますか？",
     "closeTabAction": "閉じる",

@@ -10,14 +10,16 @@ import type { TFunction } from "i18next";
 import {
 	ArrowRight,
 	BarChart3,
-	MessagesSquare,
 	ChevronLeft,
 	ChevronRight,
 	ExternalLink,
 	Folder,
 	GripVertical,
+	LayoutGrid,
+	MessagesSquare,
 	Play,
 	Plus,
+	Rows3,
 	Search,
 	X,
 } from "lucide-react";
@@ -118,6 +120,7 @@ import { SessionHistory } from "./SessionHistory";
 import { SessionHistoryV2 } from "./history/SessionHistoryV2";
 import { HOOK_COMMAND } from "../../../shared/identity";
 import { storageKey } from "../utils/app-storage";
+import { WorkspaceBoard } from "./WorkspaceBoard";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -1024,7 +1027,6 @@ function CollapsedWorkspaceSummary({
 function PaneRow({
 	session,
 	pane,
-	bridgePaneId,
 	onSelect,
 	onSelectPane,
 	onClosePane,
@@ -1032,7 +1034,6 @@ function PaneRow({
 }: {
 	session: ExtendedSessionResponse;
 	pane: PaneInfo;
-	bridgePaneId?: string;
 	onSelect: (session: ExtendedSessionResponse) => void;
 	onSelectPane?: (session: ExtendedSessionResponse, paneId: string) => void;
 	onClosePane?: (sessionId: string, paneId: string, name: string) => void;
@@ -1112,11 +1113,11 @@ function PaneRow({
 					)}
 				</p>
 			)}
-			{pane.paneId === bridgePaneId && (
+			{pane.bridgeSessionId && (
 				<button
 					type="button"
 					onClick={() => {
-						const bridgeId = session.bridgeSessionId;
+						const bridgeId = pane.bridgeSessionId;
 						if (!bridgeId) return;
 						openClaudeAppSession(bridgeId);
 					}}
@@ -1340,13 +1341,6 @@ function SessionItem({
 
 	const extSession = session;
 	const agent = extSession.agent ?? extSession.currentCommand;
-	// Multi-pane Remote Control: the Claude-app link belongs to the pane running
-	// the session's agent (same detection as the backend's isClaudeOnPane), so
-	// nest it under that row instead of the session-level jump menu.
-	const bridgePaneId =
-		extSession.bridgeSessionId && extSession.panes
-			? extSession.panes.find((p) => p.currentCommand === agent)?.paneId
-			: undefined;
 	const supportsConversationMetadata = agentSupportsConversationMetadata(agent);
 	const agentLabel =
 		agent && isAgentProvider(agent)
@@ -1734,7 +1728,6 @@ function SessionItem({
 															key={pane.paneId}
 															session={extSession}
 															pane={pane}
-															bridgePaneId={bridgePaneId}
 															onSelect={onSelect}
 															onSelectPane={onSelectPane}
 															onClosePane={onClosePane}
@@ -1755,7 +1748,6 @@ function SessionItem({
 									key={pane.paneId}
 									session={extSession}
 									pane={pane}
-									bridgePaneId={bridgePaneId}
 									onSelect={onSelect}
 									onSelectPane={onSelectPane}
 									onClosePane={onClosePane}
@@ -1810,6 +1802,7 @@ export function WorkspaceList({
 		paneId: string;
 		name: string;
 	} | null>(null);
+	const [closePaneError, setClosePaneError] = useState<string | null>(null);
 	const [tabToClose, setTabToClose] = useState<{
 		sessionId: string;
 		tabId: string;
@@ -1820,6 +1813,19 @@ export function WorkspaceList({
 		"sessions",
 	);
 	const historyV2 = useHistoryV2Flag();
+	const [boardView, setBoardView] = useState(
+		() =>
+			typeof localStorage !== "undefined" &&
+			localStorage.getItem(storageKey("workspace-board")) === "1",
+	);
+	const chooseBoardView = (on: boolean) => {
+		setBoardView(on);
+		try {
+			localStorage.setItem(storageKey("workspace-board"), on ? "1" : "0");
+		} catch {
+			// private mode: the choice lasts for this page only
+		}
+	};
 	const [showSearch, setShowSearch] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [hookConfigured, setHookConfigured] = useState<boolean | null>(null);
@@ -1898,7 +1904,7 @@ export function WorkspaceList({
 							// searching `sessions` (which is stale inside this closure).
 							onSelectSession({
 								id: data.tmuxSessionId,
-								name: data.tmuxSessionId,
+								name: data.name ?? data.tmuxSessionId,
 								createdAt: "",
 								lastAccessedAt: "",
 								state: "working",
@@ -2253,120 +2259,179 @@ export function WorkspaceList({
 
 	const isDraggable = !searchQuery; // Disable drag during search
 
+	// One search, drawn either always-open (wide header) or behind the search
+	// button (narrow header); both edit the same query.
+	const renderSearchInput = (autoFocus: boolean) => (
+		<div className="relative">
+			<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+			<input
+				// biome-ignore lint/a11y/noAutofocus: only the narrow header's input autofocuses, and it is mounted by the user's own tap on the search button
+				autoFocus={autoFocus}
+				value={searchQuery}
+				onChange={(e) => setSearchQuery(e.target.value)}
+				placeholder={`${t("session.title")}...`}
+				className="w-full pl-9 pr-8 py-1.5 bg-white/[0.05] border border-white/[0.08] rounded-lg text-[13px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
+			/>
+			{searchQuery && (
+				<button
+					type="button"
+					onClick={() => setSearchQuery("")}
+					className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-zinc-500 hover:text-zinc-300"
+				>
+					<X className="w-3.5 h-3.5" />
+				</button>
+			)}
+		</div>
+	);
+
 	return (
 		<div className="h-full flex flex-col bg-[#0a0a0a] text-white overflow-hidden">
 			{/* ─── Header: frosted glass ─── */}
-			<div className="shrink-0 px-4 pt-3 pb-2 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
-				<div className="max-w-lg">
-					{/* Top row: tabs + actions. No separate "Sessions" title — the
-					    active segmented tab (Workspaces / History) already labels the
-					    view, and dropping the title row widens the list area. */}
-					<div className="flex items-center justify-between gap-2 mb-2">
-						<div className="flex items-center gap-2 min-w-0">
-							{onBack && (
-								<button
-									type="button"
-									onClick={onBack}
-									className="p-1.5 -ml-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors shrink-0"
-								>
-									<ChevronLeft className="w-[18px] h-[18px]" />
-								</button>
-							)}
-							<div className="inline-flex bg-white/[0.04] rounded-lg p-0.5">
-								<button
-									type="button"
-									onClick={() => setActiveTab("sessions")}
-									className={`px-5 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200 ${
-										activeTab === "sessions"
-											? "bg-white/[0.09] text-white shadow-sm"
-											: "text-zinc-500 hover:text-zinc-400"
-									}`}
-								>
-									{t("session.title")}
-								</button>
-								<button
-									type="button"
-									onClick={() => setActiveTab("history")}
-									className={`px-5 py-1.5 text-[13px] font-medium rounded-md transition-all duration-200 ${
-										activeTab === "history"
-											? "bg-white/[0.09] text-white shadow-sm"
-											: "text-zinc-500 hover:text-zinc-400"
-									}`}
-									data-onboarding="history-tab"
-								>
-									{t("history.title")}
-								</button>
-							</div>
-						</div>
-						<div className="flex items-center gap-1 shrink-0">
-							{onToggleDashboard && (
-								<button
-									type="button"
-									onClick={onToggleDashboard}
-									className={`p-2 rounded-lg transition-colors ${
-										dashboardOpen
-											? "text-blue-400 bg-blue-500/20"
-											: "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
-									}`}
-									title={t("dashboard.title")}
-								>
-									<BarChart3 className="w-[18px] h-[18px]" />
-								</button>
-							)}
+			{/* The first line holds what means the same on every tab; the second
+			    holds the workspace list's own view switch and search, and exists
+			    only on that tab. Where the header is wide enough the two lines
+			    join into one. That is decided by the header's own width rather
+			    than the device, because a dashboard opened beside the list
+			    narrows it on a tablet. */}
+			<div className="@container shrink-0 px-4 pt-3 pb-2 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/[0.06] sticky top-0 z-10">
+				<div className="flex flex-wrap items-center gap-x-1 gap-y-2 mb-2">
+					<div className="order-1 flex items-center gap-2 min-w-0">
+						{onBack && (
 							<button
 								type="button"
-								onClick={() => setShowSearch(!showSearch)}
-								className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
+								onClick={onBack}
+								className="p-1.5 -ml-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors shrink-0"
 							>
-								<Search className="w-[18px] h-[18px]" />
+								<ChevronLeft className="w-[18px] h-[18px]" />
+							</button>
+						)}
+						<div className="inline-flex bg-white/[0.04] rounded-lg p-0.5">
+							<button
+								type="button"
+								onClick={() => setActiveTab("sessions")}
+								className={`px-3 sm:px-5 py-1.5 text-[13px] font-medium whitespace-nowrap rounded-md transition-all duration-200 ${
+									activeTab === "sessions"
+										? "bg-white/[0.09] text-white shadow-sm"
+										: "text-zinc-500 hover:text-zinc-400"
+								}`}
+							>
+								{t("session.title")}
 							</button>
 							<button
 								type="button"
-								onClick={() => setShowCreateModal(true)}
-								className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
-								data-onboarding="new-session"
+								onClick={() => setActiveTab("history")}
+								className={`px-3 sm:px-5 py-1.5 text-[13px] font-medium whitespace-nowrap rounded-md transition-all duration-200 ${
+									activeTab === "history"
+										? "bg-white/[0.09] text-white shadow-sm"
+										: "text-zinc-500 hover:text-zinc-400"
+								}`}
+								data-onboarding="history-tab"
 							>
-								<Plus className="w-[18px] h-[18px]" />
+								{t("history.title")}
 							</button>
-							{onClose && (
-								<button
-									type="button"
-									onClick={onClose}
-									className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
-								>
-									<X className="w-[18px] h-[18px]" />
-								</button>
-							)}
 						</div>
 					</div>
 
-					{/* Search bar (expandable) */}
-					{showSearch && (
-						<div className="mb-2">
-							<div className="relative max-w-sm">
-								<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-								<input
-									// biome-ignore lint/a11y/noAutofocus: search input is only mounted on user toggle; immediate focus is expected UX
-									autoFocus
-									value={searchQuery}
-									onChange={(e) => setSearchQuery(e.target.value)}
-									placeholder={`${t("session.title")}...`}
-									className="w-full pl-9 pr-3 py-2 bg-white/[0.05] border border-white/[0.08] rounded-lg text-[13px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
-								/>
-								{searchQuery && (
-									<button
-										type="button"
-										onClick={() => setSearchQuery("")}
-										className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-zinc-500 hover:text-zinc-300"
-									>
-										<X className="w-3.5 h-3.5" />
-									</button>
-								)}
+					{activeTab === "sessions" && (
+						<>
+							<div aria-hidden className="order-3 basis-full h-0 @3xl:hidden" />
+							<span
+								aria-hidden
+								className="hidden @3xl:block order-4 w-px h-5 mx-2 bg-white/[0.1]"
+							/>
+							<div className="order-4 inline-flex bg-white/[0.04] rounded-lg p-0.5">
+								<button
+									type="button"
+									onClick={() => chooseBoardView(false)}
+									aria-pressed={!boardView}
+									className={`flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium whitespace-nowrap rounded-md transition-all duration-200 ${
+										!boardView
+											? "bg-white/[0.09] text-white shadow-sm"
+											: "text-zinc-500 hover:text-zinc-400"
+									}`}
+								>
+									<LayoutGrid className="w-3.5 h-3.5" />
+									{t("board.list")}
+								</button>
+								<button
+									type="button"
+									onClick={() => chooseBoardView(true)}
+									aria-pressed={boardView}
+									className={`flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-medium whitespace-nowrap rounded-md transition-all duration-200 ${
+										boardView
+											? "bg-white/[0.09] text-white shadow-sm"
+											: "text-zinc-500 hover:text-zinc-400"
+									}`}
+								>
+									<Rows3 className="w-3.5 h-3.5" />
+									{t("board.board")}
+								</button>
 							</div>
-						</div>
+							<div className="order-5 ml-auto flex items-center min-w-0">
+								<button
+									type="button"
+									onClick={() => setShowSearch(!showSearch)}
+									title={t("common.search")}
+									className={`@3xl:hidden p-2 rounded-lg transition-colors ${
+										showSearch
+											? "text-blue-400"
+											: "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+									}`}
+								>
+									<Search className="w-[18px] h-[18px]" />
+								</button>
+								<div className="hidden @3xl:block w-60 mr-1">
+									{renderSearchInput(false)}
+								</div>
+							</div>
+						</>
 					)}
 
+					<div
+						className={`order-2 @3xl:order-6 flex items-center gap-1 shrink-0 ${
+							activeTab === "sessions" ? "ml-auto @3xl:ml-0" : "ml-auto"
+						}`}
+					>
+						{onToggleDashboard && (
+							<button
+								type="button"
+								onClick={onToggleDashboard}
+								className={`p-2 rounded-lg transition-colors ${
+									dashboardOpen
+										? "text-blue-400"
+										: "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06]"
+								}`}
+								title={t("dashboard.title")}
+								aria-pressed={dashboardOpen}
+							>
+								<BarChart3 className="w-[18px] h-[18px]" />
+							</button>
+						)}
+						<button
+							type="button"
+							onClick={() => setShowCreateModal(true)}
+							className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
+							data-onboarding="new-session"
+						>
+							<Plus className="w-[18px] h-[18px]" />
+						</button>
+						{onClose && (
+							<button
+								type="button"
+								onClick={onClose}
+								className="p-2 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] transition-colors"
+							>
+								<X className="w-[18px] h-[18px]" />
+							</button>
+						)}
+					</div>
 				</div>
+
+				{showSearch && activeTab === "sessions" && (
+					<div className="mb-2 max-w-sm @3xl:hidden">
+						{renderSearchInput(true)}
+					</div>
+				)}
 			</div>
 
 			{/* Error message */}
@@ -2464,6 +2529,12 @@ export function WorkspaceList({
 									<div className="text-center text-zinc-600 py-12">
 										<p className="text-[13px]">No matching sessions</p>
 									</div>
+								) : boardView ? (
+									<WorkspaceBoard
+										sessions={filteredSessions}
+										onSelectSession={onSelectSession}
+										onSelectPane={onSelectPane}
+									/>
 								) : (
 									<>
 										<DndContext
@@ -2563,39 +2634,53 @@ export function WorkspaceList({
 			{paneToClose && (
 				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] animate-backdrop-in"
-					onClick={() => setPaneToClose(null)}
+					onClick={() => {
+						setPaneToClose(null);
+						setClosePaneError(null);
+					}}
 				>
 					<div
 						className="bg-th-surface rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl animate-modal-in"
 						onClick={(e) => e.stopPropagation()}
 					>
-						<h3 className="text-lg font-bold text-th-text mb-2">Close Pane</h3>
+						<h3 className="text-lg font-bold text-th-text mb-2">
+							{t("session.closePaneTitle")}
+						</h3>
 						<p className="text-th-text-secondary mb-4">
-							<span className="font-medium text-th-text">
-								{paneToClose.name}
-							</span>{" "}
-							will be closed. Continue?
+							{t("session.closePaneBody", { name: paneToClose.name })}
 						</p>
+						{closePaneError && (
+							<p
+								role="alert"
+								className="mb-4 rounded-md bg-red-500/15 px-3 py-2 text-[13px] text-red-400"
+							>
+								{closePaneError}
+							</p>
+						)}
 						<div className="flex gap-3 justify-end">
 							<button
 								type="button"
-								onClick={() => setPaneToClose(null)}
+								onClick={() => {
+									setPaneToClose(null);
+									setClosePaneError(null);
+								}}
 								className="px-4 py-2 bg-th-surface-active hover:bg-th-surface-hover rounded font-medium transition-colors text-th-text"
 							>
-								Cancel
+								{t("common.cancel")}
 							</button>
 							<button
 								type="button"
 								onClick={async () => {
+									// Route to the owning Hub/peer instead of always the
+									// local Hub — otherwise closing a pane on a remote
+									// peer's session silently fails (or, on id collision,
+									// closes the wrong pane).
+									const session = sessions.find(
+										(s) => s.id === paneToClose.sessionId,
+									);
+									let failure: string | null = null;
 									try {
-										// Route to the owning Hub/peer instead of always the
-										// local Hub — otherwise closing a pane on a remote
-										// peer's session silently fails (or, on id collision,
-										// closes the wrong pane).
-										const session = sessions.find(
-											(s) => s.id === paneToClose.sessionId,
-										);
-										await sessionFetch(
+										const res = await sessionFetch(
 											session,
 											peers,
 											`/api/workspaces/${encodeURIComponent(paneToClose.sessionId)}/panes/close`,
@@ -2605,12 +2690,33 @@ export function WorkspaceList({
 												body: JSON.stringify({ paneId: paneToClose.paneId }),
 											},
 										);
-									} catch {}
+										if (!res.ok) {
+											const body = (await res.json().catch(() => ({}))) as {
+												error?: string;
+											};
+											failure = body.error?.includes("last pane")
+												? t("session.closePaneLast")
+												: t("session.closePaneFailed", {
+														reason: body.error || res.status,
+													});
+										}
+									} catch (err) {
+										failure = t("session.closePaneFailed", {
+											reason: err instanceof Error ? err.message : String(err),
+										});
+									}
+									// A refusal has to be seen: closing the dialog on it
+									// looks exactly like the tap not registering.
+									if (failure) {
+										setClosePaneError(failure);
+										return;
+									}
+									setClosePaneError(null);
 									setPaneToClose(null);
 								}}
 								className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-medium transition-colors text-white"
 							>
-								Close
+								{t("session.closePaneAction")}
 							</button>
 						</div>
 					</div>

@@ -163,6 +163,7 @@ export function useHistoryActions({
 
 	const handleTap = useCallback(
 		async (session: HistorySession, projectDirName?: string) => {
+			setResumeError(null);
 			setSelectedSession(session);
 			setLoadingConversation(true);
 			setConversation([]);

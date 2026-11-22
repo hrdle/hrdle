@@ -4,6 +4,85 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.211] - 2026-11-22
+
+### Changed
+- **The workspace list's header is grouped by what each control is for.** On a
+  phone, the tabs, dashboard and new-session buttons share the first line, and
+  the list's own view switch and search sit on a second one. Wherever the
+  header is wide enough, as on a tablet or desktop, everything fits on one line
+  with the search field always open. The view switch is now a plain List /
+  Board choice, and the dashboard button shows it is on by its color alone.
+
+### Fixed
+- **The History tab no longer shows a workspace search.** It filtered the
+  workspace list, which is not on screen there, so typing into it did nothing.
+
+## [0.3.210] - 2026-11-21
+
+### Fixed
+- **Resuming a conversation from history works when it is already open.** A
+  conversation still running in a workspace was refused as a second agent in
+  the same directory, and the refusal was shown behind the conversation, so
+  the button seemed to do nothing. Resume now switches to the workspace it is
+  running in. A failed resume says why inside the conversation view.
+
+## [0.3.209] - 2026-11-21
+
+### Fixed
+- **A pane can be closed from the workspace list when each tab holds one
+  pane.** Only the tab on screen was counted, so every pane looked like the
+  workspace's last one and the close was refused without a word. A tab's only
+  pane now closes with its tab, and only the workspace's last pane is kept.
+  When a close is refused, the dialog stays open and says why.
+
+## [0.3.208] - 2026-11-20
+
+### Fixed
+- **`hrdle send`, `hrdle peek`, `hrdle stt-prompt` and `hrdle glasses` work on
+  a server with a password.** They called this machine's own server without
+  logging in and were turned away. They now sign in on their own, with nothing
+  to set up. A server given `JWT_SECRET` in its environment is the one case they
+  cannot sign for, and the error now says so instead of only "Not authorized".
+
+## [0.3.207] - 2026-11-20
+
+### Fixed
+- **"Open in Claude app" opens the session of the pane it is on.** In a
+  workspace with two Claude panes, the button opened the same one of them from
+  every pane, and appeared on a pane whose Claude had Remote Control off. Each
+  pane's button now opens its own session, and only a pane with Remote Control
+  on has one.
+
+## [0.3.206] - 2026-11-20
+
+### Added
+- **The board shows background work.** A row carries the count Claude Code
+  shows at the bottom of its own screen - `bg: 1 shell`, `bg: 1 shell, 1 monitor`
+  - so a session that looks idle but still has something running says so.
+
+### Fixed
+- **The board's time column is no longer blank for almost every row.** It now
+  says how long a workspace has been in the state it is listed under - waiting
+  for 12 minutes, finished 5 hours ago. A session that was already working when
+  the server last restarted shows no time until its state next changes.
+
+## [0.3.205] - 2026-11-18
+
+### Added
+- **A board view of your workspaces.** A new button in the workspace list's
+  header regroups the list by what each agent needs from you - needs you,
+  done but not yet looked at, working, idle - with a count for each and one
+  line per workspace. Opening a workspace from it marks it as looked at, on
+  every device at once.
+
+### Fixed
+- **Opening a pane from the workspace list focuses that pane on desktop and
+  tablet too.** It only did so on the phone; elsewhere the session opened and
+  herdr's focus stayed where it was.
+- **A pane picked while its session was still opening is no longer ignored.**
+  The request could go out before the session was ready and was dropped.
+
 ## [0.3.204] - 2026-11-18
 
 ### Added

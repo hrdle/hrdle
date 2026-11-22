@@ -12,6 +12,7 @@ import { notify } from './routes/notify';
 import { peers } from './routes/peers';
 import { shortTailscaleIp, startDiscoveryServer } from './services/discovery';
 import { migrateSessionIds } from './services/session-id-migration';
+import { startPaneStatusClock } from './services/pane-status-since';
 import { herdr } from './routes/herdr';
 import { glasses } from './routes/glasses';
 import { glassesRelay } from './routes/glasses-relay';
@@ -355,6 +356,7 @@ console.log(`herdr ${herdrPong.version ?? '?'} (protocol ${herdrPong.protocol ??
 // Needs herdr, so it runs here rather than at import time, and it is not
 // awaited: nothing about serving depends on it.
 void migrateSessionIds();
+startPaneStatusClock();
 if (herdrPong.protocol !== undefined && herdrPong.protocol !== HERDR_TESTED_PROTOCOL) {
   console.warn(
     `warning: herdr protocol ${herdrPong.protocol} differs from the tested protocol ${HERDR_TESTED_PROTOCOL}. ` +

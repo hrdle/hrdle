@@ -462,9 +462,9 @@ function TerminalPane({
 						onSelect: handleToggleConversation,
 					},
 					"claude-app": {
-						hidden: !session?.bridgeSessionId,
+						hidden: !activeTmuxPane?.bridgeSessionId,
 						onSelect: () => {
-							const id = session?.bridgeSessionId;
+							const id = activeTmuxPane?.bridgeSessionId;
 							if (id) openClaudeAppSession(id);
 						},
 					},
@@ -598,13 +598,13 @@ function TerminalPane({
 							</button>
 					)}
 					{/* Open the matching Remote Control session in the Claude app */}
-					{onPane("claude-app") && session?.bridgeSessionId && (
+					{onPane("claude-app") && activeTmuxPane?.bridgeSessionId && (
 						<button
 							type="button"
 							data-testid={actionTestId("claude-app")}
 							onClick={(e) => {
 								e.stopPropagation();
-								const bridgeId = session.bridgeSessionId;
+								const bridgeId = activeTmuxPane.bridgeSessionId;
 								if (!bridgeId) return;
 								openClaudeAppSession(bridgeId);
 							}}
