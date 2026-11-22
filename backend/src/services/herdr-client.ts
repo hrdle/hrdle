@@ -192,6 +192,17 @@ export function createNdjsonReader(onLine: (line: string) => void): (chunk: Buff
   };
 }
 
+/** A herdr API error, carrying its `code` (`agent_name_taken`, ...) for callers that branch on it. */
+export class HerdrRpcError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | undefined,
+  ) {
+    super(message);
+    this.name = 'HerdrRpcError';
+  }
+}
+
 export async function herdrRpc<T = Record<string, unknown>>(
   method: string,
   params: Record<string, unknown>,
@@ -219,7 +230,12 @@ export async function herdrRpc<T = Record<string, unknown>>(
         };
         if (msg.error) {
           settle(() =>
-            reject(new Error(`herdr ${method}: ${msg.error?.message ?? msg.error?.code ?? 'error'}`)),
+            reject(
+              new HerdrRpcError(
+                `herdr ${method}: ${msg.error?.message ?? msg.error?.code ?? 'error'}`,
+                msg.error?.code,
+              ),
+            ),
           );
         } else {
           settle(() => resolve(msg.result as T));

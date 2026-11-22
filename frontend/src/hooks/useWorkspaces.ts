@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+	type AgentLaunchReport,
 	type AgentProvider,
 	DEFAULT_AGENT_PROVIDER,
 	type ExtendedSessionResponse,
@@ -61,6 +62,16 @@ function hookEventToIndicatorState(event: string): IndicatorState | null {
 	}
 }
 
+/**
+ * The server may spend up to ~10s getting a busy pane to take the agent and
+ * 30s more waiting for it to accept input, so the usual 10s would abort a
+ * create that is going fine.
+ */
+const AGENT_WAIT_FETCH_TIMEOUT_MS = 90_000;
+
+/** A created session plus how its agent came up; the report is not kept in the list. */
+export type CreatedSession = ExtendedSessionResponse & AgentLaunchReport;
+
 interface UseWorkspacesReturn {
 	sessions: ExtendedSessionResponse[];
 	isLoading: boolean;
@@ -72,7 +83,9 @@ interface UseWorkspacesReturn {
 		// Multi-server: creates the session on the given peer (a remote hrdle).
 		// Omitted, or 'local', creates it on the hub.
 		peerId?: string,
-	) => Promise<ExtendedSessionResponse | null>;
+		/** Answer only once the agent accepts input; the report says how it went. */
+		wait?: boolean,
+	) => Promise<CreatedSession | null>;
 	// peerId: session ids (workspace labels) can collide across peers — pass the
 	// owning peer so the request doesn't resolve to the local same-name session.
 	deleteSession: (id: string, peerId?: string) => Promise<boolean>;
@@ -154,7 +167,8 @@ export function useWorkspaces(): UseWorkspacesReturn {
 			workingDir?: string,
 			agent: AgentProvider = DEFAULT_AGENT_PROVIDER,
 			peerId?: string,
-		): Promise<SessionResponse | null> => {
+			wait?: boolean,
+		): Promise<CreatedSession | null> => {
 			setError(null);
 			// With a peerId the POST goes to that peer. `sessionFetch` takes a session
 			// object, so a stub carrying only peerId is passed in.
@@ -165,8 +179,9 @@ export function useWorkspaces(): UseWorkspacesReturn {
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ name, workingDir, agent }),
+					body: JSON.stringify({ name, workingDir, agent, wait }),
 				},
+				wait ? AGENT_WAIT_FETCH_TIMEOUT_MS : undefined,
 			);
 
 			if (!response.ok) {
@@ -176,13 +191,14 @@ export function useWorkspaces(): UseWorkspacesReturn {
 				throw err;
 			}
 
-			const session = (await response.json()) as ExtendedSessionResponse;
+			const { agentName, agentReady, agentError, promptSent, ...session } =
+				(await response.json()) as CreatedSession;
 			// Stamp the peerId when it was created on a peer, so the UI can tell
 			const enriched: ExtendedSessionResponse = peerId
 				? { ...session, peerId }
 				: session;
 			setSessions((prev) => [enriched, ...prev]);
-			return enriched;
+			return { ...enriched, agentName, agentReady, agentError, promptSent };
 		},
 		[peers],
 	);

@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { ClaudeBackgroundReader } from '../services/claude-footer';
 import { readPaneText, toHerdrPaneId } from '../services/herdr-client';
 import { paneStatusClock } from '../services/pane-status-since';
+import { promptAgent, startAgent, waitForAgentReady, type StartedAgent } from '../services/agent-launch';
+import { stat } from 'node:fs/promises';
 import { z } from 'zod';
 import { homedir } from 'node:os';
-import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
+import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentLaunchReport, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
 import { HerdrService, findSessionByAddress } from '../services/herdr';
 import {
   captureViewportHerdr,
@@ -86,8 +88,12 @@ export function expandHome(value: string): string {
   return value;
 }
 
-export function agentStartCommand(agent: AgentProvider, workingDir: string): string {
-  return `cd ${shellQuote(expandHome(workingDir))} && ${AGENT_PROVIDERS[agent].command}`;
+async function isDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 export function findDuplicateAgentWorkingDirSession<T extends { agent?: string; currentCommand?: string; currentPath?: string }>(
@@ -659,82 +665,119 @@ sessions.post('/', async (c) => {
   notifySessionChange();
   const body = await c.req.json().catch(() => ({}));
   const parsed = CreateSessionSchema.safeParse(body);
-  const agent = parsed.success ? parsed.data.agent : DEFAULT_AGENT_PROVIDER;
-
-  // Generate session name
-  const herdrSessions = await herdrService.listWorkspaces();
-  const name = parsed.success && parsed.data.name
-    ? parsed.data.name
-    : `session-${herdrSessions.length + 1}`;
-
-  // Check if session already exists
-  const exists = await herdrService.workspaceExists(name);
-  if (exists) {
-    return c.json({ error: 'Session already exists' }, 400);
+  // A body that does not validate is refused, not defaulted. Falling back
+  // field by field dropped the name, the directory and the agent together,
+  // and answered 201 with a bare shell under `session-N`: the caller had no
+  // way to tell, and its next prompt ran as a shell command.
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request', details: parsed.error.issues }, 400);
   }
+  const { agent, workingDir, initialPrompt, wait } = parsed.data;
+
+  const herdrSessions = await herdrService.listWorkspaces();
+  // The label is free text and need not be unique: a session is addressed by
+  // its workspace id, and herdr allows two workspaces the same label.
+  const name = parsed.data.name ?? `session-${herdrSessions.length + 1}`;
 
   // Guard: reject if the same agent is already running in the same directory
-  if (parsed.success && parsed.data.workingDir) {
-    const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, parsed.data.workingDir);
+  if (workingDir) {
+    const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, workingDir);
     if (conflicting) {
       return c.json({ error: 'duplicate_working_dir', existingSession: conflicting.name }, 409);
     }
   }
 
+  const cwd = workingDir ? expandHome(workingDir) : undefined;
+  if (cwd && !(await isDirectory(cwd))) {
+    return c.json({ error: 'working_dir_not_found', workingDir }, 400);
+  }
+
+  let created: { workspaceId: string; rootPaneId?: string };
   try {
-    const instanceId = await herdrService.createWorkspace(name);
-
-    // A new workspace takes a copy of the glossary and stops sharing: from
-    // here its vocabulary is one list it owns, and terms it will never say
-    // can be deleted. Best-effort - a workspace with no vocabulary of its own
-    // falls back to the shared glossary, so failing here costs nothing.
-    await seedWorkspaceVocabulary(instanceId ?? name).catch(() => {});
-
-    // Start the selected agent if workingDir is specified
-    if (parsed.success && parsed.data.workingDir) {
-      await sendTextToSession(name, agentStartCommand(agent, parsed.data.workingDir));
-
-      // Send initial prompt after the agent starts (interactive mode)
-      if (parsed.data.initialPrompt) {
-        const prompt = parsed.data.initialPrompt;
-        const sessionName = name;
-        // Poll until the selected agent process is running in the session
-        (async () => {
-          for (let i = 0; i < 30; i++) { // up to 30 seconds
-            await new Promise(r => setTimeout(r, 1000));
-            const sessions = await herdrService.listWorkspaces();
-            const session = sessions.find(s => s.name === sessionName);
-            if (session?.currentCommand === agent) {
-              // Wait a bit more for the TUI to be fully ready, then submit
-              // via bracketed paste (multi-line prompts stay multi-line).
-              await new Promise(r => setTimeout(r, 2000));
-              await sendTextToSession(sessionName, prompt, { bracketed: true });
-              return;
-            }
-          }
-        })().catch((err) => {
-          console.warn(`[sessions] initial prompt delivery failed for ${name}:`, err);
-        });
-      }
-    }
-
-    // The id is herdr's workspace id, the same value the list answers with.
-    // Handing back the label instead leaves the caller holding an id that
-    // matches nothing in `GET /sessions`, and the frontend persists it into
-    // the pane tree — so the desktop comes back from a reload with a session
-    // it cannot resolve.
-    return c.json({
-      id: instanceId,
-      name: name,
-      instanceId,
-      createdAt: new Date().toISOString(),
-      lastAccessedAt: new Date().toISOString(),
-      state: 'idle',
-      agent,
-    }, 201);
+    created = await herdrService.createWorkspaceWithRoot(name, cwd);
   } catch (_error) {
     return c.json({ error: 'Failed to create session' }, 500);
   }
+  const instanceId = created.workspaceId;
+
+  // A new workspace takes a copy of the glossary and stops sharing: from
+  // here its vocabulary is one list it owns, and terms it will never say
+  // can be deleted. Best-effort - a workspace with no vocabulary of its own
+  // falls back to the shared glossary, so failing here costs nothing.
+  await seedWorkspaceVocabulary(instanceId).catch(() => {});
+
+  // The workspace exists from here on, so an agent that fails to come up is
+  // reported in the 201 rather than as an error: the caller has a workspace
+  // either way and needs its id.
+  const launch: AgentLaunchReport = {};
+
+  if (cwd) {
+    let started: StartedAgent | undefined;
+    try {
+      if (!created.rootPaneId) throw new Error('herdr workspace.create returned no root pane');
+      started = await startAgent({ paneId: created.rootPaneId, kind: agent });
+      launch.agentName = started.name;
+    } catch (err) {
+      launch.agentReady = false;
+      launch.agentError = { code: 'start_failed', message: (err as Error).message };
+    }
+
+    if (started) {
+      const agentRef = { ...started, kind: agent };
+      const readyThenPrompt = async () => {
+        const result = await waitForAgentReady(agentRef);
+        if (!result.ready || !initialPrompt || result.blocked) return { result, promptSent: false };
+        await promptAgent(agentRef.name, initialPrompt);
+        return { result, promptSent: true };
+      };
+      const blockedError = {
+        code: 'blocked',
+        message: 'the agent is asking a question first, so the initial prompt was not sent',
+      };
+
+      if (wait) {
+        try {
+          const { result, promptSent } = await readyThenPrompt();
+          launch.agentReady = result.ready;
+          if (!result.ready) launch.agentError = { code: result.code, message: result.message };
+          else if (initialPrompt && result.blocked) launch.agentError = blockedError;
+          if (initialPrompt) launch.promptSent = promptSent;
+        } catch (err) {
+          // Ready, but the prompt did not go through.
+          launch.agentReady = true;
+          launch.promptSent = false;
+          launch.agentError = { code: 'prompt_failed', message: (err as Error).message };
+        }
+      } else if (initialPrompt) {
+        readyThenPrompt()
+          .then(({ result }) => {
+            const why = !result.ready ? result : result.blocked ? blockedError : null;
+            if (why) {
+              console.warn(`[sessions] initial prompt not sent for ${instanceId}: ${why.code} ${why.message}`);
+            }
+          })
+          .catch((err) => {
+            console.warn(`[sessions] initial prompt delivery failed for ${instanceId}:`, err);
+          });
+      }
+    }
+  }
+
+  // The id is herdr's workspace id, the same value the list answers with.
+  // Handing back the label instead leaves the caller holding an id that
+  // matches nothing in `GET /sessions`, and the frontend persists it into
+  // the pane tree — so the desktop comes back from a reload with a session
+  // it cannot resolve.
+  return c.json({
+    id: instanceId,
+    name,
+    instanceId,
+    createdAt: new Date().toISOString(),
+    lastAccessedAt: new Date().toISOString(),
+    state: 'idle',
+    agent,
+    ...launch,
+  }, 201);
 });
 
 // GET /sessions/history/projects - Get list of projects (fast, no file content reading)
@@ -982,10 +1025,10 @@ sessions.post('/history/resume', async (c) => {
     // Change to project directory and run the agent's resume command
     const command = `cd ${shellQuote(expandHome(projectPath))} && ${agentResumeCommand(agent, sessionId)}`;
     try {
-      await sendTextToSession(sessionName, command);
+      await sendTextToSession(workspaceId, command);
     } catch {
       // Clean up the session if command failed
-      await herdrService.killWorkspace(sessionName);
+      await herdrService.killWorkspace(workspaceId);
       return c.json({ error: 'Failed to start agent session' }, 500);
     }
 
@@ -1146,11 +1189,7 @@ sessions.put('/:id/title', async (c) => {
     // must not retire the session's address mid-conversation.
     const sessionId = await herdrService.renameWorkspace(id, title);
     return c.json({ success: true, title, id: sessionId });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '';
-    if (message.includes('already exists')) {
-      return c.json({ error: 'A session with that name already exists' }, 409);
-    }
+  } catch (_error) {
     return c.json({ error: 'Failed to update title' }, 500);
   }
 });

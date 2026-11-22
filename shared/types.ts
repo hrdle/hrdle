@@ -324,16 +324,35 @@ export interface SessionMetrics {
 // alphabet as SessionIdSchema so a label stays safe to use wherever a
 // session id appears (URLs, logs, RPC params) without escaping.
 export const CreateSessionSchema = z.object({
+  // The name is the herdr workspace label, not the session id (that is the
+  // workspace_id), so it takes what a rename takes: the labels people and
+  // agents actually write are Japanese, spaced and dashed. Control characters
+  // stay out because a label is drawn on terminals and the glasses.
   name: z
     .string()
+    .trim()
     .min(1)
-    .max(64)
-    .regex(/^[A-Za-z0-9._-]+$/, 'Session name must be alphanumerics, dot, underscore, or hyphen')
+    .max(100)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting them is the point
+    .regex(/^[^\u0000-\u001f\u007f]+$/, 'Session name must not contain control characters')
     .optional(),
   workingDir: z.string().optional(),
-  initialPrompt: z.string().max(1000).optional(),
+  initialPrompt: z.string().min(1).optional(),
+  /** Answer only once the agent accepts input (and the initial prompt, if any, is sent). */
+  wait: z.boolean().optional(),
   agent: z.enum(AGENT_PROVIDER_IDS).optional().default(DEFAULT_AGENT_PROVIDER),
 });
+
+/**
+ * How the agent of a just-created workspace came up, carried on the create
+ * response. The workspace exists whatever this says.
+ */
+export interface AgentLaunchReport {
+  agentName?: string;
+  agentReady?: boolean;
+  agentError?: { code: string; message: string };
+  promptSent?: boolean;
+}
 
 export const ResizeTerminalSchema = z.object({
   cols: z.number().int().min(1).max(500),

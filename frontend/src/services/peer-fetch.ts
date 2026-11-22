@@ -40,12 +40,13 @@ export async function sessionFetch(
 	peers: PeerClientView[],
 	path: string,
 	init: RequestInit = {},
+	timeoutMs?: number,
 ): Promise<Response> {
 	const { apiBase, token, isRemote } = resolveSessionApi(session, peers);
 	if (!isRemote) {
-		return authFetch(`${apiBase}${path}`, init);
+		return authFetch(`${apiBase}${path}`, init, timeoutMs);
 	}
 	const headers = new Headers(init.headers);
 	if (token) headers.set("Authorization", `Bearer ${token}`);
-	return fetchWithTimeout(`${apiBase}${path}`, { ...init, headers });
+	return fetchWithTimeout(`${apiBase}${path}`, { ...init, headers }, timeoutMs);
 }
