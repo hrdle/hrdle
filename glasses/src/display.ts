@@ -405,6 +405,12 @@ export interface AppState {
    * asks them to speak up - advice that cannot help when nothing was listening.
    */
   voiceMicFailed?: boolean
+  /**
+   * The refusal came after the host's exit dialogue, which keeps the
+   * microphone closed until the app is restarted. Restarting is the one thing
+   * that works, so the screen says that instead of leaving it to be guessed.
+   */
+  voiceMicNeedsRestart?: boolean
   /** Which panel of a finished draft is showing. Only the confirm screen pages. */
   voicePage?: number
   /**
@@ -2087,7 +2093,9 @@ function voiceContent(state: AppState): { headerText: string; bodyText: string; 
         bodyText: asked
           ? `Send this?${of}${lost}\n${asked}`
           : state.voiceMicFailed
-            ? '(the microphone did not open)\n\nNothing was listening, so there is nothing to send'
+            ? state.voiceMicNeedsRestart
+              ? '(the microphone did not open)\n\nThe exit dialog keeps it closed. Close this app and open it again'
+              : '(the microphone did not open)\n\nNothing was listening, so there is nothing to send'
             : state.voiceFailed
               ? '(the transcription did not come back)\n\nSay it again - the recording was not the problem'
               : state.voicePhrases?.length

@@ -644,6 +644,15 @@ export class GlassesController {
    * this recording's and uploaded under a session nobody spoke them to.
    */
   private micOpen = false
+  /**
+   * Whether this instance has raised the host's exit dialogue.
+   *
+   * Raising it - cancelled or not - leaves the host refusing the microphone for
+   * the rest of the instance, and nothing the app calls brings it back. Only a
+   * restart does, so a refusal after it is told as that, not as a failure to
+   * try again.
+   */
+  private exitDialogueRaised = false
   /** Whether anything above `SPEECH_RMS` has been heard in this phrase. */
   private heardSpeech = false
   /** Samples collected into the phrase being spoken now. */
@@ -1506,7 +1515,7 @@ export class GlassesController {
       case 'doubleTap':
         // The machines are the root when there are any: the exit dialogue
         // the host expects of a root page (see the session list's double-tap).
-        this.platform.requestExit()
+        this.askHostToExit()
         return
     }
   }
@@ -1589,7 +1598,7 @@ export class GlassesController {
           this.render()
           return
         }
-        this.platform.requestExit()
+        this.askHostToExit()
         return
     }
   }
@@ -2167,12 +2176,18 @@ export class GlassesController {
    * every time. The screens and the gestures are unchanged; only the audio is
    * not real.
    */
+  private askHostToExit(): void {
+    this.exitDialogueRaised = true
+    this.platform.requestExit()
+  }
+
   private async beginCapture(): Promise<void> {
     this.audioChunks = []
     this.phraseSamples = 0
     this.heardSpeech = false
     this.state.voiceLevel = 0
     this.state.voiceMicFailed = false
+    this.state.voiceMicNeedsRestart = false
     this.recording = true
     this.micOpen = false
     const run = ++this.voiceRun
@@ -2197,6 +2212,7 @@ export class GlassesController {
     if (!opened) {
       this.recording = false
       this.state.voiceMicFailed = true
+      this.state.voiceMicNeedsRestart = this.exitDialogueRaised
       this.state.voicePhase = 'confirm'
       this.render()
       return
