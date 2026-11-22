@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.212] - 2026-11-22
+
+### Fixed
+- **A session in a directory with an underscore or non-ASCII characters in its
+  path finds its own Claude Code history.** Only slashes and dots were mapped
+  the way Claude Code names its project folders, so such a session never
+  matched its folder and every list refresh searched all of them. History from
+  other agents in the same directory now groups with Claude Code's instead of
+  appearing as a second project.
+
 ## [0.3.211] - 2026-11-22
 
 ### Changed
