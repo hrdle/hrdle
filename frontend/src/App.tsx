@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	type AgentProvider,
+	type AgentLaunchReport,
 	type ExtendedSessionResponse,
 	type IndicatorState,
 	type PaneInfo,
@@ -343,7 +344,16 @@ export function App() {
 				}),
 			});
 			if (response.ok) {
-				const session: ExtendedSessionResponse = await response.json();
+				const session: ExtendedSessionResponse & AgentLaunchReport =
+					await response.json();
+				// Not waited for: this runs behind the loading screen of a first
+				// visit. The workspace still opens - on a shell, if the agent did
+				// not start.
+				if (session.agentError) {
+					console.warn(
+						`Welcome agent did not start: ${session.agentError.code}: ${session.agentError.message}`,
+					);
+				}
 				return apiToOpenSession(session);
 			}
 		} catch (err) {

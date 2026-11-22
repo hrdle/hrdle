@@ -101,6 +101,13 @@
     "folderName": "Folder name",
     "noSubdirectories": "No subdirectories",
     "agentStartFailed": "Workspace \"{{name}}\" was created, but {{agent}} did not start: {{message}}",
+    "agentFailure": {
+      "exited": "it exited before it could take input",
+      "timeout": "it did not become ready to take input within 30 seconds",
+      "kind_mismatch": "a different agent came up in the pane",
+      "name_lost": "its pane was taken over by something else"
+    },
+    "startingAgent": "Starting agent...",
     "openWorkspace": "Open workspace",
     "duplicateWorkingDir": "A session for the same agent is already running in this directory ({{name}})",
     "resumeFailed": "Failed to resume session",

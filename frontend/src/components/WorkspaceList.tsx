@@ -400,7 +400,7 @@ function CreateSessionModal({
 		workingDir?: string,
 		agent?: AgentProvider,
 		peerId?: string,
-	) => void;
+	) => Promise<void>;
 	onCancel: () => void;
 	existingNames: Set<string>;
 	externalError?: string | null;
@@ -422,6 +422,7 @@ function CreateSessionModal({
 	const [showNewFolderInput, setShowNewFolderInput] = useState(false);
 	const [newFolderName, setNewFolderName] = useState("");
 	const [creatingFolder, setCreatingFolder] = useState(false);
+	const [creating, setCreating] = useState(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const newFolderInputRef = useRef<HTMLInputElement>(null);
 
@@ -491,8 +492,13 @@ function CreateSessionModal({
 		setNameManuallyEdited(true);
 	};
 
-	const handleSubmit = () => {
-		onConfirm(name, currentPath, agent, isRemote ? selectedPeerId : undefined);
+	const handleSubmit = async () => {
+		setCreating(true);
+		try {
+			await onConfirm(name, currentPath, agent, isRemote ? selectedPeerId : undefined);
+		} finally {
+			setCreating(false);
+		}
 	};
 
 	const handleCreateFolder = async () => {
@@ -745,9 +751,10 @@ function CreateSessionModal({
 						<button
 							type="button"
 							onClick={handleSubmit}
-							className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium transition-colors text-sm"
+							disabled={creating}
+							className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:hover:bg-blue-600 rounded font-medium transition-colors text-sm"
 						>
-							{t("common.create")}
+							{creating ? t("session.startingAgent") : t("common.create")}
 						</button>
 					)}
 				</div>
@@ -755,6 +762,8 @@ function CreateSessionModal({
 		</div>
 	);
 }
+
+const AGENT_FAILURE_KEYS = new Set(["exited", "timeout", "kind_mismatch", "name_lost"]);
 
 // Sortable wrapper for SessionItem (drag-to-reorder)
 function sessionCompositeKey(session: ExtendedSessionResponse): string {
@@ -2154,23 +2163,40 @@ export function WorkspaceList({
 		message: string;
 	} | null>(null);
 
+	// Bumped on every submit and on cancel, so an answer that arrives after the
+	// modal was closed (the create waits for the agent) does not reopen or
+	// navigate anything.
+	const createAttemptRef = useRef(0);
+
 	const handleCreateSession = async (
 		name: string,
 		workingDir?: string,
 		agent?: AgentProvider,
 		peerId?: string,
 	) => {
+		const attempt = ++createAttemptRef.current;
 		setCreateError(null);
 		setAgentFailure(null);
 		try {
-			const created = await createSession(name || undefined, workingDir, agent, peerId);
+			const created = await createSession(
+				name || undefined,
+				workingDir,
+				agent,
+				peerId,
+				true,
+			);
+			if (attempt !== createAttemptRef.current) return;
 			if (created) {
 				const { agentName, agentReady, agentError, promptSent, ...session } = created;
 				if (agentError) {
 					setAgentFailure({
 						session,
 						agent: agent ?? DEFAULT_AGENT_PROVIDER,
-						message: agentError.message,
+						// herdr's own wording is the useful part of a refused start;
+						// the rest are hrdle's codes and read better translated.
+						message: AGENT_FAILURE_KEYS.has(agentError.code)
+							? t(`session.agentFailure.${agentError.code}`)
+							: agentError.message,
 					});
 					return;
 				}
@@ -2178,6 +2204,7 @@ export function WorkspaceList({
 				onSelectSession(session);
 			}
 		} catch (err) {
+			if (attempt !== createAttemptRef.current) return;
 			const error = err as Error & {
 				data?: { error?: string; existingSession?: string };
 			};
@@ -2755,6 +2782,7 @@ export function WorkspaceList({
 					peers={peers}
 					onConfirm={handleCreateSession}
 					onCancel={() => {
+						createAttemptRef.current++;
 						setShowCreateModal(false);
 						setCreateError(null);
 						setAgentFailure(null);

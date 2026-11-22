@@ -99,6 +99,13 @@
     "folderName": "フォルダ名",
     "noSubdirectories": "サブディレクトリがありません",
     "agentStartFailed": "ワークスペース「{{name}}」は作成しましたが、{{agent}} を起動できませんでした: {{message}}",
+    "agentFailure": {
+      "exited": "入力を受け付ける前に終了しました",
+      "timeout": "30秒以内に入力を受け付ける状態になりませんでした",
+      "kind_mismatch": "ペインで別のエージェントが起動しました",
+      "name_lost": "ペインが別のものに置き換わりました"
+    },
+    "startingAgent": "エージェントを起動中...",
     "openWorkspace": "ワークスペースを開く",
     "duplicateWorkingDir": "このディレクトリでは既に同じエージェントのセッションが実行中です（{{name}}）",
     "resumeFailed": "セッションの再開に失敗しました",
