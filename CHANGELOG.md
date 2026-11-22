@@ -4,7 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.213] - 2026-11-22
+
+### Added
+- **A question an agent is waiting on can be read and answered over the API.**
+  `GET /api/sessions/:id/panes/:paneId/question` returns it whole - the
+  question, its options with their descriptions, whether it is multi-select and
+  which boxes are ticked - and `POST .../answer` answers it by option, with
+  text for a "Type something" row. An answer meant for a question that has
+  since changed is refused. Claude Code's picker and Kimi's questions are
+  supported.
+
 ### Fixed
+- **Answering a multi-select question from the glasses no longer stops at the
+  review screen.** Claude Code 2.1.330 changed that screen, so it was not
+  recognised and the answer was never submitted.
+- **The status dot next to the session name follows the agent live.** It kept
+  the color it had when the page loaded.
 - **A session's `state` now says what its agent is doing.** It used to say
   `working` for whichever workspace herdr had focused, so a finished agent
   could sit at `working` indefinitely and anything polling the API had to read
