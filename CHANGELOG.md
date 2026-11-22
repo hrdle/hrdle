@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.211] - 2026-11-22
+
+### Changed
+- **The workspace list's header is grouped by what each control is for.** On a
+  phone, the tabs, dashboard and new-session buttons share the first line, and
+  the list's own view switch and search sit on a second one. Wherever the
+  header is wide enough, as on a tablet or desktop, everything fits on one line
+  with the search field always open. The view switch is now a plain List /
+  Board choice, and the dashboard button shows it is on by its color alone.
+
+### Fixed
+- **The History tab no longer shows a workspace search.** It filtered the
+  workspace list, which is not on screen there, so typing into it did nothing.
+
 ## [0.3.210] - 2026-11-21
 
 ### Fixed
