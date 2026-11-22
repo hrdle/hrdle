@@ -343,6 +343,17 @@ export const CreateSessionSchema = z.object({
   agent: z.enum(AGENT_PROVIDER_IDS).optional().default(DEFAULT_AGENT_PROVIDER),
 });
 
+/**
+ * How the agent of a just-created workspace came up, carried on the create
+ * response. The workspace exists whatever this says.
+ */
+export interface AgentLaunchReport {
+  agentName?: string;
+  agentReady?: boolean;
+  agentError?: { code: string; message: string };
+  promptSent?: boolean;
+}
+
 export const ResizeTerminalSchema = z.object({
   cols: z.number().int().min(1).max(500),
   rows: z.number().int().min(1).max(200),

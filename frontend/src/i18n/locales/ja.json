@@ -98,6 +98,8 @@
     "newFolder": "新規フォルダ",
     "folderName": "フォルダ名",
     "noSubdirectories": "サブディレクトリがありません",
+    "agentStartFailed": "ワークスペース「{{name}}」は作成しましたが、{{agent}} を起動できませんでした: {{message}}",
+    "openWorkspace": "ワークスペースを開く",
     "duplicateWorkingDir": "このディレクトリでは既に同じエージェントのセッションが実行中です（{{name}}）",
     "resumeFailed": "セッションの再開に失敗しました",
     "history": "履歴",

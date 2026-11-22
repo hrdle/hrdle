@@ -391,6 +391,8 @@ function CreateSessionModal({
 	onCancel,
 	existingNames,
 	externalError,
+	agentFailure,
+	onOpenCreated,
 	peers,
 }: {
 	onConfirm: (
@@ -402,6 +404,9 @@ function CreateSessionModal({
 	onCancel: () => void;
 	existingNames: Set<string>;
 	externalError?: string | null;
+	/** The workspace was created but its agent did not start. */
+	agentFailure?: { name: string; agent: AgentProvider; message: string } | null;
+	onOpenCreated?: () => void;
 	peers: PeerClientView[];
 }) {
 	const { t } = useTranslation();
@@ -655,6 +660,18 @@ function CreateSessionModal({
 							{externalError || error}
 						</div>
 					)}
+					{agentFailure && (
+						<div
+							role="alert"
+							className="text-xs text-amber-400 mb-2 break-words"
+						>
+							{t("session.agentStartFailed", {
+								name: agentFailure.name,
+								agent: t(AGENT_PROVIDERS[agentFailure.agent].labelKey),
+								message: agentFailure.message,
+							})}
+						</div>
+					)}
 
 					{/* Directory list */}
 					<div className="flex-1 overflow-y-auto bg-th-bg rounded border border-th-border">
@@ -714,13 +731,25 @@ function CreateSessionModal({
 					>
 						{t("common.cancel")}
 					</button>
-					<button
-						type="button"
-						onClick={handleSubmit}
-						className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium transition-colors text-sm"
-					>
-						{t("common.create")}
-					</button>
+					{agentFailure ? (
+						// Creating again would make a second workspace beside the one
+						// that already exists.
+						<button
+							type="button"
+							onClick={onOpenCreated}
+							className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium transition-colors text-sm"
+						>
+							{t("session.openWorkspace")}
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={handleSubmit}
+							className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-medium transition-colors text-sm"
+						>
+							{t("common.create")}
+						</button>
+					)}
 				</div>
 			</div>
 		</div>
@@ -2119,6 +2148,11 @@ export function WorkspaceList({
 	);
 
 	const [createError, setCreateError] = useState<string | null>(null);
+	const [agentFailure, setAgentFailure] = useState<{
+		session: ExtendedSessionResponse;
+		agent: AgentProvider;
+		message: string;
+	} | null>(null);
 
 	const handleCreateSession = async (
 		name: string,
@@ -2127,9 +2161,19 @@ export function WorkspaceList({
 		peerId?: string,
 	) => {
 		setCreateError(null);
+		setAgentFailure(null);
 		try {
-			const session = await createSession(name || undefined, workingDir, agent, peerId);
-			if (session) {
+			const created = await createSession(name || undefined, workingDir, agent, peerId);
+			if (created) {
+				const { agentName, agentReady, agentError, promptSent, ...session } = created;
+				if (agentError) {
+					setAgentFailure({
+						session,
+						agent: agent ?? DEFAULT_AGENT_PROVIDER,
+						message: agentError.message,
+					});
+					return;
+				}
 				setShowCreateModal(false);
 				onSelectSession(session);
 			}
@@ -2713,9 +2757,23 @@ export function WorkspaceList({
 					onCancel={() => {
 						setShowCreateModal(false);
 						setCreateError(null);
+						setAgentFailure(null);
 					}}
 					existingNames={new Set(sessions.map((s) => s.name))}
 					externalError={createError}
+					agentFailure={
+						agentFailure && {
+							name: agentFailure.session.name,
+							agent: agentFailure.agent,
+							message: agentFailure.message,
+						}
+					}
+					onOpenCreated={() => {
+						if (!agentFailure) return;
+						setShowCreateModal(false);
+						setAgentFailure(null);
+						onSelectSession(agentFailure.session);
+					}}
 				/>
 			)}
 

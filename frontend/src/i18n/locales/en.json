@@ -100,6 +100,8 @@
     "newFolder": "New Folder",
     "folderName": "Folder name",
     "noSubdirectories": "No subdirectories",
+    "agentStartFailed": "Workspace \"{{name}}\" was created, but {{agent}} did not start: {{message}}",
+    "openWorkspace": "Open workspace",
     "duplicateWorkingDir": "A session for the same agent is already running in this directory ({{name}})",
     "resumeFailed": "Failed to resume session",
     "history": "History",

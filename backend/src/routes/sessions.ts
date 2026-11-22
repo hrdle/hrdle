@@ -6,7 +6,7 @@ import { promptAgent, startAgent, waitForAgentReady, type StartedAgent } from '.
 import { stat } from 'node:fs/promises';
 import { z } from 'zod';
 import { homedir } from 'node:os';
-import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
+import { AGENT_PROVIDERS, AGENT_PROVIDER_IDS, CreateSessionSchema, DEFAULT_AGENT_PROVIDER, PaneIdSchema, SessionIdSchema, TabIdSchema, agentResumeCommand, agentSupportsConversationMetadata, isAgentProvider, threadAgentOf, type AgentLaunchReport, type AgentProvider, type IndicatorState, type PaneInfo, type ExtendedSessionResponse, type SessionState } from '../../../shared/types';
 import { HerdrService, findSessionByAddress } from '../services/herdr';
 import {
   captureViewportHerdr,
@@ -665,12 +665,7 @@ sessions.post('/', async (c) => {
   // The workspace exists from here on, so an agent that fails to come up is
   // reported in the 201 rather than as an error: the caller has a workspace
   // either way and needs its id.
-  const launch: {
-    agentName?: string;
-    agentReady?: boolean;
-    agentError?: { code: string; message: string };
-    promptSent?: boolean;
-  } = {};
+  const launch: AgentLaunchReport = {};
 
   if (cwd) {
     let started: StartedAgent | undefined;
