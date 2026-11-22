@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.215] - 2026-11-23
+
+### Changed
+- **A new session waits for its agent and says when it is ready.** The create
+  modal shows "Starting agent..." until the agent can take input (about 4.5
+  seconds for Claude Code), then opens the workspace. If the agent did not
+  start, the modal says why and offers to open the workspace that was created
+  instead of making a second one. The agent is started by herdr itself rather
+  than by typing a command into the shell. Over the API, `wait: true` on
+  `POST /api/workspaces` answers only once the agent is ready and carries
+  `agentReady` or `agentError`.
+- **An agent that opens on a question is not answered by the initial prompt.**
+  When herdr reports the agent waiting on something right after launch (Codex's
+  update offer, for example), the prompt is held back and the create reports
+  it. herdr reports Kimi's folder trust check and Grok's sign-in screen as idle
+  rather than waiting, so the prompt still goes into those two.
+
+### Fixed
+- **A workspace name can be anything a rename accepts.** Japanese or spaced
+  names used to be refused without saying so: the session was created as
+  `session-N` in the wrong directory with no agent. An invalid request is now a
+  400 that says what was wrong, and names no longer have to be unique.
+
 ## [0.3.214] - 2026-11-23
 
 ### Changed
