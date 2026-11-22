@@ -66,12 +66,11 @@ test.describe('mobile shell', () => {
     const list = page.getByRole('button', { name: 'ワークスペース' });
     await expect(list).toBeVisible();
 
-    // The list's own container rather than one tab's label width. Addressed by
-    // its width class because that class is the thing under test: `max-w-lg`
-    // fills a phone and constrains a desktop, and a merged layout that swapped
-    // it for the desktop's modal would fail here rather than on someone's phone.
+    // The list's own header rather than one tab's label width: a merged
+    // layout that swapped the screen for the desktop's modal would fail here
+    // rather than on someone's phone.
     const box = await list
-      .locator('xpath=ancestor::div[contains(@class,"max-w-lg")][1]')
+      .locator('xpath=ancestor::div[contains(@class,"@container")][1]')
       .boundingBox();
     const viewport = page.viewportSize();
     if (!box || !viewport) throw new Error('no session list on screen');
