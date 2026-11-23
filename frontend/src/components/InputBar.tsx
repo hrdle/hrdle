@@ -21,7 +21,7 @@ import {
 import { bracketedPaste, imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
 import { Keyboard } from "./Keyboard";
-import { storageKey } from "../utils/app-storage";
+import { loadInputHistory, pushInputHistory } from "../utils/input-history";
 
 export type InputMode = "hidden" | "shortcuts" | "input";
 
@@ -75,17 +75,7 @@ export const InputBar = memo(
 			}),
 			[setInputMode],
 		);
-		const inputHistoryRef = useRef<string[]>(
-			(() => {
-				try {
-					return JSON.parse(
-						localStorage.getItem(storageKey("input-history")) || "[]",
-					);
-				} catch {
-					return [];
-				}
-			})(),
-		);
+		const inputHistoryRef = useRef<string[]>(loadInputHistory());
 		const [isUploading, setIsUploading] = useState(false);
 		const [isAnimating, setIsAnimating] = useState(false);
 		const [showHint, setShowHint] = useState(true);
@@ -130,14 +120,7 @@ export const InputBar = memo(
 		};
 
 		const addToInputHistory = (text: string) => {
-			const history = inputHistoryRef.current;
-			const idx = history.indexOf(text);
-			if (idx !== -1) history.splice(idx, 1);
-			history.unshift(text);
-			if (history.length > 50) history.pop();
-			try {
-				localStorage.setItem(storageKey("input-history"), JSON.stringify(history));
-			} catch {}
+			inputHistoryRef.current = pushInputHistory(inputHistoryRef.current, text);
 		};
 
 		const handleInputKeyDown = (
@@ -385,15 +368,7 @@ export const InputBar = memo(
 									<button
 										type="button"
 										onClick={() => {
-											inputHistoryRef.current = (() => {
-												try {
-													return JSON.parse(
-														localStorage.getItem(storageKey("input-history")) || "[]",
-													);
-												} catch {
-													return [];
-												}
-											})();
+											inputHistoryRef.current = loadInputHistory();
 											setShowInputHistory((prev) => !prev);
 										}}
 										className={`px-2.5 rounded border border-th-border ${showInputHistory ? "bg-blue-700 text-white border-blue-700" : "bg-th-surface text-th-text-secondary"}`}
@@ -535,15 +510,7 @@ export const InputBar = memo(
 								<button
 									type="button"
 									onClick={() => {
-										inputHistoryRef.current = (() => {
-											try {
-												return JSON.parse(
-													localStorage.getItem(storageKey("input-history")) || "[]",
-												);
-											} catch {
-												return [];
-											}
-										})();
+										inputHistoryRef.current = loadInputHistory();
 										setShowInputHistory((prev) => !prev);
 									}}
 									className={`h-9 w-14 flex items-center justify-center rounded-md transition-colors ${

@@ -193,6 +193,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/tabs/create` - Create and switch to a new tab
 - `POST /:id/tabs/close` - Close a tab and all its panes (`{ tabId }`)
 - `POST /:id/prompt` - Send a prompt to the session's agent
+- `POST /:id/panes/:paneId/prompt` - Submit a prompt to one pane's agent through herdr's `agent.prompt` (`{ text }`). Takes no pane control stream; 409 when the pane has no agent. The chat composer's route
 - `PUT /:id/theme` - Set session color theme
 - `PUT /:id/title` - Rename the session's herdr workspace. Labels need not be unique; the id is the workspace id and does not change
 - `PUT /:id/stt-prompt` - Set the words this session's speech is made of (leads its STT vocabulary bias)
@@ -290,7 +291,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **dashboard/PeerServerCard.tsx** - Per-peer server info card with system metrics
 
 **Chat** (`components/chat/`):
-- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. Reading the agent's transcript, it is **read-only**: two places to type into one pane make it ambiguous which one is listening, and it is never the one on screen
+- **ChatView.tsx** - Conversation-style view of the current pane, replacing the terminal area when "Chat" mode is selected, with a composer (`ChatComposer.tsx`) under it. It replaces the terminal rather than sitting beside it, so the composer is the one place on screen to type into that pane. The composer submits through `POST /:id/panes/:paneId/prompt` (herdr's `agent.prompt`), which takes no pane control stream. **It never shows a conversation it cannot name**: without the pane's agent session id there is no transcript to read, and the view says why instead (`utils/conversation-status.ts`: no agent, no session id from herdr, no transcript, nothing said yet, unreachable) - the newest transcript in the directory may be another session's. A peer's thread agent is read through `/api/peers/history/:peerId/...`
 
 **Keyboard / Input**:
 - **InputBar.tsx** - Persistent input bar above the terminal with prompt history, slash-command picker, image upload, sendable to the focused pane

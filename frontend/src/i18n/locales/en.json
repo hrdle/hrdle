@@ -363,7 +363,12 @@
     "reasonUnreachableTitle": "Could not read the conversation",
     "reasonUnreachableBody": "The server holding this conversation did not answer. If it runs on another machine, that machine may be offline. This retries on its own.",
     "reasonEmptyTitle": "Nothing said yet",
-    "reasonEmptyBody": "This session has no messages yet. They appear here as the conversation starts."
+    "reasonEmptyBody": "This session has no messages yet. They appear here as the conversation starts.",
+    "composerLabel": "Message to this pane's agent",
+    "composerPlaceholder": "Enter twice to send",
+    "composerSend": "Send",
+    "composerHistory": "Sent before",
+    "composerSendFailed": "Not sent: {{reason}}"
   },
   "keyboard": {
     "title": "Keyboard",
