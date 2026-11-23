@@ -98,7 +98,7 @@ export function SessionHistoryV2({
 		selectedSession,
 		conversation,
 		loadingConversation,
-		activeCcSessionIds,
+		activeConversationIds,
 		handleResume,
 		handleNavigate,
 		handleTap,
@@ -386,7 +386,7 @@ export function SessionHistoryV2({
 								// the list blank after the row set shrinks.
 								key={isSearchMode ? "search" : `flat:${facetKey(facet)}`}
 								rows={rows}
-								activeCcSessionIds={activeCcSessionIds}
+								activeConversationIds={activeConversationIds}
 								resumingId={resumingId}
 								onTap={handleTap}
 								onResume={handleResume}
@@ -419,6 +419,8 @@ export function SessionHistoryV2({
 					isLoading={loadingConversation}
 					onClose={closeModal}
 					onResume={() => handleResume(selectedSession)}
+					isActive={activeConversationIds.has(selectedSession.sessionId)}
+					onNavigate={() => handleNavigate(selectedSession)}
 					isResuming={resumingId === selectedSession.sessionId}
 					resumeError={resumeError}
 					scrollToBottom={true}

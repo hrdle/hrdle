@@ -6,7 +6,7 @@ import { HistoryRowV2 } from "./HistoryRowV2";
 
 interface VirtualizedHistoryListProps {
 	rows: HistoryListRow[];
-	activeCcSessionIds: Set<string>;
+	activeConversationIds: Set<string>;
 	resumingId: string | null;
 	onTap: (session: HistorySession, projectDirName?: string) => void;
 	onResume: (session: HistorySession) => void;
@@ -22,7 +22,7 @@ interface VirtualizedHistoryListProps {
  */
 export function VirtualizedHistoryList({
 	rows,
-	activeCcSessionIds,
+	activeConversationIds,
 	resumingId,
 	onTap,
 	onResume,
@@ -88,7 +88,7 @@ export function VirtualizedHistoryList({
 								) : (
 									<HistoryRowV2
 										session={row.session}
-										isActive={activeCcSessionIds.has(row.session.sessionId)}
+										isActive={activeConversationIds.has(row.session.sessionId)}
 										isResuming={resumingId === row.session.sessionId}
 										onTap={() => onTap(row.session, row.dirName)}
 										onResume={() => onResume(row.session)}
