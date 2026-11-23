@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.217] - 2026-11-24
+
+### Added
+- **The chat view has a composer.** Every agent pane's chat view can now be
+  written to, so a conversation can be read and answered without switching
+  back to the terminal. Enter on an empty line sends (so Japanese conversion
+  is confirmed with one Enter and sent with two), Ctrl/Cmd+Enter sends at
+  once, and sent prompts share their history with the terminal's input bar.
+  It goes through herdr's `agent.prompt`, so the pane stays live wherever
+  else it is open. Over the API: `POST /api/sessions/:id/panes/:paneId/prompt`.
+
+### Fixed
+- **History says Go to for a conversation that is running.** The
+  conversation opened from history always offered Resume, even when its row
+  said Go to; and a workspace's second agent pane, or a Codex, Grok, Kimi,
+  OpenCode or pi conversation, read as stopped. Resume still landed on the
+  open workspace, so no second agent was started - the button said the wrong
+  thing.
+
 ## [0.3.216] - 2026-11-24
 
 ### Changed
