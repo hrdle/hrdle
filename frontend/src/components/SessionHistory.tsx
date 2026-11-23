@@ -376,19 +376,8 @@ export function SessionHistory({
 				await refreshAllLoadedProjects();
 			}
 			setSelectedSession(null);
-		} catch (err) {
-			const error = err as Error & {
-				data?: { error?: string; existingSession?: string };
-			};
-			if (error.data?.error === "duplicate_working_dir") {
-				setResumeError(
-					t("session.duplicateWorkingDir", {
-						name: error.data.existingSession || "",
-					}),
-				);
-			} else {
-				setResumeError(t("session.resumeFailed"));
-			}
+		} catch {
+			setResumeError(t("session.resumeFailed"));
 		} finally {
 			setResumingId(null);
 		}

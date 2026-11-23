@@ -96,12 +96,27 @@ async function isDirectory(path: string): Promise<boolean> {
   }
 }
 
-export function findDuplicateAgentWorkingDirSession<T extends { agent?: string; currentCommand?: string; currentPath?: string }>(
-  sessions: T[],
-  agent: AgentProvider,
-  workingDir: string,
-): T | undefined {
-  return sessions.find(s => (s.agent ?? s.currentCommand) === agent && s.currentPath === workingDir);
+/**
+ * Whether a session remembered from before a restart is still running.
+ *
+ * Its workspace being here settles it, and so does its conversation running
+ * in any pane. The directory decides only for a session that never had a
+ * conversation id: one directory holds several sessions, so another one open
+ * there says nothing about this one.
+ */
+export function liveSessionMatcher(
+  live: Array<{ id: string; currentPath?: string; agentSessionId?: string; panes?: Array<{ agentSessionId?: string }> }>,
+): (lost: { id: string; currentPath?: string; agentSessionId?: string }) => boolean {
+  const ids = new Set(live.map((s) => s.id));
+  const paths = new Set(live.map((s) => s.currentPath).filter(Boolean));
+  const conversations = new Set(
+    live.flatMap((s) => [s.agentSessionId, ...(s.panes ?? []).map((p) => p.agentSessionId)]).filter(Boolean),
+  );
+  return (lost) => {
+    if (ids.has(lost.id)) return true;
+    if (lost.agentSessionId) return conversations.has(lost.agentSessionId);
+    return !!lost.currentPath && paths.has(lost.currentPath);
+  };
 }
 
 export function findWorkspaceRunningConversation<
@@ -543,13 +558,11 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
   claudeBackground.retain(liveClaudePanes);
 
   // Add lost sessions (existed before reboot but not in herdr now)
-  const activeIds = new Set(results.map(s => s.id));
-  const activePaths = new Set(results.map(s => s.currentPath).filter(Boolean));
   const lastKnown = await getLastKnownSessions();
   const lostSessions: LastKnownSession[] = [];
+  const stillHere = liveSessionMatcher(herdrSessions);
   for (const lost of lastKnown) {
-    // Skip if session ID still exists or if a new session is already running in the same directory
-    if (activeIds.has(lost.id) || (lost.currentPath && activePaths.has(lost.currentPath))) continue;
+    if (stillHere(lost)) continue;
     lostSessions.push(lost);
     results.push({
       id: lost.id,
@@ -664,14 +677,6 @@ sessions.post('/', async (c) => {
   // The label is free text and need not be unique: a session is addressed by
   // its workspace id, and herdr allows two workspaces the same label.
   const name = parsed.data.name ?? `session-${herdrSessions.length + 1}`;
-
-  // Guard: reject if the same agent is already running in the same directory
-  if (workingDir) {
-    const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, workingDir);
-    if (conflicting) {
-      return c.json({ error: 'duplicate_working_dir', existingSession: conflicting.name }, 409);
-    }
-  }
 
   const cwd = workingDir ? expandHome(workingDir) : undefined;
   if (cwd && !(await isDirectory(cwd))) {
@@ -979,9 +984,7 @@ sessions.post('/history/resume', async (c) => {
     const herdrSessions = await herdrService.listWorkspaces();
 
     // The conversation is already live in a workspace: that workspace is what
-    // was asked for. It also trips the directory guard below, by definition,
-    // so without this the one conversation that needs no resuming is the one
-    // that can never be reached from history.
+    // was asked for. Resuming it again would put one conversation in two panes.
     const open = findWorkspaceRunningConversation(herdrSessions, sessionId);
     if (open) {
       return c.json({
@@ -994,11 +997,6 @@ sessions.post('/history/resume', async (c) => {
       });
     }
 
-    // Guard: reject if the same agent is already running in the same directory
-    const conflicting = findDuplicateAgentWorkingDirSession(herdrSessions, agent, projectPath);
-    if (conflicting) {
-      return c.json({ error: 'duplicate_working_dir', existingSession: conflicting.name }, 409);
-    }
     let sessionName = projectName;
     let counter = 1;
     while (herdrSessions.some(s => s.name === sessionName)) {

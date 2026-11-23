@@ -115,7 +115,6 @@
     },
     "startingAgent": "Starting agent...",
     "openWorkspace": "Open workspace",
-    "duplicateWorkingDir": "A session for the same agent is already running in this directory ({{name}})",
     "resumeFailed": "Failed to resume session",
     "history": "History",
     "longPressHint": "Long press to delete",

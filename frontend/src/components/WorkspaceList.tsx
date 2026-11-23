@@ -2205,18 +2205,7 @@ export function WorkspaceList({
 			}
 		} catch (err) {
 			if (attempt !== createAttemptRef.current) return;
-			const error = err as Error & {
-				data?: { error?: string; existingSession?: string };
-			};
-			if (error.data?.error === "duplicate_working_dir") {
-				setCreateError(
-					t("session.duplicateWorkingDir", {
-						name: error.data.existingSession || "",
-					}),
-				);
-			} else {
-				setCreateError(error.message || t("common.error"));
-			}
+			setCreateError((err as Error).message || t("common.error"));
 		}
 	};
 
