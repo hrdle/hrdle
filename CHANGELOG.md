@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.218] - 2026-11-24
+
+### Added
+- **Images in the chat composer.** Images can be attached to a chat message
+  from the image button or by pasting from the clipboard. They show as
+  thumbnails above the input while uploading, each with a button to remove
+  it, and a message can be images alone. Each image is pasted into the pane
+  on its own, so Claude Code takes it as an attachment rather than as a path
+  written in the text. On a peer, images are uploaded to that machine.
+  `POST /api/sessions/:id/panes/:paneId/prompt` takes `images` (absolute
+  paths, up to 10).
+
 ## [0.3.217] - 2026-11-24
 
 ### Added
