@@ -771,6 +771,12 @@ interface ConversationViewerProps {
 	isLoading: boolean;
 	onClose: () => void;
 	onResume?: () => void;
+	/**
+	 * Go to the workspace this conversation is running in. Given together with
+	 * `isActive`, the footer button goes there instead of resuming: the
+	 * conversation is not stopped, so there is nothing to resume.
+	 */
+	onNavigate?: () => void;
 	isResuming?: boolean;
 	/**
 	 * Why the last resume did not happen. Shown here because this view covers
@@ -792,6 +798,7 @@ export function ConversationViewer({
 	isLoading,
 	onClose,
 	onResume,
+	onNavigate,
 	isResuming,
 	resumeError,
 	scrollToBottom = false,
@@ -1111,15 +1118,25 @@ export function ConversationViewer({
 							</p>
 						)}
 					</div>
-					{onResume && (
+					{isActive && onNavigate ? (
 						<button
 							type="button"
-							onClick={onResume}
-							disabled={isResuming}
-							className="ml-2 shrink-0 rounded-lg bg-cv-accent px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+							onClick={onNavigate}
+							className="ml-2 shrink-0 rounded-lg bg-cv-accent px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
 						>
-							{isResuming ? t("session.resuming") : t("session.resume")}
+							{t("session.navigate")}
 						</button>
+					) : (
+						onResume && (
+							<button
+								type="button"
+								onClick={onResume}
+								disabled={isResuming}
+								className="ml-2 shrink-0 rounded-lg bg-cv-accent px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+							>
+								{isResuming ? t("session.resuming") : t("session.resume")}
+							</button>
+						)
 					)}
 				</div>
 			)}

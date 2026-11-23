@@ -7,13 +7,11 @@ import type {
 } from "../../../shared/types";
 import type { useSessionHistory } from "./useSessionHistory";
 import { authFetch } from "../services/api";
+import { type ConversationHolder, liveConversations } from "../utils/live-conversations";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
-// Active session carries the Claude Code session id used to match history rows.
-interface ActiveSession extends SessionResponse {
-	ccSessionId?: string;
-}
+interface ActiveSession extends SessionResponse, ConversationHolder {}
 
 interface UseHistoryActionsArgs {
 	activeSessions: ActiveSession[];
@@ -66,38 +64,13 @@ export function useHistoryActions({
 	const [conversation, setConversation] = useState<ConversationMessage[]>([]);
 	const [loadingConversation, setLoadingConversation] = useState(false);
 
-	const activeCcSessionIds = useMemo(() => {
-		const ids = new Set<string>();
-		for (const s of activeSessions) {
-			if (s.ccSessionId) ids.add(s.ccSessionId);
-		}
-		return ids;
-	}, [activeSessions]);
-
-	const sessionsByCcId = useMemo(() => {
-		const map = new Map<string, SessionResponse[]>();
-		for (const s of activeSessions) {
-			if (s.ccSessionId) {
-				const list = map.get(s.ccSessionId) || [];
-				list.push(s);
-				map.set(s.ccSessionId, list);
-			}
-		}
-		return map;
-	}, [activeSessions]);
+	const live = useMemo(() => liveConversations(activeSessions), [activeSessions]);
+	const activeConversationIds = useMemo(() => new Set(live.keys()), [live]);
 
 	const findActiveSession = useCallback(
-		(historySession: HistorySession): SessionResponse | undefined => {
-			const candidates = sessionsByCcId.get(historySession.sessionId);
-			if (!candidates || candidates.length === 0) return undefined;
-			if (candidates.length === 1) return candidates[0];
-			const projectBasename =
-				historySession.projectPath.split("/").pop() || "";
-			return (
-				candidates.find((s) => s.name === projectBasename) || candidates[0]
-			);
-		},
-		[sessionsByCcId],
+		(historySession: HistorySession): SessionResponse | undefined =>
+			live.get(historySession.sessionId),
+		[live],
 	);
 
 	const handleResume = useCallback(
@@ -146,6 +119,7 @@ export function useHistoryActions({
 				selectRef.current(activeSession);
 				if (resumedRef.current) resumedRef.current();
 			}
+			setSelectedSession(null);
 		},
 		[findActiveSession],
 	);
@@ -180,7 +154,7 @@ export function useHistoryActions({
 		selectedSession,
 		conversation,
 		loadingConversation,
-		activeCcSessionIds,
+		activeConversationIds,
 		findActiveSession,
 		handleResume,
 		handleNavigate,

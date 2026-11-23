@@ -24,11 +24,10 @@ import { authFetch } from "../services/api";
 import { agentBadge } from "../utils/agentDisplay";
 import { formatRelativeTime } from "../utils/format";
 import { ConversationViewer } from "./ConversationViewer";
+import { type ConversationHolder, liveConversations } from "../utils/live-conversations";
 
 // Extended session type with ccSessionId
-interface ActiveSession extends SessionResponse {
-	ccSessionId?: string;
-}
+interface ActiveSession extends SessionResponse, ConversationHolder {}
 
 interface SessionHistoryProps {
 	onSessionResumed?: () => void;
@@ -171,7 +170,7 @@ function ProjectGroupItem({
 	onResume,
 	onNavigate,
 	resumingId,
-	activeCcSessionIds,
+	activeConversationIds,
 }: {
 	project: ProjectInfo;
 	sessions: HistorySession[] | undefined;
@@ -181,7 +180,7 @@ function ProjectGroupItem({
 	onResume: (session: HistorySession) => void;
 	onNavigate: (session: HistorySession) => void;
 	resumingId: string | null;
-	activeCcSessionIds: Set<string>;
+	activeConversationIds: Set<string>;
 }) {
 	const { t } = useTranslation();
 	const [isExpanded, setIsExpanded] = useState(false);
@@ -256,7 +255,7 @@ function ProjectGroupItem({
 									onResume={() => onResume(session)}
 									onNavigate={() => onNavigate(session)}
 									isResuming={resumingId === session.sessionId}
-									isActive={activeCcSessionIds.has(session.sessionId)}
+									isActive={activeConversationIds.has(session.sessionId)}
 								/>
 							))}
 						</div>
@@ -306,40 +305,10 @@ export function SessionHistory({
 	const [conversation, setConversation] = useState<ConversationMessage[]>([]);
 	const [loadingConversation, setLoadingConversation] = useState(false);
 
-	// Create a Set of active ccSessionIds for quick lookup
-	const activeCcSessionIds = useMemo(() => {
-		const ids = new Set<string>();
-		for (const s of activeSessions) {
-			if (s.ccSessionId) {
-				ids.add(s.ccSessionId);
-			}
-		}
-		return ids;
-	}, [activeSessions]);
-
-	// Create a Map from ccSessionId to SessionResponse for navigation
-	const sessionsByCcId = useMemo(() => {
-		const map = new Map<string, SessionResponse[]>();
-		for (const s of activeSessions) {
-			if (s.ccSessionId) {
-				const list = map.get(s.ccSessionId) || [];
-				list.push(s);
-				map.set(s.ccSessionId, list);
-			}
-		}
-		return map;
-	}, [activeSessions]);
-
-	const findActiveSession = (
-		historySession: HistorySession,
-	): SessionResponse | undefined => {
-		const candidates = sessionsByCcId.get(historySession.sessionId);
-		if (!candidates || candidates.length === 0) return undefined;
-		if (candidates.length === 1) return candidates[0];
-
-		const projectBasename = historySession.projectPath.split("/").pop() || "";
-		return candidates.find((s) => s.name === projectBasename) || candidates[0];
-	};
+	const live = useMemo(() => liveConversations(activeSessions), [activeSessions]);
+	const activeConversationIds = useMemo(() => new Set(live.keys()), [live]);
+	const findActiveSession = (historySession: HistorySession) =>
+		live.get(historySession.sessionId);
 
 	const handleResume = async (session: HistorySession) => {
 		setResumingId(session.sessionId);
@@ -391,6 +360,7 @@ export function SessionHistory({
 				onSessionResumed();
 			}
 		}
+		setSelectedSession(null);
 	};
 
 	const handleTap = async (session: HistorySession, projectDirName: string) => {
@@ -531,7 +501,7 @@ export function SessionHistory({
 									onResume={() => handleResume(session)}
 									onNavigate={() => handleNavigate(session)}
 									isResuming={resumingId === session.sessionId}
-									isActive={activeCcSessionIds.has(session.sessionId)}
+									isActive={activeConversationIds.has(session.sessionId)}
 								/>
 							))}
 						</div>
@@ -558,7 +528,7 @@ export function SessionHistory({
 								onResume={handleResume}
 								onNavigate={handleNavigate}
 								resumingId={resumingId}
-								activeCcSessionIds={activeCcSessionIds}
+								activeConversationIds={activeConversationIds}
 							/>
 						);
 					})
@@ -578,6 +548,8 @@ export function SessionHistory({
 					isLoading={loadingConversation}
 					onClose={() => setSelectedSession(null)}
 					onResume={() => handleResume(selectedSession)}
+					isActive={activeConversationIds.has(selectedSession.sessionId)}
+					onNavigate={() => handleNavigate(selectedSession)}
 					isResuming={resumingId === selectedSession.sessionId}
 					resumeError={resumeError}
 					scrollToBottom={true}
