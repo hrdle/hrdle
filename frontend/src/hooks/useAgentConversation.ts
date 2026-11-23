@@ -4,6 +4,10 @@ import {
 	agentSupportsConversationMetadata,
 	threadAgentOf,
 } from "../../../shared/types";
+import {
+	type ConversationStatus,
+	conversationStatus,
+} from "../utils/conversation-status";
 import { useConversationStream } from "./useConversationStream";
 import { useThreadConversation } from "./useThreadConversation";
 
@@ -18,25 +22,18 @@ export interface UseAgentConversationOptions {
 	 * panes, and then the workspace id alone names two conversations.
 	 */
 	agentSessionId: string | null | undefined;
-	enabled?: boolean;
 }
-
-type AgentConversationError = "missing-agent" | "unsupported-agent";
 
 export interface UseAgentConversationResult {
 	messages: ConversationMessage[];
-	isReady: boolean;
 	/**
 	 * Identifier shown in the conversation header subtitle (e.g. last 8 chars).
 	 * Claude → ccSessionId resolved over the WebSocket; Codex → the rollout
 	 * thread id; null otherwise.
 	 */
 	conversationId: string | null;
-	/**
-	 * Set when no provider is wired for the requested `agent` value. Consumers
-	 * should render an inline error rather than a blank conversation.
-	 */
-	error: AgentConversationError | null;
+	/** What the view can show; anything but loading/ready carries a reason. */
+	status: ConversationStatus;
 }
 
 /**
@@ -46,48 +43,62 @@ export interface UseAgentConversationResult {
  * (`supportsConversationMetadata`) stream over the WebSocket; thread agents
  * (Codex, Grok, ...) poll their transcript over HTTP. Adding a provider to
  * `AGENT_PROVIDERS` wires it up here with no further edits.
+ *
+ * Neither reader is started without the pane's agent session id: the server
+ * has nothing to name the conversation by, and the view says so instead.
  */
 export function useAgentConversation({
 	agent,
 	sessionId,
 	agentSessionId,
-	enabled = true,
 }: UseAgentConversationOptions): UseAgentConversationResult {
 	const isStream = agentSupportsConversationMetadata(agent);
 	const threadAgent = threadAgentOf(agent);
+	const hasId = !!agentSessionId;
 	const claude = useConversationStream({
 		sessionId,
 		agentSessionId,
-		enabled: enabled && isStream,
+		enabled: isStream && hasId,
 	});
 	const thread = useThreadConversation({
 		agent: threadAgent,
 		threadId: agentSessionId,
-		enabled: enabled && !!threadAgent,
+		enabled: !!threadAgent && hasId,
 	});
 
 	if (isStream) {
 		return {
 			messages: claude.messages,
-			isReady: claude.isReady,
 			conversationId: claude.ccSessionId,
-			error: null,
+			status: conversationStatus({
+				agent,
+				agentSessionId,
+				isReady: claude.isReady,
+				messageCount: claude.messages.length,
+				found: claude.isReady ? claude.ccSessionId !== null : undefined,
+			}),
 		};
 	}
 	if (threadAgent) {
 		return {
 			messages: thread.messages,
-			isReady: thread.isReady,
 			conversationId: agentSessionId ?? null,
-			error: null,
+			status: conversationStatus({
+				agent,
+				agentSessionId,
+				isReady: thread.isReady,
+				messageCount: thread.messages.length,
+			}),
 		};
 	}
-	// `isReady=true` so consumers fall through to their error state instead
-	// of showing a loading skeleton that would never resolve.
 	return {
 		messages: [],
-		isReady: true,
 		conversationId: null,
-		error: agent === undefined ? "missing-agent" : "unsupported-agent",
+		status: conversationStatus({
+			agent,
+			agentSessionId,
+			isReady: true,
+			messageCount: 0,
+		}),
 	};
 }

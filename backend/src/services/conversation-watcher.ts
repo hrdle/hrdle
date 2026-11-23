@@ -32,21 +32,17 @@ export class ConversationWatcher {
   /**
    * Start watching a conversation jsonl.
    *
-   * `agentSessionId` is the pane's own Claude session, and when it is given it
-   * decides the file. Resolving by directory alone picks the newest transcript
-   * under that path, which is the right answer only while a workspace has one
-   * agent in it — with two panes it showed whichever had written last, and
-   * that is a different conversation from the one on screen.
+   * The pane's own Claude session id is the only thing that names the file.
+   * Without one there is nothing to watch: the newest transcript under the
+   * working directory belongs to whichever agent there wrote last, which with
+   * two agents in one directory is a different conversation from the one on
+   * screen. An id that resolves to nothing shows nothing for the same reason -
+   * the lookup already searches every project, so anything else it could find
+   * would be another pane's conversation presented as this one's.
    *
-   * A session id that resolves to nothing (a transcript not written yet, an id
-   * herdr reports for an agent that never started one) shows nothing. It used
-   * to fall back to the directory on the theory that a conversation from the
-   * right directory beats an empty screen — but the lookup already searches
-   * every project for the id, so what is left to fall back to is another
-   * pane's conversation presented as this one's. An empty screen is honest.
-   *
-   * Returns the initial set of conversation messages (may be empty if no
-   * session exists yet).
+   * Returns the initial set of conversation messages (empty when there is no
+   * id or no transcript; `getCcSessionId()` tells those apart from an empty
+   * transcript).
    */
   async start(workingDir: string, agentSessionId?: string): Promise<ConversationMessage[]> {
     // Re-entrant start: close any previous fs.watch before re-initialising.
@@ -55,9 +51,8 @@ export class ConversationWatcher {
     // conversation. Listeners are kept — they belong to the subscriber.
     this.closeWatcher();
 
-    const session = agentSessionId
-      ? await claudeCodeService.getSessionById(agentSessionId, workingDir)
-      : await claudeCodeService.getSessionForPath(workingDir);
+    if (!agentSessionId) return [];
+    const session = await claudeCodeService.getSessionById(agentSessionId, workingDir);
     if (!session?.sessionId) {
       return [];
     }

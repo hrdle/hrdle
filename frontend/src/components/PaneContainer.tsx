@@ -370,18 +370,20 @@ function TerminalPane({
 		}
 	}, [conversationModeKey]);
 
-	// Fall back to terminal view only if pane data has loaded AND no supported
-	// agent is running on the active pane. Without the loaded check, the very
-	// first render after remount (e.g. after a split) sees panes=undefined and
-	// would wrongly clear chat mode.
+	// Fall back to terminal view only if pane data has loaded AND no agent is
+	// running on the active pane. Without the loaded check, the very first
+	// render after remount (e.g. after a split) sees panes=undefined and would
+	// wrongly clear chat mode.
+	//
+	// An agent whose session id herdr has not reported still gets the chat
+	// view: it says why it cannot show the conversation, where a disabled
+	// button only said "No agent is running", which was not true.
 	const controlledPaneId = controlModeContext.getControlConfig(paneId)?.paneId;
 	const activeTmuxPane =
 		session?.panes?.find((p) => p.paneId === controlledPaneId) ??
 		session?.panes?.find((p) => p.isActive) ??
 		soleVisiblePane(session);
-	const conversationAvailable = !!(
-		activeTmuxPane?.agent && activeTmuxPane.agentSessionId
-	);
+	const conversationAvailable = !!activeTmuxPane?.agent;
 	const panesLoaded = !!session?.panes;
 	useEffect(() => {
 		if (!panesLoaded) return;
@@ -527,8 +529,6 @@ function TerminalPane({
 								? toHomeShortPath(session.currentPath)
 								: undefined
 						}
-						inline
-						enabled
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
 					/>
@@ -841,8 +841,6 @@ function TerminalPane({
 						sessionId={sessionTarget.id}
 						title={t("conversation.history")}
 						subtitle={session?.name}
-						inline={true}
-						enabled={showConversation}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
 					/>

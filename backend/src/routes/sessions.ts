@@ -334,7 +334,7 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
   const livePaneKeys = new Set<string>();
   const liveClaudePanes = new Set<string>();
   const results = await Promise.all(herdrSessions.map(async (s) => {
-    let ccSession: Awaited<ReturnType<typeof claudeCodeService.getSessionForPath>> | undefined;
+    let ccSession: Awaited<ReturnType<typeof claudeCodeService.getSessionById>> | undefined;
     const threadAgent = threadAgentOf(s.agent ?? s.currentCommand);
     const agentThread = threadAgent && s.agentSessionId
       ? threadsByAgent.get(threadAgent)?.get(s.agentSessionId)
@@ -386,20 +386,6 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       durationMinutes = Math.round((Date.now() - modified.getTime()) / 60000);
     }
 
-    // ccSessionId is needed for hook-event matching even when the session was
-    // resolved via parent-directory traversal (e.g. a `claude` invocation with
-    // no project dir yet). But user-visible content (recap / firstPrompt /
-    // summary) must NOT leak from an ancestor project — gate it on
-    // ccSession.projectPath === s.currentPath.
-    //
-    // Unless the id itself matched: an id is unique across every project, so a
-    // transcript found by id is this pane's own wherever it turned up. Gating
-    // that by path is how a session whose directory was renamed mid-flight lost
-    // its recap — the pane's cwd had stopped naming the project it started in.
-    const isExactPathMatch =
-      !!ccSession &&
-      (ccSession.matchedById || (!!s.currentPath && ccSession.projectPath === s.currentPath));
-
     // Same order for every agent: herdr watches the pane, a hook only reports
     // the moment it fired. Thread agents used to read hooks first, which left a
     // Kimi pane at `completed` for a whole turn — its only registered hook is
@@ -436,16 +422,16 @@ export async function buildSessionsList(): Promise<ExtendedSessionResponse[]> {
       agent: s.agent,
       currentPath: s.currentPath,
       waitingToolName: includeClaudeInfo ? effectiveWaitingToolName : includeThreadInfo ? hookToolName : undefined,
-      ccSummary: includeClaudeInfo ? (isExactPathMatch ? ccSession?.summary : undefined) : agentThread?.title,
-      ccFirstPrompt: includeClaudeInfo ? (isExactPathMatch ? ccSession?.firstPrompt : undefined) : agentThread?.firstPrompt,
-      ccRecap: includeClaudeInfo && isExactPathMatch ? ccSession?.lastRecap?.content : agentThread?.recap,
-      ccRecapAt: includeClaudeInfo && isExactPathMatch ? ccSession?.lastRecap?.timestamp : agentThread?.recapAt,
+      ccSummary: includeClaudeInfo ? ccSession?.summary : agentThread?.title,
+      ccFirstPrompt: includeClaudeInfo ? ccSession?.firstPrompt : agentThread?.firstPrompt,
+      ccRecap: includeClaudeInfo ? ccSession?.lastRecap?.content : agentThread?.recap,
+      ccRecapAt: includeClaudeInfo ? ccSession?.lastRecap?.timestamp : agentThread?.recapAt,
       // The two branches above are different kinds of text, and this is the
       // only place that knows which one was taken: Claude's is a summary, a
       // thread agent's is a copy of its own latest message (`AgentThread.recap`
       // says so). A reader that cannot tell them apart puts the copy above the
       // message it copies.
-      ccRecapKind: (includeClaudeInfo && isExactPathMatch
+      ccRecapKind: (includeClaudeInfo
         ? (ccSession?.lastRecap ? 'summary' : undefined)
         : (agentThread?.recap ? 'last-message' : undefined)) as 'summary' | 'last-message' | undefined,
       indicatorState: sessionIndicatorState,
