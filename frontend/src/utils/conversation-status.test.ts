@@ -55,6 +55,22 @@ describe("conversationStatus", () => {
 		).toBe("not-found");
 	});
 
+	test("a failed read is not mistaken for an empty conversation", () => {
+		const peerThread = {
+			agent: "codex",
+			agentSessionId: "019a",
+			isReady: true,
+			messageCount: 0,
+		};
+		expect(conversationStatus({ ...peerThread, failed: true })).toBe(
+			"unreachable",
+		);
+		// Messages already on screen stay there through a failed poll.
+		expect(
+			conversationStatus({ ...peerThread, failed: true, messageCount: 4 }),
+		).toBe("ready");
+	});
+
 	test("a transcript with nothing in it yet is empty", () => {
 		expect(conversationStatus({ ...base, messageCount: 0 })).toBe("empty");
 		expect(

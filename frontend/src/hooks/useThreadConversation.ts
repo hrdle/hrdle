@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { AgentProvider, ConversationMessage } from "../../../shared/types";
+import {
+	type AgentProvider,
+	type ConversationMessage,
+	LOCAL_PEER_ID,
+} from "../../../shared/types";
 import { authFetch } from "../services/api";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -9,6 +13,9 @@ interface UseThreadConversationOptions {
 	agent: AgentProvider | undefined;
 	/** The agent's own session/thread id. */
 	threadId: string | undefined | null;
+	/** The peer whose agent this is. Its transcript is only on that machine,
+	 *  so the request goes through the local hub's peer forwarding. */
+	peerId?: string;
 	enabled?: boolean;
 	/** Refresh interval in ms. Default 5000. */
 	pollIntervalMs?: number;
@@ -17,6 +24,9 @@ interface UseThreadConversationOptions {
 interface UseThreadConversationResult {
 	messages: ConversationMessage[];
 	isReady: boolean;
+	/** The last request failed (a peer offline, the server down). An empty
+	 *  list then means nothing was read, not that nothing was said. */
+	failed: boolean;
 }
 
 /**
@@ -28,11 +38,13 @@ interface UseThreadConversationResult {
 export function useThreadConversation({
 	agent,
 	threadId,
+	peerId,
 	enabled = true,
 	pollIntervalMs = 5000,
 }: UseThreadConversationOptions): UseThreadConversationResult {
 	const [messages, setMessages] = useState<ConversationMessage[]>([]);
 	const [isReady, setIsReady] = useState(false);
+	const [failed, setFailed] = useState(false);
 
 	useEffect(() => {
 		// Per-effect cancellation flag. A shared ref would be reset when the
@@ -41,6 +53,7 @@ export function useThreadConversation({
 		let cancelled = false;
 		setMessages([]);
 		setIsReady(false);
+		setFailed(false);
 
 		if (!enabled || !threadId || !agent) {
 			return;
@@ -48,15 +61,21 @@ export function useThreadConversation({
 
 		const fetchOnce = async () => {
 			try {
-				const url = `${API_BASE}/api/sessions/history/${threadId}/conversation?agent=${agent}`;
+				const path =
+					peerId && peerId !== LOCAL_PEER_ID
+						? `/api/peers/history/${encodeURIComponent(peerId)}/${encodeURIComponent(threadId)}/conversation`
+						: `/api/sessions/history/${encodeURIComponent(threadId)}/conversation`;
+				const url = `${API_BASE}${path}?agent=${agent}`;
 				const response = await authFetch(url, { cache: "no-store" });
 				if (!response.ok) throw new Error(`status ${response.status}`);
 				const data = await response.json();
 				if (cancelled) return;
 				setMessages(data.messages ?? []);
+				setFailed(false);
 			} catch (err) {
-				if (!cancelled)
-					console.error(`Failed to fetch ${agent} conversation:`, err);
+				if (cancelled) return;
+				setFailed(true);
+				console.error(`Failed to fetch ${agent} conversation:`, err);
 			} finally {
 				if (!cancelled) setIsReady(true);
 			}
@@ -69,7 +88,7 @@ export function useThreadConversation({
 			cancelled = true;
 			window.clearInterval(id);
 		};
-	}, [agent, threadId, enabled, pollIntervalMs]);
+	}, [agent, threadId, peerId, enabled, pollIntervalMs]);
 
-	return { messages, isReady };
+	return { messages, isReady, failed };
 }

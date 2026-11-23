@@ -22,6 +22,8 @@ export interface UseAgentConversationOptions {
 	 * panes, and then the workspace id alone names two conversations.
 	 */
 	agentSessionId: string | null | undefined;
+	/** The peer the session runs on, when it is not this machine. */
+	peerId?: string;
 }
 
 export interface UseAgentConversationResult {
@@ -51,6 +53,7 @@ export function useAgentConversation({
 	agent,
 	sessionId,
 	agentSessionId,
+	peerId,
 }: UseAgentConversationOptions): UseAgentConversationResult {
 	const isStream = agentSupportsConversationMetadata(agent);
 	const threadAgent = threadAgentOf(agent);
@@ -63,6 +66,7 @@ export function useAgentConversation({
 	const thread = useThreadConversation({
 		agent: threadAgent,
 		threadId: agentSessionId,
+		peerId,
 		enabled: !!threadAgent && hasId,
 	});
 
@@ -88,6 +92,7 @@ export function useAgentConversation({
 				agentSessionId,
 				isReady: thread.isReady,
 				messageCount: thread.messages.length,
+				failed: thread.failed,
 			}),
 		};
 	}
