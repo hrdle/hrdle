@@ -24,6 +24,9 @@ import {
 } from './herdr-client';
 import { herdrControlSessions } from './herdr-control';
 
+/** How long an agent TUI is given to turn a pasted image path into an attachment. */
+const IMAGE_PASTE_SETTLE_MS = 600;
+
 interface HerdrPaneInfo {
   paneId: string;
   command: string;
@@ -530,6 +533,46 @@ export class HerdrService {
   }
 
   /**
+   * Submit a prompt to the agent in one pane, the way herdr submits one.
+   *
+   * `agent.prompt` honours the pane's own bracketed-paste mode and goes over
+   * the RPC socket, so it takes no pane control stream - the pane can stay on
+   * screen in herdr, or in another Hrdle, while this writes to it.
+   *
+   * Images go in first, each pasted on its own: an agent TUI turns a paste
+   * that is exactly a path to an image into an attachment (`[Image #1]` in
+   * Claude Code), and leaves a path pasted together with other text as text.
+   * The prompt that follows submits them with it.
+   *
+   * Returns `missing` when the session cannot be resolved and `no-agent` when
+   * herdr reports no agent in the pane - checked before anything is pasted, so
+   * a shell is not handed image paths.
+   */
+  async promptPane(
+    sessionId: string,
+    paneId: string,
+    text: string,
+    images: string[] = [],
+  ): Promise<'ok' | 'missing' | 'no-agent'> {
+    const ws = await this.resolveWorkspace(sessionId);
+    if (!ws) return 'missing';
+    const target = toHerdrPaneId(ws.workspace_id, paneId);
+    const { agents = [] } = await herdrRpc<{ agents?: Array<{ pane_id?: string; agent?: string }> }>(
+      'agent.list',
+      {},
+    );
+    if (!agents.some((a) => a.pane_id === target && a.agent)) return 'no-agent';
+    for (const path of images) {
+      await herdrRpc('pane.send_text', { pane_id: target, text: `\x1b[200~${path}\x1b[201~` });
+      // The TUI reads the file to make the attachment; text arriving before it
+      // has would land in front of the placeholder rather than after it.
+      await new Promise((r) => setTimeout(r, IMAGE_PASTE_SETTLE_MS));
+    }
+    await herdrRpc('agent.prompt', { target, text: images.length ? ` ${text}` : text });
+    return 'ok';
+  }
+
+  /**
    * Why an address resolves to nothing, for the paths that deliver something.
    *
    * `missing` and `ambiguous` are both "it did not arrive", but they are not
@@ -538,22 +581,6 @@ export class HerdrService {
    * Session not found is how the caller ends up retyping a name that will
    * never work.
    */
-  /**
-   * Submit a prompt to the agent in one pane, the way herdr submits one.
-   *
-   * `agent.prompt` honours the pane's own bracketed-paste mode and goes over
-   * the RPC socket, so it takes no pane control stream - the pane can stay on
-   * screen in herdr, or in another Hrdle, while this writes to it. Returns
-   * false when the session cannot be resolved; herdr refusing (no agent in the
-   * pane) throws.
-   */
-  async promptPane(sessionId: string, paneId: string, text: string): Promise<boolean> {
-    const ws = await this.resolveWorkspace(sessionId);
-    if (!ws) return false;
-    await herdrRpc('agent.prompt', { target: toHerdrPaneId(ws.workspace_id, paneId), text });
-    return true;
-  }
-
   async addressStatus(sessionId: string): Promise<'ok' | 'ambiguous' | 'missing'> {
     try {
       const workspaces = await listWorkspaces();

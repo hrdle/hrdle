@@ -365,7 +365,10 @@
     "composerPlaceholder": "Enter 2 回で送信",
     "composerSend": "送信",
     "composerHistory": "送信履歴",
-    "composerSendFailed": "送れませんでした: {{reason}}"
+    "composerSendFailed": "送れませんでした: {{reason}}",
+    "composerAttachImage": "画像を添付",
+    "composerRemoveImage": "画像を外す",
+    "composerUploadFailed": "失敗"
   },
   "keyboard": {
     "title": "キーボード",
