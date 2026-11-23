@@ -1645,6 +1645,24 @@ sessions.post('/:id/panes/:paneId/answer', async (c) => {
 // POST /sessions/:id/prompt - Send a prompt text to the session's active pane.
 // Optional `paneId` targets a specific pane (glasses relay reply routing):
 // in a multi-pane workspace the blocked pane is not necessarily the active one.
+/**
+ * A path is pasted into the pane as it is, so it may not carry anything a
+ * terminal would act on - a newline would submit, an escape would end the
+ * paste early.
+ */
+const PastedPathSchema = z
+  .string()
+  .min(1)
+  .max(1024)
+  .refine((p) => p.startsWith('/') && ![...p].some((ch) => ch.charCodeAt(0) < 0x20 || ch.charCodeAt(0) === 0x7f), 'Invalid image path');
+
+export const PanePromptSchema = z
+  .object({
+    text: z.string().default(''),
+    images: z.array(PastedPathSchema).max(10).default([]),
+  })
+  .refine((b) => b.text.trim().length > 0 || b.images.length > 0, 'text or images is required');
+
 // POST /sessions/:id/panes/:paneId/prompt - Submit a prompt to one pane's agent
 // The chat view's composer. Unlike /prompt it names the pane - a workspace can
 // hold two agents - and goes through herdr's agent.prompt rather than a pane
@@ -1663,11 +1681,11 @@ sessions.post('/:id/panes/:paneId/prompt', async (c) => {
   if (!PaneIdSchema.safeParse(paneId).success) {
     return c.json({ error: 'Invalid pane ID' }, 400);
   }
-  const body = await c.req.json().catch(() => ({}));
-  const text = typeof body.text === 'string' ? body.text : '';
-  if (!text.trim()) {
-    return c.json({ error: 'text is required' }, 400);
+  const parsed = PanePromptSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }, 400);
   }
+  const { text, images } = parsed.data;
 
   const status = await herdrService.addressStatus(id);
   if (status !== 'ok') {
@@ -1680,12 +1698,11 @@ sessions.post('/:id/panes/:paneId/prompt', async (c) => {
   }
 
   try {
-    if (!(await herdrService.promptPane(id, paneId, text))) {
-      return c.json({ error: 'Session not found' }, 404);
-    }
+    const result = await herdrService.promptPane(id, paneId, text, images);
+    if (result === 'missing') return c.json({ error: 'Session not found' }, 404);
+    if (result === 'no-agent') return c.json({ error: 'No agent is running in this pane' }, 409);
     return c.json({ success: true, paneId });
   } catch (error) {
-    // herdr refuses a pane with no agent in it; say so rather than 500.
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ error: `The pane's agent did not take the prompt: ${message}` }, 409);
   }

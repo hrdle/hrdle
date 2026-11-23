@@ -1,10 +1,22 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LOCAL_PEER_ID } from "../../../../shared/types";
 import { authFetch } from "../../services/api";
 import { loadInputHistory, pushInputHistory } from "../../utils/input-history";
+import { uploadImage } from "../../utils/upload-image";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
+
+/** An image picked for the next prompt: shown at once, sent once uploaded. */
+interface Attachment {
+	key: string;
+	previewUrl: string;
+	/** Where the upload landed, on the machine the pane is on. */
+	path?: string;
+	error?: string;
+}
+
+const IMAGE_TYPES = "image/png,image/jpeg,image/gif,image/webp";
 
 interface ChatComposerProps {
 	sessionId: string;
@@ -28,6 +40,10 @@ function promptUrl(sessionId: string, paneId: string, peerId?: string): string {
  * a person typing - Enter on an empty last line sends, so a newline is one
  * Enter and a send is two, which is what Japanese input needs to confirm a
  * conversion without sending it. Ctrl/Cmd+Enter sends at once.
+ *
+ * Images upload the moment they are picked or pasted, to the machine the pane
+ * is on, and show as thumbnails until the prompt goes; the server pastes each
+ * one into the pane ahead of the text.
  */
 export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 	const { t } = useTranslation();
@@ -36,25 +52,74 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 	const [error, setError] = useState<string | null>(null);
 	const [history, setHistory] = useState<string[]>(loadInputHistory);
 	const [showHistory, setShowHistory] = useState(false);
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	// Object URLs hold the image in memory until revoked.
+	const attachmentsRef = useRef(attachments);
+	attachmentsRef.current = attachments;
+	useEffect(
+		() => () => {
+			for (const a of attachmentsRef.current) URL.revokeObjectURL(a.previewUrl);
+		},
+		[],
+	);
+
+	const attach = (files: Iterable<File>) => {
+		for (const file of files) {
+			if (!file.type.startsWith("image/")) continue;
+			const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+			setAttachments((prev) => [
+				...prev,
+				{ key, previewUrl: URL.createObjectURL(file) },
+			]);
+			void uploadImage(file, peerId).then((result) => {
+				setAttachments((prev) =>
+					prev.map((a) =>
+						a.key === key
+							? result.ok
+								? { ...a, path: result.path }
+								: { ...a, error: result.error ?? "upload failed" }
+							: a,
+					),
+				);
+			});
+		}
+	};
+
+	const detach = (key: string) => {
+		setAttachments((prev) => {
+			const gone = prev.find((a) => a.key === key);
+			if (gone) URL.revokeObjectURL(gone.previewUrl);
+			return prev.filter((a) => a.key !== key);
+		});
+	};
+
+	const uploading = attachments.some((a) => !a.path && !a.error);
+	const images = attachments.flatMap((a) => (a.path ? [a.path] : []));
+	const canSend =
+		!sending && !uploading && (text.trim().length > 0 || images.length > 0);
 
 	const send = async (raw: string) => {
 		const prompt = raw.replace(/\n+$/, "");
-		if (!prompt.trim() || sending) return;
+		if (!canSend) return;
 		setSending(true);
 		setError(null);
 		try {
 			const res = await authFetch(promptUrl(sessionId, paneId, peerId), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ text: prompt }),
+				body: JSON.stringify({ text: prompt, images }),
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data.error || `status ${res.status}`);
 			}
-			setHistory((prev) => pushInputHistory(prev, prompt));
+			if (prompt.trim()) setHistory((prev) => pushInputHistory(prev, prompt));
 			setText("");
+			for (const a of attachments) URL.revokeObjectURL(a.previewUrl);
+			setAttachments([]);
 			setShowHistory(false);
 		} catch (err) {
 			setError(
@@ -105,12 +170,78 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 					))}
 				</div>
 			)}
+			{attachments.length > 0 && (
+				<div className="mx-auto mb-2 flex max-w-3xl flex-wrap gap-2">
+					{attachments.map((a) => (
+						<div
+							key={a.key}
+							className="relative h-16 w-16 overflow-hidden rounded-lg border border-cv-border bg-cv-surface"
+						>
+							<img
+								src={a.previewUrl}
+								alt=""
+								className={`h-full w-full object-cover ${a.path ? "" : "opacity-50"}`}
+							/>
+							{!a.path && !a.error && (
+								<span className="absolute inset-0 flex items-center justify-center">
+									<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
+								</span>
+							)}
+							{a.error && (
+								<span
+									className="absolute inset-x-0 bottom-0 bg-red-600/90 px-1 text-center text-[10px] text-white"
+									title={a.error}
+								>
+									{t("conversation.composerUploadFailed")}
+								</span>
+							)}
+							<button
+								type="button"
+								onClick={() => detach(a.key)}
+								aria-label={t("conversation.composerRemoveImage")}
+								className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white"
+							>
+								<svg
+									className="h-3 w-3"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth={2.5}
+									strokeLinecap="round"
+									aria-hidden="true"
+								>
+									<path d="M6 6l12 12M18 6L6 18" />
+								</svg>
+							</button>
+						</div>
+					))}
+				</div>
+			)}
+			<input
+				ref={fileInputRef}
+				type="file"
+				accept={IMAGE_TYPES}
+				multiple
+				className="hidden"
+				onChange={(e) => {
+					if (e.target.files) attach(Array.from(e.target.files));
+					e.target.value = "";
+				}}
+			/>
 			<div className="mx-auto flex max-w-3xl items-end gap-2 rounded-xl border border-cv-border bg-cv-surface py-1.5 pr-1.5 pl-3">
 				<textarea
 					ref={textareaRef}
 					value={text}
 					onChange={(e) => setText(e.target.value)}
 					onKeyDown={onKeyDown}
+					onPaste={(e) => {
+						const files = Array.from(e.clipboardData.files).filter((f) =>
+							f.type.startsWith("image/"),
+						);
+						if (files.length === 0) return;
+						e.preventDefault();
+						attach(files);
+					}}
 					rows={Math.min(6, Math.max(1, text.split("\n").length))}
 					lang="ja"
 					autoCapitalize="off"
@@ -121,6 +252,27 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 					className="min-h-9 flex-1 resize-none bg-transparent py-1.5 text-cv-text leading-relaxed placeholder:text-cv-text-muted focus:outline-none"
 					style={{ fontSize: "16px" }}
 				/>
+				<button
+					type="button"
+					onClick={() => fileInputRef.current?.click()}
+					aria-label={t("conversation.composerAttachImage")}
+					className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-cv-text-muted hover:bg-cv-surface-hover"
+				>
+					<svg
+						className="h-4 w-4"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						strokeWidth={2}
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						aria-hidden="true"
+					>
+						<rect x="3" y="5" width="18" height="14" rx="2" />
+						<circle cx="9" cy="10" r="1.5" />
+						<path d="M21 16l-5-5-8 8" />
+					</svg>
+				</button>
 				<button
 					type="button"
 					onClick={() => {
@@ -152,7 +304,7 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 				<button
 					type="button"
 					onClick={() => void send(text)}
-					disabled={sending || !text.trim()}
+					disabled={!canSend}
 					aria-label={t("conversation.composerSend")}
 					className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cv-accent text-white disabled:opacity-40"
 				>
