@@ -126,9 +126,12 @@ files.get('/read', async (c) => {
 });
 
 /**
- * GET /files/changes/:sessionWorkingDir - Get changed files for a session
+ * GET /files/changes/:sessionWorkingDir?sessionId= - Files a Claude session changed
  * Path params:
  *   - sessionWorkingDir: URL-encoded working directory of the session
+ * Query:
+ *   - sessionId: the pane's Claude session id. Without it the answer is empty:
+ *     a directory can hold several sessions, so it cannot name one
  */
 files.get('/changes/:sessionWorkingDir', async (c) => {
   const sessionWorkingDir = decodeURIComponent(c.req.param('sessionWorkingDir'));
@@ -142,7 +145,10 @@ files.get('/changes/:sessionWorkingDir', async (c) => {
   }
 
   try {
-    const changes = await changeTracker.getChangesForWorkingDir(sessionWorkingDir);
+    const sessionId = c.req.query('sessionId');
+    const changes = sessionId
+      ? await changeTracker.getChangesForSessionId(sessionWorkingDir, sessionId)
+      : [];
 
     const response: FileChangesResponse = {
       sessionId: sessionWorkingDir,

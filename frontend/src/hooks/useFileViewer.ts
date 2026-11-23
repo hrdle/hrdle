@@ -36,10 +36,14 @@ interface UseFileViewerReturn {
 /**
  * `peerId` (optional) routes every files API call to the peer that owns the
  * file system on disk. Unset / `local` → the Hub.
+ *
+ * `claudeSessionId` names whose edits the Claude changes list shows. Without
+ * it the list is empty: a directory can hold several sessions.
  */
 export function useFileViewer(
 	sessionWorkingDir: string,
 	peerId?: string,
+	claudeSessionId?: string,
 ): UseFileViewerReturn {
 	const [currentPath, setCurrentPath] = useState(sessionWorkingDir);
 	const [files, setFiles] = useState<FileInfo[]>([]);
@@ -129,12 +133,16 @@ export function useFileViewer(
 	);
 
 	const getChanges = useCallback(async () => {
+		if (!claudeSessionId) {
+			setChanges([]);
+			return;
+		}
 		setIsLoading(true);
 		setError(null);
 
 		try {
 			const response = await authFetch(
-				`${filesApiBase}/changes/${encodeURIComponent(sessionWorkingDir)}`,
+				`${filesApiBase}/changes/${encodeURIComponent(sessionWorkingDir)}?sessionId=${encodeURIComponent(claudeSessionId)}`,
 			);
 
 			if (!response.ok) {
@@ -153,7 +161,7 @@ export function useFileViewer(
 		} finally {
 			setIsLoading(false);
 		}
-	}, [sessionWorkingDir, filesApiBase]);
+	}, [sessionWorkingDir, filesApiBase, claudeSessionId]);
 
 	const getGitChanges = useCallback(async () => {
 		setIsLoading(true);
