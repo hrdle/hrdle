@@ -15,7 +15,8 @@ export type ConversationStatus =
 	| "missing-agent"
 	| "unsupported-agent"
 	| "no-session-id"
-	| "not-found";
+	| "not-found"
+	| "unreachable";
 
 export interface ConversationStatusInput {
 	agent: string | undefined;
@@ -29,6 +30,9 @@ export interface ConversationStatusInput {
 	 * `empty`.
 	 */
 	found?: boolean;
+	/** The last read failed, so an empty list says nothing about the
+	 *  conversation. */
+	failed?: boolean;
 }
 
 export function conversationStatus({
@@ -37,6 +41,7 @@ export function conversationStatus({
 	isReady,
 	messageCount,
 	found,
+	failed,
 }: ConversationStatusInput): ConversationStatus {
 	if (!agent) return "missing-agent";
 	if (!isAgentProvider(agent)) return "unsupported-agent";
@@ -46,5 +51,6 @@ export function conversationStatus({
 	if (!agentSessionId) return "no-session-id";
 	if (!isReady) return messageCount > 0 ? "ready" : "loading";
 	if (found === false) return "not-found";
+	if (failed && messageCount === 0) return "unreachable";
 	return messageCount > 0 ? "ready" : "empty";
 }

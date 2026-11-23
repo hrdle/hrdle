@@ -605,7 +605,10 @@ export function subscribeConversation(
 		subscribedConversations.add(key);
 	} else {
 		pendingConversationSubs.add(key);
-		ensureConnection(token);
+		// Reconnect to whichever server the socket already serves. With no base
+		// given this would be the local hub, and a peer's conversation opened
+		// while the socket was down took the socket away from that peer.
+		ensureConnection(token ?? currentWsToken, currentWsBase);
 	}
 }
 

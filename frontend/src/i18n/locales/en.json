@@ -360,6 +360,8 @@
     "reasonNoSessionIdBody": "herdr has not reported which {{agent}} session this pane is running, so there is no way to tell its conversation from another one in the same directory.\nInstall or update herdr's integration on the host:\nherdr integration install {{agent}}\nIf it still does not appear, restart the agent in this pane.",
     "reasonNotFoundTitle": "No transcript for this session",
     "reasonNotFoundBody": "The session is known, but no transcript was found for it. The agent may have been started with transcript saving off.",
+    "reasonUnreachableTitle": "Could not read the conversation",
+    "reasonUnreachableBody": "The server holding this conversation did not answer. If it runs on another machine, that machine may be offline. This retries on its own.",
     "reasonEmptyTitle": "Nothing said yet",
     "reasonEmptyBody": "This session has no messages yet. They appear here as the conversation starts."
   },

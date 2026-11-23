@@ -531,6 +531,7 @@ function TerminalPane({
 						}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
+						peerId={sessionTarget.peerId}
 					/>
 				</div>
 			</div>
@@ -843,6 +844,7 @@ function TerminalPane({
 						subtitle={session?.name}
 						agent={activeTmuxPane?.agent}
 						agentSessionId={activeTmuxPane?.agentSessionId}
+						peerId={sessionTarget.peerId}
 					/>
 				)}
 				{sessionTarget ? (

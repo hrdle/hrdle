@@ -13,6 +13,8 @@ interface ChatViewProps {
 	agent?: AgentProvider;
 	/** Thread id for thread-based agents, used as the conversation key. */
 	agentSessionId?: string | null;
+	/** The peer the session runs on, when it is not this machine. */
+	peerId?: string;
 }
 
 /** Statuses that are a reason rather than a conversation. */
@@ -35,6 +37,10 @@ const REASON_KEYS: Partial<
 		title: "conversation.reasonNotFoundTitle",
 		body: "conversation.reasonNotFoundBody",
 	},
+	unreachable: {
+		title: "conversation.reasonUnreachableTitle",
+		body: "conversation.reasonUnreachableBody",
+	},
 	empty: {
 		title: "conversation.reasonEmptyTitle",
 		body: "conversation.reasonEmptyBody",
@@ -53,12 +59,14 @@ export function ChatView({
 	subtitle,
 	agent,
 	agentSessionId,
+	peerId,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const { messages, conversationId, status } = useAgentConversation({
 		agent,
 		sessionId,
 		agentSessionId,
+		peerId,
 	});
 
 	const resolvedTitle = title ?? t("conversation.claude");
