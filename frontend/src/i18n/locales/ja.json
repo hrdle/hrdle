@@ -113,7 +113,6 @@
     },
     "startingAgent": "エージェントを起動中...",
     "openWorkspace": "ワークスペースを開く",
-    "duplicateWorkingDir": "このディレクトリでは既に同じエージェントのセッションが実行中です（{{name}}）",
     "resumeFailed": "セッションの再開に失敗しました",
     "history": "履歴",
     "longPressHint": "長押しで削除",

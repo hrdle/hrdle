@@ -356,7 +356,7 @@ peers.post('/history/:peerId/resume', async (c) => {
   const path = '/api/sessions/history/resume';
   const res = await peerFetch(peer.id, peer.url, peer.wsToken, path, init);
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-  // Pass the peer's status through untouched, so codes like duplicate_working_dir reach the client
+  // Pass the peer's status through untouched, so its error codes reach the client
   if (res.ok) return c.json(data);
   return c.json(data, (res.status >= 400 && res.status < 600 ? res.status : 502) as 400 | 401 | 404 | 409 | 500 | 502);
 });
