@@ -1868,15 +1868,15 @@ export function DesktopLayout({
 		}
 	}, [isMobile, sessionListOpen, fileViewerVisible, chatPaneOnScreen]);
 
-	// The pane the file browser's chat button would switch, when there is a
-	// transcript to switch to. Mobile only: chat is one of the phone's actions,
+	// The pane the file browser's chat button would switch, when an agent is
+	// running in it. Mobile only: chat is one of the phone's actions,
 	// and the other two layouts toggle it from the pane header instead.
 	const activeChatPane = (() => {
 		if (!isMobile) return null;
 		const pane = activeSession?.panes?.find(
 			(p) => p.paneId === desktopState.activePane,
 		);
-		return pane?.agent && pane.agentSessionId ? desktopState.activePane : null;
+		return pane?.agent ? desktopState.activePane : null;
 	})();
 
 	// An open file browser follows the session the pane is showing. Without

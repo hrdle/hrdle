@@ -28,30 +28,6 @@ interface ClaudeCodeSession {
    */
   filePath?: string;
   projectDirName?: string;
-  /**
-   * The lookup matched this session's id, not merely its directory. An id is
-   * unique across every project, so the content is this pane's own even when
-   * it was found somewhere the pane's cwd would never have pointed to.
-   */
-  matchedById?: boolean;
-}
-
-interface SessionsIndex {
-  version: number;
-  entries: Array<{
-    sessionId: string;
-    fullPath: string;
-    fileMtime: number;
-    firstPrompt?: string;
-    summary?: string;
-    messageCount?: number;
-    created?: string;
-    modified?: string;
-    gitBranch?: string;
-    projectPath?: string;
-    isSidechain?: boolean;
-  }>;
-  originalPath?: string;
 }
 
 /** Cached session data with mtime for staleness check */
@@ -71,17 +47,9 @@ export class ClaudeCodeService {
   private sessionDataCache = new Map<string, CachedSessionData>();
   private static readonly SESSION_DATA_CACHE_TTL = 30_000; // 30 seconds
 
-  // Cache for getSessionForPath / getRecentSessionsForPath / getSessionByTtyStartTime
-  // results keyed by composite cache key. Avoids re-running readdir + stat over
-  // every JSONL on every sessions-push tick.
-  private pathResultCache = new Map<string, { data: unknown; timestamp: number }>();
-  private static readonly PATH_RESULT_CACHE_TTL = 3_000; // 3 seconds
-
-  // Hard cap on each cache: long-lived ClaudeCodeService singletons used to leak
-  // an entry per ever-seen JSONL/path/tty — every distinct session a self-hosted
-  // server ever saw would stay resident forever. Evict on insert by sweeping
-  // expired entries first, then dropping the oldest (Map insertion order) until
-  // size <= cap.
+  // Hard cap on the cache: a long-lived singleton would otherwise keep an entry
+  // for every session it ever saw. Evict on insert by sweeping expired entries
+  // first, then dropping the oldest (Map insertion order) until size <= cap.
   private static readonly CACHE_MAX_ENTRIES = 1000;
 
   private static evictAndCap<V extends { timestamp: number }>(
@@ -544,7 +512,7 @@ export class ClaudeCodeService {
       const filePath = join(projectDir, `${sessionId}.jsonl`);
 
       const result = await this.readSessionDataCached(filePath, sessionId, workingDir);
-      if (result) return { ...result, matchedById: true };
+      if (result) return result;
 
       // Try parent directories
       let currentPath = workingDir;
@@ -558,7 +526,7 @@ export class ClaudeCodeService {
         const parentFilePath = join(parentProjectDir, `${sessionId}.jsonl`);
 
         const parentResult = await this.readSessionDataCached(parentFilePath, sessionId, currentPath);
-        if (parentResult) return { ...parentResult, matchedById: true };
+        if (parentResult) return parentResult;
       }
 
       // Nowhere the cwd points to. Ask every project directory instead: the
@@ -572,292 +540,12 @@ export class ClaudeCodeService {
           sessionId,
           recordedCwd ?? workingDir,
         );
-        if (anyProject) return { ...anyProject, matchedById: true };
+        if (anyProject) return anyProject;
       }
 
       return null;
     } catch {
       return null;
-    }
-  }
-
-  private getPathCached<T>(key: string): T | undefined {
-    const entry = this.pathResultCache.get(key);
-    if (entry && Date.now() - entry.timestamp < ClaudeCodeService.PATH_RESULT_CACHE_TTL) {
-      return entry.data as T;
-    }
-    return undefined;
-  }
-
-  private setPathCached(key: string, data: unknown): void {
-    ClaudeCodeService.evictAndCap(this.pathResultCache, ClaudeCodeService.PATH_RESULT_CACHE_TTL);
-    this.pathResultCache.set(key, { data, timestamp: Date.now() });
-  }
-
-  /**
-   * Get the latest Claude Code session info for a given working directory
-   */
-  async getSessionForPath(workingDir: string): Promise<ClaudeCodeSession | null> {
-    const cacheKey = `path:${workingDir}`;
-    const cached = this.getPathCached<ClaudeCodeSession | null>(cacheKey);
-    if (cached !== undefined) return cached;
-
-    const result = await this.getSessionForPathUncached(workingDir);
-    this.setPathCached(cacheKey, result);
-    return result;
-  }
-
-  private async getSessionForPathUncached(workingDir: string): Promise<ClaudeCodeSession | null> {
-    try {
-      // Try exact path first, then parent directories. The parent-dir fallback
-      // is needed so that a pane whose project dir has no jsonl (e.g. a
-      // freshly-started `claude` whose tty-start-time match also fails) still
-      // gets a ccSessionId for hook events to bind to. The route handler
-      // gates user-visible fields (recap / firstPrompt / summary) by an
-      // exact-path-match check on projectPath to keep ancestor content from
-      // leaking into deeper panes.
-      let currentPath = workingDir;
-
-      while (currentPath && currentPath !== '/') {
-        const projectName = this.pathToProjectName(currentPath);
-        const projectDir = join(this.claudeDir, projectName);
-        const indexPath = join(projectDir, 'sessions-index.json');
-
-        try {
-          // First, find the most recently modified .jsonl file
-          const files = await readdir(projectDir);
-          const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
-
-          // Get stats for all files in parallel
-          const fileStats = await Promise.all(
-            jsonlFiles.map(async (file) => {
-              try {
-                const fileStat = await stat(join(projectDir, file));
-                return { name: file, mtime: fileStat.mtimeMs };
-              } catch {
-                return null;
-              }
-            })
-          );
-
-          // Find the most recent file
-          const validStats = fileStats.filter((s): s is { name: string; mtime: number } => s !== null);
-          const latestFile = validStats.reduce<{ name: string; mtime: number } | null>(
-            (latest, current) => (!latest || current.mtime > latest.mtime) ? current : latest,
-            null
-          );
-
-          // Read the index to get cached info
-          let index: SessionsIndex | null = null;
-          try {
-            const content = await readFile(indexPath, 'utf-8');
-            index = JSON.parse(content);
-          } catch {
-            // Index doesn't exist or is invalid
-          }
-
-          // Check if the latest file is newer than what's in the index
-          if (latestFile) {
-            const sessionId = latestFile.name.replace('.jsonl', '');
-            const indexEntry = index?.entries?.find(e => e.sessionId === sessionId);
-
-            // If this file is in the index and not much newer, use cached data
-            // But always check waiting state for accuracy
-            if (indexEntry && (latestFile.mtime - (indexEntry.fileMtime || 0)) < 60000) {
-              const filePath = join(projectDir, latestFile.name);
-              const [waitingToolName, lastUserMessage, firstMessageId, lastRecap] = await Promise.all([
-                this.checkWaitingState(filePath),
-                this.readLastUserMessage(filePath),
-                this.readFirstMessageId(filePath),
-                scanLastRecap(filePath),
-              ]);
-
-              return {
-                sessionId: indexEntry.sessionId,
-                summary: lastUserMessage || indexEntry.summary,
-                firstPrompt: indexEntry.firstPrompt,
-                messageCount: indexEntry.messageCount,
-                modified: indexEntry.modified,
-                gitBranch: indexEntry.gitBranch,
-                projectPath: indexEntry.projectPath ?? currentPath,
-
-                waitingToolName: waitingToolName || undefined,
-                firstMessageId: firstMessageId || undefined,
-                lastRecap: lastRecap || undefined,
-              };
-            }
-
-            // For active sessions (not in index or much newer), read directly
-            const filePath = join(projectDir, latestFile.name);
-            const [firstPrompt, lastUserMessage, waitingToolName, firstMessageId, lastRecap] = await Promise.all([
-              this.readFirstPromptFromFile(filePath),
-              this.readLastUserMessage(filePath),
-              this.checkWaitingState(filePath),
-              this.readFirstMessageId(filePath),
-              scanLastRecap(filePath),
-            ]);
-
-            return {
-              sessionId,
-              summary: lastUserMessage || indexEntry?.summary,
-              firstPrompt: firstPrompt || indexEntry?.firstPrompt,
-              messageCount: indexEntry?.messageCount,
-              modified: new Date(latestFile.mtime).toISOString(),
-              gitBranch: indexEntry?.gitBranch,
-              projectPath: indexEntry?.projectPath ?? currentPath,
-
-              waitingToolName: waitingToolName || undefined,
-              firstMessageId: firstMessageId || undefined,
-              lastRecap: lastRecap || undefined,
-            };
-          }
-
-          // Fallback to index-only data
-          if (index?.entries && index.entries.length > 0) {
-            const sortedEntries = [...index.entries].sort((a, b) => {
-              const aTime = a.fileMtime || 0;
-              const bTime = b.fileMtime || 0;
-              return bTime - aTime;
-            });
-
-            const latest = sortedEntries[0];
-            return {
-              sessionId: latest.sessionId,
-              summary: latest.summary,
-              firstPrompt: latest.firstPrompt,
-              messageCount: latest.messageCount,
-              modified: latest.modified,
-              gitBranch: latest.gitBranch,
-              projectPath: latest.projectPath ?? currentPath,
-            };
-          }
-        } catch {
-          // Index doesn't exist for this path, try parent
-        }
-
-        // Move to parent directory
-        const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
-        if (parentPath === currentPath) break;
-        currentPath = parentPath || '/';
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Get Claude Code session summaries for multiple paths
-   */
-  async getSessionsForPaths(paths: string[]): Promise<Map<string, ClaudeCodeSession>> {
-    const results = new Map<string, ClaudeCodeSession>();
-
-    await Promise.all(
-      paths.map(async (path) => {
-        const session = await this.getSessionForPath(path);
-        if (session) {
-          results.set(path, session);
-        }
-      })
-    );
-
-    return results;
-  }
-
-  /**
-   * Get multiple recent Claude Code sessions for a path
-   * Used when multiple sessions (herdr workspaces) share the same working directory
-   */
-  async getRecentSessionsForPath(workingDir: string, count: number): Promise<ClaudeCodeSession[]> {
-    const cacheKey = `recent:${workingDir}:${count}`;
-    const cached = this.getPathCached<ClaudeCodeSession[]>(cacheKey);
-    if (cached !== undefined) return cached;
-
-    const result = await this.getRecentSessionsForPathUncached(workingDir, count);
-    this.setPathCached(cacheKey, result);
-    return result;
-  }
-
-  private async getRecentSessionsForPathUncached(workingDir: string, count: number): Promise<ClaudeCodeSession[]> {
-    const sessions: ClaudeCodeSession[] = [];
-
-    try {
-      // Parent-dir traversal mirrors getSessionForPathUncached; user-visible
-      // fields are gated by exact-path-match in the route handler.
-      let currentPath = workingDir;
-
-      while (currentPath && currentPath !== '/') {
-        const projectName = this.pathToProjectName(currentPath);
-        const projectDir = join(this.claudeDir, projectName);
-
-        try {
-          const files = await readdir(projectDir);
-          const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
-
-          // Get stats for all files
-          const fileStats = await Promise.all(
-            jsonlFiles.map(async (file) => {
-              try {
-                const fileStat = await stat(join(projectDir, file));
-                return { name: file, mtime: fileStat.mtimeMs };
-              } catch {
-                return null;
-              }
-            })
-          );
-
-          // Sort by mtime descending and take top N
-          const validStats = fileStats
-            .filter((s): s is { name: string; mtime: number } => s !== null)
-            .sort((a, b) => b.mtime - a.mtime)
-            .slice(0, count);
-
-          // Read session info for each file (in parallel)
-          const projectPathForResults = currentPath;
-          const sessionResults = await Promise.all(
-            validStats.map(async (fileStat) => {
-              const sessionId = fileStat.name.replace('.jsonl', '');
-              const filePath = join(projectDir, fileStat.name);
-
-              const [firstPrompt, lastUserMessage, waitingToolName, firstMessageId, lastRecap] = await Promise.all([
-                this.readFirstPromptFromFile(filePath),
-                this.readLastUserMessage(filePath),
-                this.checkWaitingState(filePath),
-                this.readFirstMessageId(filePath),
-                scanLastRecap(filePath),
-              ]);
-
-              return {
-                sessionId,
-                summary: lastUserMessage || undefined,
-                firstPrompt: firstPrompt || undefined,
-                modified: new Date(fileStat.mtime).toISOString(),
-                projectPath: projectPathForResults,
-
-                waitingToolName: waitingToolName || undefined,
-                firstMessageId: firstMessageId || undefined,
-                lastRecap: lastRecap || undefined,
-              };
-            })
-          );
-          sessions.push(...sessionResults);
-
-          if (sessions.length >= count) {
-            return sessions.slice(0, count);
-          }
-        } catch {
-          // Try parent directory
-        }
-
-        const parentPath = currentPath.substring(0, currentPath.lastIndexOf('/'));
-        if (parentPath === currentPath) break;
-        currentPath = parentPath || '/';
-      }
-
-      return sessions;
-    } catch {
-      return sessions;
     }
   }
 }

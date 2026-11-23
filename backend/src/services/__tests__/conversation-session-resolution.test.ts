@@ -9,10 +9,8 @@ import { claudeProjectDirName } from '../../utils/claude-project-path';
  * Which transcript a conversation subscription reads.
  *
  * Two Claude panes in one workspace, in one directory, are two conversations
- * in one project folder. Resolving by directory answers with whichever wrote
- * last, so the pane on screen and the transcript beside it were routinely
- * different agents. The subscription now names the pane's own session id, and
- * this locks the difference between the two lookups.
+ * in one project folder, so the directory cannot tell them apart. The pane's
+ * own session id is the only key, and these lock what it answers.
  */
 describe('conversation transcript resolution', () => {
   async function fixture() {
@@ -45,16 +43,6 @@ describe('conversation transcript resolution', () => {
   const serviceFor = (home: string) =>
     new ClaudeCodeService(join(home, '.claude', 'projects'));
 
-  test('by directory: the newest transcript wins, whichever pane wrote it', async () => {
-    const { home, workDir, newer } = await fixture();
-    try {
-      const session = await serviceFor(home).getSessionForPath(workDir);
-      expect(session?.sessionId).toBe(newer);
-    } finally {
-      await rm(home, { recursive: true, force: true });
-    }
-  });
-
   test('by session id: the pane asked for is the pane answered, newer or not', async () => {
     const { home, workDir, older } = await fixture();
     try {
@@ -66,7 +54,7 @@ describe('conversation transcript resolution', () => {
     }
   });
 
-  test('an id with no transcript resolves to nothing, so the caller can fall back', async () => {
+  test('an id with no transcript resolves to nothing', async () => {
     const { home, workDir } = await fixture();
     try {
       const session = await serviceFor(home).getSessionById(
@@ -82,8 +70,7 @@ describe('conversation transcript resolution', () => {
   /**
    * Rename the working directory under a running agent and the pane's cwd names
    * a project directory that was never written to. The transcript stays where
-   * the agent started it. Resolving by directory then walked up to an ancestor
-   * — `/home` — and answered with a stranger's conversation.
+   * the agent started it, and the id still finds it there.
    */
   test('by session id: a renamed working directory still finds the transcript', async () => {
     const { home, older } = await fixture();
@@ -93,7 +80,6 @@ describe('conversation transcript resolution', () => {
       expect(session?.sessionId).toBe(older);
       // The directory the transcript is in, not the one the pane is in now.
       expect(session?.projectDirName).toBe(claudeProjectDirName('/home/fixture/repos/work'));
-      expect(session?.matchedById).toBe(true);
     } finally {
       await rm(home, { recursive: true, force: true });
     }

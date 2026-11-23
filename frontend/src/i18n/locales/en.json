@@ -344,7 +344,6 @@
     "kimi": "Kimi",
     "system": "System",
     "errorTitle": "Conversation unavailable",
-    "errorMissingAgent": "Session has no agent information. Try refreshing the session list.",
     "errorUnsupportedAgent": "Conversation history is not supported for \"{{agent}}\".",
     "systemSummary": "System (Summary)",
     "thinking": "Thinking",
@@ -355,7 +354,15 @@
     "showAll": "Show all",
     "collapse": "Collapse",
     "backToTerminal": "Back to terminal",
-    "showHistory": "Show conversation history"
+    "showHistory": "Show conversation history",
+    "reasonMissingAgentTitle": "No agent in this pane",
+    "reasonMissingAgentBody": "This pane is not running a coding agent (a shell, an editor, ...). A conversation can only be shown for an agent's pane.",
+    "reasonNoSessionIdTitle": "This conversation cannot be identified yet",
+    "reasonNoSessionIdBody": "herdr has not reported which {{agent}} session this pane is running, so there is no way to tell its conversation from another one in the same directory.\nInstall or update herdr's integration on the host:\nherdr integration install {{agent}}\nIf it still does not appear, restart the agent in this pane.",
+    "reasonNotFoundTitle": "No transcript for this session",
+    "reasonNotFoundBody": "The session is known, but no transcript was found for it. The agent may have been started with transcript saving off.",
+    "reasonEmptyTitle": "Nothing said yet",
+    "reasonEmptyBody": "This session has no messages yet. They appear here as the conversation starts."
   },
   "keyboard": {
     "title": "Keyboard",

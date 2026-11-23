@@ -341,7 +341,6 @@
     "kimi": "Kimi",
     "system": "System",
     "errorTitle": "会話を表示できません",
-    "errorMissingAgent": "セッションのエージェント情報が取得できませんでした。セッション一覧を再読み込みしてください。",
     "errorUnsupportedAgent": "「{{agent}}」は会話履歴に対応していません。",
     "systemSummary": "System (Summary)",
     "thinking": "思考過程",
@@ -352,7 +351,15 @@
     "showAll": "すべて表示",
     "collapse": "折りたたむ",
     "backToTerminal": "ターミナルに戻る",
-    "showHistory": "会話履歴を表示"
+    "showHistory": "会話履歴を表示",
+    "reasonMissingAgentTitle": "このペインにはエージェントがいません",
+    "reasonMissingAgentBody": "このペインではコーディングエージェントが動いていません（シェルやエディタなど）。会話は、エージェントのペインでだけ表示できます。",
+    "reasonNoSessionIdTitle": "どの会話かを特定できません",
+    "reasonNoSessionIdBody": "このペインで動いている {{agent}} のセッションを、herdr がまだ報告していません。同じディレクトリにある別の会話と見分けられないため、表示していません。\nホストで herdr の統合を入れるか、更新してください:\nherdr integration install {{agent}}\nそれでも表示されなければ、このペインのエージェントを起動し直してください。",
+    "reasonNotFoundTitle": "このセッションの記録が見つかりません",
+    "reasonNotFoundBody": "セッションは分かっていますが、会話の記録が見つかりませんでした。記録を保存しない設定でエージェントが起動された可能性があります。",
+    "reasonEmptyTitle": "まだ会話がありません",
+    "reasonEmptyBody": "このセッションにはまだメッセージがありません。会話が始まると、ここに表示されます。"
   },
   "keyboard": {
     "title": "キーボード",
