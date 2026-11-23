@@ -1879,6 +1879,16 @@ export function DesktopLayout({
 		return pane?.agent ? desktopState.activePane : null;
 	})();
 
+	// Whose edits the file browser's Claude changes list shows: the focused
+	// pane's own session. The browser is one per directory and a directory can
+	// hold several sessions, so the directory cannot answer this.
+	const activeClaudeSessionId = (() => {
+		const pane =
+			activeSession?.panes?.find((p) => p.paneId === desktopState.activePane) ??
+			activeSession?.panes?.find((p) => p.isActive);
+		return pane?.agent === "claude" ? (pane.agentSessionId ?? undefined) : undefined;
+	})();
+
 	// An open file browser follows the session the pane is showing. Without
 	// this it keeps whichever directory it was opened for while the header
 	// names the new session — so the panel lists one workspace's files under
@@ -2132,6 +2142,9 @@ export function DesktopLayout({
 					key={dir}
 					sessionWorkingDir={dir}
 					peerId={peerId}
+					claudeSessionId={
+						dir === activeFileViewerDir ? activeClaudeSessionId : undefined
+					}
 					onClose={() => closeFileViewer(dir)}
 					hidden={
 						!fileViewerOpenDirs.has(dir) ||

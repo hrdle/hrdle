@@ -45,6 +45,8 @@ interface FileViewerProps {
 	sessionWorkingDir: string;
 	/** Peer that owns the files on disk. Unset / "local" → the Hub. */
 	peerId?: string;
+	/** The focused pane's Claude session, whose edits the changes list shows. */
+	claudeSessionId?: string;
 	onClose: () => void;
 	initialPath?: string;
 	onCopyPrompt?: (text: string) => void;
@@ -66,6 +68,7 @@ interface FileViewerProps {
 export function FileViewer({
 	sessionWorkingDir,
 	peerId,
+	claudeSessionId,
 	onClose,
 	initialPath,
 	onCopyPrompt,
@@ -91,7 +94,7 @@ export function FileViewer({
 		getChanges,
 		getGitChanges,
 		getGitDiff,
-	} = useFileViewer(sessionWorkingDir, peerId);
+	} = useFileViewer(sessionWorkingDir, peerId, claudeSessionId);
 
 	// Files API prefix that matches the peer (`/api/files` for local, the
 	// `/api/peers/<id>/files` proxy for remote). Used for upload/download/raw
