@@ -1645,6 +1645,52 @@ sessions.post('/:id/panes/:paneId/answer', async (c) => {
 // POST /sessions/:id/prompt - Send a prompt text to the session's active pane.
 // Optional `paneId` targets a specific pane (glasses relay reply routing):
 // in a multi-pane workspace the blocked pane is not necessarily the active one.
+// POST /sessions/:id/panes/:paneId/prompt - Submit a prompt to one pane's agent
+// The chat view's composer. Unlike /prompt it names the pane - a workspace can
+// hold two agents - and goes through herdr's agent.prompt rather than a pane
+// control stream.
+sessions.post('/:id/panes/:paneId/prompt', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/prompt`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await c.req.text(),
+    });
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const text = typeof body.text === 'string' ? body.text : '';
+  if (!text.trim()) {
+    return c.json({ error: 'text is required' }, 400);
+  }
+
+  const status = await herdrService.addressStatus(id);
+  if (status !== 'ok') {
+    return c.json(
+      status === 'ambiguous'
+        ? { error: `"${id}" names more than one session - address it by session id` }
+        : { error: 'Session not found' },
+      404,
+    );
+  }
+
+  try {
+    if (!(await herdrService.promptPane(id, paneId, text))) {
+      return c.json({ error: 'Session not found' }, 404);
+    }
+    return c.json({ success: true, paneId });
+  } catch (error) {
+    // herdr refuses a pane with no agent in it; say so rather than 500.
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: `The pane's agent did not take the prompt: ${message}` }, 409);
+  }
+});
+
 sessions.post('/:id/prompt', async (c) => {
   const id = c.req.param('id');
   // Addressed to a peer's session, the body goes to the same endpoint on that

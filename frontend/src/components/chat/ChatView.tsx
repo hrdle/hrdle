@@ -3,6 +3,7 @@ import type { AgentProvider } from "../../../../shared/types";
 import { useAgentConversation } from "../../hooks/useAgentConversation";
 import type { ConversationStatus } from "../../utils/conversation-status";
 import { ConversationViewer } from "../ConversationViewer";
+import { ChatComposer } from "./ChatComposer";
 
 interface ChatViewProps {
 	sessionId: string;
@@ -15,6 +16,8 @@ interface ChatViewProps {
 	agentSessionId?: string | null;
 	/** The peer the session runs on, when it is not this machine. */
 	peerId?: string;
+	/** The pane the conversation belongs to; the composer writes to its agent. */
+	paneId?: string;
 }
 
 /** Statuses that are a reason rather than a conversation. */
@@ -48,10 +51,13 @@ const REASON_KEYS: Partial<
 };
 
 /**
- * Read-only view of a session's conversation.
+ * A pane's conversation, read from the agent's own transcript, with a
+ * composer under it.
  *
- * There is no composer: input goes to the pane through the terminal, and a
- * second place to type only made it ambiguous which one was listening.
+ * The chat view replaces the terminal rather than sitting beside it, so the
+ * composer is the one place on screen to type into that pane. It submits with
+ * herdr's `agent.prompt`, which takes no pane control stream: the same pane
+ * open in herdr's TUI or another Hrdle keeps rendering while this writes to it.
  */
 export function ChatView({
 	sessionId,
@@ -60,6 +66,7 @@ export function ChatView({
 	agent,
 	agentSessionId,
 	peerId,
+	paneId,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const { messages, conversationId, status } = useAgentConversation({
@@ -77,10 +84,11 @@ export function ChatView({
 			: undefined);
 
 	const reason = REASON_KEYS[status];
+	let content: React.ReactNode;
 	if (reason) {
-		return (
+		content = (
 			<div
-				className="flex h-full flex-col items-center justify-center bg-cv-bg px-6 text-center"
+				className="flex h-full flex-col items-center justify-center px-6 text-center"
 				data-conversation-status={status}
 			>
 				<div className="mb-2 text-sm font-medium text-cv-text">
@@ -91,31 +99,38 @@ export function ChatView({
 				</div>
 			</div>
 		);
-	}
-
-	// Avoid showing a "Loading..." flash every time the view opens. Until the
-	// initial conversation arrives, render an empty container.
-	if (status === "loading") {
-		return (
-			<div
-				className="flex h-full min-h-0 flex-col bg-cv-bg"
-				data-conversation-status={status}
+	} else if (status === "loading") {
+		// Avoid showing a "Loading..." flash every time the view opens. Until the
+		// initial conversation arrives, render an empty container.
+		content = <div className="h-full" data-conversation-status={status} />;
+	} else {
+		content = (
+			<ConversationViewer
+				title={resolvedTitle}
+				subtitle={resolvedSubtitle}
+				messages={messages}
+				isLoading={false}
+				onClose={() => {
+					/* close handled by parent */
+				}}
+				scrollToBottom
+				inline
+				agent={agent}
 			/>
 		);
 	}
 
+	// A pane with an agent in it can be written to whatever there is to read:
+	// a prompt is how a conversation with nothing in it yet gets its first turn.
+	const canPrompt =
+		!!paneId && status !== "missing-agent" && status !== "unsupported-agent";
+
 	return (
-		<ConversationViewer
-			title={resolvedTitle}
-			subtitle={resolvedSubtitle}
-			messages={messages}
-			isLoading={false}
-			onClose={() => {
-				/* close handled by parent */
-			}}
-			scrollToBottom
-			inline
-			agent={agent}
-		/>
+		<div className="flex h-full min-h-0 flex-col bg-cv-bg">
+			<div className="min-h-0 flex-1">{content}</div>
+			{canPrompt && paneId && (
+				<ChatComposer sessionId={sessionId} paneId={paneId} peerId={peerId} />
+			)}
+		</div>
 	);
 }

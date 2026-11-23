@@ -17,6 +17,7 @@ import {
   listWorkspaces,
   readPaneText,
   renameWorkspace as renameHerdrWorkspace,
+  toHerdrPaneId,
   toTmuxPaneId,
   type HerdrAgentStatus,
   type HerdrWorkspace,
@@ -537,6 +538,22 @@ export class HerdrService {
    * Session not found is how the caller ends up retyping a name that will
    * never work.
    */
+  /**
+   * Submit a prompt to the agent in one pane, the way herdr submits one.
+   *
+   * `agent.prompt` honours the pane's own bracketed-paste mode and goes over
+   * the RPC socket, so it takes no pane control stream - the pane can stay on
+   * screen in herdr, or in another Hrdle, while this writes to it. Returns
+   * false when the session cannot be resolved; herdr refusing (no agent in the
+   * pane) throws.
+   */
+  async promptPane(sessionId: string, paneId: string, text: string): Promise<boolean> {
+    const ws = await this.resolveWorkspace(sessionId);
+    if (!ws) return false;
+    await herdrRpc('agent.prompt', { target: toHerdrPaneId(ws.workspace_id, paneId), text });
+    return true;
+  }
+
   async addressStatus(sessionId: string): Promise<'ok' | 'ambiguous' | 'missing'> {
     try {
       const workspaces = await listWorkspaces();

@@ -360,7 +360,12 @@
     "reasonUnreachableTitle": "会話を読み込めませんでした",
     "reasonUnreachableBody": "この会話を持っているサーバから応答がありません。別のマシンのセッションなら、そのマシンがオフラインかもしれません。自動で再試行します。",
     "reasonEmptyTitle": "まだ会話がありません",
-    "reasonEmptyBody": "このセッションにはまだメッセージがありません。会話が始まると、ここに表示されます。"
+    "reasonEmptyBody": "このセッションにはまだメッセージがありません。会話が始まると、ここに表示されます。",
+    "composerLabel": "このペインのエージェントへのメッセージ",
+    "composerPlaceholder": "Enter 2 回で送信",
+    "composerSend": "送信",
+    "composerHistory": "送信履歴",
+    "composerSendFailed": "送れませんでした: {{reason}}"
   },
   "keyboard": {
     "title": "キーボード",
