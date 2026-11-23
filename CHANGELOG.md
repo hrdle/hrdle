@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.216] - 2026-11-24
+
+### Changed
+- **More than one session of an agent can work in one directory.** Creating a
+  workspace or resuming from history no longer refuses because the same agent
+  is already running there.
+- **The chat view opens for every agent pane and says why when it has nothing
+  to show.** It used to be one blank screen, or a disabled button saying no
+  agent was running. It now names the reason: no agent in the pane, herdr has
+  not reported which session it is (with the `herdr integration install`
+  command to fix that), no transcript, nothing said yet, or the conversation
+  could not be read.
+
+### Fixed
+- **A pane's conversation is never another session's.** Without the pane's
+  own session id, the chat view used to show the newest transcript in the
+  working directory, and so did Codex's history. With two sessions in one
+  directory, that was the other one's conversation.
+- **The Files view's Claude changes are the focused session's own edits,**
+  not those of whichever session in the directory wrote last.
+- **A peer's Codex, Grok, Kimi, OpenCode or pi conversation shows in the chat
+  view.** It was read from this machine and came back empty.
+- **Opening a peer's Claude chat while reconnecting no longer moves the
+  connection off that peer.**
+
 ## [0.3.215] - 2026-11-23
 
 ### Changed
