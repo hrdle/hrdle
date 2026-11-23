@@ -859,6 +859,8 @@ function TerminalPane({
 							// The phone keeps its InputBar and soft keyboard; the other two
 							// type into the pane directly or through FloatingKeyboard.
 							hideKeyboard={!isMobile}
+							// The chat has its own composer, written with the OS keyboard.
+							lockInputHidden={isMobile && showConversation}
 							overlayContent={
 								bottomBar ? (
 									<>
