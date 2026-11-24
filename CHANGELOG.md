@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.221] - 2026-11-24
+
+### Added
+- **Claude Code permission prompts can be answered from the chat view.** When
+  Claude asks to run a command or edit a file, a card above the composer shows
+  what it wants to do (the tool, the command or the diff) and the choices.
+  A tap answers. Writing in the composer declines with that text as an
+  instruction to Claude. `GET .../question` now reports these prompts with
+  `kind: 'permission'`, `title` and `detail`.
+
 ## [0.3.220] - 2026-11-24
 
 ### Added
