@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.223] - 2026-11-24
+
+### Added
+- **The chat's slash palette lists plugin commands and skills.** Enabled
+  plugins' entries appear as `/plugin:name`, the way Claude Code names them.
+  A plugin installed for one project appears only in that project.
+
 ## [0.3.222] - 2026-11-24
 
 ### Added
