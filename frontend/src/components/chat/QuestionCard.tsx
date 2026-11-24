@@ -26,12 +26,16 @@ export function QuestionCard({ question, busy, error, onAnswer, onWrite }: Quest
 		: undefined;
 	const fieldTicked = fieldOption ? ticked.has(fieldOption.index) : false;
 
+	// Keyed on the id alone: the question is re-read every few seconds and each
+	// read is a new `options` array, so depending on it cleared the ticks and the
+	// typed words mid-answer. The id changes exactly when the question does.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: options is read only when the question changes
 	useEffect(() => {
 		setTicked(
 			new Set(question.options.filter((o) => o.checked).map((o) => o.index)),
 		);
 		setFieldText("");
-	}, [question.questionId, question.options]);
+	}, [question.questionId]);
 
 	return (
 		<div
