@@ -1,0 +1,40 @@
+
+● このフォルダには note.txt と one.txt の2つのファイルがあります。先ほどの touch は却下されたので、two.txt
+  は作られていません。
+
+✻ Crunched for 7s · done 6:40 PM
+
+❯ note.txt の中身を見せて
+
+  Read 1 file
+
+● note.txt の中身は次の1行です。
+
+  goodbye
+
+✻ Cogitated for 7s · done 6:43 PM
+
+❯ one.txt の中身も見せて
+
+  Read 1 file
+
+● one.txt の中身は次の1行です。
+
+  first
+
+✻ Cogitated for 3s · done 6:48 PM
+
+❯ /model
+  ⎿  Kept model as Opus 5.5
+
+❯ /model
+  ⎿  Kept model as Opus 5.5
+
+❯ /model
+  ⎿  Kept model as Opus 5.5
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  dev@:/home/dev/work/proj
+  ⏵⏵ auto mode on (shift+tab to cycle)

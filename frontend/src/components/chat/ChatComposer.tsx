@@ -5,6 +5,8 @@ import { loadInputHistory, pushInputHistory } from "../../utils/input-history";
 import { uploadImage } from "../../utils/upload-image";
 import { ModeChip } from "./ModeChip";
 import { usePaneSuggestion } from "./usePaneSuggestion";
+import { PanelCard } from "./PanelCard";
+import { usePanePanel } from "./usePanePanel";
 import { paneUrl } from "./pane-url";
 import { QuestionCard } from "./QuestionCard";
 import {
@@ -175,6 +177,7 @@ export function ChatComposer({
 			? question.options.find((o) => o.freeText)
 			: undefined;
 
+	const panel = usePanePanel(sessionId, paneId, peerId);
 	const { suggestion, clear: clearSuggestion } = usePaneSuggestion(
 		sessionId,
 		paneId,
@@ -274,6 +277,9 @@ export function ChatComposer({
 				throw new Error(data.error || `status ${res.status}`);
 			}
 			if (prompt.trim()) setHistory((prev) => pushInputHistory(prev, prompt));
+			// `/usage`, `/model` and the like answer with a panel on the screen
+			// rather than in the transcript.
+			if (prompt.startsWith("/")) panel.watch();
 			setText("");
 			for (const a of attachments) URL.revokeObjectURL(a.previewUrl);
 			setAttachments([]);
@@ -346,6 +352,14 @@ export function ChatComposer({
 					error={answerError}
 					onAnswer={(choices, text) => void answer(choices, text)}
 					onWrite={() => textareaRef.current?.focus()}
+				/>
+			)}
+			{panel.lines && !question && !expanded && (
+				<PanelCard
+					lines={panel.lines}
+					busy={panel.busy}
+					error={panel.error}
+					onKey={(key) => void panel.press(key)}
 				/>
 			)}
 			{paletteOpen && !expanded && (
