@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { ClaudeBackgroundReader } from '../services/claude-footer';
-import { readPaneText, toHerdrPaneId } from '../services/herdr-client';
+import { cycleToMode, parseClaudeMode } from '../services/claude-mode';
+import { readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
 import { paneStatusClock } from '../services/pane-status-since';
 import { promptAgent, startAgent, waitForAgentReady, type StartedAgent } from '../services/agent-launch';
 import { stat } from 'node:fs/promises';
@@ -1669,11 +1670,11 @@ export const PanePromptSchema = z
  * into it.
  */
 export const PaneKeysSchema = z.object({
-  keys: z.array(z.enum(['esc', 'shift+tab'])).min(1).max(8),
+  keys: z.array(z.enum(['esc'])).min(1).max(8),
 });
 
 // POST /sessions/:id/panes/:paneId/keys - Press control keys in one pane
-// The chat view's stop button (esc) and mode chip (shift+tab).
+// The chat view's stop button.
 sessions.post('/:id/panes/:paneId/keys', async (c) => {
   const id = c.req.param('id');
   const paneId = c.req.param('paneId');
@@ -1709,6 +1710,58 @@ sessions.post('/:id/panes/:paneId/keys', async (c) => {
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ error: `The pane did not take the keys: ${message}` }, 409);
   }
+});
+
+const PaneModeSchema = z.object({
+  // Bypass is left out: the chat view does not offer it, as the Claude app does not.
+  mode: z.enum(['manual', 'acceptEdits', 'plan', 'auto']),
+});
+
+// GET /sessions/:id/panes/:paneId/mode - Claude Code's permission mode, read off its footer
+sessions.get('/:id/panes/:paneId/mode', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/mode`));
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const target = await herdrService.herdrPaneOf(id, paneId);
+  if (!target) return c.json({ error: 'Session not found' }, 404);
+  const screen = await readPaneText(target, 'visible');
+  return c.json({ mode: screen ? parseClaudeMode(screen) : null });
+});
+
+// POST /sessions/:id/panes/:paneId/mode - Cycle to a mode with Shift+Tab
+sessions.post('/:id/panes/:paneId/mode', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/mode`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await c.req.text(),
+    });
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const parsed = PaneModeSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }, 400);
+  }
+  const target = await herdrService.herdrPaneOf(id, paneId);
+  if (!target) return c.json({ error: 'Session not found' }, 404);
+  const result = await cycleToMode(parsed.data.mode, {
+    read: () => readPaneText(target, 'visible'),
+    pressShiftTab: () => sendPaneKeys(target, ['shift+tab']),
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  });
+  if (!result.ok) return c.json({ error: result.error, mode: result.mode }, 409);
+  return c.json({ mode: result.mode });
 });
 
 // POST /sessions/:id/panes/:paneId/prompt - Submit a prompt to one pane's agent

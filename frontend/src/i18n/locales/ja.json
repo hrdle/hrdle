@@ -377,7 +377,23 @@
     "questionWaiting": "Claude が回答を待っています",
     "questionSubmit": "回答を送る",
     "questionFailed": "回答できませんでした: {{reason}}",
-    "questionWriteAnswer": "ほかの答えを書く"
+    "questionWriteAnswer": "ほかの答えを書く",
+    "modeLabel": "モード: {{mode}}",
+    "modeTitle": "モード",
+    "modeFailed": "モードを変えられませんでした: {{reason}}",
+    "mode": {
+      "manual": "手動承認",
+      "acceptEdits": "編集を自動承認",
+      "plan": "Plan",
+      "auto": "Auto",
+      "bypass": "Bypass"
+    },
+    "modeHint": {
+      "manual": "ツールを使う前に毎回確認する",
+      "acceptEdits": "ファイルの編集は確認なしで進める",
+      "plan": "調べて計画だけ立てる。変更はしない",
+      "auto": "安全な操作は判断して自動で進める"
+    }
   },
   "keyboard": {
     "title": "キーボード",

@@ -141,6 +141,7 @@ export function ChatView({
 					peerId={peerId}
 					working={working}
 					waiting={waiting}
+					showMode={agent === "claude"}
 				/>
 			)}
 		</div>

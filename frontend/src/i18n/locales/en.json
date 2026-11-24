@@ -380,7 +380,23 @@
     "questionWaiting": "Claude is waiting for your answer",
     "questionSubmit": "Send answer",
     "questionFailed": "Not answered: {{reason}}",
-    "questionWriteAnswer": "Write a different answer"
+    "questionWriteAnswer": "Write a different answer",
+    "modeLabel": "Mode: {{mode}}",
+    "modeTitle": "Mode",
+    "modeFailed": "Mode not changed: {{reason}}",
+    "mode": {
+      "manual": "Manual",
+      "acceptEdits": "Accept edits",
+      "plan": "Plan",
+      "auto": "Auto",
+      "bypass": "Bypass"
+    },
+    "modeHint": {
+      "manual": "Ask before every tool use",
+      "acceptEdits": "Edit files without asking",
+      "plan": "Research and plan, change nothing",
+      "auto": "Go ahead with what is judged safe"
+    }
   },
   "keyboard": {
     "title": "Keyboard",

@@ -573,6 +573,12 @@ export class HerdrService {
     return 'ok';
   }
 
+  /** The herdr pane id for a session's pane, or null when the session is gone. */
+  async herdrPaneOf(sessionId: string, paneId: string): Promise<string | null> {
+    const ws = await this.resolveWorkspace(sessionId);
+    return ws ? toHerdrPaneId(ws.workspace_id, paneId) : null;
+  }
+
   /** Press named keys in one pane, without taking its control stream. */
   async pressPaneKeys(sessionId: string, paneId: string, keys: string[]): Promise<'ok' | 'missing'> {
     const ws = await this.resolveWorkspace(sessionId);
