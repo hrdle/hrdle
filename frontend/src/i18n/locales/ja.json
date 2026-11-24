@@ -393,6 +393,21 @@
       "acceptEdits": "ファイルの編集は確認なしで進める",
       "plan": "調べて計画だけ立てる。変更はしない",
       "auto": "安全な操作は判断して自動で進める"
+    },
+    "slashTitle": "コマンド",
+    "slashSkill": "スキル",
+    "slashCommand": "コマンド",
+    "slash": {
+      "compact": "会話を要約してコンテキストを空ける",
+      "clear": "会話を消して新しく始める",
+      "context": "コンテキストの使用量を表示",
+      "usage": "利用枠の使用状況を表示",
+      "model": "モデルを切り替え（例: /model sonnet）",
+      "effort": "推論の深さを変える（例: /effort high）",
+      "fast": "高速モードを切り替え",
+      "rename": "この会話の名前を変える",
+      "recap": "ここまでの流れをまとめる",
+      "config": "設定を変える（例: /config key=value）"
     }
   },
   "keyboard": {

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { ClaudeBackgroundReader } from '../services/claude-footer';
 import { cycleToMode, parseClaudeMode } from '../services/claude-mode';
-import { readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
+import { getPane, readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
+import { listSlashCommands } from '../services/slash-commands';
 import { paneStatusClock } from '../services/pane-status-since';
 import { promptAgent, startAgent, waitForAgentReady, type StartedAgent } from '../services/agent-launch';
 import { stat } from 'node:fs/promises';
@@ -1762,6 +1763,26 @@ sessions.post('/:id/panes/:paneId/mode', async (c) => {
   });
   if (!result.ok) return c.json({ error: result.error, mode: result.mode }, 409);
   return c.json({ mode: result.mode });
+});
+
+// GET /sessions/:id/panes/:paneId/commands - The person's own slash commands
+// and skills for the pane's project, for the chat view's palette
+sessions.get('/:id/panes/:paneId/commands', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/commands`));
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const target = await herdrService.herdrPaneOf(id, paneId);
+  if (!target) return c.json({ error: 'Session not found' }, 404);
+  const pane = await getPane(target);
+  // The pane's own directory: the agent reads `.claude` from where it was
+  // started, and the foreground directory moves with every `cd` in a shell.
+  return c.json({ commands: await listSlashCommands(pane?.cwd ?? null) });
 });
 
 // POST /sessions/:id/panes/:paneId/prompt - Submit a prompt to one pane's agent

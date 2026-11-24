@@ -167,6 +167,8 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **HerdrAgentStatusWatcher** (`services/herdr-agent-status.ts`) - Subscribes to herdr's per-pane `pane.agent_status_changed` (plus pane lifecycle events, which re-subscribe the pane set) and triggers an immediate sessions push. Decides *when* to rebuild the list, never what's in it — a dropped event costs latency, not correctness
 - **PaneStatusClock** (`services/pane-status-since.ts`) - When each pane entered the status it is in, for the board's age column. herdr reports a status and a sequence number, never a time, so this is the server noting when it saw a change - from herdr's own status events (`startPaneStatusClock`, always on, because the session list is only built while a client is connected and would date an overnight finish from the next page load) and from each list build. **A pane's first sighting has no time**: it was already in that state when the server started. A finished pane borrows its transcript's last write; one still working shows nothing until it next changes
 - **ClaudeBackgroundReader** (`services/claude-footer.ts`) - Background work as Claude Code's own footer counts it (`auto mode on · 1 shell`), read from the pane's screen because that line is the only place the count is published. Only what sits under the input box's bottom rule is footer - the same words above it are conversation. Read off the list's critical path: 22 panes took 110ms, so a build takes the last answer and starts the next read without waiting
+- **ClaudeMode** (`services/claude-mode.ts`) - Claude Code's permission mode from the same footer (`manual mode on`, `accept edits on`, `plan mode on`, `auto mode on`, `bypass permissions on`), and `cycleToMode`, which presses Shift+Tab until the footer agrees rather than counting presses - the cycle's length depends on how the session was started
+- **SlashCommands** (`services/slash-commands.ts`) - The person's own commands (`.claude/commands/**.md`, `a/b.md` is `/a:b`) and skills (`.claude/skills/*/SKILL.md`, minus `user-invocable: false`) for the chat's palette; a project's definition shadows the user's. Plugin skills are not read
 - **AuthService** (`services/auth.ts`) - Password-based authentication with session tokens
 - **PeerRegistry** (`services/peer-registry.ts`) - Persists peer server metadata to `peers.json` (with mutation locking), records per-peer success/failure state
 - **PeerAuth** (`services/peer-auth.ts`) - Proxy login to peer servers (`POST /api/auth/login`), stores JWT tokens for subsequent API/WS calls, marks peers `unauthorized` on 401
@@ -189,6 +191,10 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `GET /:id/panes/:paneId/viewport` - Capture a pane viewport over REST (used by `hrdle peek` / `--wait`)
 - `GET /:id/panes/:paneId/question` - The question the pane is waiting on, whole and structured: `{ status: 'question', question: { questionId, agent, source, question, multiSelect, options: [{ index, label, description?, checked?, freeText? }] } }`, or `none` / `not-blocked` / `unsupported` / `ambiguous`
 - `POST /:id/panes/:paneId/answer` - Answer it: `{ questionId, choices: number[], text? }`. Re-read before sending; a `questionId` that no longer matches is a 409 carrying the current read. Responds with `next`, what the pane asks after (the call's next tab, the review screen, or nothing)
+- `POST /:id/panes/:paneId/prompt` - Submit a prompt (`{ text, images }`) to one pane's agent through herdr's `agent.prompt`; images are bracketed-pasted first
+- `POST /:id/panes/:paneId/keys` - Press control keys in one pane (`{ keys: ['esc'] }`, a closed set) - the chat view's stop button
+- `GET /:id/panes/:paneId/mode` / `POST` (`{ mode }`) - Claude Code's permission mode, read off its footer; POST presses Shift+Tab and re-reads after each press until the footer shows the target
+- `GET /:id/panes/:paneId/commands` - The person's own slash commands and skills (`~/.claude`, and the project's `.claude` from the pane's directory)
 - `POST /:id/tabs/select` - Switch the workspace's active tab (`{ tabId }`)
 - `POST /:id/tabs/create` - Create and switch to a new tab
 - `POST /:id/tabs/close` - Close a tab and all its panes (`{ tabId }`)
@@ -291,10 +297,13 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **dashboard/PeerServerCard.tsx** - Per-peer server info card with system metrics
 
 **Chat** (`components/chat/`):
-- **ChatView.tsx** - Conversation-style view of the current pane, replacing the terminal area when "Chat" mode is selected, with a composer (`ChatComposer.tsx`) under it. It replaces the terminal rather than sitting beside it, so the composer is the one place on screen to type into that pane. The composer submits through `POST /:id/panes/:paneId/prompt` (herdr's `agent.prompt`), which takes no pane control stream. **It never shows a conversation it cannot name**: without the pane's agent session id there is no transcript to read, and the view says why instead (`utils/conversation-status.ts`: no agent, no session id from herdr, no transcript, nothing said yet, unreachable) - the newest transcript in the directory may be another session's. A peer's thread agent is read through `/api/peers/history/:peerId/...`
+- **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. It replaces the terminal rather than sitting beside it, so its composer is the one place on screen to type into that pane
+- **ChatComposer.tsx** - The chat's input, after the Claude app: text at full width, growing with the text as wrapped (not the count of newlines) up to 40% of the visible height, with an expand control past three lines; under it `+` (images, sent history), the mode chip and send. While the pane works an empty composer's send becomes stop (Esc); while it waits, `QuestionCard` shows the question from `.../question` and answers through `.../answer`; `/` opens `SlashPalette`
+- **ModeChip.tsx** - Claude Code's permission mode, read from and changed through `.../mode`. Bypass is shown, never offered
+- **SlashPalette.tsx** - Built-in commands that work without a terminal (a fixed list here) plus the person's own commands and skills from `.../commands`
 
 **Keyboard / Input**:
-- **InputBar.tsx** - Persistent input bar above the terminal with prompt history, slash-command picker, image upload, sendable to the focused pane
+- **InputBar.tsx** - Persistent input bar above the terminal with prompt history and image upload, sendable to the focused pane
 - **FloatingKeyboard.tsx** - Draggable floating keyboard for tablets, minimizable, saves position per input mode
 - **Keyboard.tsx** - Virtual keyboard for mobile with long-press for symbols
 

@@ -396,6 +396,21 @@
       "acceptEdits": "Edit files without asking",
       "plan": "Research and plan, change nothing",
       "auto": "Go ahead with what is judged safe"
+    },
+    "slashTitle": "Commands",
+    "slashSkill": "Skill",
+    "slashCommand": "Command",
+    "slash": {
+      "compact": "Summarize the conversation to free up context",
+      "clear": "Clear the conversation and start over",
+      "context": "Show how much context is in use",
+      "usage": "Show plan usage",
+      "model": "Switch model (e.g. /model sonnet)",
+      "effort": "Change reasoning effort (e.g. /effort high)",
+      "fast": "Toggle fast mode",
+      "rename": "Rename this conversation",
+      "recap": "Recap the conversation so far",
+      "config": "Change a setting (e.g. /config key=value)"
     }
   },
   "keyboard": {
