@@ -371,7 +371,10 @@
     "composerSendFailed": "Not sent: {{reason}}",
     "composerAttachImage": "Attach image",
     "composerRemoveImage": "Remove image",
-    "composerUploadFailed": "Failed"
+    "composerUploadFailed": "Failed",
+    "composerMore": "Add",
+    "composerExpand": "Write full screen",
+    "composerCollapse": "Exit full screen"
   },
   "keyboard": {
     "title": "Keyboard",

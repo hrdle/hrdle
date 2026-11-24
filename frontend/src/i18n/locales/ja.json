@@ -368,7 +368,10 @@
     "composerSendFailed": "送れませんでした: {{reason}}",
     "composerAttachImage": "画像を添付",
     "composerRemoveImage": "画像を外す",
-    "composerUploadFailed": "失敗"
+    "composerUploadFailed": "失敗",
+    "composerMore": "追加",
+    "composerExpand": "全画面で書く",
+    "composerCollapse": "全画面をやめる"
   },
   "keyboard": {
     "title": "キーボード",
