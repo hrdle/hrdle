@@ -4,6 +4,7 @@ import { authFetch } from "../../services/api";
 import { loadInputHistory, pushInputHistory } from "../../utils/input-history";
 import { uploadImage } from "../../utils/upload-image";
 import { ModeChip } from "./ModeChip";
+import { usePaneSuggestion } from "./usePaneSuggestion";
 import { paneUrl } from "./pane-url";
 import { QuestionCard } from "./QuestionCard";
 import {
@@ -174,6 +175,20 @@ export function ChatComposer({
 			? question.options.find((o) => o.freeText)
 			: undefined;
 
+	const { suggestion, clear: clearSuggestion } = usePaneSuggestion(
+		sessionId,
+		paneId,
+		peerId,
+		showMode && !working && !waiting && !question,
+	);
+	const offerSuggestion =
+		suggestion !== null && text.length === 0 && attachments.length === 0 && !expanded;
+	const acceptSuggestion = () => {
+		if (!suggestion) return;
+		setText(suggestion);
+		textareaRef.current?.focus();
+	};
+
 	const query = slashQuery(text);
 	const allCommands = usePaneCommands(sessionId, paneId, peerId, query !== null);
 	const [paletteDismissed, setPaletteDismissed] = useState<string | null>(null);
@@ -247,6 +262,7 @@ export function ChatComposer({
 		}
 		setSending(true);
 		setError(null);
+		clearSuggestion();
 		try {
 			const res = await authFetch(paneUrl(sessionId, paneId, peerId, "prompt"), {
 				method: "POST",
@@ -295,6 +311,11 @@ export function ChatComposer({
 				return;
 			}
 		}
+		if (e.key === "Tab" && offerSuggestion && !e.shiftKey) {
+			e.preventDefault();
+			acceptSuggestion();
+			return;
+		}
 		if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
 		if (e.ctrlKey || e.metaKey) {
 			e.preventDefault();
@@ -334,6 +355,31 @@ export function ChatComposer({
 					onPick={pickEntry}
 					onHover={setActiveEntry}
 				/>
+			)}
+			{offerSuggestion && !question && (
+				<div className="mx-auto mb-2 flex max-w-3xl">
+					<button
+						type="button"
+						onClick={acceptSuggestion}
+						aria-label={t("conversation.suggestionUse", { text: suggestion })}
+						className="flex min-w-0 max-w-full items-center gap-2 rounded-full border border-cv-border bg-cv-surface px-3 py-1.5 text-left text-cv-text-secondary text-sm hover:bg-cv-surface-hover"
+						data-testid="chat-suggestion"
+					>
+						<svg
+							className="h-3.5 w-3.5 shrink-0 text-cv-text-muted"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							strokeWidth={2}
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							aria-hidden="true"
+						>
+							<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" />
+						</svg>
+						<span className="truncate">{suggestion}</span>
+					</button>
+				</div>
 			)}
 			{showHistory && history.length > 0 && (
 				<div className="mx-auto mb-2 max-h-40 max-w-3xl overflow-y-auto rounded-lg border border-cv-border bg-cv-surface">

@@ -374,6 +374,7 @@
     "composerCollapse": "チャットに戻る",
     "composerStop": "止める（Esc）",
     "composerStopFailed": "止められませんでした: {{reason}}",
+    "suggestionUse": "候補を入力欄に入れる: {{text}}",
     "questionWaiting": "Claude が回答を待っています",
     "questionSubmit": "回答を送る",
     "questionFailed": "回答できませんでした: {{reason}}",

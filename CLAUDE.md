@@ -194,6 +194,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `POST /:id/panes/:paneId/prompt` - Submit a prompt (`{ text, images }`) to one pane's agent through herdr's `agent.prompt`; images are bracketed-pasted first
 - `POST /:id/panes/:paneId/keys` - Press control keys in one pane (`{ keys: ['esc'] }`, a closed set) - the chat view's stop button
 - `GET /:id/panes/:paneId/mode` / `POST` (`{ mode }`) - Claude Code's permission mode, read off its footer; POST presses Shift+Tab and re-reads after each press until the footer shows the target
+- `GET /:id/panes/:paneId/suggestion` - The next prompt Claude Code suggests in its empty input box (`{ suggestion }`), told from typed text by its faint attribute, so the screen is read with ANSI
 - `GET /:id/panes/:paneId/commands` - The person's own slash commands and skills (`~/.claude`, and the project's `.claude` from the pane's directory)
 - `POST /:id/tabs/select` - Switch the workspace's active tab (`{ tabId }`)
 - `POST /:id/tabs/create` - Create and switch to a new tab
@@ -298,7 +299,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 
 **Chat** (`components/chat/`):
 - **ChatView.tsx** - Conversation-style view of the current session, replacing the terminal area when "Chat" mode is selected. It replaces the terminal rather than sitting beside it, so its composer is the one place on screen to type into that pane
-- **ChatComposer.tsx** - The chat's input, after the Claude app: text at full width, growing with the text as wrapped (not the count of newlines) up to 40% of the visible height, with an expand control past three lines; under it `+` (images, sent history), the mode chip and send. While the pane works an empty composer's send becomes stop (Esc); while it waits, `QuestionCard` shows the question or permission prompt from `.../question` and answers through `.../answer` (a permission's `No` with the composer's words declines with an instruction); `/` opens `SlashPalette`
+- **ChatComposer.tsx** - The chat's input, after the Claude app: text at full width, growing with the text as wrapped (not the count of newlines) up to 40% of the visible height, with an expand control past three lines; under it `+` (images, sent history), the mode chip and send. While the pane works an empty composer's send becomes stop (Esc); while it waits, `QuestionCard` shows the question or permission prompt from `.../question` and answers through `.../answer` (a permission's `No` with the composer's words declines with an instruction); `/` opens `SlashPalette`; after a turn, Claude Code's own suggested next prompt (`.../suggestion`) is offered as a chip above it, put in the composer by a tap or Tab
 - **ModeChip.tsx** - Claude Code's permission mode, read from and changed through `.../mode`. Bypass is shown, never offered
 - **SlashPalette.tsx** - Built-in commands that work without a terminal (a fixed list here) plus the person's own commands and skills from `.../commands`
 
