@@ -8,6 +8,8 @@ export interface QuestionOption {
 	description?: string;
 	checked?: boolean;
 	freeText?: boolean;
+	/** With `freeText`: a tap chooses it without words. */
+	textOptional?: boolean;
 }
 
 export interface PaneQuestion {
@@ -15,6 +17,10 @@ export interface PaneQuestion {
 	question: string;
 	multiSelect: boolean;
 	options: QuestionOption[];
+	kind?: "permission";
+	/** Permission only: the tool asking (`Bash command`) and what it will do. */
+	title?: string;
+	detail?: string;
 }
 
 type QuestionRead =
