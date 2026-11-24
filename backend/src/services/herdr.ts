@@ -17,6 +17,7 @@ import {
   listWorkspaces,
   readPaneText,
   renameWorkspace as renameHerdrWorkspace,
+  sendPaneKeys,
   toHerdrPaneId,
   toTmuxPaneId,
   type HerdrAgentStatus,
@@ -569,6 +570,14 @@ export class HerdrService {
       await new Promise((r) => setTimeout(r, IMAGE_PASTE_SETTLE_MS));
     }
     await herdrRpc('agent.prompt', { target, text: images.length ? ` ${text}` : text });
+    return 'ok';
+  }
+
+  /** Press named keys in one pane, without taking its control stream. */
+  async pressPaneKeys(sessionId: string, paneId: string, keys: string[]): Promise<'ok' | 'missing'> {
+    const ws = await this.resolveWorkspace(sessionId);
+    if (!ws) return 'missing';
+    await sendPaneKeys(toHerdrPaneId(ws.workspace_id, paneId), keys);
     return 'ok';
   }
 

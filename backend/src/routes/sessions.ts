@@ -1663,6 +1663,54 @@ export const PanePromptSchema = z
   })
   .refine((b) => b.text.trim().length > 0 || b.images.length > 0, 'text or images is required');
 
+/**
+ * The keys the chat view presses for its controls. A closed set: the route
+ * reaches any pane, and an open one would be a second, unreviewed way to type
+ * into it.
+ */
+export const PaneKeysSchema = z.object({
+  keys: z.array(z.enum(['esc', 'shift+tab'])).min(1).max(8),
+});
+
+// POST /sessions/:id/panes/:paneId/keys - Press control keys in one pane
+// The chat view's stop button (esc) and mode chip (shift+tab).
+sessions.post('/:id/panes/:paneId/keys', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/keys`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await c.req.text(),
+    });
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const parsed = PaneKeysSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }, 400);
+  }
+  const status = await herdrService.addressStatus(id);
+  if (status !== 'ok') {
+    return c.json(
+      status === 'ambiguous'
+        ? { error: `"${id}" names more than one session - address it by session id` }
+        : { error: 'Session not found' },
+      404,
+    );
+  }
+  try {
+    const result = await herdrService.pressPaneKeys(id, paneId, parsed.data.keys);
+    if (result === 'missing') return c.json({ error: 'Session not found' }, 404);
+    return c.json({ success: true, paneId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return c.json({ error: `The pane did not take the keys: ${message}` }, 409);
+  }
+});
+
 // POST /sessions/:id/panes/:paneId/prompt - Submit a prompt to one pane's agent
 // The chat view's composer. Unlike /prompt it names the pane - a workspace can
 // hold two agents - and goes through herdr's agent.prompt rather than a pane

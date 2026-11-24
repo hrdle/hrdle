@@ -371,7 +371,9 @@
     "composerUploadFailed": "失敗",
     "composerMore": "添付と送信履歴",
     "composerExpand": "全画面で書く",
-    "composerCollapse": "チャットに戻る"
+    "composerCollapse": "チャットに戻る",
+    "composerStop": "止める（Esc）",
+    "composerStopFailed": "止められませんでした: {{reason}}"
   },
   "keyboard": {
     "title": "キーボード",
