@@ -6,6 +6,13 @@ import { uploadImage } from "../../utils/upload-image";
 import { ModeChip } from "./ModeChip";
 import { paneUrl } from "./pane-url";
 import { QuestionCard } from "./QuestionCard";
+import {
+	type PaletteEntry,
+	SlashPalette,
+	filterEntries,
+	slashQuery,
+	usePaneCommands,
+} from "./SlashPalette";
 import { usePaneQuestion } from "./usePaneQuestion";
 
 /** An image picked for the next prompt: shown at once, sent once uploaded. */
@@ -167,6 +174,21 @@ export function ChatComposer({
 			? question.options.find((o) => o.freeText)
 			: undefined;
 
+	const query = slashQuery(text);
+	const allCommands = usePaneCommands(sessionId, paneId, peerId, query !== null);
+	const [paletteDismissed, setPaletteDismissed] = useState<string | null>(null);
+	const [activeEntry, setActiveEntry] = useState(0);
+	const paletteEntries =
+		query !== null && paletteDismissed !== text ? filterEntries(allCommands, query) : [];
+	const paletteOpen = paletteEntries.length > 0;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the highlight starts over with each keystroke
+	useEffect(() => setActiveEntry(0), [query]);
+
+	const pickEntry = (entry: PaletteEntry) => {
+		setText(`/${entry.name} `);
+		textareaRef.current?.focus();
+	};
+
 	const uploading = attachments.some((a) => !a.path && !a.error);
 	const images = attachments.flatMap((a) => (a.path ? [a.path] : []));
 	const canSend =
@@ -254,6 +276,25 @@ export function ChatComposer({
 	};
 
 	const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (paletteOpen && !e.nativeEvent.isComposing) {
+			const n = paletteEntries.length;
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+				e.preventDefault();
+				setActiveEntry((i) => (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n);
+				return;
+			}
+			if (e.key === "Enter" || e.key === "Tab") {
+				e.preventDefault();
+				const entry = paletteEntries[Math.min(activeEntry, n - 1)];
+				if (entry) pickEntry(entry);
+				return;
+			}
+			if (e.key === "Escape") {
+				e.preventDefault();
+				setPaletteDismissed(text);
+				return;
+			}
+		}
 		if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
 		if (e.ctrlKey || e.metaKey) {
 			e.preventDefault();
@@ -284,6 +325,14 @@ export function ChatComposer({
 					error={answerError}
 					onAnswer={(choices, text) => void answer(choices, text)}
 					onWrite={() => textareaRef.current?.focus()}
+				/>
+			)}
+			{paletteOpen && !expanded && (
+				<SlashPalette
+					entries={paletteEntries}
+					active={activeEntry}
+					onPick={pickEntry}
+					onHover={setActiveEntry}
 				/>
 			)}
 			{showHistory && history.length > 0 && (
