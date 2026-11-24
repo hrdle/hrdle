@@ -2183,7 +2183,9 @@ export function DesktopLayout({
 
 					<FloatingKeyboard
 						ref={floatingKeyboardRef}
-						visible={showKeyboard}
+						// It types into the pane, and the chat has a composer of its own:
+						// with both up, the keyboard on screen is not the one being read.
+						visible={showKeyboard && !chatPaneOnScreen}
 						onClose={() => setShowKeyboard(false)}
 						onSend={handleKeyboardSend}
 						onFilePicker={handleFilePicker}
