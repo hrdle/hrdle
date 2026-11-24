@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.222] - 2026-11-24
+
+### Added
+- **The chat view offers Claude Code's suggested next prompt.** After a turn,
+  the prompt Claude Code suggests in its empty input box shows as a chip above
+  the composer. A tap, or Tab on a keyboard, puts it in the composer to edit or
+  send. New route: `GET /api/sessions/:id/panes/:paneId/suggestion`.
+
 ## [0.3.221] - 2026-11-24
 
 ### Added
