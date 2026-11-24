@@ -371,7 +371,10 @@
     "composerSendFailed": "Not sent: {{reason}}",
     "composerAttachImage": "Attach image",
     "composerRemoveImage": "Remove image",
-    "composerUploadFailed": "Failed"
+    "composerUploadFailed": "Failed",
+    "composerMore": "Attach or reuse",
+    "composerExpand": "Write full screen",
+    "composerCollapse": "Back to the chat"
   },
   "keyboard": {
     "title": "Keyboard",
