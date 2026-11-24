@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { ClaudeBackgroundReader } from '../services/claude-footer';
 import { cycleToMode, parseClaudeMode } from '../services/claude-mode';
-import { getPane, readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
+import { getPane, readPane, readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
+import { parseClaudeSuggestion } from '../services/claude-suggestion';
 import { listSlashCommands } from '../services/slash-commands';
 import { paneStatusClock } from '../services/pane-status-since';
 import { promptAgent, startAgent, waitForAgentReady, type StartedAgent } from '../services/agent-launch';
@@ -1733,6 +1734,24 @@ sessions.get('/:id/panes/:paneId/mode', async (c) => {
   if (!target) return c.json({ error: 'Session not found' }, 404);
   const screen = await readPaneText(target, 'visible');
   return c.json({ mode: screen ? parseClaudeMode(screen) : null });
+});
+
+// GET /sessions/:id/panes/:paneId/suggestion - The next prompt Claude Code
+// suggests, read off its input box
+sessions.get('/:id/panes/:paneId/suggestion', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/suggestion`));
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const target = await herdrService.herdrPaneOf(id, paneId);
+  if (!target) return c.json({ error: 'Session not found' }, 404);
+  const screen = await readPane(target, 'visible');
+  return c.json({ suggestion: screen ? parseClaudeSuggestion(screen) : null });
 });
 
 // POST /sessions/:id/panes/:paneId/mode - Cycle to a mode with Shift+Tab

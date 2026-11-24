@@ -377,6 +377,7 @@
     "composerCollapse": "Back to the chat",
     "composerStop": "Stop (Esc)",
     "composerStopFailed": "Not stopped: {{reason}}",
+    "suggestionUse": "Put the suggestion in the composer: {{text}}",
     "questionWaiting": "Claude is waiting for your answer",
     "questionSubmit": "Send answer",
     "questionFailed": "Not answered: {{reason}}",
