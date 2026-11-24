@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.224] - 2026-11-24
+
+### Added
+- **Claude Code's panels show in the chat view.** `/usage`, `/model`,
+  `/config` and similar commands open a panel over the input box and write
+  nothing to the transcript, so the chat showed nothing after one. The panel
+  now shows as a card above the composer, with arrow, Enter and close buttons
+  to move through it. New route: `GET /api/sessions/:id/panes/:paneId/panel`;
+  `POST .../keys` also takes the arrows and `enter`.
+
 ## [0.3.223] - 2026-11-24
 
 ### Added
