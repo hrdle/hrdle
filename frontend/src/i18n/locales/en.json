@@ -376,7 +376,11 @@
     "composerExpand": "Write full screen",
     "composerCollapse": "Back to the chat",
     "composerStop": "Stop (Esc)",
-    "composerStopFailed": "Not stopped: {{reason}}"
+    "composerStopFailed": "Not stopped: {{reason}}",
+    "questionWaiting": "Claude is waiting for your answer",
+    "questionSubmit": "Send answer",
+    "questionFailed": "Not answered: {{reason}}",
+    "questionWriteAnswer": "Write a different answer"
   },
   "keyboard": {
     "title": "Keyboard",

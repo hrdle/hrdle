@@ -20,6 +20,8 @@ interface ChatViewProps {
 	paneId?: string;
 	/** The pane's agent is mid-turn: the composer offers to stop it. */
 	working?: boolean;
+	/** The pane's agent is waiting on the person: a question may be up. */
+	waiting?: boolean;
 }
 
 /** Statuses that are a reason rather than a conversation. */
@@ -70,6 +72,7 @@ export function ChatView({
 	peerId,
 	paneId,
 	working = false,
+	waiting = false,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const { messages, conversationId, status } = useAgentConversation({
@@ -137,6 +140,7 @@ export function ChatView({
 					paneId={paneId}
 					peerId={peerId}
 					working={working}
+					waiting={waiting}
 				/>
 			)}
 		</div>
