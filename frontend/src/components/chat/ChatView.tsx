@@ -126,7 +126,7 @@ export function ChatView({
 		!!paneId && status !== "missing-agent" && status !== "unsupported-agent";
 
 	return (
-		<div className="flex h-full min-h-0 flex-col bg-cv-bg">
+		<div className="relative flex h-full min-h-0 flex-col bg-cv-bg">
 			<div className="min-h-0 flex-1">{content}</div>
 			{canPrompt && paneId && (
 				<ChatComposer sessionId={sessionId} paneId={paneId} peerId={peerId} />
