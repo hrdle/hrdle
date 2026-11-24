@@ -519,7 +519,7 @@ export function ChatComposer({
 							paneId={paneId}
 							peerId={peerId}
 							// A question covers the input box, and its footer with it.
-							readable={!waiting}
+							readable={!waiting && !question}
 						/>
 					)}
 					<span className="flex-1" />

@@ -18,7 +18,13 @@ const MODE_WORDS: Array<[RegExp, ClaudeMode]> = [
   [/\bbypass permissions on\b/, 'bypass'],
 ];
 
-/** The mode the footer shows, or null when the screen shows no input box. */
+/**
+ * The mode the footer names, or null when it names none.
+ *
+ * A question or permission dialog also ends in a rule and a few short lines,
+ * so "no mode words" cannot be read as the default mode: it was, and Shift+Tab
+ * then went into the dialog six times looking for a mode that was never there.
+ */
 export function parseClaudeMode(screen: string): ClaudeMode | null {
   const footer = claudeFooterLines(screen);
   if (!footer) return null;
@@ -27,8 +33,7 @@ export function parseClaudeMode(screen: string): ClaudeMode | null {
       if (words.test(line)) return mode;
     }
   }
-  // Older builds show nothing for the default mode.
-  return 'manual';
+  return null;
 }
 
 /** Presses before giving up: one full cycle plus bypass, plus one for a press the TUI dropped. */
@@ -53,7 +58,7 @@ export async function cycleToMode(
 ): Promise<{ ok: true; mode: ClaudeMode } | { ok: false; mode: ClaudeMode | null; error: string }> {
   const first = await io.read();
   let mode = first ? parseClaudeMode(first) : null;
-  if (mode === null) return { ok: false, mode, error: 'The pane is not showing its input box' };
+  if (mode === null) return { ok: false, mode, error: 'The pane is not showing its input box (a question or dialog may be open)' };
   for (let i = 0; i < MAX_PRESSES && mode !== target; i++) {
     await io.pressShiftTab();
     await io.sleep(SETTLE_MS);

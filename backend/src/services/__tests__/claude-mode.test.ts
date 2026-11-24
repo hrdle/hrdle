@@ -15,7 +15,20 @@ describe('parseClaudeMode', () => {
   });
 
   test('takes nothing from the prompt being typed', () => {
-    expect(parseClaudeMode(screen('? for shortcuts', 'turn plan mode on please'))).toBe('manual');
+    expect(parseClaudeMode(screen('? for shortcuts', 'turn plan mode on please'))).toBeNull();
+  });
+
+  test('is null under an open question, whose last rule looks like a footer', () => {
+    const question = [
+      '  5. [ ] Type something',
+      '     Next',
+      RULE,
+      '  6. Chat about this',
+      '',
+      'Enter to select · Tab/Arrow keys to navigate ·',
+      'Esc to cancel',
+    ].join('\n');
+    expect(parseClaudeMode(question)).toBeNull();
   });
 
   test('is null when the input box is not on screen', () => {

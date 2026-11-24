@@ -14,7 +14,7 @@ interface ModeChipProps {
 	sessionId: string;
 	paneId: string;
 	peerId?: string;
-	/** Mid-turn or on a question the footer is not under the input box. */
+	/** False while a question is open: Shift+Tab would go into its dialog. */
 	readable: boolean;
 }
 
