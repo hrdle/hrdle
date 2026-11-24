@@ -7,7 +7,6 @@ import {
 	type IndicatorState,
 	type PeerSession,
 	samePeerId,
-	type SessionResponse,
 	type SessionTheme,
 } from "../../../shared/types";
 import { isTransientNetworkError } from "../services/api";

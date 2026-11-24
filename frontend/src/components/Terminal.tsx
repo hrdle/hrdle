@@ -1307,7 +1307,7 @@ export const TerminalComponent = memo(
 					return;
 				}
 				const offset = window.innerHeight - viewport.height;
-				setKeyboardOffset(offset > 0 ? offset : 0);
+				setKeyboardOffset(Math.max(offset, 0));
 			};
 
 			viewport.addEventListener("resize", updateKeyboardOffset);

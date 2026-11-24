@@ -41,7 +41,7 @@ async function settledDescriptorsOf(file: string): Promise<number> {
 function transcript(lines: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), 'hrdle-transcript-'));
   const file = join(dir, 'session.jsonl');
-  writeFileSync(file, lines.join('\n') + '\n');
+  writeFileSync(file, `${lines.join('\n')}\n`);
   return file;
 }
 
