@@ -640,61 +640,49 @@ export interface CodexUsageLimits {
 }
 
 /**
- * Aggregated Grok Build token usage. xAI exposes no rate-limit windows in its
- * local session data (unlike Codex's rate_limits events), so the dashboard
- * shows consumption totals aggregated from `turn_completed` records instead
- * of cycle utilization bars.
+ * Token consumption of an agent that exposes no rate-limit windows locally
+ * (Grok, Kimi, OpenCode, pi), so the dashboard shows totals aggregated from its
+ * own session data instead of cycle utilization bars.
+ *
+ * Where `costUsd` comes from differs per agent and is the dashboard's to say:
+ * Kimi's is our estimate from OpenRouter list prices, OpenCode's and pi's are
+ * the figure the agent recorded for each turn, Grok has none. Absent always
+ * means unknown, never free - a free model records a genuine 0.
  */
-export interface GrokUsageWindow {
-  /** Completed turns in the window. */
+export interface AgentUsageWindow {
+  /** Turns (Kimi: usage records) in the window. */
   turns: number;
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
-}
-
-export interface GrokUsageSummary {
-  last24h: GrokUsageWindow;
-  last7d: GrokUsageWindow;
-  /** Per-model totals over the 7-day window, largest first. */
-  models: Array<{ model: string; totalTokens: number }>;
-  /** Sessions active in the 7-day window. */
-  sessions7d: number;
-  /** 'Free' when the latest turns ran on a `*-free` model id. */
-  planType?: string;
-  /** ISO timestamp of the most recent turn seen. */
-  lastTurnAt?: string;
-}
-
-/**
- * Aggregated Kimi Code token usage. Kimi exposes no rate-limit windows or plan
- * data in its local session data, so the dashboard shows consumption totals
- * aggregated from `usage.record` records instead of cycle utilization bars.
- */
-export interface KimiUsageWindow {
-  /** usage.record entries in the window. */
-  turns: number;
-  totalTokens: number;
-  inputTokens: number;
-  cacheReadTokens: number;
-  outputTokens: number;
-  /**
-   * Estimated spend for the window in USD, from local token counts × the
-   * provider's list price. Absent when no model in the window could be priced
-   * (unknown alias, non-OpenRouter provider, price list unreachable) — an
-   * absent cost means "unknown", never "free".
-   */
+  /** Absent for an agent that does not record it. */
+  cacheReadTokens?: number;
+  /** Absent for an agent that does not record it. Already inside `outputTokens`. */
+  reasoningTokens?: number;
   costUsd?: number;
 }
 
-export interface KimiUsageModelTotal {
-  /** Model alias as recorded by Kimi (e.g. `k3`). */
+export interface AgentUsageModelTotal {
+  /** Model id as the agent recorded it (Kimi: an alias such as `k3`). */
   model: string;
   totalTokens: number;
-  /** Estimated spend for this model over the 7-day window, USD. */
+  /** Spend for this model over the 7-day window, USD. */
   costUsd?: number;
-  /** Provider-side model id the alias was priced as (e.g. `moonshotai/kimi-k3`). */
+  /** Kimi only: the provider-side id the alias was priced as (e.g. `moonshotai/kimi-k3`). */
   pricedAs?: string;
+}
+
+export interface AgentUsageSummary {
+  last24h: AgentUsageWindow;
+  last7d: AgentUsageWindow;
+  /** Per-model totals over the 7-day window, largest first. */
+  models: AgentUsageModelTotal[];
+  /** Sessions with turns in the 7-day window. */
+  sessions7d: number;
+  /** ISO timestamp of the most recent turn seen. */
+  lastTurnAt?: string;
+  /** Grok only: 'Free' when the latest turn ran on a `*-free` model id. */
+  planType?: string;
 }
 
 /**
@@ -726,11 +714,7 @@ export interface KimiUsageDay {
   observed: boolean;
 }
 
-export interface KimiUsageSummary {
-  last24h: KimiUsageWindow;
-  last7d: KimiUsageWindow;
-  /** Per-model totals over the 7-day window, largest first. */
-  models: KimiUsageModelTotal[];
+export interface KimiUsageSummary extends AgentUsageSummary {
   /**
    * Local calendar days, oldest first, today last. Contiguous — a day with no
    * usage is present with zeroes, because a gap in a bar chart has to be a bar
@@ -741,67 +725,6 @@ export interface KimiUsageSummary {
    * can still be read for; everything older comes from that file.
    */
   daily: KimiUsageDay[];
-  /** Sessions with usage in the 7-day window. */
-  sessions7d: number;
-  /** ISO timestamp of the most recent usage record seen. */
-  lastTurnAt?: string;
-}
-
-/**
- * Aggregated OpenCode token usage. Like Grok and Kimi, OpenCode exposes no
- * rate-limit windows locally, so the dashboard shows consumption totals rather
- * than cycle utilization bars.
- *
- * Unlike those two, the cost here is **not** an estimate of ours: OpenCode
- * computes and stores a per-turn `cost` itself, so the figure is whatever it
- * charged the turn at. It is absent, never zeroed, when no turn in the window
- * carried one — and genuinely 0 for free models, which report exactly that.
- */
-export interface OpenCodeUsageWindow {
-  /** Assistant turns in the window. */
-  turns: number;
-  totalTokens: number;
-  inputTokens: number;
-  cacheReadTokens: number;
-  outputTokens: number;
-  reasoningTokens: number;
-  /** Spend for the window in USD, as recorded by OpenCode. */
-  costUsd?: number;
-}
-
-export interface OpenCodeUsageSummary {
-  last24h: OpenCodeUsageWindow;
-  last7d: OpenCodeUsageWindow;
-  /** Per-model totals over the 7-day window, largest first. */
-  models: Array<{ model: string; totalTokens: number; costUsd?: number }>;
-  /** Sessions with turns in the 7-day window. */
-  sessions7d: number;
-  /** ISO timestamp of the most recent turn seen. */
-  lastTurnAt?: string;
-}
-
-/**
- * pi consumption, from the usage every assistant message in its session file
- * carries. Same footing as OpenCode: no rate-limit windows to show, and the
- * cost is the figure pi itself recorded for the turn, absent when no turn in
- * the window carried one.
- */
-export interface PiUsageWindow {
-  turns: number;
-  totalTokens: number;
-  inputTokens: number;
-  cacheReadTokens: number;
-  outputTokens: number;
-  reasoningTokens: number;
-  costUsd?: number;
-}
-
-export interface PiUsageSummary {
-  last24h: PiUsageWindow;
-  last7d: PiUsageWindow;
-  models: Array<{ model: string; totalTokens: number; costUsd?: number }>;
-  sessions7d: number;
-  lastTurnAt?: string;
 }
 
 /**
@@ -885,7 +808,7 @@ export interface SttUsageSummary {
 
 /**
  * Actual OpenRouter spend, read from OpenRouter's own accounting for the API
- * key configured in `~/.kimi-code/config.toml`. Unlike `KimiUsageWindow.costUsd`
+ * key configured in `~/.kimi-code/config.toml`. Unlike the Kimi `AgentUsageWindow.costUsd`
  * (a local estimate over rolling windows), these are billed figures over
  * OpenRouter's calendar windows and cover every request made with that key.
  */
@@ -1002,10 +925,10 @@ export interface DashboardResponse {
   usageLimits: UsageLimits | null; // New: from Anthropic API
   usageLimitsStatus?: UsageLimitsStatus; // Error/state info for UI
   codexUsageLimits?: CodexUsageLimits | null; // From Codex rollouts
-  grokUsage?: GrokUsageSummary | null; // From Grok updates.jsonl turn_completed records
+  grokUsage?: AgentUsageSummary | null; // From Grok updates.jsonl turn_completed records
   kimiUsage?: KimiUsageSummary | null; // From Kimi wire.jsonl usage.record records
-  opencodeUsage?: OpenCodeUsageSummary | null; // From OpenCode's assistant message rows
-  piUsage?: PiUsageSummary | null; // From the usage on pi's assistant messages
+  opencodeUsage?: AgentUsageSummary | null; // From OpenCode's assistant message rows
+  piUsage?: AgentUsageSummary | null; // From the usage on pi's assistant messages
   // Billed OpenRouter spend for the key in ~/.kimi-code/config.toml. Null when
   // no OpenRouter provider is configured or the account can't be reached.
   openRouterUsage?: OpenRouterAccountUsage | null;

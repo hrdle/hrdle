@@ -144,7 +144,7 @@ export function KimiDailyCostChart({ daily }: KimiDailyCostChartProps) {
 						? t("dashboard.kimiDailyCostUnseenDay", { date: day.date })
 						: day.costUsd === undefined
 							? t("dashboard.kimiDailyCostUnknown", { date: day.date })
-							: `${day.date}: ${formatUsd(day.costUsd)} · ${formatTokens(day.totalTokens)} · ${t("dashboard.kimiTurns", { count: day.turns })}`;
+							: `${day.date}: ${formatUsd(day.costUsd)} · ${formatTokens(day.totalTokens)} · ${t("dashboard.usageTurns", { count: day.turns })}`;
 					return (
 						<div
 							key={day.date}

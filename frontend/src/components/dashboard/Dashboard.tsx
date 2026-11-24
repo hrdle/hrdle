@@ -18,6 +18,7 @@ import { Card, StatTile } from "./Card";
 import { DailyUsageChart } from "./DailyUsageChart";
 import { SttUsageCard } from "./SttUsageCard";
 import { HourlyHeatmap } from "./HourlyHeatmap";
+import { AgentUsageCard } from "./AgentUsageCard";
 import { KimiDailyCostChart } from "./KimiDailyCostChart";
 import { ModelUsageChart } from "./ModelUsageChart";
 import { PeerServerCard } from "./PeerServerCard";
@@ -200,9 +201,10 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 
 				{effectiveTab === "grok" ? (
 					<div className={gridClass(compact)}>
-						<Card
-							className="md:col-span-2"
+						<AgentUsageCard
 							title={t("dashboard.grokUsage")}
+							footnote={t("dashboard.grokNoRateLimitInfo")}
+							usage={grokUsage}
 							aside={
 								grokUsage?.planType && (
 									<span className="px-1.5 py-px rounded border text-[10px] font-medium text-emerald-300 bg-emerald-400/10 border-emerald-400/20 shrink-0">
@@ -210,105 +212,16 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 									</span>
 								)
 							}
-							footnote={t("dashboard.grokNoRateLimitInfo")}
-						>
-							<div className="grid grid-cols-2 gap-2.5">
-								{(
-									[
-										["grokLast24h", grokUsage?.last24h],
-										["grokLast7d", grokUsage?.last7d],
-									] as const
-								).map(([labelKey, window]) => (
-									<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
-										<div className="text-lg font-semibold text-th-text tabular-nums">
-											{formatTokens(window?.totalTokens ?? 0)}
-										</div>
-										<div className="text-[11px] text-th-text-muted">
-											{t("dashboard.grokTurns", { count: window?.turns ?? 0 })}
-										</div>
-									</StatTile>
-								))}
-							</div>
-							{(grokUsage?.models.length ?? 0) > 0 && (
-								<div className="mt-3 space-y-1">
-									<div className="text-[11px] text-th-text-muted">
-										{t("dashboard.grokModelBreakdown")}
-									</div>
-									{grokUsage?.models.map((m) => (
-										<div
-											key={m.model}
-											className="flex justify-between text-xs text-th-text-secondary"
-										>
-											<span className="truncate">{m.model}</span>
-											<span className="shrink-0 tabular-nums">
-												{formatTokens(m.totalTokens)}
-											</span>
-										</div>
-									))}
-								</div>
-							)}
-						</Card>
+						/>
 					</div>
 				) : effectiveTab === "kimi" ? (
 					<div className={gridClass(compact)}>
-						<Card
-							className="md:col-span-2"
+						<AgentUsageCard
 							title={t("dashboard.kimiUsage")}
 							footnote={t("dashboard.kimiNoRateLimitInfo")}
-						>
-							<div className="grid grid-cols-2 gap-2.5">
-								{(
-									[
-										["kimiLast24h", kimiUsage?.last24h],
-										["kimiLast7d", kimiUsage?.last7d],
-									] as const
-								).map(([labelKey, window]) => (
-									<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
-										<div className="text-lg font-semibold text-th-text tabular-nums">
-											{formatTokens(window?.totalTokens ?? 0)}
-										</div>
-										<div className="text-[11px] text-th-text-muted">
-											{t("dashboard.kimiTurns", { count: window?.turns ?? 0 })}
-										</div>
-										{window?.costUsd !== undefined && (
-											<div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
-												<span className="text-sm font-semibold text-emerald-300 tabular-nums">
-													{formatUsd(window.costUsd)}
-												</span>
-												<span className="ml-1 text-[10px] text-th-text-muted">
-													{t("dashboard.kimiCostEstimated")}
-												</span>
-											</div>
-										)}
-									</StatTile>
-								))}
-							</div>
-							{(kimiUsage?.models.length ?? 0) > 0 && (
-								<div className="mt-3 space-y-1">
-									<div className="text-[11px] text-th-text-muted">
-										{t("dashboard.kimiModelBreakdown")}
-									</div>
-									{kimiUsage?.models.map((m) => (
-										<div
-											key={m.model}
-											className="flex justify-between gap-2 text-xs text-th-text-secondary"
-										>
-											<span className="truncate" title={m.pricedAs}>
-												{m.pricedAs ?? m.model}
-											</span>
-											<span className="shrink-0 tabular-nums">
-												{formatTokens(m.totalTokens)}
-												{m.costUsd !== undefined && (
-													<span className="ml-2 text-emerald-300">
-														{formatUsd(m.costUsd)}
-													</span>
-												)}
-											</span>
-										</div>
-									))}
-								</div>
-							)}
-						</Card>
+							usage={kimiUsage}
+							costLabel={t("dashboard.usageCostEstimated")}
+						/>
 						{kimiUsage?.daily && (
 							<div className="md:col-span-2">
 								<KimiDailyCostChart daily={kimiUsage.daily} />
@@ -374,121 +287,21 @@ export function Dashboard({ className = "", compact = false }: DashboardProps) {
 					</div>
 				) : effectiveTab === "opencode" ? (
 					<div className={gridClass(compact)}>
-						<Card
-							className="md:col-span-2"
+						<AgentUsageCard
 							title={t("dashboard.opencodeUsage")}
 							footnote={t("dashboard.opencodeNoRateLimitInfo")}
-						>
-							<div className="grid grid-cols-2 gap-2.5">
-								{(
-									[
-										["opencodeLast24h", opencodeUsage?.last24h],
-										["opencodeLast7d", opencodeUsage?.last7d],
-									] as const
-								).map(([labelKey, window]) => (
-									<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
-										<div className="text-lg font-semibold text-th-text tabular-nums">
-											{formatTokens(window?.totalTokens ?? 0)}
-										</div>
-										<div className="text-[11px] text-th-text-muted">
-											{t("dashboard.opencodeTurns", { count: window?.turns ?? 0 })}
-										</div>
-										{window?.costUsd !== undefined && (
-											<div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
-												<span className="text-sm font-semibold text-emerald-300 tabular-nums">
-													{formatUsd(window.costUsd)}
-												</span>
-												<span className="ml-1 text-[10px] text-th-text-muted">
-													{t("dashboard.opencodeCostRecorded")}
-												</span>
-											</div>
-										)}
-									</StatTile>
-								))}
-							</div>
-							{(opencodeUsage?.models.length ?? 0) > 0 && (
-								<div className="mt-3 space-y-1">
-									<div className="text-[11px] text-th-text-muted">
-										{t("dashboard.opencodeModelBreakdown")}
-									</div>
-									{opencodeUsage?.models.map((m) => (
-										<div
-											key={m.model}
-											className="flex justify-between gap-2 text-xs text-th-text-secondary"
-										>
-											<span className="truncate">{m.model}</span>
-											<span className="shrink-0 tabular-nums">
-												{formatTokens(m.totalTokens)}
-												{m.costUsd !== undefined && (
-													<span className="ml-2 text-emerald-300">
-														{formatUsd(m.costUsd)}
-													</span>
-												)}
-											</span>
-										</div>
-									))}
-								</div>
-							)}
-						</Card>
+							usage={opencodeUsage}
+							costLabel={t("dashboard.usageCostRecorded")}
+						/>
 					</div>
 				) : effectiveTab === "pi" ? (
 					<div className={gridClass(compact)}>
-						<Card
-							className="md:col-span-2"
+						<AgentUsageCard
 							title={t("dashboard.piUsage")}
 							footnote={t("dashboard.piNoRateLimitInfo")}
-						>
-							<div className="grid grid-cols-2 gap-2.5">
-								{(
-									[
-										["piLast24h", piUsage?.last24h],
-										["piLast7d", piUsage?.last7d],
-									] as const
-								).map(([labelKey, window]) => (
-									<StatTile key={labelKey} label={t(`dashboard.${labelKey}`)}>
-										<div className="text-lg font-semibold text-th-text tabular-nums">
-											{formatTokens(window?.totalTokens ?? 0)}
-										</div>
-										<div className="text-[11px] text-th-text-muted">
-											{t("dashboard.piTurns", { count: window?.turns ?? 0 })}
-										</div>
-										{window?.costUsd !== undefined && (
-											<div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
-												<span className="text-sm font-semibold text-emerald-300 tabular-nums">
-													{formatUsd(window.costUsd)}
-												</span>
-												<span className="ml-1 text-[10px] text-th-text-muted">
-													{t("dashboard.piCostRecorded")}
-												</span>
-											</div>
-										)}
-									</StatTile>
-								))}
-							</div>
-							{(piUsage?.models.length ?? 0) > 0 && (
-								<div className="mt-3 space-y-1">
-									<div className="text-[11px] text-th-text-muted">
-										{t("dashboard.piModelBreakdown")}
-									</div>
-									{piUsage?.models.map((m) => (
-										<div
-											key={m.model}
-											className="flex justify-between gap-2 text-xs text-th-text-secondary"
-										>
-											<span className="truncate">{m.model}</span>
-											<span className="shrink-0 tabular-nums">
-												{formatTokens(m.totalTokens)}
-												{m.costUsd !== undefined && (
-													<span className="ml-2 text-emerald-300">
-														{formatUsd(m.costUsd)}
-													</span>
-												)}
-											</span>
-										</div>
-									))}
-								</div>
-							)}
-						</Card>
+							usage={piUsage}
+							costLabel={t("dashboard.usageCostRecorded")}
+						/>
 					</div>
 				) : effectiveTab === "codex" ? (
 					<div className={gridClass(compact)}>
