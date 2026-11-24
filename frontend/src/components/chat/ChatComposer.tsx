@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { authFetch } from "../../services/api";
 import { loadInputHistory, pushInputHistory } from "../../utils/input-history";
 import { uploadImage } from "../../utils/upload-image";
+import { ModeChip } from "./ModeChip";
 import { paneUrl } from "./pane-url";
 import { QuestionCard } from "./QuestionCard";
 import { usePaneQuestion } from "./usePaneQuestion";
@@ -34,6 +35,8 @@ interface ChatComposerProps {
 	working?: boolean;
 	/** The pane's agent is waiting on the person. */
 	waiting?: boolean;
+	/** Claude Code has a permission mode the composer can show and change. */
+	showMode?: boolean;
 }
 
 /** How long a stop stays pending when the status does not come back to say it worked. */
@@ -55,6 +58,7 @@ export function ChatComposer({
 	peerId,
 	working = false,
 	waiting = false,
+	showMode = false,
 }: ChatComposerProps) {
 	const { t } = useTranslation();
 	const [text, setText] = useState("");
@@ -509,6 +513,15 @@ export function ChatComposer({
 						</div>
 					)}
 					</div>
+					{showMode && (
+						<ModeChip
+							sessionId={sessionId}
+							paneId={paneId}
+							peerId={peerId}
+							// A question covers the input box, and its footer with it.
+							readable={!waiting}
+						/>
+					)}
 					<span className="flex-1" />
 					{showStop ? (
 						<button

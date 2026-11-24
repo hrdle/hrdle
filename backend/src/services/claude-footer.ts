@@ -15,7 +15,11 @@ const RULE = /^[\s─━]*[─━]{10,}[\s─━]*$/;
 const COUNT = /^\d+ [a-z]+(?: [a-z]+)?$/;
 const FOOTER_MAX_LINES = 4;
 
-export function parseClaudeBackground(screen: string): string[] {
+/**
+ * The lines under the input box's bottom rule, or null when the screen is not
+ * showing the input box.
+ */
+export function claudeFooterLines(screen: string): string[] | null {
   const lines = screen.split('\n').map((l) => l.replace(/\r$/, ''));
   let rule = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -24,11 +28,17 @@ export function parseClaudeBackground(screen: string): string[] {
       break;
     }
   }
-  if (rule < 0) return [];
+  if (rule < 0) return null;
   const footer = lines.slice(rule + 1).filter((l) => l.trim().length > 0);
   // A screen whose last rule is far above the bottom is not showing the input
   // box at all - a dialog, a full-screen diff - and what follows is not a footer.
-  if (footer.length === 0 || footer.length > FOOTER_MAX_LINES) return [];
+  if (footer.length === 0 || footer.length > FOOTER_MAX_LINES) return null;
+  return footer;
+}
+
+export function parseClaudeBackground(screen: string): string[] {
+  const footer = claudeFooterLines(screen);
+  if (!footer) return [];
   const out: string[] = [];
   for (const line of footer) {
     for (const part of line.split('·')) {
