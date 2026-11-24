@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.220] - 2026-11-24
+
+### Added
+- **The chat view can drive Claude Code without the terminal.**
+  - **Stop.** While the agent is working, the send button becomes a stop
+    button that sends Esc to the pane.
+  - **Questions.** A question Claude Code is waiting on shows as a card above
+    the composer. A choice is answered with one tap; multi-select questions
+    tick their options and submit; a free-text answer is written in the
+    composer.
+  - **Mode.** A chip in the composer shows Claude Code's permission mode
+    (manual, accept edits, plan, auto) and switches it. The pane's own footer
+    is read after each Shift+Tab, so the chip shows what the pane says. It is
+    disabled while a question is open.
+  - **Slash commands.** Typing `/` lists built-in commands and the project's
+    and user's own commands and skills, filtered as you type.
+  - New routes: `POST /api/sessions/:id/panes/:paneId/keys` (`esc`),
+    `GET`/`POST .../mode`, `GET .../commands`.
+
+### Changed
+- **The chat composer is two rows.** The text takes the full width and grows
+  with what is written, up to 40% of the screen; past three lines an expand
+  button opens it over the whole chat. Attach and history moved into a `+`
+  menu on the row below.
+
 ## [0.3.219] - 2026-11-24
 
 ### Fixed
