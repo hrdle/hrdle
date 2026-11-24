@@ -30,6 +30,8 @@ interface ChatComposerProps {
 	sessionId: string;
 	paneId: string;
 	peerId?: string;
+	/** The pane's agent is mid-turn. */
+	working?: boolean;
 }
 
 /**
@@ -37,11 +39,19 @@ interface ChatComposerProps {
  * `agent.prompt`. A peer's session is reached through the hub, which forwards
  * the request to the machine the pane is on.
  */
-function promptUrl(sessionId: string, paneId: string, peerId?: string): string {
+function paneUrl(
+	sessionId: string,
+	paneId: string,
+	peerId: string | undefined,
+	action: "prompt" | "keys",
+): string {
 	const target =
 		peerId && peerId !== LOCAL_PEER_ID ? `peer:${peerId}:${sessionId}` : sessionId;
-	return `${API_BASE}/api/sessions/${encodeURIComponent(target)}/panes/${encodeURIComponent(paneId)}/prompt`;
+	return `${API_BASE}/api/sessions/${encodeURIComponent(target)}/panes/${encodeURIComponent(paneId)}/${action}`;
 }
+
+/** How long a stop stays pending when the status does not come back to say it worked. */
+const STOP_PENDING_MS = 4000;
 
 /**
  * The chat view's input. Sends the same way the terminal's input bar does to
@@ -53,7 +63,12 @@ function promptUrl(sessionId: string, paneId: string, peerId?: string): string {
  * is on, and show as thumbnails until the prompt goes; the server pastes each
  * one into the pane ahead of the text.
  */
-export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
+export function ChatComposer({
+	sessionId,
+	paneId,
+	peerId,
+	working = false,
+}: ChatComposerProps) {
 	const { t } = useTranslation();
 	const [text, setText] = useState("");
 	const [sending, setSending] = useState(false);
@@ -151,6 +166,43 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 	const images = attachments.flatMap((a) => (a.path ? [a.path] : []));
 	const canSend =
 		!sending && !uploading && (text.trim().length > 0 || images.length > 0);
+	// Something written while the agent works is sent, and Claude Code queues
+	// it; only an empty composer turns send into stop.
+	const showStop = working && text.length === 0 && attachments.length === 0;
+	const [stopping, setStopping] = useState(false);
+
+	useEffect(() => {
+		if (!stopping) return;
+		if (!working) {
+			setStopping(false);
+			return;
+		}
+		const timer = setTimeout(() => setStopping(false), STOP_PENDING_MS);
+		return () => clearTimeout(timer);
+	}, [stopping, working]);
+
+	const stop = async () => {
+		setStopping(true);
+		setError(null);
+		try {
+			const res = await authFetch(paneUrl(sessionId, paneId, peerId, "keys"), {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ keys: ["esc"] }),
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data.error || `status ${res.status}`);
+			}
+		} catch (err) {
+			setStopping(false);
+			setError(
+				t("conversation.composerStopFailed", {
+					reason: err instanceof Error ? err.message : String(err),
+				}),
+			);
+		}
+	};
 
 	const send = async (raw: string) => {
 		const prompt = raw.replace(/\n+$/, "");
@@ -158,7 +210,7 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 		setSending(true);
 		setError(null);
 		try {
-			const res = await authFetch(promptUrl(sessionId, paneId, peerId), {
+			const res = await authFetch(paneUrl(sessionId, paneId, peerId, "prompt"), {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ text: prompt, images }),
@@ -433,26 +485,38 @@ export function ChatComposer({ sessionId, paneId, peerId }: ChatComposerProps) {
 					)}
 					</div>
 					<span className="flex-1" />
-					<button
-						type="button"
-						onClick={() => void send(text)}
-						disabled={!canSend}
-						aria-label={t("conversation.composerSend")}
-						className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cv-accent text-white disabled:opacity-40"
-					>
-						<svg
-							className="h-4 w-4"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							strokeWidth={2.2}
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							aria-hidden="true"
+					{showStop ? (
+						<button
+							type="button"
+							onClick={() => void stop()}
+							disabled={stopping}
+							aria-label={t("conversation.composerStop")}
+							className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cv-text disabled:opacity-50"
 						>
-							<path d="M12 19V5M5 12l7-7 7 7" />
-						</svg>
-					</button>
+							<span className="h-3 w-3 rounded-[2px] bg-cv-bg" />
+						</button>
+					) : (
+						<button
+							type="button"
+							onClick={() => void send(text)}
+							disabled={!canSend}
+							aria-label={t("conversation.composerSend")}
+							className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cv-accent text-white disabled:opacity-40"
+						>
+							<svg
+								className="h-4 w-4"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth={2.2}
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								aria-hidden="true"
+							>
+								<path d="M12 19V5M5 12l7-7 7 7" />
+							</svg>
+						</button>
+					)}
 				</div>
 			</div>
 			{error && (

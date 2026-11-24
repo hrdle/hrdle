@@ -18,6 +18,8 @@ interface ChatViewProps {
 	peerId?: string;
 	/** The pane the conversation belongs to; the composer writes to its agent. */
 	paneId?: string;
+	/** The pane's agent is mid-turn: the composer offers to stop it. */
+	working?: boolean;
 }
 
 /** Statuses that are a reason rather than a conversation. */
@@ -67,6 +69,7 @@ export function ChatView({
 	agentSessionId,
 	peerId,
 	paneId,
+	working = false,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const { messages, conversationId, status } = useAgentConversation({
@@ -129,7 +132,12 @@ export function ChatView({
 		<div className="relative flex h-full min-h-0 flex-col bg-cv-bg">
 			<div className="min-h-0 flex-1">{content}</div>
 			{canPrompt && paneId && (
-				<ChatComposer sessionId={sessionId} paneId={paneId} peerId={peerId} />
+				<ChatComposer
+					sessionId={sessionId}
+					paneId={paneId}
+					peerId={peerId}
+					working={working}
+				/>
 			)}
 		</div>
 	);

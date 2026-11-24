@@ -374,7 +374,9 @@
     "composerUploadFailed": "Failed",
     "composerMore": "Attach or reuse",
     "composerExpand": "Write full screen",
-    "composerCollapse": "Back to the chat"
+    "composerCollapse": "Back to the chat",
+    "composerStop": "Stop (Esc)",
+    "composerStopFailed": "Not stopped: {{reason}}"
   },
   "keyboard": {
     "title": "Keyboard",

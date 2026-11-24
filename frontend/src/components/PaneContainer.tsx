@@ -533,6 +533,7 @@ function TerminalPane({
 						agentSessionId={activeTmuxPane?.agentSessionId}
 						peerId={sessionTarget.peerId}
 						paneId={activeTmuxPane?.paneId}
+						working={activeTmuxPane?.indicatorState === "processing"}
 					/>
 				</div>
 			</div>
@@ -847,6 +848,7 @@ function TerminalPane({
 						agentSessionId={activeTmuxPane?.agentSessionId}
 						peerId={sessionTarget.peerId}
 						paneId={activeTmuxPane?.paneId}
+						working={activeTmuxPane?.indicatorState === "processing"}
 					/>
 				)}
 				{sessionTarget ? (
