@@ -107,6 +107,7 @@ export function ChatComposer({
 	// Sized from what the text measures as wrapped: Japanese is mostly written
 	// without newlines, so a row count taken from them leaves a long prompt one
 	// line tall with its start scrolled out of sight.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: text and tall are cues to re-measure; neither is read here.
 	useLayoutEffect(() => {
 		const ta = textareaRef.current;
 		if (!ta) return;

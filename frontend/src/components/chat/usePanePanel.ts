@@ -35,15 +35,15 @@ export function usePanePanel(sessionId: string, paneId: string, peerId: string |
 		}
 	}, [sessionId, paneId, peerId]);
 
-	const clearTimers = () => {
+	const clearTimers = useCallback(() => {
 		for (const t of timers.current) clearTimeout(t);
 		timers.current = [];
-	};
+	}, []);
 
 	const watch = useCallback(() => {
 		clearTimers();
 		timers.current = LOOK_MS.map((ms) => setTimeout(read, ms));
-	}, [read]);
+	}, [read, clearTimers]);
 
 	const open = lines !== null;
 	useEffect(() => {
