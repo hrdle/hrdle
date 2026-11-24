@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.219] - 2026-11-24
+
+### Fixed
+- **No second input under the chat composer.** On a phone the terminal's
+  Keyboard / Input panel stayed open under the chat's own composer, and on a
+  tablet the floating keyboard did - both type into the pane, not the chat.
+  While the chat is shown they now stay out of the way, and the chat is
+  written with the OS keyboard. They come back on switching to the terminal.
+
 ## [0.3.218] - 2026-11-24
 
 ### Added
