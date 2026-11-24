@@ -1,0 +1,40 @@
+
+  Read 1 file
+
+● note.txt の中身は次の1行です。
+
+  goodbye
+
+✻ Cogitated for 7s · done 6:43 PM
+
+❯ one.txt の中身も見せて
+
+  Read 1 file
+
+● one.txt の中身は次の1行です。
+
+  first
+
+✻ Cogitated for 3s · done 6:48 PM
+
+❯ /model
+  ⎿  Kept model as Opus 5.5
+
+❯ /model
+  ⎿  Kept model as Opus 5.5
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+  Select model
+  Your pick is the default for new sessions. For other models, use --model.
+
+    1.  Default (recommended)  Opus 5.5 · Best for everyday, complex tasks
+  ❯ 2.  Opus 5.5 ✔             For complex work and everyday tasks
+    3.  Fable 5.2              For your toughest challenges
+    4.  Sonnet 5.5             Most efficient for simpler tasks
+    5.  Haiku 5.5              Fastest for quick answers
+    ▸   More models
+
+  ◐ Medium effort (default) ←/→ to adjust
+
+  Use /fast to turn on fast mode (Opus 5.5).
+
+  s to use this session only · Enter to save · Esc to cancel

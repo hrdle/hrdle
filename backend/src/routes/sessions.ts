@@ -3,6 +3,7 @@ import { ClaudeBackgroundReader } from '../services/claude-footer';
 import { cycleToMode, parseClaudeMode } from '../services/claude-mode';
 import { getPane, readPane, readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
 import { parseClaudeSuggestion } from '../services/claude-suggestion';
+import { parseClaudePanel } from '../services/claude-panel';
 import { listSlashCommands } from '../services/slash-commands';
 import { paneStatusClock } from '../services/pane-status-since';
 import { promptAgent, startAgent, waitForAgentReady, type StartedAgent } from '../services/agent-launch';
@@ -1672,7 +1673,9 @@ export const PanePromptSchema = z
  * into it.
  */
 export const PaneKeysSchema = z.object({
-  keys: z.array(z.enum(['esc'])).min(1).max(8),
+  // Esc is the stop button; the arrows and Enter move through a panel Claude
+  // Code draws over its input box (`/usage`, `/model`, `/config`).
+  keys: z.array(z.enum(['esc', 'up', 'down', 'left', 'right', 'enter'])).min(1).max(8),
 });
 
 // POST /sessions/:id/panes/:paneId/keys - Press control keys in one pane
@@ -1752,6 +1755,24 @@ sessions.get('/:id/panes/:paneId/suggestion', async (c) => {
   if (!target) return c.json({ error: 'Session not found' }, 404);
   const screen = await readPane(target, 'visible');
   return c.json({ suggestion: screen ? parseClaudeSuggestion(screen) : null });
+});
+
+// GET /sessions/:id/panes/:paneId/panel - A panel Claude Code draws over its
+// input box (`/usage`, `/model`, `/config`), as text
+sessions.get('/:id/panes/:paneId/panel', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/panel`));
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const target = await herdrService.herdrPaneOf(id, paneId);
+  if (!target) return c.json({ error: 'Session not found' }, 404);
+  const screen = await readPaneText(target, 'visible');
+  return c.json({ panel: screen ? parseClaudePanel(screen) : null });
 });
 
 // POST /sessions/:id/panes/:paneId/mode - Cycle to a mode with Shift+Tab
