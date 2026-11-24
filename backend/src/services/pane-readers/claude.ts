@@ -319,7 +319,7 @@ export function readClaudePicker(lines: string[]): ClaudePicker | undefined {
 function walkTo(row: number, from: number): string | undefined {
   if (row < 0 || from < 0) return undefined;
   const steps = row - from;
-  return (steps >= 0 ? '\x1b[B' : '\x1b[A').repeat(Math.abs(steps)) + '\r';
+  return `${(steps >= 0 ? '\x1b[B' : '\x1b[A').repeat(Math.abs(steps))}\r`;
 }
 
 function indentOf(line: string): number {

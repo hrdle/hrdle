@@ -119,6 +119,7 @@ function CodeBlock({ children }: { children?: React.ReactNode }) {
 	const [copied, setCopied] = useState(false);
 
 	const copy = useCallback(() => {
+		// biome-ignore lint/performance/useDomNodeTextContent: textContent would copy hidden markup, not what is on screen.
 		const text = preRef.current?.innerText ?? "";
 		if (!text) return;
 		navigator.clipboard

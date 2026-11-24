@@ -386,19 +386,17 @@ notify.post('/', async (c) => {
       // `deliveredToGlasses` still comes from `postHookRelay`, which counts
       // only wearers here: this machine cannot know whether the one on the
       // other machine saw it, and losing a notification is the worse failure.
-      {
-        try {
-          const target = await resolveHookTarget(sessionId, cwd);
-          if (target) {
-            deliveredToGlasses = postHookRelay({
-              sessionId: target.sessionId,
-              paneId: target.paneId,
-              text: message || HOOK_RELAY_TEXT[event] || `Hook: ${event}`,
-            });
-          }
-        } catch (err) {
-          console.warn('[notify] glasses relay failed:', err);
+      try {
+        const target = await resolveHookTarget(sessionId, cwd);
+        if (target) {
+          deliveredToGlasses = postHookRelay({
+            sessionId: target.sessionId,
+            paneId: target.paneId,
+            text: message || HOOK_RELAY_TEXT[event] || `Hook: ${event}`,
+          });
         }
+      } catch (err) {
+        console.warn('[notify] glasses relay failed:', err);
       }
       const hookMsg = {
         type: 'hook-event',

@@ -16,14 +16,13 @@ import {
 	Folder,
 	GripVertical,
 	LayoutGrid,
-	MessagesSquare,
 	Play,
 	Plus,
 	Rows3,
 	Search,
 	X,
 } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	AGENT_PROVIDER_IDS,

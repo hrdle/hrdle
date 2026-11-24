@@ -4,7 +4,6 @@ import {
 	ChevronDown,
 	ExternalLink,
 	MessageSquare,
-	MoreHorizontal,
 	Terminal as TerminalIcon,
 	Unplug,
 } from "lucide-react";
@@ -425,7 +424,6 @@ function TerminalPane({
 	// smallest screen there is. `TerminalComponent` places it, so it stays put
 	// while the soft keyboard comes and goes.
 	const bottomBar = isMobile ? (
-		<>
 		<div className="flex items-center gap-2 px-3 py-1.5 bg-[#0a0a0a] border-b border-white/[0.06]">
 			{/* Session selector. Takes the bar's free space so the name gets every
 			    pixel the action buttons don't need - a fixed cap truncated names
@@ -478,7 +476,6 @@ function TerminalPane({
 				}}
 			/>
 		</div>
-		</>
 	) : null;
 
 	// The transcript, with the header `ConversationViewer` does not draw when it

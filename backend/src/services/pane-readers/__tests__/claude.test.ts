@@ -427,7 +427,7 @@ describe('a multi-select on a real pane', () => {
     // Five rows down from the cursor, then Enter. The button is not an option
     // and is not in the list, but the pane's cursor stops on it, so it counts
     // as a row for the walk and not for the choosing.
-    expect(live?.choiceSend).toBe('\x1b[B'.repeat(5) + '\r');
+    expect(live?.choiceSend).toBe(`${'\x1b[B'.repeat(5)}\r`);
   });
 
   test('the pane already sitting on the button is a walk of nothing', () => {

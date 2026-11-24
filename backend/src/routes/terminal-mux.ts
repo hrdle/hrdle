@@ -21,7 +21,6 @@ import type {
   ExtendedSessionResponse,
   GlassesScreen,
   MuxClientMessage,
-  MuxServerMessage,
   ConversationMessage,
   SessionResponse,
 } from '../../../shared/types';
