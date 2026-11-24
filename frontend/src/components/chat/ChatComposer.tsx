@@ -440,9 +440,11 @@ export function ChatComposer({
 						spellCheck={false}
 						aria-label={t("conversation.composerLabel")}
 						placeholder={t(
-							freeTextOption
-								? "conversation.questionWriteAnswer"
-								: "conversation.composerPlaceholder",
+							freeTextOption?.textOptional
+								? "conversation.permissionWriteDeny"
+								: freeTextOption
+									? "conversation.questionWriteAnswer"
+									: "conversation.composerPlaceholder",
 						)}
 						className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-cv-text leading-relaxed placeholder:text-cv-text-muted focus:outline-none"
 						style={{ fontSize: "16px" }}

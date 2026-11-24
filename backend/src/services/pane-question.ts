@@ -4,6 +4,7 @@ import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './age
 import { choiceKeysOf, fieldRowsOf, matchOpenQuestion } from './glasses-relay';
 import type { HerdrAgentStatus } from './herdr-client';
 import { type PaneQuestion, readPaneQuestion } from './pane-readers';
+import { type ClaudePermission, readClaudePermission } from './pane-readers/claude-permission';
 
 /**
  * The question a pane is waiting on, as data a program can relay and answer.
@@ -18,9 +19,10 @@ import { type PaneQuestion, readPaneQuestion } from './pane-readers';
  * frame (`pane-readers/claude.ts`) - the chip above and the `Enter to select`
  * footer below - because Claude Code does not write an open `AskUserQuestion`
  * to its transcript until it is answered. Kimi's question is read from its wire
- * (`agent-question.ts`). Permission prompts and every other agent are left out:
- * there the screen is read by its shape, and a guess handed to another program
- * is relayed to a person as fact.
+ * (`agent-question.ts`). Claude's permission prompt has a frame of its own too
+ * (`pane-readers/claude-permission.ts`) and is served as `kind: 'permission'`.
+ * Every other agent's prompts are left out: there the screen is read by its
+ * shape, and a guess handed to another program is relayed to a person as fact.
  */
 
 export interface StructuredOption {
@@ -31,6 +33,8 @@ export interface StructuredOption {
   checked?: boolean;
   /** Choosing it means supplying `text`. */
   freeText?: boolean;
+  /** With `freeText`: it may also be chosen without text. */
+  textOptional?: boolean;
 }
 
 export interface StructuredQuestion {
@@ -47,6 +51,11 @@ export interface StructuredQuestion {
   question: string;
   multiSelect: boolean;
   options: StructuredOption[];
+  /** Absent for a question; `permission` for a tool waiting to be allowed. */
+  kind?: 'permission';
+  /** Permission only: what wants it (`Bash command`, `Edit file`) and what it will do. */
+  title?: string;
+  detail?: string;
 }
 
 /** What answering needs and the caller does not: the keys. */
@@ -59,6 +68,8 @@ interface AnswerKeys {
   actionRows: number[];
   /** The walk to the pane's Submit button and the Enter that presses it. */
   send?: string;
+  /** The keys that open a text field in a row (`Tab to amend`); the text and an Enter follow. */
+  amend?: { index: number; keys: string };
 }
 
 export type PaneQuestionRead =
@@ -87,9 +98,15 @@ const defaultDeps: PaneQuestionDeps = { readAgentQuestions };
 
 const BOX = /^\[([ xX*✓✔])\]\s*/;
 
-function questionIdOf(agent: AgentProvider, question: string, multiSelect: boolean, labels: string[]): string {
+function questionIdOf(
+  agent: AgentProvider,
+  question: string,
+  multiSelect: boolean,
+  labels: string[],
+  context?: string,
+): string {
   return createHash('sha256')
-    .update(JSON.stringify([agent, question, multiSelect, labels]))
+    .update(JSON.stringify([agent, question, multiSelect, labels, context ?? null]))
     .digest('hex')
     .slice(0, 16);
 }
@@ -129,6 +146,46 @@ function fromPicker(picker: PaneQuestion): PaneQuestionRead {
   };
 }
 
+/** Detail lines past this are a long diff, and the pane shows the rest. */
+const MAX_PERMISSION_DETAIL_LINES = 40;
+
+function fromPermission(p: ClaudePermission): PaneQuestionRead {
+  // The last "No" row is the one that tells Claude what to do instead.
+  const deny = p.amend ? p.options.findLastIndex((o) => /^no\b/i.test(o.label)) : -1;
+  const options: StructuredOption[] = p.options.map((o, i) => ({
+    index: i,
+    label: o.label,
+    ...(o.description ? { description: o.description } : {}),
+    ...(i === deny ? { freeText: true, textOptional: true } : {}),
+  }));
+  const detail = p.detail.slice(0, MAX_PERMISSION_DETAIL_LINES).join('\n');
+  const steps = deny - p.cursor;
+  const walk = (steps > 0 ? '\x1b[B' : '\x1b[A').repeat(Math.abs(steps));
+  return {
+    status: 'question',
+    question: {
+      // The detail is in the id: two Bash prompts in a row ask the same
+      // question with the same rows, and an answer meant for the first must not
+      // allow the second.
+      questionId: questionIdOf('claude', p.question, false, options.map((o) => o.label), `${p.title}\n${detail}`),
+      agent: 'claude',
+      source: 'screen',
+      kind: 'permission',
+      title: p.title,
+      ...(detail ? { detail } : {}),
+      question: p.question,
+      multiSelect: false,
+      options,
+    },
+    keys: {
+      keys: options.map((_, i) => String(i + 1)),
+      fieldRows: [],
+      actionRows: [],
+      ...(deny >= 0 ? { amend: { index: deny, keys: `${walk}\t` } } : {}),
+    },
+  };
+}
+
 function fromRecord(agent: AgentProvider, q: OpenQuestion): PaneQuestionRead {
   const options: StructuredOption[] = q.options.map((o, i) => ({
     index: i,
@@ -162,6 +219,8 @@ export async function readStructuredQuestion(
     // already drawn.
     const picker = pane.text ? readPaneQuestion('claude', { lines: pane.text.split('\n') }) : undefined;
     if (picker) return fromPicker(picker);
+    const permission = pane.text ? readClaudePermission(pane.text.split('\n')) : undefined;
+    if (permission) return fromPermission(permission);
     return blocked ? { status: 'none' } : { status: 'not-blocked' };
   }
   if (pane.agent === 'kimi') {
@@ -224,7 +283,7 @@ export function planAnswer(read: PaneQuestionRead, req: AnswerRequest): AnswerPl
   if (text && chosenFree.length === 0) {
     return { ok: false, status: 400, error: 'text is only accepted with a freeText option' };
   }
-  if (!text && chosenFree.length > 0) {
+  if (!text && chosenFree.some((c) => !question.options[c].textOptional)) {
     return { ok: false, status: 400, error: 'a freeText option needs text' };
   }
   if (chosenFree.length > 1) {
@@ -232,6 +291,9 @@ export function planAnswer(read: PaneQuestionRead, req: AnswerRequest): AnswerPl
   }
 
   const single = (index: number): AnswerPlan => {
+    if (text && keys.amend?.index === index) {
+      return { ok: true, steps: [{ kind: 'keys', data: keys.amend.keys }, { kind: 'prompt', data: text }] };
+    }
     const steps: AnswerStep[] = [{ kind: 'keys', data: keys.keys[index] }];
     if (question.options[index].freeText && text) steps.push({ kind: 'prompt', data: text });
     return { ok: true, steps };

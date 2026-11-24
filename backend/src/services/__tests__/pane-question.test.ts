@@ -287,3 +287,61 @@ describe('carrying the answer out', () => {
     expect(splitKeystrokes(`1${DOWN}\r`)).toEqual(['1', DOWN, '\r']);
   });
 });
+
+describe('a claude permission prompt', () => {
+  const bash = (command: string, cursorRow = 1) =>
+    [
+      '─'.repeat(60),
+      ' Bash command',
+      ` ${command}`,
+      ' Do you want to proceed?',
+      `${cursorRow === 1 ? ' ❯' : '  '} 1. Yes`,
+      `${cursorRow === 2 ? ' ❯' : '  '} 2. Yes, and switch to auto mode · auto mode handles these prompts for you`,
+      `${cursorRow === 3 ? ' ❯' : '  '} 3. No`,
+      '',
+      ' Esc to cancel · Tab to amend',
+    ].join('\n');
+
+  test('is read as a permission, with No open to an instruction', async () => {
+    const r = question(await read(claude(bash('touch a.txt'))));
+    expect(r.question.kind).toBe('permission');
+    expect(r.question.title).toBe('Bash command');
+    expect(r.question.detail).toBe('touch a.txt');
+    expect(r.question.options[2]).toEqual({ index: 2, label: 'No', freeText: true, textOptional: true });
+  });
+
+  test('two commands asking the same question have different ids', async () => {
+    const a = question(await read(claude(bash('touch a.txt'))));
+    const b = question(await read(claude(bash('rm -rf b'))));
+    expect(a.question.questionId).not.toBe(b.question.questionId);
+  });
+
+  test('a row is answered by its digit, No included when nothing is written', async () => {
+    const r = question(await read(claude(bash('touch a.txt'))));
+    expect(planAnswer(r, { questionId: r.question.questionId, choices: [0] })).toEqual({
+      ok: true,
+      steps: [{ kind: 'keys', data: '1' }],
+    });
+    expect(planAnswer(r, { questionId: r.question.questionId, choices: [2] })).toEqual({
+      ok: true,
+      steps: [{ kind: 'keys', data: '3' }],
+    });
+  });
+
+  test('No with words walks from the pane cursor, amends, and sends them', async () => {
+    const r = question(await read(claude(bash('touch a.txt', 2))));
+    expect(planAnswer(r, { questionId: r.question.questionId, choices: [2], text: 'use echo' })).toEqual({
+      ok: true,
+      steps: [
+        { kind: 'keys', data: `${DOWN}\t` },
+        { kind: 'prompt', data: 'use echo' },
+      ],
+    });
+  });
+
+  test('words on any other row are refused', async () => {
+    const r = question(await read(claude(bash('touch a.txt'))));
+    const plan = planAnswer(r, { questionId: r.question.questionId, choices: [0], text: 'why' });
+    expect(plan.ok).toBe(false);
+  });
+});

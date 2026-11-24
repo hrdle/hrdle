@@ -1,0 +1,46 @@
+
+
+● こんにちは！ファイルは作成していません。
+
+✻ Brewed for 4s · done 2:15 PM
+
+❯ Use the Edit tool to change hello to goodbye
+  in note.txt
+
+  Read 1 file
+
+● Update(note.txt)
+  ⎿  Added 1 line, removed 1 line
+      1 -hello
+      1 +goodbye
+
+● note.txt の hello を goodbye
+  に書き換えました。
+
+✻ Cogitated for 6s · done 2:15 PM
+
+❯ Run this exact bash command: echo first >
+  one.txt
+
+  Writing "first" to one.txt
+  ⎿  $ echo first > one.txt
+
+────────────────────────────────────────────────
+ Bash command
+ Tip: auto mode handles these prompts for you —
+ choose "switch to auto mode" below
+ Write "first" to one.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ echo first > one.txt
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and always allow access to
+      /home/dev/work/projects/permission-fixtur
+      e/a-path-long-enough-to-be-cut-mid-word-b
+      y-th/perm/proj from this project
+   3. Yes, and switch to auto mode · auto mode
+      handles these prompts for you
+   4. No
+
+ Esc to cancel · Tab to amend

@@ -41,13 +41,26 @@ export function QuestionCard({ question, busy, error, onAnswer, onWrite }: Quest
 			<div className="flex items-center gap-2 px-3.5 pt-2.5">
 				<span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
 				<span className="text-cv-text-muted text-xs">
-					{t("conversation.questionWaiting")}
+					{t(
+						question.kind === "permission"
+							? "conversation.permissionWaiting"
+							: "conversation.questionWaiting",
+					)}
 				</span>
 			</div>
-			<div className="px-3.5 pt-0.5 pb-2 font-medium text-[15px] text-cv-text whitespace-pre-wrap">
+			<div className="min-h-0 overflow-y-auto">
+			{question.kind === "permission" && question.title && (
+				<div className="px-3.5 pt-1 text-cv-text-secondary text-xs">{question.title}</div>
+			)}
+			{question.detail && (
+				<pre className="mx-3.5 mt-1.5 max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg border border-cv-border bg-cv-bg px-2.5 py-2 font-mono text-[12.5px] text-cv-text-secondary leading-snug">
+					{question.detail}
+				</pre>
+			)}
+			<div className="px-3.5 pt-1.5 pb-2 font-medium text-[15px] text-cv-text whitespace-pre-wrap">
 				{question.question}
 			</div>
-			<div className="min-h-0 overflow-y-auto">
+			<div>
 				{question.options.map((option, i) => {
 					const isTicked = ticked.has(option.index);
 					return (
@@ -56,7 +69,7 @@ export function QuestionCard({ question, busy, error, onAnswer, onWrite }: Quest
 							type="button"
 							disabled={busy}
 							onClick={() => {
-								if (option.freeText && !question.multiSelect) {
+								if (option.freeText && !option.textOptional && !question.multiSelect) {
 									onWrite();
 									return;
 								}
@@ -106,6 +119,11 @@ export function QuestionCard({ question, busy, error, onAnswer, onWrite }: Quest
 										{option.description}
 									</span>
 								)}
+								{option.textOptional && (
+									<span className="text-cv-text-muted text-xs">
+										{t("conversation.permissionDenyHint")}
+									</span>
+								)}
 							</span>
 						</button>
 						{option.freeText && question.multiSelect && isTicked && (
@@ -124,6 +142,7 @@ export function QuestionCard({ question, busy, error, onAnswer, onWrite }: Quest
 						</div>
 					);
 				})}
+			</div>
 			</div>
 			{question.multiSelect && (
 				<div className="flex justify-end border-cv-border border-t px-3 py-2">
