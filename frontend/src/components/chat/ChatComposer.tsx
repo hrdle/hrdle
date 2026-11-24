@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LOCAL_PEER_ID } from "../../../../shared/types";
 import { authFetch } from "../../services/api";
 import { loadInputHistory, pushInputHistory } from "../../utils/input-history";
 import { uploadImage } from "../../utils/upload-image";
-
-const API_BASE = import.meta.env.VITE_API_URL || "";
+import { paneUrl } from "./pane-url";
+import { QuestionCard } from "./QuestionCard";
+import { usePaneQuestion } from "./usePaneQuestion";
 
 /** An image picked for the next prompt: shown at once, sent once uploaded. */
 interface Attachment {
@@ -32,22 +32,8 @@ interface ChatComposerProps {
 	peerId?: string;
 	/** The pane's agent is mid-turn. */
 	working?: boolean;
-}
-
-/**
- * Where the chat view's prompt goes: one pane's agent, through herdr's
- * `agent.prompt`. A peer's session is reached through the hub, which forwards
- * the request to the machine the pane is on.
- */
-function paneUrl(
-	sessionId: string,
-	paneId: string,
-	peerId: string | undefined,
-	action: "prompt" | "keys",
-): string {
-	const target =
-		peerId && peerId !== LOCAL_PEER_ID ? `peer:${peerId}:${sessionId}` : sessionId;
-	return `${API_BASE}/api/sessions/${encodeURIComponent(target)}/panes/${encodeURIComponent(paneId)}/${action}`;
+	/** The pane's agent is waiting on the person. */
+	waiting?: boolean;
 }
 
 /** How long a stop stays pending when the status does not come back to say it worked. */
@@ -68,6 +54,7 @@ export function ChatComposer({
 	paneId,
 	peerId,
 	working = false,
+	waiting = false,
 }: ChatComposerProps) {
 	const { t } = useTranslation();
 	const [text, setText] = useState("");
@@ -162,6 +149,20 @@ export function ChatComposer({
 		});
 	};
 
+	const {
+		question,
+		answer,
+		busy: answering,
+		error: answerError,
+	} = usePaneQuestion(sessionId, paneId, peerId, waiting);
+	// While a single-choice question with a free-text row is up, what is
+	// written answers it rather than going in as a prompt: typed into the
+	// picker, a prompt's keys would move the selection instead.
+	const freeTextOption =
+		question && !question.multiSelect
+			? question.options.find((o) => o.freeText)
+			: undefined;
+
 	const uploading = attachments.some((a) => !a.path && !a.error);
 	const images = attachments.flatMap((a) => (a.path ? [a.path] : []));
 	const canSend =
@@ -207,6 +208,17 @@ export function ChatComposer({
 	const send = async (raw: string) => {
 		const prompt = raw.replace(/\n+$/, "");
 		if (!canSend) return;
+		if (freeTextOption && prompt.trim() && images.length === 0) {
+			setSending(true);
+			const ok = await answer([freeTextOption.index], prompt);
+			setSending(false);
+			if (ok) {
+				setHistory((prev) => pushInputHistory(prev, prompt));
+				setText("");
+				setExpanded(false);
+			}
+			return;
+		}
 		setSending(true);
 		setError(null);
 		try {
@@ -261,6 +273,15 @@ export function ChatComposer({
 			}
 			data-testid="chat-composer"
 		>
+			{question && !expanded && (
+				<QuestionCard
+					question={question}
+					busy={answering}
+					error={answerError}
+					onAnswer={(choices, text) => void answer(choices, text)}
+					onWrite={() => textareaRef.current?.focus()}
+				/>
+			)}
 			{showHistory && history.length > 0 && (
 				<div className="mx-auto mb-2 max-h-40 max-w-3xl overflow-y-auto rounded-lg border border-cv-border bg-cv-surface">
 					{history.map((item, i) => (
@@ -365,7 +386,11 @@ export function ChatComposer({
 						autoCorrect="off"
 						spellCheck={false}
 						aria-label={t("conversation.composerLabel")}
-						placeholder={t("conversation.composerPlaceholder")}
+						placeholder={t(
+							freeTextOption
+								? "conversation.questionWriteAnswer"
+								: "conversation.composerPlaceholder",
+						)}
 						className="min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-cv-text leading-relaxed placeholder:text-cv-text-muted focus:outline-none"
 						style={{ fontSize: "16px" }}
 					/>
