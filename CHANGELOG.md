@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.225] - 2026-11-24
+
+### Fixed
+- **A multi-select question in the chat view keeps its ticks.** The question
+  is read again every few seconds while the pane waits, and each read cleared
+  the boxes already ticked and any words typed, so the send button went back
+  to disabled before an answer could go. The card now resets only when the
+  question itself changes.
+
 ## [0.3.224] - 2026-11-24
 
 ### Added
