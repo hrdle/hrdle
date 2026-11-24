@@ -43,3 +43,43 @@ describe('listSlashCommands', () => {
     expect(await listSlashCommands(join(root, 'nowhere'), join(root, 'nobody'))).toEqual([]);
   });
 });
+
+describe('listSlashCommands with plugins', () => {
+  const home = 'phome';
+  const plugin = (name: string) => join(root, home, '.claude/plugins/cache/m', name);
+  write(`${home}/.claude/settings.json`, JSON.stringify({ enabledPlugins: { 'a@m': true, 'off@m': false, 'mine@m': true } }));
+  write(`${home}/.claude/plugins/installed_plugins.json`, JSON.stringify({
+    version: 2,
+    plugins: {
+      'a@m': [{ scope: 'user', installPath: plugin('a') }],
+      'off@m': [{ scope: 'user', installPath: plugin('off') }],
+      'mine@m': [{ scope: 'local', projectPath: join(root, 'pproj'), installPath: plugin('mine') }],
+      'there@m': [{ scope: 'project', projectPath: join(root, 'pproj'), installPath: plugin('there') }],
+    },
+  }));
+  write(`${home}/.claude/plugins/cache/m/a/.claude-plugin/plugin.json`, JSON.stringify({ name: 'alpha', skills: ['./extra/one'] }));
+  write(`${home}/.claude/plugins/cache/m/a/skills/build/SKILL.md`, '---\nname: build\ndescription: builds\n---\n');
+  write(`${home}/.claude/plugins/cache/m/a/skills/quiet/SKILL.md`, '---\nname: quiet\nuser-invocable: false\n---\n');
+  write(`${home}/.claude/plugins/cache/m/a/extra/one/SKILL.md`, '---\nname: one\n---\n');
+  write(`${home}/.claude/plugins/cache/m/a/commands/run.md`, '---\ndescription: runs\n---\n');
+  write(`${home}/.claude/plugins/cache/m/off/skills/x/SKILL.md`, '---\nname: x\n---\n');
+  write(`${home}/.claude/plugins/cache/m/mine/skills/y/SKILL.md`, '---\nname: y\n---\n');
+  write(`${home}/.claude/plugins/cache/m/there/skills/z/SKILL.md`, '---\nname: z\n---\n');
+  write('pproj/.claude/settings.local.json', JSON.stringify({ enabledPlugins: { 'there@m': true } }));
+
+  test('lists enabled plugins under their own name, from the manifest paths too', async () => {
+    const names = (await listSlashCommands(join(root, 'elsewhere'), join(root, home))).map((c) => c.name);
+    expect(names).toEqual(['alpha:build', 'alpha:one', 'alpha:run']);
+  });
+
+  test('counts a project-scoped install only in that project, with its own settings', async () => {
+    const list = await listSlashCommands(join(root, 'pproj'), join(root, home));
+    expect(list.map((c) => c.name)).toEqual(['alpha:build', 'alpha:one', 'alpha:run', 'mine:y', 'there:z']);
+    expect(list.find((c) => c.name === 'alpha:build')).toEqual({
+      name: 'alpha:build',
+      description: 'builds',
+      kind: 'skill',
+      scope: 'plugin',
+    });
+  });
+});
