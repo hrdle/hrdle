@@ -1,11 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type {
-  KimiUsageDay,
-  KimiUsageModelTotal,
-  KimiUsageSummary,
-  KimiUsageWindow,
-} from '../../../shared/types';
+import type { AgentUsageWindow, KimiUsageDay, KimiUsageSummary } from '../../../shared/types';
+import { aggregateUsage, CachedUsage, USAGE_WINDOW_7D_MS, type UsageTurn } from './agent-usage';
 import { KimiSessionStore } from './kimi';
 import { KimiUsageStore, type StoredDay } from './kimi-usage-store';
 import { KimiConfigService } from './kimi-config';
@@ -42,21 +38,15 @@ function numberOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
-function emptyWindow(): KimiUsageWindow {
-  return { turns: 0, totalTokens: 0, inputTokens: 0, cacheReadTokens: 0, outputTokens: 0 };
+function addCost(acc: CostAccumulator, usd: number | undefined): void {
+  if (usd === undefined) return;
+  acc.usd += usd;
+  acc.priced = true;
 }
 
-function addToWindow(window: KimiUsageWindow, record: UsageRecord): void {
-  window.turns++;
-  window.totalTokens += record.totalTokens;
-  window.inputTokens += record.inputTokens;
-  window.cacheReadTokens += record.cacheReadTokens;
-  window.outputTokens += record.outputTokens;
-}
-
-function addCost(acc: CostAccumulator, record: UsageRecord, pricing?: ModelPricing): void {
-  if (!pricing) return;
-  acc.usd += costOf(
+function recordCost(record: UsageRecord, pricing?: ModelPricing): number | undefined {
+  if (!pricing) return undefined;
+  return costOf(
     {
       inputOther: record.inputOtherTokens,
       cacheRead: record.cacheReadTokens,
@@ -65,12 +55,15 @@ function addCost(acc: CostAccumulator, record: UsageRecord, pricing?: ModelPrici
     },
     pricing,
   );
-  acc.priced = true;
 }
 
 /** Round to cents-with-headroom: sub-cent turns are common, so keep 4 dp. */
 function roundUsd(usd: number): number {
   return Math.round(usd * 10_000) / 10_000;
+}
+
+function roundWindowCost(window: AgentUsageWindow): void {
+  if (window.costUsd !== undefined) window.costUsd = roundUsd(window.costUsd);
 }
 
 /**
@@ -179,25 +172,19 @@ export function buildDailySeries(
  * locally, so consumption totals are all a dashboard can honestly show.
  */
 export class KimiUsageService {
-  private store: KimiSessionStore;
-  private cache: { timestamp: number; data: KimiUsageSummary | null } | null = null;
-  private static readonly CACHE_TTL = 30_000;
-  private static readonly WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
-  private static readonly WINDOW_24H_MS = 24 * 60 * 60 * 1000;
+  private readonly cached = new CachedUsage('kimi', () => this.build());
   /** Days the logs can still be read for, today included. */
   private static readonly DAILY_DAYS = 7;
   /** Days the chart may show, once the history file has that many. */
   private static readonly CHART_DAYS = 30;
 
   constructor(
-    store = new KimiSessionStore(),
+    private readonly store = new KimiSessionStore(),
     private readonly config = new KimiConfigService(),
     private readonly pricing = new OpenRouterPricingService(),
     /** Completed days, so the chart outlives the log files' seven. */
     private readonly history = new KimiUsageStore(),
-  ) {
-    this.store = store;
-  }
+  ) {}
 
   /**
    * Prices per model alias. Only OpenRouter-backed aliases resolve: anything
@@ -221,88 +208,64 @@ export class KimiUsageService {
     return resolved;
   }
 
-  async getUsageSummary(): Promise<KimiUsageSummary | null> {
-    if (this.cache && Date.now() - this.cache.timestamp < KimiUsageService.CACHE_TTL) {
-      return this.cache.data;
-    }
-    const data = await this.build();
-    this.cache = { timestamp: Date.now(), data };
-    return data;
+  getUsageSummary(): Promise<KimiUsageSummary | null> {
+    return this.cached.get();
   }
 
   private async build(): Promise<KimiUsageSummary | null> {
     const now = Date.now();
-    const cutoff7d = now - KimiUsageService.WINDOW_7D_MS;
+    const cutoff7d = now - USAGE_WINDOW_7D_MS;
     const sessions = (await this.store.listSessions()).filter(
       (s) => new Date(s.updatedAt).getTime() >= cutoff7d,
     );
-    if (sessions.length === 0) return null;
-
-    const records: UsageRecord[] = [];
-    let sessionsWithUsage = 0;
-    await Promise.all(sessions.map(async (s) => {
-      const sessionRecords = await this.readSessionRecords(s.dir, cutoff7d);
-      if (sessionRecords.length > 0) sessionsWithUsage++;
-      records.push(...sessionRecords);
-    }));
+    const records = (
+      await Promise.all(
+        sessions.map(async (s) =>
+          (await this.readSessionRecords(s.dir, cutoff7d)).map((record) => ({ record, sessionId: s.dir })),
+        ),
+      )
+    ).flat();
     if (records.length === 0) return null;
 
-    records.sort((a, b) => a.timestamp - b.timestamp);
     const priceByAlias = await this.resolvePricing(
-      records.map((r) => r.model).filter((m): m is string => !!m),
+      records.map(({ record }) => record.model).filter((m): m is string => !!m),
     );
+    const turns: UsageTurn[] = records.map(({ record, sessionId }) => ({
+      at: record.timestamp,
+      sessionId,
+      models: record.model ? [record.model] : [],
+      totalTokens: record.totalTokens,
+      inputTokens: record.inputTokens,
+      cacheReadTokens: record.cacheReadTokens,
+      outputTokens: record.outputTokens,
+      costUsd: recordCost(record, record.model ? priceByAlias.get(record.model)?.pricing : undefined),
+    }));
+    const summary = aggregateUsage(turns, now);
+    if (!summary) return null;
+    roundWindowCost(summary.last24h);
+    roundWindowCost(summary.last7d);
+    for (const model of summary.models) {
+      if (model.costUsd !== undefined) model.costUsd = roundUsd(model.costUsd);
+      model.pricedAs = priceByAlias.get(model.model)?.modelId;
+    }
 
-    const last24h = emptyWindow();
-    const last7d = emptyWindow();
-    const cost24h: CostAccumulator = { usd: 0, priced: false };
-    const cost7d: CostAccumulator = { usd: 0, priced: false };
-    const modelTotals = new Map<string, { totalTokens: number; cost: CostAccumulator }>();
-    const cutoff24h = now - KimiUsageService.WINDOW_24H_MS;
     // Local midnight of the oldest day on the chart. It always sits inside the
     // 7-day rolling cutoff already read (midnight n days back is later than
     // n+1 days back to the second), so the daily series costs no extra I/O.
     const dailyStart = startOfDayBefore(now, KimiUsageService.DAILY_DAYS - 1);
     const days = new Map<string, DayAccumulator>();
-    for (const record of records) {
-      const pricing = record.model ? priceByAlias.get(record.model)?.pricing : undefined;
-      addToWindow(last7d, record);
-      addCost(cost7d, record, pricing);
-      if (record.timestamp >= cutoff24h) {
-        addToWindow(last24h, record);
-        addCost(cost24h, record, pricing);
+    for (const turn of turns) {
+      if (turn.at < dailyStart) continue;
+      const key = localDateKey(turn.at);
+      let day = days.get(key);
+      if (!day) {
+        day = { turns: 0, totalTokens: 0, cost: { usd: 0, priced: false } };
+        days.set(key, day);
       }
-      if (record.timestamp >= dailyStart) {
-        const key = localDateKey(record.timestamp);
-        let day = days.get(key);
-        if (!day) {
-          day = { turns: 0, totalTokens: 0, cost: { usd: 0, priced: false } };
-          days.set(key, day);
-        }
-        day.turns++;
-        day.totalTokens += record.totalTokens;
-        addCost(day.cost, record, pricing);
-      }
-      if (record.model) {
-        let total = modelTotals.get(record.model);
-        if (!total) {
-          total = { totalTokens: 0, cost: { usd: 0, priced: false } };
-          modelTotals.set(record.model, total);
-        }
-        total.totalTokens += record.totalTokens;
-        addCost(total.cost, record, pricing);
-      }
+      day.turns++;
+      day.totalTokens += turn.totalTokens;
+      addCost(day.cost, turn.costUsd);
     }
-    if (cost24h.priced) last24h.costUsd = roundUsd(cost24h.usd);
-    if (cost7d.priced) last7d.costUsd = roundUsd(cost7d.usd);
-
-    const models: KimiUsageModelTotal[] = Array.from(modelTotals.entries())
-      .map(([model, { totalTokens, cost }]) => ({
-        model,
-        totalTokens,
-        costUsd: cost.priced ? roundUsd(cost.usd) : undefined,
-        pricedAs: priceByAlias.get(model)?.modelId,
-      }))
-      .sort((a, b) => b.totalTokens - a.totalTokens);
 
     const live = buildLiveDays(days, now, KimiUsageService.DAILY_DAYS);
     // Only the finished days are written down. Today is still being added to,
@@ -324,14 +287,7 @@ export class KimiUsageService {
       KimiUsageService.CHART_DAYS,
     );
 
-    return {
-      last24h,
-      last7d,
-      models,
-      daily,
-      sessions7d: sessionsWithUsage,
-      lastTurnAt: new Date(records[records.length - 1].timestamp).toISOString(),
-    };
+    return { ...summary, daily };
   }
 
   /** usage.record entries across all agent wires of one session dir. */

@@ -57,7 +57,7 @@ const SUMMARY_DAYS = 14;
 
 /**
  * List price per hour of audio, USD, by model. A local estimate, like
- * `KimiUsageWindow.costUsd`: Groq bills on its own rounding and this server
+ * Kimi's `AgentUsageWindow.costUsd`: Groq bills on its own rounding and this server
  * never sees the invoice.
  *
  * Only the model this ran on before the model became a setting has a rate

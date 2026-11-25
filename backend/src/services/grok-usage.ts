@@ -1,27 +1,8 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { GrokUsageSummary, GrokUsageWindow } from '../../../shared/types';
+import type { AgentUsageSummary } from '../../../shared/types';
+import { aggregateUsage, CachedUsage, USAGE_WINDOW_7D_MS, type UsageTurn } from './agent-usage';
 import { GrokSessionStore } from './grok';
-
-interface TurnRecord {
-  /** Unix seconds. */
-  timestamp: number;
-  totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  models: string[];
-}
-
-function emptyWindow(): GrokUsageWindow {
-  return { turns: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0 };
-}
-
-function addToWindow(window: GrokUsageWindow, turn: TurnRecord): void {
-  window.turns++;
-  window.totalTokens += turn.totalTokens;
-  window.inputTokens += turn.inputTokens;
-  window.outputTokens += turn.outputTokens;
-}
 
 /**
  * Aggregates Grok Build token consumption from `turn_completed` records in
@@ -30,69 +11,31 @@ function addToWindow(window: GrokUsageWindow, turn: TurnRecord): void {
  * a dashboard can honestly show.
  */
 export class GrokUsageService {
-  private store: GrokSessionStore;
-  private cache: { timestamp: number; data: GrokUsageSummary | null } | null = null;
-  private static readonly CACHE_TTL = 30_000;
-  private static readonly WINDOW_7D_MS = 7 * 24 * 60 * 60 * 1000;
-  private static readonly WINDOW_24H_MS = 24 * 60 * 60 * 1000;
+  private readonly cached = new CachedUsage('grok', () => this.build());
 
-  constructor(store = new GrokSessionStore()) {
-    this.store = store;
+  constructor(private readonly store = new GrokSessionStore()) {}
+
+  getUsageSummary(): Promise<AgentUsageSummary | null> {
+    return this.cached.get();
   }
 
-  async getUsageSummary(): Promise<GrokUsageSummary | null> {
-    if (this.cache && Date.now() - this.cache.timestamp < GrokUsageService.CACHE_TTL) {
-      return this.cache.data;
-    }
-    const data = await this.build();
-    this.cache = { timestamp: Date.now(), data };
-    return data;
-  }
-
-  private async build(): Promise<GrokUsageSummary | null> {
+  private async build(): Promise<AgentUsageSummary | null> {
     const now = Date.now();
-    const cutoff7d = now - GrokUsageService.WINDOW_7D_MS;
+    const cutoff7d = now - USAGE_WINDOW_7D_MS;
     const sessions = (await this.store.listSessions()).filter(
       (s) => new Date(s.updatedAt).getTime() >= cutoff7d,
     );
-    if (sessions.length === 0) return null;
-
-    const turns: TurnRecord[] = [];
-    await Promise.all(sessions.map(async (s) => {
-      turns.push(...await this.readTurns(join(s.dir, 'updates.jsonl'), cutoff7d));
-    }));
-    if (turns.length === 0) return null;
-
-    turns.sort((a, b) => a.timestamp - b.timestamp);
-    const last24h = emptyWindow();
-    const last7d = emptyWindow();
-    const modelTotals = new Map<string, number>();
-    const cutoff24h = now - GrokUsageService.WINDOW_24H_MS;
-    for (const turn of turns) {
-      const ms = turn.timestamp * 1000;
-      addToWindow(last7d, turn);
-      if (ms >= cutoff24h) addToWindow(last24h, turn);
-      for (const model of turn.models) {
-        modelTotals.set(model, (modelTotals.get(model) ?? 0) + turn.totalTokens);
-      }
-    }
-
-    const lastTurn = turns[turns.length - 1];
-    const models = Array.from(modelTotals.entries())
-      .map(([model, totalTokens]) => ({ model, totalTokens }))
-      .sort((a, b) => b.totalTokens - a.totalTokens);
-
-    return {
-      last24h,
-      last7d,
-      models,
-      sessions7d: sessions.length,
-      planType: lastTurn.models.some((m) => m.endsWith('-free')) ? 'Free' : undefined,
-      lastTurnAt: new Date(lastTurn.timestamp * 1000).toISOString(),
-    };
+    const turns = (
+      await Promise.all(sessions.map((s) => this.readTurns(s.dir, join(s.dir, 'updates.jsonl'), cutoff7d)))
+    ).flat();
+    const summary = aggregateUsage(turns, now);
+    if (!summary) return null;
+    const lastTurn = turns.reduce((a, b) => (b.at > a.at ? b : a));
+    if (lastTurn.models.some((m) => m.endsWith('-free'))) summary.planType = 'Free';
+    return summary;
   }
 
-  private async readTurns(updatesPath: string, cutoffMs: number): Promise<TurnRecord[]> {
+  private async readTurns(sessionId: string, updatesPath: string, cutoffMs: number): Promise<UsageTurn[]> {
     // Skip files that clearly predate the window before reading them.
     try {
       if ((await stat(updatesPath)).mtimeMs < cutoffMs) return [];
@@ -106,7 +49,7 @@ export class GrokUsageService {
       return [];
     }
 
-    const turns: TurnRecord[] = [];
+    const turns: UsageTurn[] = [];
     for (const line of text.split('\n')) {
       if (!line.includes('"turn_completed"')) continue;
       try {
@@ -129,7 +72,8 @@ export class GrokUsageService {
         const timestamp = typeof record.timestamp === 'number' ? record.timestamp : 0;
         if (timestamp * 1000 < cutoffMs) continue;
         turns.push({
-          timestamp,
+          at: timestamp * 1000,
+          sessionId,
           totalTokens: update.usage.totalTokens ?? 0,
           inputTokens: update.usage.inputTokens ?? 0,
           outputTokens: update.usage.outputTokens ?? 0,
