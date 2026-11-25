@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.227] - 2026-11-25
+
+### Changed
+- **Sending from the chat view scrolls to the end.** A prompt sent while
+  reading older turns used to leave the view where it was, so the reply
+  arrived off screen. The view now jumps to the bottom and follows the reply
+  as it comes in.
+
 ## [0.3.226] - 2026-11-25
 
 ### Added
