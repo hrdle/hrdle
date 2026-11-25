@@ -785,6 +785,12 @@ interface ConversationViewerProps {
 	 */
 	resumeError?: string | null;
 	scrollToBottom?: boolean;
+	/**
+	 * Changes each time the person sends from the composer. The view jumps to
+	 * the end and follows from there, even if they had scrolled up to read:
+	 * having just written, the next thing they want is the reply.
+	 */
+	followSignal?: number;
 	isActive?: boolean; // Whether the session is actively running
 	onRefresh?: () => void; // Callback to refresh conversation
 	inline?: boolean; // If true, render inline instead of fullscreen modal
@@ -803,6 +809,7 @@ export function ConversationViewer({
 	isResuming,
 	resumeError,
 	scrollToBottom = false,
+	followSignal = 0,
 	isActive = false,
 	onRefresh,
 	inline = false,
@@ -916,11 +923,22 @@ export function ConversationViewer({
 		}
 	}, [rows.length, isLoading, scrollToBottom, prevRowCount, scrollToEnd]);
 
+	const rowsLenRef = useRef(rows.length);
+	rowsLenRef.current = rows.length;
+
+	useEffect(() => {
+		if (followSignal === 0) return;
+		atBottomRef.current = true;
+		requestAnimationFrame(() => {
+			if (rowsLenRef.current > 0) {
+				virtualizer.scrollToIndex(rowsLenRef.current - 1, { align: "end" });
+			}
+		});
+	}, [followSignal, virtualizer]);
+
 	// Snap to bottom when the container becomes visible (e.g. unhidden after
 	// mounting under display:none). Without this, scrollToEnd above runs while
 	// the parent has 0 height and silently no-ops.
-	const rowsLenRef = useRef(rows.length);
-	rowsLenRef.current = rows.length;
 	useEffect(() => {
 		if (!scrollToBottom) return;
 		const el = parentRef.current;
