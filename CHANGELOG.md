@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.231] - 2026-11-25
+
+### Changed
+- **Internal restructuring, nothing to notice.** The code that lists Grok,
+  Kimi, OpenCode and pi sessions and reads their usage is shared between them
+  instead of written four times. No screen or API behaves differently.
+
 ## [0.3.230] - 2026-11-25
 
 ### Fixed
