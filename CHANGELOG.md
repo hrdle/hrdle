@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.234] - 2026-11-25
+
+### Changed
+- **Internal restructuring, nothing to notice.** The code that reads a waiting
+  pane's question and options off its screen now sits with the other screen
+  readers instead of inside the glasses relay. Nothing on the glasses, the
+  chat view or the API behaves differently.
+
 ## [0.3.233] - 2026-11-25
 
 ### Fixed
