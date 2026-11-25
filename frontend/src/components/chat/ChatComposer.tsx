@@ -48,6 +48,8 @@ interface ChatComposerProps {
 	waiting?: boolean;
 	/** Claude Code has a permission mode the composer can show and change. */
 	showMode?: boolean;
+	/** A prompt went in: the view follows the conversation to its end. */
+	onSent?: () => void;
 }
 
 /** How long a stop stays pending when the status does not come back to say it worked. */
@@ -70,6 +72,7 @@ export function ChatComposer({
 	working = false,
 	waiting = false,
 	showMode = false,
+	onSent,
 }: ChatComposerProps) {
 	const { t } = useTranslation();
 	const [text, setText] = useState("");
@@ -280,6 +283,7 @@ export function ChatComposer({
 				throw new Error(data.error || `status ${res.status}`);
 			}
 			if (prompt.trim()) setHistory((prev) => pushInputHistory(prev, prompt));
+			onSent?.();
 			// `/usage`, `/model` and the like answer with a panel on the screen
 			// rather than in the transcript.
 			if (prompt.startsWith("/")) panel.watch();

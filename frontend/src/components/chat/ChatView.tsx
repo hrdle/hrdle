@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentProvider } from "../../../../shared/types";
 import { useAgentConversation } from "../../hooks/useAgentConversation";
@@ -75,6 +76,7 @@ export function ChatView({
 	waiting = false,
 }: ChatViewProps) {
 	const { t } = useTranslation();
+	const [followSignal, setFollowSignal] = useState(0);
 	const { messages, conversationId, status } = useAgentConversation({
 		agent,
 		sessionId,
@@ -120,6 +122,7 @@ export function ChatView({
 					/* close handled by parent */
 				}}
 				scrollToBottom
+				followSignal={followSignal}
 				inline
 				agent={agent}
 			/>
@@ -142,6 +145,7 @@ export function ChatView({
 					working={working}
 					waiting={waiting}
 					showMode={agent === "claude"}
+					onSent={() => setFollowSignal((n) => n + 1)}
 				/>
 			)}
 		</div>
