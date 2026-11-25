@@ -48,8 +48,8 @@ interface ChatComposerProps {
 	waiting?: boolean;
 	/** Claude Code has a permission mode the composer can show and change. */
 	showMode?: boolean;
-	/** A prompt went in: the view follows the conversation to its end. */
-	onSent?: () => void;
+	/** A prompt went in, as written: the view shows it and follows to its end. */
+	onSent?: (prompt: string) => void;
 }
 
 /** How long a stop stays pending when the status does not come back to say it worked. */
@@ -283,7 +283,7 @@ export function ChatComposer({
 				throw new Error(data.error || `status ${res.status}`);
 			}
 			if (prompt.trim()) setHistory((prev) => pushInputHistory(prev, prompt));
-			onSent?.();
+			onSent?.(prompt);
 			// `/usage`, `/model` and the like answer with a panel on the screen
 			// rather than in the transcript.
 			if (prompt.startsWith("/")) panel.watch();

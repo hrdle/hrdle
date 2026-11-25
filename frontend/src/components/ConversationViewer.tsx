@@ -671,6 +671,8 @@ interface DisplayRow {
 	orphanResults: ToolResultInfo[];
 	/** First row of a turn. A burst of tool calls is one speaker, not twelve. */
 	showSpeaker: boolean;
+	/** Sent from here and not yet in the transcript. */
+	pending?: boolean;
 }
 
 function buildRows(messages: ConversationMessage[]): DisplayRow[] {
@@ -725,7 +727,10 @@ const MessageRow = memo(function MessageRow({
 		// The user's own turn: a bubble on the right, the one place in the view
 		// where text is not the full column width.
 		return (
-			<div className="flex flex-col items-end gap-1">
+			<div
+				className={`flex flex-col items-end gap-1${row.pending ? " opacity-60" : ""}`}
+				data-testid={row.pending ? "chat-pending-prompt" : undefined}
+			>
 				{msg.content && (
 					<div className="max-w-[85%] rounded-2xl bg-cv-bubble px-4 py-2.5 text-cv-text">
 						<Markdown content={msg.content} />
@@ -791,6 +796,14 @@ interface ConversationViewerProps {
 	 * having just written, the next thing they want is the reply.
 	 */
 	followSignal?: number;
+	/**
+	 * A prompt sent from the composer that the transcript does not hold yet,
+	 * shown as the last turn until it does. A slash command is written only
+	 * once it has run - `/compact` a minute later, `/model` once its panel
+	 * closes - and a prompt sent mid-turn only once it is dequeued, so without
+	 * this the view shows nothing for what was just sent.
+	 */
+	pendingPrompt?: string | null;
 	isActive?: boolean; // Whether the session is actively running
 	onRefresh?: () => void; // Callback to refresh conversation
 	inline?: boolean; // If true, render inline instead of fullscreen modal
@@ -810,6 +823,7 @@ export function ConversationViewer({
 	resumeError,
 	scrollToBottom = false,
 	followSignal = 0,
+	pendingPrompt = null,
 	isActive = false,
 	onRefresh,
 	inline = false,
@@ -820,7 +834,19 @@ export function ConversationViewer({
 	const [prevRowCount, setPrevRowCount] = useState(0);
 	const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
-	const rows = useMemo(() => buildRows(messages), [messages]);
+	const rows = useMemo(() => {
+		const built = buildRows(messages);
+		if (!pendingPrompt) return built;
+		const last = built[built.length - 1];
+		built.push({
+			msg: { role: "user", content: pendingPrompt },
+			results: [],
+			orphanResults: [],
+			showSpeaker: last?.msg.role !== "user",
+			pending: true,
+		});
+		return built;
+	}, [messages, pendingPrompt]);
 
 	// Inline images (rendered by markdownComponents) dispatch this event when
 	// tapped. Listening at the component level (rather than event delegation

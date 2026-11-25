@@ -191,15 +191,40 @@ describe('what the transcript hides', () => {
     expect(messages.map((m) => m.content)).toEqual(['a person speaking']);
   });
 
-  it('rewrites the command markup a person did not type', async () => {
+  it('reads a slash command back as it was typed', async () => {
     const messages = await parse(
       await write([
         { type: 'user', uuid: 'u1', message: { content: '<command-name>/release</command-name><command-args>v1</command-args>' } },
       ]),
     );
 
-    expect(messages[0].content).toContain('Command: /release');
-    expect(messages[0].content).not.toContain('<command-args>');
+    expect(messages[0].content).toBe('/release v1');
+  });
+
+  it('reads a local command written as a system record', async () => {
+    const messages = await parse(
+      await write([
+        { type: 'system', subtype: 'local_command', uuid: 'u1', content: '<command-name>/model</command-name>\n<command-message>model</command-message>\n<command-args></command-args>' },
+        { type: 'system', subtype: 'local_command', uuid: 'u2', content: '<local-command-stdout>Kept model as `Haiku`</local-command-stdout>' },
+        { type: 'system', subtype: 'turn_duration', uuid: 'u3', content: 'ignored' },
+      ]),
+    );
+
+    expect(messages.map((m) => [m.role, m.content])).toEqual([
+      ['user', '/model'],
+      ['user', 'Kept model as `Haiku`'],
+    ]);
+  });
+
+  it('drops what Claude Code adds to a turn, such as an expanded skill', async () => {
+    const messages = await parse(
+      await write([
+        { type: 'user', uuid: 'u1', message: { content: '<command-message>hello</command-message>\n<command-name>/hello</command-name>' } },
+        { type: 'user', uuid: 'u2', isMeta: true, message: { content: [{ type: 'text', text: 'Base directory for this skill: /x' }] } },
+      ]),
+    );
+
+    expect(messages.map((m) => m.content)).toEqual(['/hello']);
   });
 
   it('strips terminal escape sequences', async () => {
