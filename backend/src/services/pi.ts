@@ -1,7 +1,9 @@
 import { readdir, readFile, stat, open } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
-import type { AgentThread, AgentThreadService, AgentTokenUsage } from './agent-providers';
+import { numberOrUndefined } from '../utils/number';
+import type { AgentTokenUsage } from './agent-providers';
+import { CachedSessionStore, StoreThreadService, type ThreadDetails } from './agent-session-store';
 
 /**
  * pi (the terminal coding agent) keeps one file per session under
@@ -101,10 +103,6 @@ export function blockText(content: PiContentBlock[] | string | undefined): strin
     .filter((b) => b?.type === 'text' && typeof b.text === 'string')
     .map((b) => b.text as string)
     .join('\n');
-}
-
-function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 const PI_RECAP_MAX_CHARS = 500;
@@ -274,23 +272,9 @@ async function readHead(path: string): Promise<{ header?: PiSessionRecord; first
   }
 }
 
-export class PiSessionStore {
-  private cache: { timestamp: number; sessions: PiSessionInfo[] } | null = null;
-  private static readonly CACHE_TTL = 5000;
-
-  constructor(private readonly sessionsDir = piSessionsDir()) {}
-
-  async listSessions(): Promise<PiSessionInfo[]> {
-    if (this.cache && Date.now() - this.cache.timestamp < PiSessionStore.CACHE_TTL) {
-      return this.cache.sessions;
-    }
-    const sessions = await this.scan();
-    this.cache = { timestamp: Date.now(), sessions };
-    return sessions;
-  }
-
-  async findSession(sessionId: string): Promise<PiSessionInfo | undefined> {
-    return (await this.listSessions()).find((s) => s.sessionId === sessionId);
+export class PiSessionStore extends CachedSessionStore<PiSessionInfo> {
+  constructor(private readonly sessionsDir = piSessionsDir()) {
+    super();
   }
 
   /** The tail of one session: the current usage and the latest answer. */
@@ -306,7 +290,7 @@ export class PiSessionStore {
     return readFile(session.path, 'utf8');
   }
 
-  private async scan(): Promise<PiSessionInfo[]> {
+  protected async scan(): Promise<PiSessionInfo[]> {
     let dirs: string[];
     try {
       dirs = await readdir(this.sessionsDir);
@@ -346,11 +330,13 @@ export class PiSessionStore {
   }
 }
 
-export class PiService implements AgentThreadService {
+export class PiService extends StoreThreadService<PiSessionInfo, PiSessionStore> {
   constructor(
-    private readonly store = new PiSessionStore(),
+    store = new PiSessionStore(),
     private readonly models = new PiModelsStore(),
-  ) {}
+  ) {
+    super(store);
+  }
 
   /** The usage with its window and percent, when pi has recorded a window for that model. */
   private async withWindow(tail: PiTail): Promise<AgentTokenUsage | undefined> {
@@ -364,24 +350,12 @@ export class PiService implements AgentThreadService {
     return { ...usage, contextMaxTokens, contextPercent };
   }
 
-  async getThreadsByIds(sessionIds: string[]): Promise<Map<string, AgentThread>> {
-    const wanted = new Set(sessionIds.filter(Boolean));
-    if (wanted.size === 0) return new Map();
-    const result = new Map<string, AgentThread>();
-    for (const s of await this.store.listSessions()) {
-      if (!wanted.has(s.sessionId)) continue;
+  protected async describe(sessions: PiSessionInfo[]): Promise<ThreadDetails[]> {
+    const details: ThreadDetails[] = [];
+    for (const s of sessions) {
       const tail = await this.store.readTail(s);
-      result.set(s.sessionId, {
-        sessionId: s.sessionId,
-        firstPrompt: s.firstPrompt,
-        tokenUsage: await this.withWindow(tail),
-        recap: tail.recap,
-        recapAt: tail.recapAt,
-        cwd: s.cwd,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      });
+      details.push({ tokenUsage: await this.withWindow(tail), recap: tail.recap, recapAt: tail.recapAt });
     }
-    return result;
+    return details;
   }
 }

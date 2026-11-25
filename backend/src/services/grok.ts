@@ -1,8 +1,10 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentThread, AgentThreadService, AgentTokenUsage } from './agent-providers';
+import { readFileTailSync } from '../utils/file-slice';
+import { numberOrUndefined } from '../utils/number';
+import type { AgentTokenUsage } from './agent-providers';
+import { CachedSessionStore, StoreThreadService, type ThreadDetails } from './agent-session-store';
 
 /** One Grok Build session as recorded under `~/.grok/sessions`. */
 export interface GrokSessionInfo {
@@ -39,30 +41,12 @@ interface GrokSummaryJson {
  * The scanner decodes the directory name instead of re-encoding cwds so it
  * can never disagree with Grok's own percent-encoding.
  */
-export class GrokSessionStore {
-  private sessionsDir: string;
-  private cache: { timestamp: number; sessions: GrokSessionInfo[] } | null = null;
-  private static readonly CACHE_TTL = 5000;
-
-  constructor(sessionsDir = join(homedir(), '.grok', 'sessions')) {
-    this.sessionsDir = sessionsDir;
+export class GrokSessionStore extends CachedSessionStore<GrokSessionInfo> {
+  constructor(private readonly sessionsDir = join(homedir(), '.grok', 'sessions')) {
+    super();
   }
 
-  async listSessions(): Promise<GrokSessionInfo[]> {
-    if (this.cache && Date.now() - this.cache.timestamp < GrokSessionStore.CACHE_TTL) {
-      return this.cache.sessions;
-    }
-    const sessions = await this.scan();
-    this.cache = { timestamp: Date.now(), sessions };
-    return sessions;
-  }
-
-  async findSession(sessionId: string): Promise<GrokSessionInfo | undefined> {
-    const sessions = await this.listSessions();
-    return sessions.find((s) => s.sessionId === sessionId);
-  }
-
-  private async scan(): Promise<GrokSessionInfo[]> {
+  protected async scan(): Promise<GrokSessionInfo[]> {
     let projectDirs: string[];
     try {
       projectDirs = await readdir(this.sessionsDir);
@@ -150,44 +134,14 @@ interface GrokTurnUsage {
   cachedReadTokens?: number;
 }
 
-function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
 /**
  * Tail-read updates.jsonl and return the usage block of the last
  * `turn_completed` record. Bounded read (like the Codex reader) so multi-MB
  * streams don't get re-parsed on every sessions push.
  */
 export function readLatestGrokTokenUsage(sessionDir: string): AgentTokenUsage | undefined {
-  const updatesPath = join(sessionDir, 'updates.jsonl');
-  if (!existsSync(updatesPath)) return undefined;
-  let text: string;
-  try {
-    const stat = statSync(updatesPath);
-    const maxTailBytes = 1024 * 1024;
-    if (stat.size <= maxTailBytes) {
-      const fd = openSync(updatesPath, 'r');
-      try {
-        const buffer = Buffer.alloc(stat.size);
-        readSync(fd, buffer, 0, stat.size, 0);
-        text = buffer.toString('utf8');
-      } finally {
-        closeSync(fd);
-      }
-    } else {
-      const fd = openSync(updatesPath, 'r');
-      try {
-        const buffer = Buffer.alloc(maxTailBytes);
-        readSync(fd, buffer, 0, maxTailBytes, stat.size - maxTailBytes);
-        text = buffer.toString('utf8');
-      } finally {
-        closeSync(fd);
-      }
-    }
-  } catch {
-    return undefined;
-  }
+  const text = readFileTailSync(join(sessionDir, 'updates.jsonl'), 1024 * 1024);
+  if (text === undefined) return undefined;
 
   const lines = text.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -214,32 +168,15 @@ export function readLatestGrokTokenUsage(sessionDir: string): AgentTokenUsage | 
 }
 
 /** Exact Grok sessions by native session id, for the active-sessions list. */
-export class GrokService implements AgentThreadService {
-  private store: GrokSessionStore;
-
+export class GrokService extends StoreThreadService<GrokSessionInfo> {
   constructor(store = new GrokSessionStore()) {
-    this.store = store;
+    super(store);
   }
 
-  async getThreadsByIds(sessionIds: string[]): Promise<Map<string, AgentThread>> {
-    const uniqueIds = new Set(sessionIds.filter(Boolean));
-    if (uniqueIds.size === 0) return new Map();
-
-    const sessions = await this.store.listSessions();
-    const result = new Map<string, AgentThread>();
-    for (const s of sessions) {
-      if (!uniqueIds.has(s.sessionId)) continue;
+  protected describe(sessions: GrokSessionInfo[]): ThreadDetails[] {
+    return sessions.map((s) => {
       const tokenUsage = readLatestGrokTokenUsage(s.dir);
-      result.set(s.sessionId, {
-        sessionId: s.sessionId,
-        title: s.title,
-        firstPrompt: s.firstPrompt,
-        tokenUsage: s.modelId ? { ...tokenUsage, model: s.modelId } : tokenUsage,
-        cwd: s.cwd,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      });
-    }
-    return result;
+      return { tokenUsage: s.modelId ? { ...tokenUsage, model: s.modelId } : tokenUsage };
+    });
   }
 }
