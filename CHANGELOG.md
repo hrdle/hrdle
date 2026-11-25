@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.228] - 2026-11-25
+
+### Changed
+- **Internal restructuring, nothing to notice.** The session routes, the
+  workspace list and the desktop layout are split into smaller files, and the
+  desktop's keyboard shortcuts are now checked by a test against the keys the
+  terminal lets through. No screen or API behaves differently.
+
 ## [0.3.227] - 2026-11-25
 
 ### Changed
