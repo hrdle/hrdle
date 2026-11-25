@@ -18,7 +18,7 @@
 //                                and leaves a prompt open.
 
 import { describe, expect, test } from 'bun:test';
-import { choiceKeysOf, fieldRowsOf } from '../glasses-relay';
+import { choiceKeysOf, fieldRowsOf } from '../pane-readers/picker-keys';
 import type { PaneQuestion } from '../pane-readers';
 
 const DOWN = '\x1b[B';

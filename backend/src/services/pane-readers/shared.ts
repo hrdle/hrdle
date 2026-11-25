@@ -165,6 +165,9 @@ export function joinWrapped(head: string, tail: string): string {
  *  wrapped that way throughout. */
 export const CJK_EDGE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー、。「」『』（）？]/u;
 
+/** A row is answered by its digit, and there are nine of them. */
+export const MAX_CHOICES = 9;
+
 /** However wrapped, a description longer than this is not read off a pair of
  *  glasses - and the server clamps it again to the lines it will actually get. */
 export const MAX_DETAIL_CHARS = 120;

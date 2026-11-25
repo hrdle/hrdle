@@ -42,7 +42,7 @@ function plainRow(s: string): string {
 }
 
 // Wide-codepoint table copied from `displayWidth` in
-// backend/src/services/glasses-relay.ts — a row's width in cells, not
+// backend/src/utils/display-width.ts — a row's width in cells, not
 // characters, decides whether it is full.
 function isWideCodePoint(cp: number): boolean {
 	return (

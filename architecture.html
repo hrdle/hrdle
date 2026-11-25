@@ -241,7 +241,7 @@
       {
         "name": "PaneReaders",
         "file": "backend/src/services/pane-readers/",
-        "summary": "What a pane is asking, read the way that pane's agent draws it. Dispatched on PaneInfo.agent, and an agent with no reader gets no options rather than a general rule - a guess offered to someone wearing the glasses is answered, while an omission is only read. One shape-matching reader for all of them offered a grep hit and a line of prose as answers. The blast radius is per agent: a TUI that changes breaks its own reader and no one else's",
+        "summary": "What a pane is asking, read the way that pane's agent draws it. Dispatched on PaneInfo.agent, and an agent with no reader gets no options rather than a general rule - a guess offered to someone wearing the glasses is answered, while an omission is only read. One shape-matching reader for all of them offered a grep hit and a line of prose as answers. The blast radius is per agent: a TUI that changes breaks its own reader and no one else's. Beside the readers: screen-shape.ts, the read by shape alone that the glasses relay uses where no reader applies (an agent without one, a permission prompt), and picker-keys.ts, the keys each row of a read picker answers to, shared by the relay and the question API",
         "deps": []
       },
       {

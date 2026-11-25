@@ -10,6 +10,7 @@
 
 import { Hono } from 'hono';
 import { dismissRelayItem, postAgentRelay } from '../services/glasses-relay';
+import { MAX_CHOICES } from '../services/pane-readers/shared';
 
 // Same alphabet as SessionIdSchema / the notify flood guard.
 const SESSION_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
@@ -23,7 +24,6 @@ const ITEM_ID_RE = /^(peer:[A-Za-z0-9_-]{1,40}:)?[A-Za-z0-9-]{1,64}$/;
 // Base36 like herdr's own pane token, not digits (`%A` is the tenth pane).
 const PANE_ID_RE = /^%[0-9A-Za-z]+$/;
 const MAX_TEXT_LEN = 4000; // pre-clamp; the service trims to one G2 page
-const MAX_CHOICES = 9;
 const MAX_CHOICE_LEN = 200;
 
 const glassesRelay = new Hono();

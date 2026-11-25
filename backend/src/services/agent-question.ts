@@ -262,3 +262,22 @@ export async function readAgentQuestions(
   if (agent === 'kimi') return { known: true, questions: await openKimiQuestions(sessionId) };
   return { known: false };
 }
+
+/**
+ * Which of a call's questions the pane is showing.
+ *
+ * One question needs no matching. Several draw a tab each, and the record
+ * cannot say which is in front - but the front tab's question text is painted
+ * on the pane and the others' is not (their headers are, and a header is a
+ * word, not the question). Compared with all whitespace removed, because the
+ * pane wraps the question wherever its width falls - mid-word in Japanese -
+ * and every break is a character the record does not have. No match, or more
+ * than one, returns nothing rather than a guess.
+ */
+export function matchOpenQuestion(questions: OpenQuestion[], paneText: string): OpenQuestion | undefined {
+  if (questions.length === 1) return questions[0];
+  const flat = (s: string) => s.replace(/\s+/g, '');
+  const pane = flat(paneText);
+  const hits = questions.filter((q) => pane.includes(flat(q.question)));
+  return hits.length === 1 ? hits[0] : undefined;
+}

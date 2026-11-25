@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AgentProvider } from '../../../shared/types';
-import { type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
-import { choiceKeysOf, fieldRowsOf, matchOpenQuestion } from './glasses-relay';
+import { matchOpenQuestion, type OpenQuestion, type QuestionsRead, readAgentQuestions } from './agent-question';
+import { choiceKeysOf, fieldRowsOf } from './pane-readers/picker-keys';
 import type { HerdrAgentStatus } from './herdr-client';
 import { type PaneQuestion, readPaneQuestion } from './pane-readers';
 import { type ClaudePermission, readClaudePermission } from './pane-readers/claude-permission';
