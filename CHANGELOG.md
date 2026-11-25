@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.230] - 2026-11-25
+
+### Fixed
+- **A slash command shows in the chat view as soon as it is sent.** Claude Code
+  records a command only once it has run, so `/compact` or `/model` used to
+  leave the chat unchanged until then. The sent text now appears, dimmed, as the
+  last turn until it is recorded. A prompt sent while the agent is working shows
+  the same way until it is picked up.
+- **Commands read as they were typed** (`/release v1` rather than
+  `Command: /release`), a skill's expanded instructions no longer appear as your
+  own message, and `/model` closed without a change is shown.
+
 ## [0.3.229] - 2026-11-25
 
 ### Changed
