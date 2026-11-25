@@ -11,6 +11,20 @@ import type {
 import { readLastLines } from '../utils/read-last-lines';
 import { scanLastRecap } from '../utils/recap-scanner';
 import { homeShortPath } from '../utils/home-path';
+import { slashCommandText } from '../utils/slash-command-record';
+
+/**
+ * Some local commands (`/model` closed without a change, `/clear`) are written
+ * as `system` records with the text at the top level rather than as a user
+ * turn. They are the person's own commands all the same.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: a transcript line is untyped JSON
+function asConversationEntry(entry: any): any {
+  if (entry?.type === 'system' && entry.subtype === 'local_command' && typeof entry.content === 'string') {
+    return { ...entry, type: 'user', message: { role: 'user', content: entry.content } };
+  }
+  return entry;
+}
 
 export type { HistorySession };
 
@@ -605,11 +619,14 @@ export class SessionHistoryService {
 
       for await (const line of rl) {
         try {
-          const entry = JSON.parse(line);
+          const entry = asConversationEntry(JSON.parse(line));
 
           // Skip non-message entries
           if (entry.type !== 'user' && entry.type !== 'assistant') continue;
           if (!entry.message) continue;
+          // What Claude Code adds to a turn rather than what anyone said: a
+          // skill's expanded body, the caveat before a local command's output.
+          if (entry.isMeta === true) continue;
 
           const role = entry.type as 'user' | 'assistant';
           let content = '';
@@ -693,11 +710,11 @@ export class SessionHistoryService {
           if (content.startsWith('<local-command-caveat>')) continue;
 
           // Format command-related messages for readability
-          if (content) {
+          const command = content ? slashCommandText(content) : null;
+          if (command) {
+            content = command;
+          } else if (content) {
             content = content
-              .replace(/<command-name>([^<]*)<\/command-name>/g, 'Command: $1')
-              .replace(/<command-message>([^<]*)<\/command-message>/g, '$1')
-              .replace(/<command-args>([^<]*)<\/command-args>/g, '')
               .replace(/<local-command-stdout>([^<]*)<\/local-command-stdout>/g, '$1')
               .replace(/<task-notification>.*?<status>([^<]*)<\/status>.*?<summary>([^<]*)<\/summary>.*?<\/task-notification>.*/gs, 'Task ($1): $2')
               .replace(/<bash-notification>.*?<status>([^<]*)<\/status>.*?<summary>([^<]*)<\/summary>.*/gs, 'Background ($1): $2')

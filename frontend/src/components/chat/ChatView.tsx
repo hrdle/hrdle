@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { AgentProvider } from "../../../../shared/types";
+import type {
+	AgentProvider,
+	ConversationMessage,
+} from "../../../../shared/types";
 import { useAgentConversation } from "../../hooks/useAgentConversation";
 import type { ConversationStatus } from "../../utils/conversation-status";
 import { ConversationViewer } from "../ConversationViewer";
@@ -23,6 +26,29 @@ interface ChatViewProps {
 	working?: boolean;
 	/** The pane's agent is waiting on the person: a question may be up. */
 	waiting?: boolean;
+}
+
+interface SentPrompt {
+	text: string;
+	/** The conversation's last message when it was sent. */
+	afterId: string | undefined;
+	conversationId: string | null;
+}
+
+/**
+ * Whether the transcript has caught up with a prompt sent from here: a turn of
+ * the person's own after the message that was last when it went. Not matched by
+ * text, since a slash command comes back reworded and images come back as
+ * references.
+ */
+function hasArrived(sent: SentPrompt, messages: ConversationMessage[]): boolean {
+	const from = sent.afterId
+		? messages.findIndex((m) => m.id === sent.afterId)
+		: -1;
+	if (sent.afterId && from < 0) return true;
+	return messages
+		.slice(from + 1)
+		.some((m) => m.role === "user" && !!m.content && !m.toolResult?.length);
 }
 
 /** Statuses that are a reason rather than a conversation. */
@@ -77,12 +103,22 @@ export function ChatView({
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const [followSignal, setFollowSignal] = useState(0);
+	const [sent, setSent] = useState<SentPrompt | null>(null);
 	const { messages, conversationId, status } = useAgentConversation({
 		agent,
 		sessionId,
 		agentSessionId,
 		peerId,
 	});
+	const pendingPrompt = useMemo(
+		() =>
+			sent &&
+			sent.conversationId === conversationId &&
+			!hasArrived(sent, messages)
+				? sent.text
+				: null,
+		[sent, conversationId, messages],
+	);
 
 	const resolvedTitle = title ?? t("conversation.claude");
 	const resolvedSubtitle =
@@ -123,6 +159,7 @@ export function ChatView({
 				}}
 				scrollToBottom
 				followSignal={followSignal}
+				pendingPrompt={pendingPrompt}
 				inline
 				agent={agent}
 			/>
@@ -145,7 +182,18 @@ export function ChatView({
 					working={working}
 					waiting={waiting}
 					showMode={agent === "claude"}
-					onSent={() => setFollowSignal((n) => n + 1)}
+					onSent={(prompt) => {
+						setSent(
+							prompt.trim()
+								? {
+										text: prompt,
+										afterId: messages[messages.length - 1]?.id,
+										conversationId,
+									}
+								: null,
+						);
+						setFollowSignal((n) => n + 1);
+					}}
 				/>
 			)}
 		</div>
