@@ -383,32 +383,39 @@ function TerminalPane({
 	// render after remount (e.g. after a split) sees panes=undefined and would
 	// wrongly clear chat mode.
 	//
+	// Only what is on screen falls back; the saved choice stays. A list built
+	// while herdr's `agent.list` failed carries no agent on any pane, and
+	// clearing the choice then lost it for good.
+	//
 	// An agent whose session id herdr has not reported still gets the chat
 	// view: it says why it cannot show the conversation, where a disabled
 	// button only said "No agent is running", which was not true.
 	const conversationAvailable = !!activeTmuxPane?.agent;
 	const panesLoaded = !!session?.panes;
 	useEffect(() => {
-		if (!panesLoaded) return;
-		if (!conversationAvailable && showConversation) {
-			setShowConversation(false);
+		if (!panesLoaded || !conversationModeKey) return;
+		try {
+			setShowConversationState(
+				conversationAvailable &&
+					localStorage.getItem(conversationModeKey) === "1",
+			);
+		} catch {
+			/* ignore */
 		}
-	}, [
-		conversationAvailable,
-		showConversation,
-		panesLoaded,
-		setShowConversation,
-	]);
+	}, [conversationAvailable, panesLoaded, conversationModeKey]);
 
 	const handleToggleConversation = useCallback(() => {
 		setShowConversation((prev) => !prev);
-	}, []);
+	}, [setShowConversation]);
 
 	// Nothing to switch to: no agent has been running in this pane.
 	const chatDisabled = !showConversation && !conversationAvailable;
 
 	const { chatRequest, onChatOpenChange } = controlModeContext;
-	const appliedChatRequestRef = useRef(0);
+	// A request is for the pane on screen when it was made. Pane ids repeat
+	// across workspaces (`%1` is in most of them), so one replayed on mount
+	// would set the mode of whichever session is switched to next.
+	const appliedChatRequestRef = useRef(chatRequest?.requestId ?? 0);
 	useEffect(() => {
 		if (!chatRequest || chatRequest.requestId === appliedChatRequestRef.current)
 			return;
