@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.229] - 2026-11-25
+
+### Changed
+- **History search for Grok, Kimi, OpenCode and pi behaves the same.** All
+  four now match the directory, the title and the first prompt, and ignore
+  spaces around the search words. On a Mac, project names in the history
+  start with `~/` instead of the full home path, as they already did on Linux.
+
 ## [0.3.228] - 2026-11-25
 
 ### Changed
