@@ -2,15 +2,7 @@
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-	paneIdFromLayout,
-	type PaneInfo,
-	type PaneViewport,
-	samePeerId,
-	type SessionState,
-	type SessionTheme,
-	type TmuxLayoutNode,
-} from "../../../shared/types";
+import { type PaneInfo, type PaneViewport, samePeerId, type SessionState, type SessionTheme, type TmuxLayoutNode } from "../../../shared/types";
 import type { LayoutVariant } from "../actions/sessionActions";
 import { useMultiplexedTerminal } from "../hooks/useMultiplexedTerminal";
 import { usePeerConnection } from "../hooks/usePeerConnection";
@@ -21,10 +13,7 @@ import { nukeClientCache } from "../utils/nuke-cache";
 import { shouldFollowSessionDir } from "../utils/file-viewer-follow";
 import { makeSessionKey, parseSessionKey } from "../utils/sessionKey";
 import { usePeers } from "../hooks/usePeers";
-import {
-	updateCachedSessionsByHookEvent,
-	useWorkspaces,
-} from "../hooks/useWorkspaces";
+import { updateCachedSessionsByHookEvent, useWorkspaces } from "../hooks/useWorkspaces";
 import { fireHookNotification } from "../utils/hookNotification";
 import { imagePastePayload } from "../utils/terminal-paste";
 import { uploadImage } from "../utils/upload-image";
@@ -35,14 +24,15 @@ import { MobileDashboard } from "./dashboard/MobileDashboard";
 import { DashboardPanel } from "./DashboardPanel";
 import { FloatingKeyboard, type FloatingKeyboardRef } from "./FloatingKeyboard";
 import { FileViewer } from "./files/FileViewer";
-import {
-	type ControlModeContext,
-	PaneContainer,
-	type PaneNode,
-} from "./PaneContainer";
+import { type ControlModeContext, PaneContainer, type PaneNode } from "./PaneContainer";
 import { SessionModal } from "./SessionModal";
 import type { ControlModeConfig, TerminalRef } from "./Terminal";
 import { storageKey } from "../utils/app-storage";
+import { applyBoundaryDrag, collectPaneDemands, computeTotalSizeFromTree, extractPaneSizes, firstLeafId, getAllPaneIds, tmuxLayoutToPaneNode, updateAllSessionKeys, updateSessionKey } from "../utils/pane-tree";
+import {
+	DEFAULT_FONT_SIZE,
+	matchDesktopShortcut,
+} from "../utils/desktop-shortcuts";
 
 const DESKTOP_STATE_KEY = storageKey("desktop-state");
 interface OpenSession {
@@ -105,273 +95,6 @@ function createInitialState(sessionKey: string | null): DesktopState {
 		root: { type: "terminal", sessionKey, id: paneId },
 		activePane: paneId,
 	};
-}
-
-// First terminal (leaf) pane id under a node, in depth-first order.
-function firstLeafId(node: PaneNode): string | null {
-	if (node.type === "terminal") return node.id;
-	if (node.type === "split") {
-		for (const child of node.children) {
-			const id = firstLeafId(child);
-			if (id) return id;
-		}
-	}
-	return null;
-}
-
-// Compute the session's total window size by summing pane sizes from the
-// layout tree, following the wire layout's tmux-convention geometry:
-// horizontal splits → sum cols + 1-cell borders, vertical → sum rows + borders.
-// When useProposed=true, uses proposeDimensions() (what fits the container) instead of
-// actual xterm size. This is needed in control mode where xterm size is set by the
-// server's layout, not by FitAddon.
-function computeTotalSizeFromTree(
-	root: PaneNode,
-	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>,
-	useProposed = false,
-): { cols: number; rows: number } | null {
-	if (root.type === "terminal") {
-		const ref = terminalRefs.current?.get(root.id);
-		const size = useProposed
-			? (ref?.getProposedSize?.() ?? ref?.getSize?.())
-			: ref?.getSize?.();
-		return size ?? null;
-	}
-
-	if (root.type === "split") {
-		const childSizes = root.children.map((c) =>
-			computeTotalSizeFromTree(c, terminalRefs, useProposed),
-		);
-		if (childSizes.some((s) => s === null)) return null;
-		const sizes = childSizes as { cols: number; rows: number }[];
-
-		if (root.direction === "horizontal") {
-			// Panes side by side: total cols = sum + borders
-			return {
-				cols: sizes.reduce((sum, s) => sum + s.cols, 0) + (sizes.length - 1),
-				rows: Math.max(...sizes.map((s) => s.rows)),
-			};
-		}
-		// Panes stacked: total rows = sum + borders
-		return {
-			cols: Math.max(...sizes.map((s) => s.cols)),
-			rows: sizes.reduce((sum, s) => sum + s.rows, 0) + (sizes.length - 1),
-		};
-	}
-
-	return null;
-}
-
-// Per-pane render sizes to report as per-client demands. Sourced from each
-// pane's proposed dimensions (what fits its container) — NOT the layout the
-// server sent back — so demands can't lag or feed back into the server's
-// sizing. Pass the zoom-aware root (the zoomed subtree when zoomed) so a zoomed
-// pane reports its full-container size and hidden panes report nothing.
-function collectPaneDemands(
-	root: PaneNode,
-	terminalRefs: React.RefObject<Map<string, TerminalRef | null>>,
-): Record<string, { cols: number; rows: number }> {
-	const out: Record<string, { cols: number; rows: number }> = {};
-	const walk = (n: PaneNode): void => {
-		if (n.type === "terminal") {
-			const ref = terminalRefs.current?.get(n.id);
-			const size = ref?.getProposedSize?.() ?? ref?.getSize?.();
-			if (size && size.cols > 0 && size.rows > 0) {
-				out[n.id] = { cols: size.cols, rows: size.rows };
-			}
-			return;
-		}
-		if (n.type === "split") n.children.forEach(walk);
-	};
-	walk(root);
-	return out;
-}
-
-// Get all pane IDs in order (leaf nodes only)
-function getAllPaneIds(node: PaneNode): string[] {
-	if (node.type === "split") {
-		return node.children.flatMap(getAllPaneIds);
-	}
-	// terminal, sessions, dashboard, empty are all leaf nodes
-	return [node.id];
-}
-
-// Boundary-style divider drag. Moving the divider between children[i] and
-// children[i+1] of `splitId` must move ONLY that boundary on screen: the two
-// panes touching it absorb the delta, every other pane keeps its absolute
-// size. Inside each adjacent child, same-direction splits
-// along the touching edge renormalize their ratios to hold the interior
-// boundaries still; cross-direction splits pass the change through to all
-// children (each of their rows/columns touches the dragged boundary).
-// Returns the original root unchanged when any resulting ratio would leave
-// [10, 90] — the drag hard-stops at the limit instead of crushing a pane.
-function applyBoundaryDrag(
-	root: PaneNode,
-	splitId: string,
-	newRatio: number[],
-	dividerIndex: number,
-): PaneNode {
-	let valid = true;
-
-	// `node`'s extent along `dir` changes oldExtent→newExtent (any consistent
-	// unit); only the pane touching the dragged boundary — via `edge` — absorbs
-	// the difference.
-	const renormalize = (
-		node: PaneNode,
-		dir: "horizontal" | "vertical",
-		edge: "start" | "end",
-		oldExtent: number,
-		newExtent: number,
-	): PaneNode => {
-		if (node.type !== "split" || oldExtent <= 0 || newExtent <= 0) return node;
-		if (node.direction !== dir) {
-			return {
-				...node,
-				children: node.children.map((c) =>
-					renormalize(c, dir, edge, oldExtent, newExtent),
-				),
-			};
-		}
-		const abs = node.ratio.map((r) => (r / 100) * oldExtent);
-		const idx = edge === "end" ? abs.length - 1 : 0;
-		const absorbedOld = abs[idx] ?? 0;
-		const absorbedNew = absorbedOld + (newExtent - oldExtent);
-		abs[idx] = absorbedNew;
-		const ratio = abs.map((w) => (w / newExtent) * 100);
-		for (const r of ratio) {
-			if (r < 10 || r > 90) valid = false;
-		}
-		return {
-			...node,
-			ratio,
-			children: node.children.map((c, i) =>
-				i === idx ? renormalize(c, dir, edge, absorbedOld, absorbedNew) : c,
-			),
-		};
-	};
-
-	const walk = (node: PaneNode): PaneNode => {
-		if (node.type !== "split") return node;
-		if (node.id !== splitId) {
-			return { ...node, children: node.children.map(walk) };
-		}
-		const i = dividerIndex;
-		const oldA = node.ratio[i];
-		const oldB = node.ratio[i + 1];
-		const newA = newRatio[i];
-		const newB = newRatio[i + 1];
-		if (
-			oldA === undefined ||
-			oldB === undefined ||
-			newA === undefined ||
-			newB === undefined
-		) {
-			return node;
-		}
-		const children = node.children.map((c, ci) => {
-			if (ci === i) return renormalize(c, node.direction, "end", oldA, newA);
-			if (ci === i + 1)
-				return renormalize(c, node.direction, "start", oldB, newB);
-			return c;
-		});
-		return { ...node, ratio: newRatio, children };
-	};
-
-	const next = walk(root);
-	return valid ? next : root;
-}
-
-// Update one pane's session key in the tree
-function updateSessionKey(
-	root: PaneNode,
-	paneId: string,
-	sessionKey: string,
-): PaneNode {
-	if (root.id === paneId && root.type === "terminal") {
-		return { ...root, sessionKey };
-	}
-	if (root.type === "split") {
-		return {
-			...root,
-			children: root.children.map((c) => updateSessionKey(c, paneId, sessionKey)),
-		};
-	}
-	return root;
-}
-
-// Update ALL terminal panes' session key (used for control mode session switching)
-function updateAllSessionKeys(root: PaneNode, sessionKey: string): PaneNode {
-	if (root.type === "terminal") {
-		return { ...root, sessionKey };
-	}
-	if (root.type === "split") {
-		return {
-			...root,
-			children: root.children.map((c) => updateAllSessionKeys(c, sessionKey)),
-		};
-	}
-	return root;
-}
-
-// Convert TmuxLayoutNode to PaneNode with session IDs.
-// Split ids derive from the node's PATH in the tree, not its x/y position:
-// a nested split starting at the same corner as its parent (e.g. the left
-// column of a 2x2, or the inner-left split of 4 columns) would collide under
-// position-based ids, and ratio updates addressed by id would then hit the
-// ancestor instead of the dragged split.
-function tmuxLayoutToPaneNode(
-	node: TmuxLayoutNode,
-	sessionKey: string,
-	path = "r",
-): PaneNode {
-	if (node.type === "leaf") {
-		return {
-			type: "terminal",
-			sessionKey,
-			id: paneIdFromLayout(node.paneId),
-		};
-	}
-
-	const children = (node.children || []).map((c, i) =>
-		tmuxLayoutToPaneNode(c, sessionKey, `${path}.${i}`),
-	);
-	const isHorizontal = node.type === "horizontal";
-	const totalSize = (node.children || []).reduce(
-		(sum, c) => sum + (isHorizontal ? c.width : c.height),
-		0,
-	);
-	const ratio = (node.children || []).map((c) => {
-		const size = isHorizontal ? c.width : c.height;
-		return totalSize > 0
-			? (size / totalSize) * 100
-			: 100 / (node.children || []).length;
-	});
-
-	return {
-		type: "split",
-		direction: isHorizontal ? "horizontal" : "vertical",
-		children,
-		ratio,
-		id: `split-${path}`,
-	};
-}
-
-// Extract per-pane {cols, rows} from a TmuxLayoutNode tree.
-// TmuxLayoutNode width/height = pane cols/rows.
-function extractPaneSizes(
-	node: TmuxLayoutNode,
-): Map<string, { cols: number; rows: number }> {
-	const sizes = new Map<string, { cols: number; rows: number }>();
-	function walk(n: TmuxLayoutNode) {
-		if (n.type === "leaf" && n.paneId !== undefined) {
-			sizes.set(paneIdFromLayout(n.paneId), { cols: n.width, rows: n.height });
-		}
-		if (n.children) {
-			n.children.forEach(walk);
-		}
-	}
-	walk(node);
-	return sizes;
 }
 
 const KEYBOARD_VISIBLE_KEY = storageKey("floating-keyboard-visible");
@@ -1394,173 +1117,80 @@ export function DesktopLayout({
 		[desktopState.root, desktopState.activePane],
 	);
 
-	// Keyboard shortcuts
+	// Keyboard shortcuts. Which chord means what is `matchDesktopShortcut`'s;
+	// what each one does to this layout is here.
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			// Alt + Arrow: Move the focus between panes. Ctrl+Arrow is word
-			// motion in every shell, so the app does not take it.
-			if (
-				e.altKey &&
-				!e.ctrlKey &&
-				!e.metaKey &&
-				(e.key === "ArrowLeft" ||
-					e.key === "ArrowRight" ||
-					e.key === "ArrowUp" ||
-					e.key === "ArrowDown")
-			) {
-				e.preventDefault();
-				handleFocusNavigation(e.key);
-				return;
-			}
+			const shortcut = matchDesktopShortcut(e);
+			if (!shortcut) return;
+			e.preventDefault();
+			const activeTerminal = () =>
+				terminalRefs.current?.get(activePaneRef.current);
 
-			// Accept both Ctrl and Cmd (Meta) for all shortcuts.
-			// This supports Mac keyboards on Linux and vice versa.
-			const modifier = e.ctrlKey || e.metaKey;
-
-			if (!modifier) return;
-
-			// Ctrl/Cmd + Shift + E: Vertical split (right)
-			if (e.shiftKey && e.key.toLowerCase() === "e") {
-				e.preventDefault();
-				handleSplit("horizontal");
-				return;
-			}
-
-			// Ctrl/Cmd + Shift + D: Horizontal split (bottom)
-			if (e.shiftKey && e.key.toLowerCase() === "d") {
-				e.preventDefault();
-				handleSplit("vertical");
-				return;
-			}
-
-			// Ctrl/Cmd + Shift + X: Close pane. Not Ctrl+Shift+W, which the
-			// browser keeps for closing its own window and a page cannot take.
-			if (e.shiftKey && e.key.toLowerCase() === "x") {
-				e.preventDefault();
-				handleClosePane();
-				return;
-			}
-
-			// Ctrl/Cmd + C: Copy the terminal selection
-			if (!e.shiftKey && e.key.toLowerCase() === "c") {
-				const ref = terminalRefs.current?.get(activePaneRef.current);
-				const selection = ref?.getSelection();
-
-				if (selection) {
-					e.preventDefault();
-					navigator.clipboard.writeText(selection).catch((err) => {
-						console.error("Clipboard write failed:", err);
-					});
+			switch (shortcut.kind) {
+				case "focus-pane":
+					handleFocusNavigation(shortcut.key);
+					return;
+				case "split":
+					handleSplit(shortcut.direction);
+					return;
+				case "close-pane":
+					handleClosePane();
+					return;
+				case "copy": {
+					// With no selection the browser's own copy is still suppressed and
+					// the key left to xterm, which sends it on to the pane as SIGINT.
+					const selection = activeTerminal()?.getSelection();
+					if (selection) {
+						navigator.clipboard.writeText(selection).catch((err) => {
+							console.error("Clipboard write failed:", err);
+						});
+					}
 					return;
 				}
-
-				// No selection: suppress the browser's own copy and leave the key to
-				// xterm, which sends it on to the pane as SIGINT.
-				e.preventDefault();
-				return;
-			}
-
-			// Ctrl/Cmd + V: Paste to terminal (text or image)
-			if (!e.shiftKey && e.key.toLowerCase() === "v") {
-				e.preventDefault();
-				handlePaste();
-				return;
-			}
-
-			// Ctrl/Cmd + = or +: Zoom in (increase font size)
-			if (!e.shiftKey && (e.key === "=" || e.key === "+")) {
-				e.preventDefault();
-				const ref = terminalRefs.current?.get(activePaneRef.current);
-				ref?.changeFontSize(2);
-				return;
-			}
-
-			// Ctrl/Cmd + -: Zoom out (decrease font size)
-			if (!e.shiftKey && e.key === "-") {
-				e.preventDefault();
-				const ref = terminalRefs.current?.get(activePaneRef.current);
-				ref?.changeFontSize(-2);
-				return;
-			}
-
-			// Ctrl/Cmd + 0: Reset font size to default
-			if (!e.shiftKey && e.key === "0") {
-				e.preventDefault();
-				const ref = terminalRefs.current?.get(activePaneRef.current);
-				if (ref) {
-					const current = ref.getFontSize();
-					ref.changeFontSize(14 - current);
+				case "paste":
+					handlePaste();
+					return;
+				case "font-size":
+					activeTerminal()?.changeFontSize(shortcut.delta);
+					return;
+				case "font-size-reset": {
+					const ref = activeTerminal();
+					if (ref) ref.changeFontSize(DEFAULT_FONT_SIZE - ref.getFontSize());
+					return;
 				}
-				return;
-			}
-
-			// Ctrl/Cmd + B: Toggle session modal
-			if (!e.shiftKey && e.key.toLowerCase() === "b") {
-				e.preventDefault();
-				setShowSessionModal((prev) => !prev);
-				return;
-			}
-
-			// Ctrl/Cmd + Shift + B: Toggle dashboard panel
-			if (e.shiftKey && e.key.toLowerCase() === "b") {
-				e.preventDefault();
-				setShowDashboard((prev) => !prev);
-				return;
-			}
-
-			// Ctrl/Cmd + Shift + Arrow: Resize active pane
-			// (no-op in remote-control mode — pane sizes are owned by the local
-			// herdr client and the WS path would reject the unsubscribed session)
-			if (
-				e.shiftKey &&
-				!e.altKey &&
-				(e.key === "ArrowLeft" ||
-					e.key === "ArrowRight" ||
-					e.key === "ArrowUp" ||
-					e.key === "ArrowDown")
-			) {
-				e.preventDefault();
-				if (remoteControlRef.current) return;
-				const paneId = activePaneRef.current;
-				const dirMap: Record<string, "L" | "R" | "U" | "D"> = {
-					ArrowLeft: "L",
-					ArrowRight: "R",
-					ArrowUp: "U",
-					ArrowDown: "D",
-				};
-				const amount = e.key === "ArrowLeft" || e.key === "ArrowRight" ? 5 : 3;
-				controlTerminalRef.current.adjustPane(paneId, dirMap[e.key], amount);
-				return;
-			}
-
-			// Ctrl/Cmd + Shift + =: Equalize pane sizes
-			if (e.shiftKey && !e.altKey && (e.key === "+" || e.key === "=")) {
-				e.preventDefault();
-				if (remoteControlRef.current) return;
-				const root = desktopStateRef.current.root;
-				const dir =
-					root.type === "split"
-						? root.direction === "horizontal"
-							? "horizontal"
-							: "vertical"
-						: "horizontal";
-				controlTerminalRef.current.equalizePanes(dir);
-				return;
-			}
-
-			// Ctrl/Cmd + Shift + F5: Cache clear & reload
-			if (e.shiftKey && e.key === "F5") {
-				e.preventDefault();
-				void nukeClientCache();
-				return;
-			}
-
-			// Ctrl/Cmd + 1-9: Session switch
-			const num = parseInt(e.key, 10);
-			if (!e.shiftKey && num >= 1 && num <= 9) {
-				e.preventDefault();
-				const session = sessions[num - 1];
-				if (session) {
+				case "toggle-session-modal":
+					setShowSessionModal((prev) => !prev);
+					return;
+				case "toggle-dashboard":
+					setShowDashboard((prev) => !prev);
+					return;
+				case "resize-pane":
+					// Pane sizes belong to the local herdr client in remote-control
+					// mode, and the WS path would reject the unsubscribed session.
+					if (remoteControlRef.current) return;
+					controlTerminalRef.current.adjustPane(
+						activePaneRef.current,
+						shortcut.direction,
+						shortcut.amount,
+					);
+					return;
+				case "equalize-panes": {
+					if (remoteControlRef.current) return;
+					const root = desktopStateRef.current.root;
+					const dir =
+						root.type === "split" && root.direction === "vertical"
+							? "vertical"
+							: "horizontal";
+					controlTerminalRef.current.equalizePanes(dir);
+					return;
+				}
+				case "reload":
+					void nukeClientCache();
+					return;
+				case "switch-session": {
+					const session = sessions[shortcut.index];
+					if (!session) return;
 					setDesktopState((prev) => ({
 						...prev,
 						root: updateSessionKey(
@@ -1569,8 +1199,8 @@ export function DesktopLayout({
 							makeSessionKey(session.id, session.peerId),
 						),
 					}));
+					return;
 				}
-				return;
 			}
 		};
 

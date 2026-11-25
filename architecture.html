@@ -721,56 +721,56 @@
         "path": "/api/sessions/:id/panes/focus",
         "group": "Sessions",
         "description": "Focuses a pane ({ paneId })",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/close",
         "group": "Sessions",
         "description": "Closes a pane. The last one is refused",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/split",
         "group": "Sessions",
         "description": "Splits a pane ({ paneId, direction: 'h'|'v' })",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/panes/input",
         "group": "Sessions",
         "description": "Sends input to a pane over REST (used by `send` and by peers). With wait=true it returns a viewport snapshot taken after the send",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/:id/panes/:paneId/viewport",
         "group": "Sessions",
         "description": "Captures a pane viewport over REST (used by `peek`). The lines query sets how many trailing rows to return",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/tabs/select",
         "group": "Sessions",
         "description": "Switches the workspace's active tab ({ tabId })",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/tabs/create",
         "group": "Sessions",
         "description": "Creates a tab and switches to it",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/:id/tabs/close",
         "group": "Sessions",
         "description": "Closes a tab and every pane in it ({ tabId })",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/panes.ts"
       },
       {
         "method": "POST",
@@ -784,63 +784,63 @@
         "path": "/api/sessions/history",
         "group": "Session History",
         "description": "Recent session history. The metadata query loads the metadata lazily",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/projects",
         "group": "Session History",
         "description": "The project list (Claude Code, Codex, Grok, Kimi and OpenCode merged)",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/projects/:dirName",
         "group": "Session History",
         "description": "Sessions inside a project",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/search",
         "group": "Session History",
         "description": "Session search across every project (q, limit)",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/search/stream",
         "group": "Session History",
         "description": "Streams search results over SSE",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/history/:sessionId/conversation",
         "group": "Session History",
         "description": "A session's conversation. The agent query picks the provider (codex / grok / kimi / opencode); projectDirName and last are also supported",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/history/metadata",
         "group": "Session History",
         "description": "Lazily loads metadata for the given sessionIds",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "POST",
         "path": "/api/sessions/history/resume",
         "group": "Session History",
         "description": "Resumes a session from history (creates a new workspace, preferring the cwd recorded in the conversation log)",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
         "path": "/api/sessions/prompts/search",
         "group": "Session History",
         "description": "Searches the prompt history (q, limit)",
-        "file": "backend/src/routes/sessions.ts"
+        "file": "backend/src/routes/session-history.ts"
       },
       {
         "method": "GET",
@@ -1257,7 +1257,7 @@
       {
         "name": "WorkspaceList",
         "file": "frontend/src/components/WorkspaceList.tsx",
-        "summary": "The workspace list (Active / History / Dashboard tabs): pane operations, drag-to-reorder, pinch zoom, the create-session modal (name, directory, agent, machine) and the History V1/V2 split. Starting work from a phone rather than only watching it is what this screen is for",
+        "summary": "The workspace list (Active / History / Dashboard tabs): pane operations, drag-to-reorder, pinch zoom and the History V1/V2 split. Starting work from a phone rather than only watching it is what this screen is for. Its rows, the create-session modal and the session menu live in components/workspace-list/",
         "hooks": [
           "useWorkspaces",
           "useHistoryV2Flag",
@@ -1265,6 +1265,33 @@
         ],
         "parents": [
           "App"
+        ]
+      },
+      {
+        "name": "SessionItem",
+        "file": "frontend/src/components/workspace-list/SessionItem.tsx",
+        "summary": "One workspace in the list: the card, its tabs and panes (PaneRows.tsx), long press for the session menu, and the sortable wrapper drag-to-reorder moves",
+        "hooks": [],
+        "parents": [
+          "WorkspaceList"
+        ]
+      },
+      {
+        "name": "CreateSessionModal",
+        "file": "frontend/src/components/workspace-list/CreateSessionModal.tsx",
+        "summary": "The create-session modal: name, directory (browsed on the chosen machine), agent and machine",
+        "hooks": [],
+        "parents": [
+          "WorkspaceList"
+        ]
+      },
+      {
+        "name": "SessionMenuDialog",
+        "file": "frontend/src/components/workspace-list/SessionMenuDialog.tsx",
+        "summary": "A session's menu: colour, title and close",
+        "hooks": [],
+        "parents": [
+          "WorkspaceList"
         ]
       },
       {
