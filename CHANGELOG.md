@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.233] - 2026-11-25
+
+### Fixed
+- **Switching another session back to its terminal no longer does the same to
+  this one.** The chat toggle on a phone's bottom bar was applied again to the
+  next session opened, so a session left in the chat view could come back as a
+  terminal with its choice forgotten.
+
 ## [0.3.232] - 2026-11-25
 
 ### Fixed
