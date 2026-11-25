@@ -25,7 +25,7 @@ import type {
   SessionResponse,
 } from '../../../shared/types';
 import { MuxClientMessageSchema } from '../../../shared/types';
-import { buildSessionsList, invalidateWorkspacesCache } from './sessions';
+import { buildSessionsList, invalidateWorkspacesCache } from '../services/session-list';
 import { sessionsWithPeers } from '../services/peer-sessions';
 
 // Output → push debounce. Wait this long after the last %output for a pane

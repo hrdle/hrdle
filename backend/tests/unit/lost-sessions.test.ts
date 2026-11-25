@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { liveSessionMatcher } from '../../src/routes/sessions';
+import { liveSessionMatcher } from '../../src/services/session-list';
 
 describe('liveSessionMatcher', () => {
   const live = [

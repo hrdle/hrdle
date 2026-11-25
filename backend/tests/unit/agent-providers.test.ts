@@ -9,7 +9,7 @@ import {
   threadAgentOf,
 } from '../../../shared/types';
 import { homedir } from 'node:os';
-import { expandHome, shellQuote } from '../../src/routes/sessions';
+import { expandHome, shellQuote } from '../../src/utils/shell';
 
 describe('Agent provider registry', () => {
   test('derives provider IDs from the registry', () => {

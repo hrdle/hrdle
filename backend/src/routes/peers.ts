@@ -28,7 +28,8 @@ import { loginToPeer, verifyPeer, peerFetch, PeerAuthError } from '../services/p
 import { isSafePeerUrl } from '../services/peer-url';
 import { isPeerSessionId } from '../services/peer-sessions';
 import { discoverPeers } from '../services/peer-discovery';
-import { buildSessionsList, sessionHistoryService, agentHistoryProviders } from './sessions';
+import { buildSessionsList } from '../services/session-list';
+import { agentHistoryProviders, sessionHistoryService } from './session-history';
 import { getDashboard } from './dashboard';
 import { saveUploadedImage } from './upload';
 import type { DashboardResponse } from '../../../shared/types';

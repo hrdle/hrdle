@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { herdrStatusToIndicator, isUnseen, paneIndicatorState, sessionStateOf } from '../../routes/sessions';
+import { herdrStatusToIndicator, isUnseen, paneIndicatorState, sessionStateOf } from '../session-list';
 import { parseHookJson, parseHookToml } from '../hook-status';
 import { HOOK_COMMAND } from '../../../../shared/identity';
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { PaneKeysSchema } from '../sessions';
+import { PaneKeysSchema } from '../panes';
 
 describe('PaneKeysSchema', () => {
   test('accepts the keys the chat view presses', () => {

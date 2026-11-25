@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { findWorkspaceRunningConversation } from '../sessions';
+import { findWorkspaceRunningConversation } from '../session-history';
 
 describe('findWorkspaceRunningConversation', () => {
   const sessions = [

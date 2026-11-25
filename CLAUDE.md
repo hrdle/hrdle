@@ -143,7 +143,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **CodexConversationService** (`services/codex-conversation.ts`) - Reads Codex conversation transcripts and exposes them to the UI
 - **CodexUsageService** (`services/codex-usage.ts`) - Tracks Codex token usage and rate-limit state
 - **CodexHistoryService** (`services/codex-history.ts`) - Reads Codex rollout transcripts (`~/.codex/sessions`) and merges them into project history alongside Claude Code sessions
-- **AgentProviders** (`services/agent-providers.ts`) - Common `AgentThreadService` / `AgentHistoryProvider` interfaces for thread-based agents (Codex, Grok, ...). Routes iterate provider maps in `routes/sessions.ts` instead of hardcoding an agent; adding an agent = one `AGENT_PROVIDERS` registry entry in `shared/types.ts` + implementations of these interfaces
+- **AgentProviders** (`services/agent-providers.ts`) - Common `AgentThreadService` / `AgentHistoryProvider` interfaces for thread-based agents (Codex, Grok, ...). The session list and routes iterate provider maps (`threadServices` in `services/session-list.ts`, `agentHistoryProviders` in `routes/session-history.ts`) instead of hardcoding an agent; adding an agent = one `AGENT_PROVIDERS` registry entry in `shared/types.ts` + implementations of these interfaces
 - **AgentUsage** (`services/agent-usage.ts`) - The dashboard's consumption summary for every agent without rate-limit windows (Grok, Kimi, OpenCode, pi): each agent reads its own store into `UsageTurn`s, and `aggregateUsage` turns those into the 24h/7d windows, per-model totals and session count of one `AgentUsageSummary` shape; `CachedUsage` is the 30s cache that never rejects. Rendered by one `AgentUsageCard`. A token kind or cost an agent does not record stays absent rather than 0
 - **GrokService / GrokSessionStore** (`services/grok.ts`) - Grok Build (xAI) integration: scans `~/.grok/sessions/<URL-encoded cwd>/<uuid>/` (`summary.json` metadata, `prompt_history.jsonl` first prompts, `updates.jsonl` `turn_completed` token usage), resolves the latest thread per working directory
 - **GrokHistoryService** (`services/grok-history.ts`) - Grok session history + conversation reader: parses `chat_history.jsonl` (user records with `prompt_index`, assistant `tool_calls`, `tool_result`) into Claude-shaped conversation turns
@@ -178,6 +178,8 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **PeerUrl** (`services/peer-url.ts`) - SSRF guard for peer URLs: only allows Tailscale hosts (`*.ts.net`, CGNAT `100.64.0.0/10`, ULA `fd7a:115c:a1e0::/48`)
 
 ### Key API Routes
+
+`/api/sessions` is three routers: `routes/sessions.ts` (workspace CRUD and prompts, and where the other two are mounted), `routes/session-history.ts` (`/history/*`, `/prompts/search`) and `routes/panes.ts` (`/:id/panes/*`, `/:id/tabs/*`). The history router is mounted before the `/:id` routes, which would otherwise take `history` as a session id. The list itself is built in `services/session-list.ts` (`buildSessionsList`, the indicator mapping, and the one `herdrService` everything shares), shared by `GET /` and the WebSocket push.
 
 **Sessions** (`/api/sessions`):
 - `GET /` - List all sessions with Claude Code state and pane info
