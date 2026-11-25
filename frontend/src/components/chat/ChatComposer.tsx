@@ -4,6 +4,7 @@ import { authFetch } from "../../services/api";
 import { loadInputHistory, pushInputHistory } from "../../utils/input-history";
 import { uploadImage } from "../../utils/upload-image";
 import { ModeChip } from "./ModeChip";
+import { usePaneProgress } from "./usePaneProgress";
 import { usePaneSuggestion } from "./usePaneSuggestion";
 import { PanelCard } from "./PanelCard";
 import { usePanePanel } from "./usePanePanel";
@@ -185,6 +186,7 @@ export function ChatComposer({
 		peerId,
 		showMode && !working && !waiting && !question,
 	);
+	const progress = usePaneProgress(sessionId, paneId, peerId, showMode && working);
 	const offerSuggestion =
 		suggestion !== null && text.length === 0 && attachments.length === 0 && !expanded;
 	const acceptSuggestion = () => {
@@ -346,6 +348,23 @@ export function ChatComposer({
 			}
 			data-testid="chat-composer"
 		>
+			{progress && !question && !expanded && (
+				<div
+					className="mx-auto mb-2 flex max-w-3xl items-baseline gap-2 text-sm"
+					aria-live="polite"
+					data-testid="chat-progress"
+				>
+					<span className="shrink-0 animate-pulse text-cv-accent" aria-hidden="true">
+						{progress.glyph}
+					</span>
+					<span className="min-w-0 truncate text-cv-text-secondary">
+						{progress.label}
+						{progress.detail && (
+							<span className="ml-2 text-cv-text-muted">{progress.detail}</span>
+						)}
+					</span>
+				</div>
+			)}
 			{question && !expanded && (
 				<QuestionCard
 					question={question}
