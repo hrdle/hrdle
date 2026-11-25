@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.226] - 2026-11-25
+
+### Added
+- **The chat view shows what Claude Code is doing mid-turn.** The line the
+  terminal draws above the input box while a turn runs - the verb, the
+  elapsed time and the token count (`Waddling… 5s · ↓ 390 tokens`) - now
+  sits above the chat composer too, updated every couple of seconds, and
+  goes away when the turn ends.
+
 ## [0.3.225] - 2026-11-24
 
 ### Fixed
