@@ -249,11 +249,20 @@ function TerminalPane({
 					s.id === sessionTarget.id && samePeerId(s.peerId, sessionTarget.peerId),
 			) ?? null)
 		: null;
-	// Persist chat-mode state per pane so it survives remounts (e.g. after a
-	// split changes the React tree from <TerminalPane> to <SplitContainer>).
-	const conversationModeKey = sessionKey
-		? storageKey(`pane-conv-mode:${sessionKey}:${paneId}`)
-		: null;
+	const controlledPaneId = controlModeContext.getControlConfig(paneId)?.paneId;
+	const activeTmuxPane =
+		session?.panes?.find((p) => p.paneId === controlledPaneId) ??
+		session?.panes?.find((p) => p.isActive) ??
+		soleVisiblePane(session);
+	// Persist chat-mode state per herdr pane so it survives remounts and session
+	// switches. Keyed by the pane herdr names (`%3`, fixed within a workspace),
+	// not by this tree node's id: until the server's layout arrives the node
+	// carries an id made up on the spot, which a phone makes again on every
+	// switch, so a mode saved under it was never found again.
+	const conversationModeKey =
+		sessionKey && activeTmuxPane
+			? storageKey(`pane-conv-mode:${sessionKey}:${activeTmuxPane.paneId}`)
+			: null;
 	const [showConversation, setShowConversationState] = useState<boolean>(() => {
 		if (!conversationModeKey) return false;
 		try {
@@ -354,9 +363,9 @@ function TerminalPane({
 		}
 	}, [sessionKey, onSessionStateChange]);
 
-	// Re-read persisted state when the (sessionKey, paneId) pair changes — e.g.
-	// user picks a different session in this pane. Initial mount already
-	// hydrated from localStorage via useState, so this is a no-op then.
+	// Re-read persisted state when the pane on screen changes — e.g. the user
+	// picks a different session in this pane. Initial mount already hydrated
+	// from localStorage via useState, so this is a no-op then.
 	useEffect(() => {
 		if (!conversationModeKey) {
 			setShowConversationState(false);
@@ -377,11 +386,6 @@ function TerminalPane({
 	// An agent whose session id herdr has not reported still gets the chat
 	// view: it says why it cannot show the conversation, where a disabled
 	// button only said "No agent is running", which was not true.
-	const controlledPaneId = controlModeContext.getControlConfig(paneId)?.paneId;
-	const activeTmuxPane =
-		session?.panes?.find((p) => p.paneId === controlledPaneId) ??
-		session?.panes?.find((p) => p.isActive) ??
-		soleVisiblePane(session);
 	const conversationAvailable = !!activeTmuxPane?.agent;
 	const panesLoaded = !!session?.panes;
 	useEffect(() => {
