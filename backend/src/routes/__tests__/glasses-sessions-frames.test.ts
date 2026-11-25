@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from 'bun';
 import { describe, expect, test } from 'bun:test';
-import { sendInitialSessions, sendSessionsTo, type MuxData } from '../terminal-mux';
+import type { MuxData } from '../mux/connections';
+import { sendInitialSessions, sendSessionsTo } from '../mux/sessions-push';
 import type { ExtendedSessionResponse } from '../../../../shared/types';
 
 /**

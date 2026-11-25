@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { herdrUpdateInProgress, lastHerdrApplyError } from '../services/herdr-update';
 import { herdrUpdateService, invalidateDashboardCache } from './dashboard';
-import { broadcastToMuxClients } from './terminal-mux';
+import { broadcastToMuxClients } from './mux/connections';
 
 export const herdr = new Hono();
 

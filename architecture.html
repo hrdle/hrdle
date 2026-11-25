@@ -122,7 +122,7 @@
   <script type="application/json" id="arch-data">{
   "name": "Hrdle",
   "version": "0.3.234",
-  "generated": "2026-11-25",
+  "generated": "2026-11-26",
   "summary": "Web-based terminal session manager for coding agents (Claude Code, Codex, Grok, Kimi, OpenCode). Runs them in herdr workspaces and provides a web UI for remote access from tablets and phones, plus a companion app for the EVEN G2 glasses",
   "stack": {
     "backend": "Bun runtime + Hono",
@@ -622,7 +622,7 @@
         "method": "WS",
         "path": "/ws/mux",
         "group": "System",
-        "description": "The multiplexed WebSocket: viewport delivery, input, layout and tab control, the conversation stream, the glasses relay and the glasses screen mirror. The token query supports Bearer auth from a peer",
+        "description": "The multiplexed WebSocket: viewport delivery, input, layout and tab control, the conversation stream, the glasses relay and the glasses screen mirror. The token query supports Bearer auth from a peer. terminal-mux.ts holds the handlers; routes/mux/ holds what they share: the open connections (connections.ts), the glasses focus election (client-focus.ts), the sessions push (sessions-push.ts), unsolicited viewports (viewport-push.ts), conversation subscriptions (conversation.ts) and the screen mirror (glasses-screen.ts)",
         "file": "backend/src/routes/terminal-mux.ts"
       },
       {

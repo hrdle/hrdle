@@ -13,7 +13,7 @@ import { UsageHistoryService } from '../services/usage-history';
 import { SystemMetricsService } from '../services/system-metrics';
 import { HerdrUpdateService } from '../services/herdr-update';
 import { hrdleUpdateService } from '../services/hrdle-update';
-import { getConnectedClientCount } from './terminal-mux';
+import { getConnectedClientCount } from './mux/connections';
 import { staleWhileRevalidate } from '../utils/stale-while-revalidate';
 import { VERSION } from '../cli';
 import type { DashboardResponse } from '../../../shared/types';
