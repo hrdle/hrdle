@@ -1,29 +1,30 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { WorkspaceInfo } from '../herdr';
+import { clampDisplayWidth, displayWidth } from '../../utils/display-width';
+import { matchOpenQuestion } from '../agent-question';
 import {
   buildGlassesRelaySnapshot,
-  clampDisplayWidth,
   dismissRelayItem,
-  displayWidth,
-  extractChoiceRows,
-  extractNumberedChoices,
-  extractPermissionRequest,
-  extractQuestionLine,
   glassesDeviceCount,
   glassesRelayDeps,
-  matchOpenQuestion,
   normalizeRelayText,
-  optionBlockStart,
   postAgentRelay,
   postHookRelay,
   resetGlassesRelayForTest,
   resolveHookTarget,
-  stripLeftRule,
   subscribeGlassesRelay,
   trackGlassesRelay,
   unsubscribeGlassesRelay,
   type RelaySocket,
 } from '../glasses-relay';
+import {
+  extractChoiceRows,
+  extractNumberedChoices,
+  extractPermissionRequest,
+  extractQuestionLine,
+  optionBlockStart,
+  stripLeftRule,
+} from '../pane-readers/screen-shape';
 import { detectPaneState } from '../pane-state';
 import { stripCursor } from '../pane-readers/shared';
 
