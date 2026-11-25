@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { homeShortPath } from '../utils/home-path';
 
 interface PromptEntry {
   display: string;
@@ -63,7 +64,7 @@ export class PromptHistoryService {
           display: entry.display,
           timestamp: new Date(entry.timestamp).toISOString(),
           project: entry.project,
-          projectName: entry.project.replace(/^\/home\/[^/]+\//, '~/'),
+          projectName: homeShortPath(entry.project),
           sessionId: entry.sessionId,
         });
       }
@@ -108,7 +109,7 @@ export class PromptHistoryService {
           display: entry.display,
           timestamp: new Date(entry.timestamp).toISOString(),
           project: entry.project,
-          projectName: entry.project.replace(/^\/home\/[^/]+\//, '~/'),
+          projectName: homeShortPath(entry.project),
           sessionId: entry.sessionId,
         });
       }
