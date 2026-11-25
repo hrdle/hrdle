@@ -252,6 +252,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `GET /:peerId/files/browse`, `POST /:peerId/files/mkdir`, `POST /:peerId/upload/image`, `GET /:peerId/dashboard` - Proxied peer operations
 
 **Terminal WebSocket** (`/ws/mux`):
+- `routes/terminal-mux.ts` is the open/message/close handlers and the per-session control dispatch; everything they share lives in `routes/mux/`: the open connections and `MuxData` (`connections.ts`), the glasses focus election (`client-focus.ts`), the sessions push (`sessions-push.ts`), unsolicited viewports (`viewport-push.ts`), conversation subscriptions (`conversation.ts`) and the glasses screen mirror (`glasses-screen.ts`)
 - Multiplexed WebSocket — single connection serves all sessions
 - Client subscribes/unsubscribes per session via JSON messages
 - Client messages (`MuxClientMessage`): `subscribe`, `unsubscribe`, `subscribe-conversation`, `unsubscribe-conversation`, then per-session (`ControlClientMessage`): `input`, `resize`, `split`, `close-pane`, `resize-pane`, `select-pane`, `adjust-pane`, `equalize-panes`, `zoom-pane`, `request-viewport`, `select-tab`, `create-tab`, `close-tab`, `ping`, `client-info`

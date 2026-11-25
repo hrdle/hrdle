@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { PaneIdSchema, TabIdSchema } from '../../../shared/types';
 import { findSessionByAddress } from '../services/herdr';
 import { captureViewportHerdr, type HerdrControlSession } from '../services/herdr-control';
-import { pushSessionsNow } from './terminal-mux';
+import { pushSessionsNow } from './mux/sessions-push';
 import { forwardToPeer, parsePeerSessionId, peerSessionPath } from '../services/peer-sessions';
 import { detectPaneState, stripAnsi, type DetectedPaneState } from '../services/pane-state';
 import { executeAnswer, planAnswer, publicRead, readStructuredQuestion, SETTLE_MS, type PaneSnapshot } from '../services/pane-question';

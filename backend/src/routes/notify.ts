@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { Hono } from 'hono';
-import { broadcastToMuxClients } from './terminal-mux';
+import { broadcastToMuxClients } from './mux/connections';
 import type { IndicatorState } from '../../../shared/types';
 import { getHookStatus } from '../services/hook-status';
 import {

@@ -12,7 +12,7 @@ import { findSessionByAddress } from '../services/herdr';
 import { setSessionTheme, setSessionSttPrompt, setSessionSttGlossary, addSessionSttTerms, removeLastKnownSession } from '../services/session-metadata';
 import { STT_PROMPT_MAX_CHARS, seedWorkspaceVocabulary, sessionPromptTerms } from '../services/stt-prompt';
 import { getIndicatorOverride } from './notify';
-import { pushSessionsNow } from './terminal-mux';
+import { pushSessionsNow } from './mux/sessions-push';
 import { forwardToPeer, parsePeerSessionId, peerSessionPath, sessionsWithPeers } from '../services/peer-sessions';
 
 async function isDirectory(path: string): Promise<boolean> {

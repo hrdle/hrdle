@@ -4,8 +4,8 @@ import {
   applySubscribeFocus,
   describeDeclaration,
   pickClientFocus,
-  type MuxData,
-} from '../terminal-mux';
+} from '../mux/client-focus';
+import type { MuxData } from '../mux/connections';
 
 /**
  * The glasses follow the session open on the screen a person is looking at, so
