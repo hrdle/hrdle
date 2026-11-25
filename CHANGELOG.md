@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.232] - 2026-11-25
+
+### Fixed
+- **A pane switched to the chat view stays there when you come back to it.** On
+  a phone, moving to another session and back returned the pane to its
+  terminal. Panes switched to chat before this update need switching once more.
+
 ## [0.3.231] - 2026-11-25
 
 ### Changed
