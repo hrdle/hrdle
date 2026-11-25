@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { ClaudeBackgroundReader } from '../services/claude-footer';
 import { cycleToMode, parseClaudeMode } from '../services/claude-mode';
 import { getPane, readPane, readPaneText, sendPaneKeys, toHerdrPaneId } from '../services/herdr-client';
+import { parseClaudeProgress } from '../services/claude-progress';
 import { parseClaudeSuggestion } from '../services/claude-suggestion';
 import { parseClaudePanel } from '../services/claude-panel';
 import { listSlashCommands } from '../services/slash-commands';
@@ -1755,6 +1756,24 @@ sessions.get('/:id/panes/:paneId/suggestion', async (c) => {
   if (!target) return c.json({ error: 'Session not found' }, 404);
   const screen = await readPane(target, 'visible');
   return c.json({ suggestion: screen ? parseClaudeSuggestion(screen) : null });
+});
+
+// GET /sessions/:id/panes/:paneId/progress - The line Claude Code draws above
+// its input box while a turn runs (verb, elapsed time, tokens)
+sessions.get('/:id/panes/:paneId/progress', async (c) => {
+  const id = c.req.param('id');
+  const paneId = c.req.param('paneId');
+  const peerRef = parsePeerSessionId(id);
+  if (peerRef) {
+    return forwardToPeer(peerRef, peerSessionPath(peerRef, `/panes/${encodeURIComponent(paneId)}/progress`));
+  }
+  if (!PaneIdSchema.safeParse(paneId).success) {
+    return c.json({ error: 'Invalid pane ID' }, 400);
+  }
+  const target = await herdrService.herdrPaneOf(id, paneId);
+  if (!target) return c.json({ error: 'Session not found' }, 404);
+  const screen = await readPaneText(target, 'visible');
+  return c.json({ progress: screen ? parseClaudeProgress(screen) : null });
 });
 
 // GET /sessions/:id/panes/:paneId/panel - A panel Claude Code draws over its

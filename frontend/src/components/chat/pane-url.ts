@@ -10,7 +10,16 @@ export function paneUrl(
 	sessionId: string,
 	paneId: string,
 	peerId: string | undefined,
-	action: "prompt" | "keys" | "question" | "answer" | "mode" | "commands" | "suggestion" | "panel",
+	action:
+		| "prompt"
+		| "keys"
+		| "question"
+		| "answer"
+		| "mode"
+		| "commands"
+		| "suggestion"
+		| "panel"
+		| "progress",
 ): string {
 	const target =
 		peerId && peerId !== LOCAL_PEER_ID ? `peer:${peerId}:${sessionId}` : sessionId;
