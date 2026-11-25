@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { PanePromptSchema } from '../../src/routes/sessions';
+import { PanePromptSchema } from '../../src/routes/panes';
 
 describe('PanePromptSchema', () => {
   test('text alone, images alone, or both', () => {
