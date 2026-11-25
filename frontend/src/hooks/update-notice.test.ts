@@ -19,7 +19,7 @@ const SRC = join(import.meta.dir, "..");
 
 describe("the update notice", () => {
 	test("the server puts its version on the push that already arrives", () => {
-		const mux = readFileSync(join(SRC, "../../backend/src/routes/terminal-mux.ts"), "utf8");
+		const mux = readFileSync(join(SRC, "../../backend/src/routes/mux/sessions-push.ts"), "utf8");
 		const payload = mux.slice(mux.indexOf("function sessionsUpdatedPayload"));
 		expect(payload.slice(0, 600)).toContain("version: VERSION");
 	});
