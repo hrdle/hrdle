@@ -1,9 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import type { ConversationMessage, HistorySession, ToolResultInfo, ToolUseInfo } from '../../../shared/types';
-import { claudeProjectDirName } from '../utils/claude-project-path';
-import type { AgentHistoryProvider } from './agent-providers';
+import type { ConversationMessage, ToolResultInfo, ToolUseInfo } from '../../../shared/types';
+import { ListedHistoryProvider } from './agent-history-listing';
 import { KimiSessionStore, kimiWirePath, turnPromptText, type KimiSessionInfo } from './kimi';
-import type { ProjectInfo } from './session-history';
 
 interface KimiWireRecord {
   type?: string;
@@ -122,67 +120,13 @@ export function parseKimiWire(text: string): ConversationMessage[] {
 }
 
 /** Reads Kimi Code session history from `~/.kimi-code/sessions`. */
-export class KimiHistoryService implements AgentHistoryProvider {
-  private store: KimiSessionStore;
-
-  constructor(store = new KimiSessionStore()) {
-    this.store = store;
+export class KimiHistoryService extends ListedHistoryProvider<KimiSessionInfo> {
+  constructor(private readonly store = new KimiSessionStore()) {
+    super('kimi');
   }
 
-  async getProjects(): Promise<ProjectInfo[]> {
-    const sessions = await this.store.listSessions();
-    const byDir = new Map<string, ProjectInfo>();
-    for (const s of sessions) {
-      const dirName = claudeProjectDirName(s.cwd);
-      const existing = byDir.get(dirName);
-      if (existing) {
-        existing.sessionCount++;
-        if (!existing.latestModified || s.updatedAt > existing.latestModified) {
-          existing.latestModified = s.updatedAt;
-        }
-      } else {
-        byDir.set(dirName, {
-          dirName,
-          projectPath: s.cwd,
-          projectName: s.cwd.replace(/^\/home\/[^/]+\//, '~/'),
-          sessionCount: 1,
-          latestModified: s.updatedAt,
-        });
-      }
-    }
-    return Array.from(byDir.values());
-  }
-
-  async getProjectSessions(dirName: string): Promise<HistorySession[]> {
-    const sessions = await this.store.listSessions();
-    return sessions
-      .filter((s) => claudeProjectDirName(s.cwd) === dirName)
-      .map((s) => this.toHistorySession(s))
-      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-  }
-
-  async getRecentSessions(limit = 30): Promise<HistorySession[]> {
-    const sessions = await this.store.listSessions();
-    return sessions
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
-      .map((s) => this.toHistorySession(s));
-  }
-
-  async searchSessions(query: string, limit = 50): Promise<HistorySession[]> {
-    if (!query.trim()) return [];
-    const needle = query.toLowerCase();
-    const sessions = await this.store.listSessions();
-    const matches: HistorySession[] = [];
-    for (const s of sessions) {
-      const haystack = `${s.cwd} ${s.title ?? ''} ${s.firstPrompt ?? ''}`.toLowerCase();
-      if (haystack.includes(needle)) {
-        matches.push(this.toHistorySession(s));
-        if (matches.length >= limit) break;
-      }
-    }
-    matches.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-    return matches;
+  protected listSessions(): Promise<KimiSessionInfo[]> {
+    return this.store.listSessions();
   }
 
   async getConversation(sessionId: string): Promise<ConversationMessage[]> {
@@ -194,20 +138,5 @@ export class KimiHistoryService implements AgentHistoryProvider {
     } catch {
       return [];
     }
-  }
-
-  private toHistorySession(s: KimiSessionInfo): HistorySession {
-    return {
-      sessionId: s.sessionId,
-      projectPath: s.cwd,
-      projectName: s.cwd.replace(/^\/home\/[^/]+\//, '~/'),
-      firstPrompt: s.firstPrompt,
-      lastPrompt: s.firstPrompt,
-      summary: s.title,
-      // Kimi transcripts have no recap (Claude-only feature).
-      recap: undefined,
-      modified: s.updatedAt,
-      agent: 'kimi',
-    };
   }
 }

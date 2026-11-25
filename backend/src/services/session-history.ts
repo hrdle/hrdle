@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/types';
 import { readLastLines } from '../utils/read-last-lines';
 import { scanLastRecap } from '../utils/recap-scanner';
+import { homeShortPath } from '../utils/home-path';
 
 export type { HistorySession };
 
@@ -322,7 +323,7 @@ export class SessionHistoryService {
             projectPath = dir.replace(/^-/, '/').replace(/-/g, '/');
           }
 
-          const projectName = projectPath.replace(/^\/home\/[^/]+\//, '~/');
+          const projectName = homeShortPath(projectPath);
           const latestModified = dirStat.mtime.toISOString();
 
           projects.push({
@@ -368,7 +369,7 @@ export class SessionHistoryService {
           // Skip sessions with no user messages
           if (!basicInfo?.lastPrompt) return null;
 
-          const projectName = basicInfo.projectPath.replace(/^\/home\/[^/]+\//, '~/');
+          const projectName = homeShortPath(basicInfo.projectPath);
           const recap = await scanLastRecap(jsonlPath);
 
           return {
@@ -422,7 +423,7 @@ export class SessionHistoryService {
               seenSessionIds.add(basicInfo.sessionId);
               sessionPaths.set(basicInfo.sessionId, jsonlPath);
 
-              const projectName = basicInfo.projectPath.replace(/^\/home\/[^/]+\//, '~/');
+              const projectName = homeShortPath(basicInfo.projectPath);
 
               const session: HistorySession = {
                 sessionId: basicInfo.sessionId,
@@ -881,7 +882,7 @@ export class SessionHistoryService {
             const basicInfo = await this.scanJsonlForBasicInfo(jsonlPath);
 
             if (basicInfo) {
-              const projectName = basicInfo.projectPath.replace(/^\/home\/[^/]+\//, '~/');
+              const projectName = homeShortPath(basicInfo.projectPath);
 
               // Quick search: check project name and last prompt first
               const quickSearchText = `${projectName} ${basicInfo.lastPrompt || ''}`.toLowerCase();

@@ -7,6 +7,7 @@ import type { ConversationMessage, HistorySession } from '../../../shared/types'
 import { claudeProjectDirName } from '../utils/claude-project-path';
 import { CodexConversationService } from './codex-conversation';
 import type { ProjectInfo } from './session-history';
+import { homeShortPath } from '../utils/home-path';
 
 interface RolloutInfo {
   rolloutPath: string;
@@ -157,7 +158,7 @@ export class CodexHistoryService {
     const byDir = new Map<string, ProjectInfo>();
     for (const r of rollouts) {
       const dirName = encodeCwd(r.cwd);
-      const projectName = r.cwd.replace(/^\/home\/[^/]+\//, '~/');
+      const projectName = homeShortPath(r.cwd);
       const existing = byDir.get(dirName);
       if (existing) {
         existing.sessionCount++;
@@ -228,7 +229,7 @@ export class CodexHistoryService {
     return {
       sessionId: r.sessionId,
       projectPath: r.cwd,
-      projectName: r.cwd.replace(/^\/home\/[^/]+\//, '~/'),
+      projectName: homeShortPath(r.cwd),
       firstPrompt: r.firstPrompt,
       lastPrompt: r.firstPrompt,
       // Codex transcripts have no recap (Claude-only feature).

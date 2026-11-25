@@ -1,8 +1,6 @@
-import type { ConversationMessage, HistorySession, ToolResultInfo, ToolUseInfo } from '../../../shared/types';
-import { claudeProjectDirName } from '../utils/claude-project-path';
-import type { AgentHistoryProvider } from './agent-providers';
+import type { ConversationMessage, ToolResultInfo, ToolUseInfo } from '../../../shared/types';
+import { ListedHistoryProvider } from './agent-history-listing';
 import { blockText, parsePiRecord, type PiContentBlock, type PiSessionInfo, PiSessionStore } from './pi';
-import type { ProjectInfo } from './session-history';
 
 function toolArgs(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
@@ -70,59 +68,14 @@ export function parsePiSession(text: string): ConversationMessage[] {
   return messages;
 }
 
-function projectName(cwd: string): string {
-  return cwd.replace(/^\/(?:home|Users)\/[^/]+\//, '~/');
-}
-
-export class PiHistoryService implements AgentHistoryProvider {
-  constructor(private readonly store = new PiSessionStore()) {}
-
-  async getProjects(): Promise<ProjectInfo[]> {
-    const byDir = new Map<string, ProjectInfo>();
-    for (const s of await this.store.listSessions()) {
-      const dirName = claudeProjectDirName(s.cwd);
-      const existing = byDir.get(dirName);
-      if (existing) {
-        existing.sessionCount++;
-        if (!existing.latestModified || s.updatedAt > existing.latestModified) existing.latestModified = s.updatedAt;
-      } else {
-        byDir.set(dirName, {
-          dirName,
-          projectPath: s.cwd,
-          projectName: projectName(s.cwd),
-          sessionCount: 1,
-          latestModified: s.updatedAt,
-        });
-      }
-    }
-    return Array.from(byDir.values());
+/** Reads pi session history from `~/.pi/agent/sessions`. */
+export class PiHistoryService extends ListedHistoryProvider<PiSessionInfo> {
+  constructor(private readonly store = new PiSessionStore()) {
+    super('pi');
   }
 
-  async getProjectSessions(dirName: string): Promise<HistorySession[]> {
-    return (await this.store.listSessions())
-      .filter((s) => claudeProjectDirName(s.cwd) === dirName)
-      .map((s) => this.toHistorySession(s))
-      .sort((a, b) => b.modified.localeCompare(a.modified));
-  }
-
-  async getRecentSessions(limit = 30): Promise<HistorySession[]> {
-    return (await this.store.listSessions())
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
-      .map((s) => this.toHistorySession(s));
-  }
-
-  async searchSessions(query: string, limit = 50): Promise<HistorySession[]> {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return [];
-    const matches: HistorySession[] = [];
-    for (const s of await this.store.listSessions()) {
-      if (`${s.cwd} ${s.firstPrompt ?? ''}`.toLowerCase().includes(needle)) {
-        matches.push(this.toHistorySession(s));
-        if (matches.length >= limit) break;
-      }
-    }
-    return matches.sort((a, b) => b.modified.localeCompare(a.modified));
+  protected listSessions(): Promise<PiSessionInfo[]> {
+    return this.store.listSessions();
   }
 
   async getConversation(sessionId: string): Promise<ConversationMessage[]> {
@@ -133,18 +86,5 @@ export class PiHistoryService implements AgentHistoryProvider {
     } catch {
       return [];
     }
-  }
-
-  private toHistorySession(s: PiSessionInfo): HistorySession {
-    return {
-      sessionId: s.sessionId,
-      projectPath: s.cwd,
-      projectName: projectName(s.cwd),
-      firstPrompt: s.firstPrompt,
-      lastPrompt: s.firstPrompt,
-      modified: s.updatedAt,
-      startTime: s.createdAt,
-      agent: 'pi',
-    };
   }
 }

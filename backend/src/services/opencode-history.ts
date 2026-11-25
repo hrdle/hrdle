@@ -1,8 +1,6 @@
-import type { ConversationMessage, HistorySession, ToolResultInfo, ToolUseInfo } from '../../../shared/types';
-import { claudeProjectDirName } from '../utils/claude-project-path';
-import type { AgentHistoryProvider } from './agent-providers';
+import type { ConversationMessage, ToolResultInfo, ToolUseInfo } from '../../../shared/types';
+import { ListedHistoryProvider } from './agent-history-listing';
 import { OpenCodeSessionStore, type OpenCodeSessionInfo } from './opencode';
-import type { ProjectInfo } from './session-history';
 
 /** A `part.data` row, discriminated by `type`. */
 interface OpenCodePart {
@@ -113,90 +111,22 @@ export function parseOpenCodeMessages(messages: Array<{ id?: string; role: strin
 }
 
 /** Reads OpenCode session history from its SQLite store. */
-export class OpenCodeHistoryService implements AgentHistoryProvider {
-  private store: OpenCodeSessionStore;
-
-  constructor(store = new OpenCodeSessionStore()) {
-    this.store = store;
+export class OpenCodeHistoryService extends ListedHistoryProvider<OpenCodeSessionInfo> {
+  constructor(private readonly store = new OpenCodeSessionStore()) {
+    super('opencode');
   }
 
   /**
-   * Grouped by `session.directory`. The `project` table is not used: its
-   * `global` row is a catch-all whose `worktree` changes as other directories
-   * are visited, so grouping by it would move sessions between projects.
+   * Projects group by `session.directory`. The `project` table is not used:
+   * its `global` row is a catch-all whose `worktree` changes as other
+   * directories are visited, so grouping by it would move sessions between
+   * projects.
    */
-  async getProjects(): Promise<ProjectInfo[]> {
-    const sessions = await this.store.listSessions();
-    const byDir = new Map<string, ProjectInfo>();
-    for (const s of sessions) {
-      const dirName = claudeProjectDirName(s.cwd);
-      const existing = byDir.get(dirName);
-      if (existing) {
-        existing.sessionCount++;
-        if (!existing.latestModified || s.updatedAt > existing.latestModified) {
-          existing.latestModified = s.updatedAt;
-        }
-      } else {
-        byDir.set(dirName, {
-          dirName,
-          projectPath: s.cwd,
-          projectName: s.cwd.replace(/^\/home\/[^/]+\//, '~/'),
-          sessionCount: 1,
-          latestModified: s.updatedAt,
-        });
-      }
-    }
-    return Array.from(byDir.values());
-  }
-
-  async getProjectSessions(dirName: string): Promise<HistorySession[]> {
-    const sessions = await this.store.listSessions();
-    return sessions
-      .filter((s) => claudeProjectDirName(s.cwd) === dirName)
-      .map((s) => this.toHistorySession(s))
-      .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-  }
-
-  async getRecentSessions(limit = 30): Promise<HistorySession[]> {
-    const sessions = await this.store.listSessions();
-    return sessions
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
-      .map((s) => this.toHistorySession(s));
-  }
-
-  async searchSessions(query: string, limit = 50): Promise<HistorySession[]> {
-    if (!query.trim()) return [];
-    const needle = query.toLowerCase();
-    const sessions = await this.store.listSessions();
-    const matches: HistorySession[] = [];
-    for (const s of sessions) {
-      const haystack = `${s.cwd} ${s.title ?? ''} ${s.firstPrompt ?? ''}`.toLowerCase();
-      if (haystack.includes(needle)) {
-        matches.push(this.toHistorySession(s));
-        if (matches.length >= limit) break;
-      }
-    }
-    matches.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-    return matches;
+  protected listSessions(): Promise<OpenCodeSessionInfo[]> {
+    return this.store.listSessions();
   }
 
   async getConversation(sessionId: string): Promise<ConversationMessage[]> {
     return parseOpenCodeMessages(this.store.getSessionParts(sessionId));
-  }
-
-  private toHistorySession(s: OpenCodeSessionInfo): HistorySession {
-    return {
-      sessionId: s.sessionId,
-      projectPath: s.cwd,
-      projectName: s.cwd.replace(/^\/home\/[^/]+\//, '~/'),
-      firstPrompt: s.firstPrompt,
-      lastPrompt: s.firstPrompt,
-      summary: s.title,
-      // OpenCode transcripts have no recap (Claude-only feature).
-      recap: undefined,
-      modified: s.updatedAt,
-      agent: 'opencode',
-    };
   }
 }
