@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.235] - 2026-11-26
+
+### Changed
+- **Internal restructuring, nothing to notice.** The server code behind the
+  live terminal connection is split into smaller pieces by job: session list
+  pushes, screen updates, conversation streams, glasses focus and the glasses
+  screen mirror. Terminals, the session list, the chat view and the glasses
+  behave as before.
+
 ## [0.3.234] - 2026-11-25
 
 ### Changed
