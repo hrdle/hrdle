@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
-import type { AgentThread, AgentThreadService, AgentTokenUsage } from './agent-providers';
+import { numberOrUndefined } from '../utils/number';
+import type { AgentTokenUsage } from './agent-providers';
+import { CachedSessionStore, StoreThreadService, type ThreadDetails } from './agent-session-store';
 
 /**
  * OpenCode keeps everything in one SQLite database rather than a tree of JSON
@@ -98,10 +100,6 @@ interface AssistantMessageData {
   time?: { created?: unknown; completed?: unknown };
 }
 
-function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
 export function parseMessageTokens(data: string): OpenCodeMessageTokens | undefined {
   let message: AssistantMessageData;
   try {
@@ -163,13 +161,9 @@ const NON_BLANK_TEXT = `length(trim(json_extract(p.data, '$.text'), ' ' || char(
  * Reads OpenCode's SQLite store. Every method opens the database, queries and
  * closes it; an unreadable or missing file yields an empty result.
  */
-export class OpenCodeSessionStore {
-  private dbPath: string;
-  private cache: { timestamp: number; sessions: OpenCodeSessionInfo[] } | null = null;
-  private static readonly CACHE_TTL = 5000;
-
-  constructor(dbPath = defaultOpenCodeDbPath()) {
-    this.dbPath = dbPath;
+export class OpenCodeSessionStore extends CachedSessionStore<OpenCodeSessionInfo> {
+  constructor(private readonly dbPath = defaultOpenCodeDbPath()) {
+    super();
   }
 
   /** Runs `fn` against a readonly connection, or returns `fallback`. */
@@ -186,21 +180,7 @@ export class OpenCodeSessionStore {
     }
   }
 
-  async listSessions(): Promise<OpenCodeSessionInfo[]> {
-    if (this.cache && Date.now() - this.cache.timestamp < OpenCodeSessionStore.CACHE_TTL) {
-      return this.cache.sessions;
-    }
-    const sessions = this.loadSessions();
-    this.cache = { timestamp: Date.now(), sessions };
-    return sessions;
-  }
-
-  async findSession(sessionId: string): Promise<OpenCodeSessionInfo | undefined> {
-    const sessions = await this.listSessions();
-    return sessions.find((s) => s.sessionId === sessionId);
-  }
-
-  private loadSessions(): OpenCodeSessionInfo[] {
+  protected scan(): OpenCodeSessionInfo[] {
     return this.read((db) => {
       // Subagent sessions (task tool) carry a parent_id; they are turns of their
       // parent, not sessions a user opened, so they never appear on their own.
@@ -442,38 +422,16 @@ function tokenUsageOf(session: OpenCodeSessionInfo, latest: OpenCodeMessageToken
 }
 
 /** Exact OpenCode sessions by native session id, for the active-sessions list. */
-export class OpenCodeService implements AgentThreadService {
-  private store: OpenCodeSessionStore;
-
+export class OpenCodeService extends StoreThreadService<OpenCodeSessionInfo, OpenCodeSessionStore> {
   constructor(store = new OpenCodeSessionStore()) {
-    this.store = store;
+    super(store);
   }
 
-  async getThreadsByIds(sessionIds: string[]): Promise<Map<string, AgentThread>> {
-    const uniqueIds = [...new Set(sessionIds.filter(Boolean))];
-    if (uniqueIds.length === 0) return new Map();
-
-    const sessions = await this.store.listSessions();
-    const wanted = sessions.filter((s) => uniqueIds.includes(s.sessionId));
-    if (wanted.length === 0) return new Map();
-
-    const extras = this.store.getThreadExtras(wanted.map((s) => s.sessionId));
-
-    const result = new Map<string, AgentThread>();
-    for (const session of wanted) {
-      const extra = extras.get(session.sessionId);
-      result.set(session.sessionId, {
-        sessionId: session.sessionId,
-        title: session.title,
-        firstPrompt: session.firstPrompt,
-        tokenUsage: tokenUsageOf(session, extra?.tokens),
-        recap: extra?.recap,
-        recapAt: extra?.recapAt,
-        cwd: session.cwd,
-        createdAt: session.createdAt,
-        updatedAt: session.updatedAt,
-      });
-    }
-    return result;
+  protected describe(sessions: OpenCodeSessionInfo[]): ThreadDetails[] {
+    const extras = this.store.getThreadExtras(sessions.map((s) => s.sessionId));
+    return sessions.map((s) => {
+      const extra = extras.get(s.sessionId);
+      return { tokenUsage: tokenUsageOf(s, extra?.tokens), recap: extra?.recap, recapAt: extra?.recapAt };
+    });
   }
 }

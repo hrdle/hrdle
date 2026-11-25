@@ -1,7 +1,9 @@
-import { existsSync, readdirSync, statSync, openSync, readSync, closeSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { CodexUsageLimits, UsageCycleInfo } from '../../../shared/types';
+import { readFileTailSync } from '../utils/file-slice';
+import { numberOrUndefined } from '../utils/number';
 
 interface RateLimitWindow {
   used_percent?: number;
@@ -25,10 +27,6 @@ interface TokenCountEvent {
     type?: string;
     rate_limits?: RateLimitsPayload | null;
   };
-}
-
-function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 function formatDuration(diffMs: number): string {
@@ -157,21 +155,10 @@ function scanRolloutText(text: string): RolloutScan {
 }
 
 function readRolloutScan(rolloutPath: string): RolloutScan {
+  const text = readFileTailSync(rolloutPath, 4 * 1024 * 1024);
+  if (text === undefined) return {};
   try {
-    const stat = statSync(rolloutPath);
-    const maxTailBytes = 4 * 1024 * 1024;
-    if (stat.size <= maxTailBytes) {
-      return scanRolloutText(readFileSync(rolloutPath, 'utf8'));
-    }
-    const fd = openSync(rolloutPath, 'r');
-    try {
-      const bytesToRead = Math.min(stat.size, maxTailBytes);
-      const buffer = Buffer.alloc(bytesToRead);
-      readSync(fd, buffer, 0, bytesToRead, stat.size - bytesToRead);
-      return scanRolloutText(buffer.toString('utf8'));
-    } finally {
-      closeSync(fd);
-    }
+    return scanRolloutText(text);
   } catch {
     return {};
   }

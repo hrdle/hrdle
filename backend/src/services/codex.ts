@@ -1,7 +1,9 @@
-import { existsSync, openSync, readFileSync, readSync, closeSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
+import { readFileTailSync } from '../utils/file-slice';
+import { numberOrUndefined } from '../utils/number';
 
 interface CodexTokenUsage {
   contextTokens?: number;
@@ -69,10 +71,6 @@ interface CodexTokenCountEvent {
   };
 }
 
-function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
 function tokenUsageFromLine(line: string): CodexTokenUsage | undefined {
   let event: CodexTokenCountEvent;
   try {
@@ -129,27 +127,9 @@ function findLatestTokenUsageInText(text: string): CodexTokenUsage | undefined {
 }
 
 function readLatestTokenUsage(rolloutPath?: string | null): CodexTokenUsage | undefined {
-  if (!rolloutPath || !existsSync(rolloutPath)) return undefined;
-
-  try {
-    const stat = statSync(rolloutPath);
-    const maxTailBytes = 4 * 1024 * 1024;
-    if (stat.size <= maxTailBytes) {
-      return findLatestTokenUsageInText(readFileSync(rolloutPath, 'utf8'));
-    }
-
-    const fd = openSync(rolloutPath, 'r');
-    try {
-      const bytesToRead = Math.min(stat.size, maxTailBytes);
-      const buffer = Buffer.alloc(bytesToRead);
-      readSync(fd, buffer, 0, bytesToRead, stat.size - bytesToRead);
-      return findLatestTokenUsageInText(buffer.toString('utf8'));
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
-    return undefined;
-  }
+  if (!rolloutPath) return undefined;
+  const text = readFileTailSync(rolloutPath, 4 * 1024 * 1024);
+  return text === undefined ? undefined : findLatestTokenUsageInText(text);
 }
 
 function rowToThread(row: CodexThreadRow): CodexThread {

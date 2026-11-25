@@ -1,8 +1,10 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { AgentThread, AgentThreadService, AgentTokenUsage } from './agent-providers';
+import { readFileHeadSync, readFileTailSync } from '../utils/file-slice';
+import { numberOrUndefined } from '../utils/number';
+import type { AgentTokenUsage } from './agent-providers';
+import { CachedSessionStore, StoreThreadService, type ThreadDetails } from './agent-session-store';
 
 /** One Kimi Code session as recorded under `~/.kimi-code/sessions`. */
 export interface KimiSessionInfo {
@@ -87,30 +89,12 @@ export function turnPromptText(record: KimiTurnPromptRecord): string {
  * and whose `usage.record` records carry per-turn token usage. Sub-agent wires
  * (`agents/agent-N/`) are ignored.
  */
-export class KimiSessionStore {
-  private sessionsDir: string;
-  private cache: { timestamp: number; sessions: KimiSessionInfo[] } | null = null;
-  private static readonly CACHE_TTL = 5000;
-
-  constructor(sessionsDir = join(homedir(), '.kimi-code', 'sessions')) {
-    this.sessionsDir = sessionsDir;
+export class KimiSessionStore extends CachedSessionStore<KimiSessionInfo> {
+  constructor(private readonly sessionsDir = join(homedir(), '.kimi-code', 'sessions')) {
+    super();
   }
 
-  async listSessions(): Promise<KimiSessionInfo[]> {
-    if (this.cache && Date.now() - this.cache.timestamp < KimiSessionStore.CACHE_TTL) {
-      return this.cache.sessions;
-    }
-    const sessions = await this.scan();
-    this.cache = { timestamp: Date.now(), sessions };
-    return sessions;
-  }
-
-  async findSession(sessionId: string): Promise<KimiSessionInfo | undefined> {
-    const sessions = await this.listSessions();
-    return sessions.find((s) => s.sessionId === sessionId);
-  }
-
-  private async scan(): Promise<KimiSessionInfo[]> {
+  protected async scan(): Promise<KimiSessionInfo[]> {
     let projectDirs: string[];
     try {
       projectDirs = await readdir(this.sessionsDir);
@@ -161,26 +145,10 @@ export class KimiSessionStore {
 
 /** First real user prompt: the first `turn.prompt` record in the main wire. */
 function readFirstKimiPrompt(sessionDir: string): string | undefined {
-  const wirePath = kimiWirePath(sessionDir);
-  if (!existsSync(wirePath)) return undefined;
-  let text: string;
-  try {
-    const stat = statSync(wirePath);
-    // Bounded head read: the first prompt sits near the top, but config.update
-    // records with the full system prompt can push it back tens of KB.
-    const maxHeadBytes = 1024 * 1024;
-    const size = Math.min(stat.size, maxHeadBytes);
-    const fd = openSync(wirePath, 'r');
-    try {
-      const buffer = Buffer.alloc(size);
-      readSync(fd, buffer, 0, size, 0);
-      text = buffer.toString('utf8');
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
-    return undefined;
-  }
+  // The first prompt sits near the top, but config.update records with the
+  // full system prompt can push it back tens of KB.
+  const text = readFileHeadSync(kimiWirePath(sessionDir), 1024 * 1024);
+  if (text === undefined) return undefined;
 
   for (const line of text.split('\n')) {
     if (!line.includes('"turn.prompt"')) continue;
@@ -194,42 +162,8 @@ function readFirstKimiPrompt(sessionDir: string): string | undefined {
   return undefined;
 }
 
-function numberOrUndefined(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-/**
- * Bounded tail read (≤1MB) of the main wire.jsonl — like the Grok reader, so
- * multi-MB streams don't get re-parsed on every sessions push. Undefined when
- * the wire is missing or unreadable.
- */
 function tailReadKimiWire(sessionDir: string): string | undefined {
-  const wirePath = kimiWirePath(sessionDir);
-  if (!existsSync(wirePath)) return undefined;
-  try {
-    const stat = statSync(wirePath);
-    const maxTailBytes = 1024 * 1024;
-    if (stat.size <= maxTailBytes) {
-      const fd = openSync(wirePath, 'r');
-      try {
-        const buffer = Buffer.alloc(stat.size);
-        readSync(fd, buffer, 0, stat.size, 0);
-        return buffer.toString('utf8');
-      } finally {
-        closeSync(fd);
-      }
-    }
-    const fd = openSync(wirePath, 'r');
-    try {
-      const buffer = Buffer.alloc(maxTailBytes);
-      readSync(fd, buffer, 0, maxTailBytes, stat.size - maxTailBytes);
-      return buffer.toString('utf8');
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
-    return undefined;
-  }
+  return readFileTailSync(kimiWirePath(sessionDir), 1024 * 1024);
 }
 
 /** Usage block of the last `usage.record` in the given wire lines. */
@@ -326,34 +260,12 @@ export function readLatestKimiTokenUsage(sessionDir: string): AgentTokenUsage | 
 }
 
 /** Exact Kimi Code sessions by native session id, for the active-sessions list. */
-export class KimiService implements AgentThreadService {
-  private store: KimiSessionStore;
-
+export class KimiService extends StoreThreadService<KimiSessionInfo> {
   constructor(store = new KimiSessionStore()) {
-    this.store = store;
+    super(store);
   }
 
-  async getThreadsByIds(sessionIds: string[]): Promise<Map<string, AgentThread>> {
-    const uniqueIds = new Set(sessionIds.filter(Boolean));
-    if (uniqueIds.size === 0) return new Map();
-
-    const sessions = await this.store.listSessions();
-    const result = new Map<string, AgentThread>();
-    for (const s of sessions) {
-      if (!uniqueIds.has(s.sessionId)) continue;
-      const tail = readKimiWireTail(s.dir);
-      result.set(s.sessionId, {
-        sessionId: s.sessionId,
-        title: s.title,
-        firstPrompt: s.firstPrompt,
-        tokenUsage: tail.tokenUsage,
-        recap: tail.recap,
-        recapAt: tail.recapAt,
-        cwd: s.cwd,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-      });
-    }
-    return result;
+  protected describe(sessions: KimiSessionInfo[]): ThreadDetails[] {
+    return sessions.map((s) => readKimiWireTail(s.dir));
   }
 }
