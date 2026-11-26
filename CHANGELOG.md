@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.236] - 2026-11-26
+
+### Changed
+- **Internal restructuring, nothing to notice.** The browser code that keeps
+  track of where each pane is scrolled to, and the code that holds the live
+  terminal connection, each moved into a piece of its own with tests around
+  it. Scrolling, switching panes and reconnecting after the server restarts
+  behave as before.
+
 ## [0.3.235] - 2026-11-26
 
 ### Changed
