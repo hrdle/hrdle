@@ -3,7 +3,7 @@ import type { ConversationMessage } from "../../../shared/types";
 import {
 	subscribeConversation,
 	unsubscribeConversation,
-} from "./useMultiplexedTerminal";
+} from "../services/mux-connection";
 
 interface ConversationEventDetail {
 	type:

@@ -347,7 +347,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 
 ### Frontend Hooks
 
-- **useMultiplexedTerminal.ts** - WebSocket connection to `/ws/mux` for multiplexed terminal I/O. Handles auto-reconnect, keepalive pings, session subscribe/unsubscribe, base64 I/O encoding, viewport dispatch (`onPaneViewport` callback). Returns `sendInput`, `resize`, `splitPane`, `closePane`, `selectPane`, `zoomPane`, `adjustPane`, `equalizePanes`, `requestViewport`, `sendClientInfo`
+- **useMultiplexedTerminal.ts** - The React side of `/ws/mux`: points the shared socket at a session, hands it the mounted layout's callbacks, and base64-encodes input. The socket itself is `services/mux-connection.ts` - one per page at module level, with auto-reconnect, the connect watchdog, keepalive pings and pong timeout, session and conversation (re)subscription, and message routing - tested against a fake WebSocket and clock. Returns `sendInput`, `resize`, `splitPane`, `closePane`, `selectPane`, `zoomPane`, `adjustPane`, `equalizePanes`, `requestViewport`, `sendClientInfo`
 - **useWorkspaces.ts** - Active sessions state management
 - **useSessionHistory.ts** - Session history browsing
 - **useDashboard.ts** - Dashboard data fetching
