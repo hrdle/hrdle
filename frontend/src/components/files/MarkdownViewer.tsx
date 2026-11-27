@@ -61,7 +61,7 @@ export function MarkdownViewer({
 }: MarkdownViewerProps) {
 	const { t } = useTranslation();
 	const containerRef = useRef<HTMLDivElement>(null);
-	const { fontSize, setFontSize, commitFontSize, resetFontSize } =
+	const { fontSize, setFontSize, commitFontSize } =
 		useViewerSettings();
 
 	usePinchZoom({
@@ -246,17 +246,6 @@ export function MarkdownViewer({
 				{renderedMarkdown}
 			</div>
 
-			{/* Controls - font size only */}
-			<div className="absolute top-2 right-2 flex items-center gap-1 bg-th-surface/90 rounded-md p-1 backdrop-blur-sm">
-				<button
-					type="button"
-					onClick={resetFontSize}
-					className="px-1.5 py-0.5 text-xs text-th-text-secondary hover:text-th-text hover:bg-th-surface-hover rounded transition-colors"
-					title={t("files.resetFontSizeHint")}
-				>
-					{fontSize}px
-				</button>
-			</div>
 		</div>
 	);
 }

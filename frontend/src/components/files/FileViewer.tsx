@@ -9,14 +9,16 @@ import {
 	EyeOff,
 	FileText,
 	MessageSquare,
+	MoreHorizontal,
+	Pencil,
 	RotateCw,
-	Upload,
 	X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	FileChange,
+	FileContent,
 	FileInfo,
 	GitFileChange,
 } from "../../../../shared/types";
@@ -29,9 +31,24 @@ import {
 	type ViewMode,
 } from "../../hooks/useViewHistory";
 import { authFetch } from "../../services/api";
+import {
+	addRecentDir,
+	expandPath,
+	getBookmarks,
+	getRecentDirs,
+	homeOf,
+	promptPathFor,
+	toggleBookmark,
+} from "../../utils/file-places";
+import { toHomeShortPath } from "../../utils/path";
 import { ChangesView } from "./ChangesView";
-import { FileBrowser } from "./FileBrowser";
+import { CreateMenu } from "./CreateMenu";
+import { FileActionsSheet } from "./FileActionsSheet";
+import { type ChangeKind, FileBrowser } from "./FileBrowser";
 import { FileContentView } from "./FileContentView";
+import { FileEditor } from "./FileEditor";
+import { JumpSheet, type SessionPlace } from "./JumpSheet";
+import { ViewerSettingsMenu } from "./ViewerSettingsMenu";
 import {
 	getFileName,
 	isHtmlFile,
@@ -63,6 +80,35 @@ interface FileViewerProps {
 		| "lost";
 	onShowConversation?: () => void;
 	onShowDashboard?: () => void;
+	/** The other sessions' directories on the same machine, offered as places to go. */
+	sessionPlaces?: SessionPlace[];
+}
+
+/** A text file read whole, which the editor can save back. */
+function isEditable(file: FileContent | null): file is FileContent {
+	return (
+		!!file &&
+		file.encoding === "utf-8" &&
+		!file.truncated &&
+		!!file.hash &&
+		!isImageFile(file.path) &&
+		!isMediaFile(file.path) &&
+		!isModelFile(file.path)
+	);
+}
+
+function asFileInfo(file: FileContent): FileInfo {
+	const name = getFileName(file.path);
+	const dot = name.lastIndexOf(".");
+	return {
+		name,
+		path: file.path,
+		type: "file",
+		size: file.size,
+		modifiedAt: new Date().toISOString(),
+		isHidden: name.startsWith("."),
+		extension: dot > 0 ? name.slice(dot) : undefined,
+	};
 }
 
 export function FileViewer({
@@ -78,8 +124,9 @@ export function FileViewer({
 	sessionStatus,
 	onShowConversation,
 	onShowDashboard,
+	sessionPlaces = [],
 }: FileViewerProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const {
 		currentPath,
 		files,
@@ -233,9 +280,8 @@ export function FileViewer({
 		[currentPath, sessionWorkingDir, listDirectory],
 	);
 
-	const handleDownloadFile = useCallback(async () => {
-		if (!selectedFile) return;
-		const url = `${filesApiBase}/download?path=${encodeURIComponent(selectedFile.path)}&sessionWorkingDir=${encodeURIComponent(sessionWorkingDir)}`;
+	const downloadPath = useCallback(async (path: string) => {
+		const url = `${filesApiBase}/download?path=${encodeURIComponent(path)}&sessionWorkingDir=${encodeURIComponent(sessionWorkingDir)}`;
 		// <a href> cannot send the Bearer header, so /files/download 401s when
 		// HRDLE_PASSWORD is set. Fetch via authFetch, materialise into a blob,
 		// and trigger the anchor against the object URL.
@@ -244,7 +290,7 @@ export function FileViewer({
 			if (!res.ok) return;
 			const cd = res.headers.get("content-disposition") ?? "";
 			const dispMatch = cd.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i);
-			const fallback = selectedFile.path.split("/").pop() ?? "download";
+			const fallback = path.split("/").pop() ?? "download";
 			let filename = fallback;
 			if (dispMatch?.[1]) {
 				try {
@@ -266,7 +312,10 @@ export function FileViewer({
 		} catch {
 			// best-effort download — surface nothing extra to the user
 		}
-	}, [selectedFile, sessionWorkingDir, filesApiBase]);
+	}, [sessionWorkingDir, filesApiBase]);
+	const handleDownloadFile = useCallback(() => {
+		if (selectedFile) void downloadPath(selectedFile.path);
+	}, [selectedFile, downloadPath]);
 
 	// Detect wide screen for two-pane layout
 	const [isWideScreen, setIsWideScreen] = useState(
@@ -332,6 +381,156 @@ export function FileViewer({
 		};
 	}, []);
 
+	// The server's home directory, which `~` stands for. Asked rather than read
+	// off a path: a session may live outside home (`/tmp`), and a peer's home is
+	// not this browser's to guess.
+	const [serverHome, setServerHome] = useState<string | null>(null);
+	useEffect(() => {
+		let cancelled = false;
+		authFetch(`${filesApiBase}/browse`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((data: { path?: string } | null) => {
+				if (!cancelled && data?.path) setServerHome(data.path);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [filesApiBase]);
+	const home = serverHome ?? homeOf(sessionWorkingDir) ?? homeOf(currentPath);
+	const uniqueSessionPlaces = useMemo(() => {
+		const seen = new Set<string>();
+		return sessionPlaces.filter((p) => !seen.has(p.path) && seen.add(p.path));
+	}, [sessionPlaces]);
+	const [editing, setEditing] = useState(false);
+	const editorDirtyRef = useRef(false);
+	const [jumpOpen, setJumpOpen] = useState(false);
+	const [menuTarget, setMenuTarget] = useState<FileInfo | null>(null);
+	const [bookmarks, setBookmarks] = useState(getBookmarks);
+	const [recentDirs, setRecentDirs] = useState(getRecentDirs);
+
+	const showNotice = useCallback((text: string, isError = false) => {
+		setUploadMessage({ text, isError });
+		window.setTimeout(() => setUploadMessage(null), 4000);
+	}, []);
+
+	// What the agent did to each file, newest change per path. Read when the
+	// viewer opens, not only on the changes tab, because the browser marks them.
+	const latestChange = useMemo(() => {
+		const map = new Map<string, FileChange>();
+		for (const c of changes) {
+			const prev = map.get(c.path);
+			if (!prev || prev.timestamp < c.timestamp) map.set(c.path, c);
+		}
+		return map;
+	}, [changes]);
+	const changeKinds = useMemo(() => {
+		const map = new Map<string, ChangeKind>();
+		for (const c of changes) {
+			if (c.toolName === "Write" && !map.has(c.path)) map.set(c.path, "created");
+			else if (c.toolName === "Edit") map.set(c.path, "edited");
+		}
+		return map;
+	}, [changes]);
+	// The viewer stays mounted while hidden, so this runs each time it is shown.
+	useEffect(() => {
+		if (!hidden) void getChanges();
+	}, [getChanges, hidden]);
+
+	const refresh = useCallback(() => {
+		void listDirectory(currentPath);
+		void getChanges();
+		setBrowserRefresh((n) => n + 1);
+	}, [listDirectory, currentPath, getChanges]);
+
+	const navigate = useCallback(
+		async (path: string) => {
+			setJumpOpen(false);
+			setListMode("browser");
+			setViewMode("browser");
+			await listDirectory(path);
+			setRecentDirs(addRecentDir(path));
+		},
+		[listDirectory],
+	);
+
+	const postJson = useCallback(
+		async (endpoint: string, body: unknown): Promise<string | null> => {
+			try {
+				const res = await authFetch(`${filesApiBase}/${endpoint}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body),
+				});
+				if (res.ok) return null;
+				const data = await res.json().catch(() => ({}));
+				if (res.status === 409) return t("files.alreadyExistsOrNotEmpty");
+				return data.error || res.statusText;
+			} catch (err) {
+				return err instanceof Error ? err.message : String(err);
+			}
+		},
+		[filesApiBase, t],
+	);
+
+	const renameEntry = useCallback(
+		async (target: FileInfo, newName: string) => {
+			const parent = target.path.slice(0, target.path.lastIndexOf("/")) || "/";
+			const to = expandPath(newName, home, parent);
+			const err = await postJson("rename", { from: target.path, to });
+			if (err) return err;
+			refresh();
+			if (selectedFile?.path === target.path) void readFile(to);
+			return null;
+		},
+		[home, postJson, refresh, selectedFile, readFile],
+	);
+
+	const deleteEntry = useCallback(
+		async (target: FileInfo) => {
+			const err = await postJson("delete", { path: target.path });
+			if (err) return err;
+			refresh();
+			if (selectedFile?.path === target.path) {
+				setEditing(false);
+				setViewMode("browser");
+			}
+			return null;
+		},
+		[postJson, refresh, selectedFile],
+	);
+
+	const copyPath = useCallback(
+		async (path: string) => {
+			try {
+				await navigator.clipboard.writeText(path);
+				showNotice(t("files.pathCopied"));
+			} catch {
+				showNotice(t("files.copyFailed"), true);
+			}
+		},
+		[showNotice, t],
+	);
+
+	const attachToChat = useCallback(
+		(path: string) => onCopyPrompt?.(`${promptPathFor(path, sessionWorkingDir)} `),
+		[onCopyPrompt, sessionWorkingDir],
+	);
+
+	const closeEditor = useCallback(() => {
+		setEditing(false);
+		editorDirtyRef.current = false;
+		if (selectedFile) void readFile(selectedFile.path);
+	}, [selectedFile, readFile]);
+
+	// A file opened for editing that turns out not to be editable text.
+	useEffect(() => {
+		if (editing && selectedFile && !isLoading && !isEditable(selectedFile)) {
+			setEditing(false);
+			showNotice(t("files.notEditable"), true);
+		}
+	}, [editing, selectedFile, isLoading, showNotice, t]);
+
 	// Initialize
 	useEffect(() => {
 		const initPath = initialPath || sessionWorkingDir;
@@ -341,13 +540,68 @@ export function FileViewer({
 	// Handle file selection
 	const handleSelectFile = useCallback(
 		async (file: FileInfo) => {
+			if (editing) {
+				if (editorDirtyRef.current) {
+					showNotice(t("files.saveFirst"), true);
+					return;
+				}
+				setEditing(false);
+			}
 			pushToHistory({ viewMode, listMode, selectedChange, selectedGitDiff });
 			await readFile(file.path);
 			setViewMode("file");
 			setPreviewMode(false);
 			scrollRatioRef.current = 0;
 		},
-		[readFile, viewMode, listMode, selectedChange, selectedGitDiff],
+		[
+			readFile,
+			viewMode,
+			listMode,
+			selectedChange,
+			selectedGitDiff,
+			editing,
+			showNotice,
+			t,
+		],
+	);
+
+	const editFile = useCallback(
+		async (file: FileInfo) => {
+			if (selectedFile?.path !== file.path || viewMode !== "file") {
+				await handleSelectFile(file);
+			}
+			setEditing(true);
+		},
+		[selectedFile, viewMode, handleSelectFile],
+	);
+
+	const createFile = useCallback(
+		async (name: string) => {
+			const path = expandPath(name, home, currentPath);
+			const err = await postJson("write", { path, content: "", expectedHash: null });
+			if (err) return err;
+			refresh();
+			await editFile({
+				name: getFileName(path),
+				path,
+				type: "file",
+				size: 0,
+				modifiedAt: new Date().toISOString(),
+				isHidden: getFileName(path).startsWith("."),
+			});
+			return null;
+		},
+		[home, currentPath, postJson, refresh, editFile],
+	);
+
+	const createFolder = useCallback(
+		async (name: string) => {
+			const err = await postJson("mkdir", { path: expandPath(name, home, currentPath) });
+			if (err) return err;
+			refresh();
+			return null;
+		},
+		[home, currentPath, postJson, refresh],
 	);
 
 	// Handle changes tab - fetch both Claude and Git changes
@@ -435,6 +689,47 @@ export function FileViewer({
 	// Check if content is showing
 	const hasContent = viewMode === "file" || viewMode === "diff";
 
+	const editingNow = editing && isEditable(selectedFile);
+
+	const sheets = (
+		<>
+			{jumpOpen && (
+				<JumpSheet
+					currentPath={currentPath}
+					workingDir={sessionWorkingDir}
+					otherSessions={uniqueSessionPlaces}
+					home={home}
+					bookmarks={bookmarks}
+					recent={recentDirs}
+					filesApiBase={filesApiBase}
+					onNavigate={(path) => void navigate(path)}
+					onClose={() => setJumpOpen(false)}
+				/>
+			)}
+			{menuTarget && (
+				<FileActionsSheet
+					target={menuTarget}
+					editable={
+						menuTarget.type !== "directory" &&
+						!isImageFile(menuTarget.path) &&
+						!isMediaFile(menuTarget.path) &&
+						!isModelFile(menuTarget.path)
+					}
+					bookmarked={bookmarks.includes(menuTarget.path)}
+					onAttach={onCopyPrompt ? () => attachToChat(menuTarget.path) : undefined}
+					onEdit={() => void editFile(menuTarget)}
+					onOpenDir={() => void navigate(menuTarget.path)}
+					onCopyPath={() => void copyPath(menuTarget.path)}
+					onDownload={() => void downloadPath(menuTarget.path)}
+					onToggleBookmark={() => setBookmarks(toggleBookmark(menuTarget.path))}
+					onRename={(name) => renameEntry(menuTarget, name)}
+					onDelete={() => deleteEntry(menuTarget)}
+					onClose={() => setMenuTarget(null)}
+				/>
+			)}
+		</>
+	);
+
 	// Two-pane layout for wide screens
 	if (isWideScreen) {
 		return (
@@ -492,10 +787,7 @@ export function FileViewer({
 								)}
 								<button
 									type="button"
-									onClick={() => {
-										listDirectory(currentPath);
-										setBrowserRefresh((n) => n + 1);
-									}}
+									onClick={refresh}
 									className="p-2 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
 									title={t("files.reload")}
 								>
@@ -546,19 +838,14 @@ export function FileViewer({
 								</div>
 								{listMode === "browser" && (
 									<>
-										<button
-											type="button"
-											onClick={handleUploadClick}
-											disabled={uploading}
-											className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
-											title={
-												uploading
-												? t("files.uploading")
-												: t("files.uploadTo", { path: currentPath })
-											}
-										>
-											<Upload className="w-4 h-4" />
-										</button>
+										<CreateMenu
+											placement="down"
+											size="sm"
+											uploading={uploading}
+											onNewFile={createFile}
+											onNewFolder={createFolder}
+											onUpload={handleUploadClick}
+										/>
 										<input
 											ref={uploadInputRef}
 											type="file"
@@ -624,6 +911,12 @@ export function FileViewer({
 									showHidden={showHidden}
 									selectedPath={selectedFile?.path}
 									refreshSignal={browserRefresh}
+									filesApiBase={filesApiBase}
+									changeKinds={changeKinds}
+									onEntryMenu={setMenuTarget}
+									onNavigate={(path) => void navigate(path)}
+									onOpenJump={() => setJumpOpen(true)}
+									home={home}
 								/>
 							) : (
 								<ChangesView
@@ -647,37 +940,64 @@ export function FileViewer({
 
 						{/* Right pane: Content */}
 						<div className="flex-1 overflow-hidden flex flex-col">
-							{hasContent ? (
+							{editing && isEditable(selectedFile) ? (
+								<FileEditor
+									key={selectedFile.path}
+									file={selectedFile}
+									filesApiBase={filesApiBase}
+									onDirtyChange={(dirty) => {
+										editorDirtyRef.current = dirty;
+									}}
+									onClose={closeEditor}
+								/>
+							) : hasContent ? (
 								<>
 									{/* Content header */}
-									<div className="flex items-center gap-2 px-3 py-2 border-b border-th-border bg-th-surface/50">
-										<span className="text-sm text-th-text-secondary truncate flex-1">
-											{viewMode === "diff"
-												? currentDiffFileName
-												: selectedFile
-													? getFileName(selectedFile.path)
-													: ""}
-										</span>
+									<div className="flex items-center gap-2 border-b border-th-border bg-th-surface/50 py-1 pl-3 pr-1.5">
+										<div className="flex min-w-0 flex-1 flex-col">
+											<span className="truncate text-sm text-th-text">
+												{viewMode === "diff"
+													? currentDiffFileName
+													: selectedFile
+														? getFileName(selectedFile.path)
+														: ""}
+											</span>
+											{viewMode === "file" && selectedFile && (
+												<span className="truncate font-mono text-[11px] text-th-text-muted">
+													{toHomeShortPath(selectedFile.path)}
+												</span>
+											)}
+										</div>
+										{viewMode === "file" && selectedFile && (
+											<AgentChangeChip change={latestChange.get(selectedFile.path)} lang={i18n.language} />
+										)}
 										{viewMode === "file" &&
 											selectedFile &&
 											(isMarkdownFile(selectedFile.path) ||
 												isHtmlFile(selectedFile.path)) && (
-												<button
-													type="button"
-													onClick={togglePreviewMode}
-													className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${previewMode ? "bg-blue-600 text-white" : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-500"}`}
-												>
-													{previewMode ? t("files.source") : t("files.preview")}
-												</button>
+												<PreviewSourceToggle previewMode={previewMode} onChange={setPreviewMode} />
 											)}
+										{viewMode === "file" && selectedFile && (
+											<ViewerSettingsMenu fileName={getFileName(selectedFile.path)} placement="down" />
+										)}
+										{viewMode === "file" && isEditable(selectedFile) && (
+											<button
+												type="button"
+												onClick={() => setEditing(true)}
+												className="flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs text-white"
+											>
+												<Pencil className="h-3.5 w-3.5" />
+												{t("files.edit")}
+											</button>
+										)}
 										{viewMode === "file" && selectedFile && (
 											<button
 												type="button"
-												onClick={handleDownloadFile}
-												className="p-1.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors"
-												title={t("files.downloadFile")}
+												onClick={() => setMenuTarget(asFileInfo(selectedFile))}
+												aria-label={t("files.moreActions")}
+												className="flex h-10 w-10 items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300"
 											>
-												<Download className="w-4 h-4" />
+												<MoreHorizontal className="h-5 w-5" />
 											</button>
 										)}
 										{viewMode === "diff" && (
@@ -723,6 +1043,7 @@ export function FileViewer({
 						</div>
 					</div>
 				</div>
+				{sheets}
 			</div>
 		);
 	}
@@ -751,9 +1072,21 @@ export function FileViewer({
 
 				{/* Content */}
 				<div className="flex-1 overflow-hidden">
+					{editingNow && (
+						<FileEditor
+							key={selectedFile.path}
+							file={selectedFile}
+							filesApiBase={filesApiBase}
+							onDirtyChange={(dirty) => {
+								editorDirtyRef.current = dirty;
+							}}
+							onClose={closeEditor}
+						/>
+					)}
+					<div className={editingNow ? "hidden" : "h-full flex flex-col"}>
 					{/* Keep FileBrowser mounted across viewMode changes so its scroll
               position survives switching to a file view and back. */}
-					<div className={viewMode === "browser" ? "h-full" : "hidden"}>
+					<div className={viewMode === "browser" ? "min-h-0 flex-1" : "hidden"}>
 						<FileBrowser
 							files={files}
 							currentPath={currentPath}
@@ -762,10 +1095,33 @@ export function FileViewer({
 							onSelectFile={handleSelectFile}
 							showHidden={showHidden}
 							selectedPath={selectedFile?.path}
+							refreshSignal={browserRefresh}
+							filesApiBase={filesApiBase}
+							changeKinds={changeKinds}
+							onEntryMenu={setMenuTarget}
+							onNavigate={(path) => void navigate(path)}
+							onOpenJump={() => setJumpOpen(true)}
+							home={home}
 						/>
 					</div>
 
+					{viewMode === "file" && selectedFile && (
+						<div className="flex shrink-0 items-center gap-2.5 border-b border-[#1a1a1a] bg-[#0f0f0f] px-4 py-2">
+							<FileText className="h-[18px] w-[18px] shrink-0 text-th-text-secondary" />
+							<div className="flex min-w-0 flex-col">
+								<span className="truncate text-sm font-semibold">
+									{getFileName(selectedFile.path)}
+								</span>
+								<span className="truncate font-mono text-[11px] text-th-text-muted">
+									{toHomeShortPath(selectedFile.path.slice(0, selectedFile.path.lastIndexOf("/")))}
+								</span>
+							</div>
+							<span className="ml-auto" />
+							<AgentChangeChip change={latestChange.get(selectedFile.path)} lang={i18n.language} />
+						</div>
+					)}
 					{(viewMode === "file" || viewMode === "diff") && (
+						<div className="min-h-0 flex-1">
 						<FileContentView
 							viewMode={viewMode}
 							selectedFile={selectedFile}
@@ -781,6 +1137,7 @@ export function FileViewer({
 							filesApiBase={filesApiBase}
 							onDownload={handleDownloadFile}
 						/>
+						</div>
 					)}
 
 					{viewMode === "changes" && (
@@ -793,133 +1150,117 @@ export function FileViewer({
 							onSelectGitChange={handleGitFileClick}
 						/>
 					)}
+					</div>
 				</div>
 
 				{/* Footer controls - 2 rows for consistency with terminal toolbar */}
+				{!editingNow && (
 				<div className="border-t border-white/[0.06] bg-[#0a0a0a]">
 					{/* Row 1: File viewer controls */}
-					<div className="flex items-center justify-between px-3 py-1.5 border-b border-white/[0.06]">
-						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								onClick={handleBack}
-								className="p-2.5 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 rounded transition-colors"
-							>
-								<ArrowLeft className="w-5 h-5" />
-							</button>
-							<h2 className="text-[13px] font-medium text-zinc-300 truncate max-w-[84px]">
-								{viewMode === "browser"
-									? t("files.title")
-									: viewMode === "changes"
-										? t("files.changes")
-										: viewMode === "diff"
-											? currentDiffFileName
-											: selectedFile
-												? getFileName(selectedFile.path)
-												: t("files.title")}
-							</h2>
-						</div>
+					<div className="flex items-center gap-1 border-b border-white/[0.06] px-1.5 py-1">
+						<button
+							type="button"
+							onClick={handleBack}
+							aria-label={t("common.back")}
+							className="p-2.5 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 rounded transition-colors"
+						>
+							<ArrowLeft className="w-5 h-5" />
+						</button>
 
-						<div className="flex items-center gap-1.5">
-							{/* Tab buttons */}
-							<div className="inline-flex items-center bg-white/[0.04] rounded-md p-0.5">
-								<button
-									type="button"
-									onClick={handleShowBrowser}
-									className={`px-2.5 py-1.5 text-sm rounded font-medium transition-colors ${
-										viewMode === "browser" || viewMode === "file"
-											? "bg-white/[0.08] text-zinc-300"
-											: "text-zinc-600 hover:text-zinc-400"
-									}`}
-								>
-									{t("files.browser")}
-								</button>
-								<button
-									type="button"
-									onClick={handleShowChanges}
-									className={`px-2.5 py-1.5 text-sm rounded font-medium transition-colors ${
-										viewMode === "changes" || viewMode === "diff"
-											? "bg-white/[0.08] text-zinc-300"
-											: "text-zinc-600 hover:text-zinc-400"
-									}`}
-								>
-									{t("files.changes")}
-								</button>
-							</div>
-
-							{/* Preview/Source toggle */}
-							{viewMode === "file" &&
-								selectedFile &&
-								(isMarkdownFile(selectedFile.path) ||
-									isHtmlFile(selectedFile.path)) && (
+						{viewMode === "file" && selectedFile ? (
+							<>
+								{(isMarkdownFile(selectedFile.path) || isHtmlFile(selectedFile.path)) && (
+									<PreviewSourceToggle previewMode={previewMode} onChange={setPreviewMode} />
+								)}
+								<div className="flex-1" />
+								<ViewerSettingsMenu fileName={getFileName(selectedFile.path)} placement="up" />
+								{isEditable(selectedFile) && (
 									<button
 										type="button"
-										onClick={togglePreviewMode}
-										className={`px-2.5 py-1.5 text-sm rounded font-medium transition-colors ${previewMode ? "bg-blue-600 text-white" : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-500"}`}
+										onClick={() => setEditing(true)}
+										className="flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-[13px] text-white"
 									>
-										{previewMode ? t("files.source") : t("files.preview")}
+										<Pencil className="h-[15px] w-[15px]" />
+										{t("files.edit")}
 									</button>
 								)}
-
-							{/* Upload + Hidden toggle (browser mode) */}
-							{viewMode === "browser" && (
-								<>
-									<button
-										type="button"
-										onClick={handleUploadClick}
-										disabled={uploading}
-										className="p-2.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50"
-										title={
-											uploading
-												? t("files.uploading")
-												: t("files.uploadTo", { path: currentPath })
-										}
-									>
-										<Upload className="w-5 h-5" />
-									</button>
-									<input
-										ref={uploadInputRef}
-										type="file"
-										multiple
-										className="hidden"
-										onChange={handleUploadFiles}
-									/>
-									<button
-										type="button"
-										onClick={() => setShowHidden(!showHidden)}
-										className={`p-2.5 rounded transition-colors ${showHidden ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
-										title={t("files.showHidden")}
-									>
-										{showHidden ? (
-											<Eye className="w-5 h-5" />
-										) : (
-											<EyeOff className="w-5 h-5" />
-										)}
-									</button>
-								</>
-							)}
-
-							{/* Download button (file view mode) */}
-							{viewMode === "file" && selectedFile && (
 								<button
 									type="button"
-									onClick={handleDownloadFile}
-									className="p-2.5 rounded text-zinc-500 hover:text-zinc-300 transition-colors"
-									title={t("files.download")}
+									onClick={() => setMenuTarget(asFileInfo(selectedFile))}
+									aria-label={t("files.moreActions")}
+									className="p-2.5 text-zinc-500 hover:text-zinc-300"
 								>
-									<Download className="w-5 h-5" />
+									<MoreHorizontal className="w-5 h-5" />
 								</button>
-							)}
-
-							{/* Close file viewer */}
-							<button
-								type="button"
-								onClick={onClose}
-								className="p-2.5 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
-							>
-								<X className="w-5 h-5" />
-							</button>
-						</div>
+							</>
+						) : (
+							<>
+								<div className="inline-flex shrink-0 items-center rounded-lg border border-th-border bg-th-surface p-[3px]">
+									<button
+										type="button"
+										onClick={handleShowBrowser}
+										className={`h-8 whitespace-nowrap rounded-md px-3.5 text-[13px] transition-colors ${
+											viewMode === "browser" ? "bg-th-surface-active text-th-text" : "text-th-text-secondary"
+										}`}
+									>
+										{t("files.browser")}
+									</button>
+									<button
+										type="button"
+										onClick={handleShowChanges}
+										className={`flex h-8 items-center gap-1.5 whitespace-nowrap rounded-md px-3.5 text-[13px] transition-colors ${
+											viewMode === "changes" || viewMode === "diff" ? "bg-th-surface-active text-th-text" : "text-th-text-secondary"
+										}`}
+									>
+										{t("files.changes")}
+										{latestChange.size > 0 && (
+											<span className="text-[11px] text-amber-500">{latestChange.size}</span>
+										)}
+									</button>
+								</div>
+								{viewMode === "diff" && (
+									<span className="ml-1 min-w-0 truncate text-[13px] text-th-text-secondary">
+										{currentDiffFileName}
+									</span>
+								)}
+								<div className="flex-1" />
+								{viewMode === "browser" && (
+									<>
+										<CreateMenu
+											placement="up"
+											uploading={uploading}
+											onNewFile={createFile}
+											onNewFolder={createFolder}
+											onUpload={handleUploadClick}
+										/>
+										<input
+											ref={uploadInputRef}
+											type="file"
+											multiple
+											className="hidden"
+											onChange={handleUploadFiles}
+										/>
+										<button
+											type="button"
+											onClick={() => setShowHidden(!showHidden)}
+											className={`p-2.5 rounded transition-colors ${showHidden ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-zinc-300"}`}
+											title={t("files.showHidden")}
+											aria-label={t("files.showHidden")}
+										>
+											{showHidden ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+										</button>
+									</>
+								)}
+								<button
+									type="button"
+									onClick={onClose}
+									aria-label={t("common.close")}
+									className="p-2.5 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
+								>
+									<X className="w-5 h-5" />
+								</button>
+							</>
+						)}
 					</div>
 
 					{/* Row 2: Terminal-style session bar (same as terminal toolbar) */}
@@ -980,7 +1321,7 @@ export function FileViewer({
 							)}
 							<button
 								type="button"
-								onClick={() => listDirectory(currentPath)}
+								onClick={refresh}
 								className="p-2.5 text-zinc-500 hover:text-zinc-300 active:text-zinc-200 transition-colors"
 								title={t("files.reload")}
 							>
@@ -989,7 +1330,62 @@ export function FileViewer({
 						</div>
 					</div>
 				</div>
+				)}
 			</div>
+			{sheets}
+		</div>
+	);
+}
+
+function AgentChangeChip({
+	change,
+	lang,
+}: {
+	change: FileChange | undefined;
+	lang: string;
+}) {
+	const { t } = useTranslation();
+	if (!change) return null;
+	const minutes = Math.round((Date.now() - new Date(change.timestamp).getTime()) / 60000);
+	const rtf = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
+	const when =
+		minutes < 60
+			? rtf.format(-minutes, "minute")
+			: minutes < 60 * 24
+				? rtf.format(-Math.round(minutes / 60), "hour")
+				: rtf.format(-Math.round(minutes / 1440), "day");
+	const created = change.toolName === "Write";
+	return (
+		<span
+			className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] ${created ? "border-green-900 bg-green-950/60 text-green-400" : "border-[#3a2a0a] bg-[#1c1405] text-amber-500"}`}
+			data-testid="agent-change-chip"
+		>
+			<span className={`h-[7px] w-[7px] rounded-full ${created ? "bg-green-500" : "bg-amber-500"}`} />
+			{created
+				? t("files.agentCreatedAt", { when })
+				: t("files.agentEditedAt", { when })}
+		</span>
+	);
+}
+
+function PreviewSourceToggle({
+	previewMode,
+	onChange,
+}: {
+	previewMode: boolean;
+	onChange: (preview: boolean) => void;
+}) {
+	const { t } = useTranslation();
+	const seg = (active: boolean) =>
+		`h-8 whitespace-nowrap rounded-md px-3 text-[13px] transition-colors ${active ? "bg-th-surface-active text-th-text" : "text-th-text-secondary"}`;
+	return (
+		<div className="flex shrink-0 rounded-lg border border-th-border bg-th-surface p-[3px]">
+			<button type="button" className={seg(previewMode)} onClick={() => onChange(true)}>
+				{t("files.preview")}
+			</button>
+			<button type="button" className={seg(!previewMode)} onClick={() => onChange(false)}>
+				{t("files.source")}
+			</button>
 		</div>
 	);
 }

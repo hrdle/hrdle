@@ -1,4 +1,6 @@
-import { readdir, stat, readFile, realpath } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readdir, stat, readFile, realpath, rename, rmdir, unlink, lstat } from 'node:fs/promises';
+import { atomicWriteFile } from '../utils/storage';
 import { join, dirname, extname, basename } from 'node:path';
 import type { FileInfo, FileContent, FileType } from '../../../shared/types';
 
@@ -259,12 +261,91 @@ export class FileService {
       mimeType,
       size: stats.size,
       truncated,
+      ...(isText && !truncated ? { hash: hashContent(buffer) } : {}),
     };
   }
 
   /**
    * Get parent directory path.
    */
+  /**
+   * Write a text file.
+   *
+   * `expectedHash` is the hash the file had when the writer read it, or null
+   * for a file that must not exist yet. Anything else on disk means someone -
+   * usually the agent - changed it in between, and the write is refused with
+   * what is there now rather than silently undoing their change.
+   *
+   * The write lands on the file a symlink points at, not on the link, and keeps
+   * the file's mode: a dotfile managed by symlink, or an executable script,
+   * stays what it was.
+   */
+  async writeTextFile(
+    path: string,
+    content: string,
+    expectedHash: string | null,
+    allowedBase: string,
+  ): Promise<{ path: string; hash: string; size: number }> {
+    const target = await this.validatePathWithParent(path, allowedBase);
+    if (!target) throw new Error('Access denied: path outside allowed directory');
+
+    let current: Buffer | null = null;
+    let mode: number | undefined;
+    try {
+      const st = await stat(target);
+      if (st.isDirectory()) throw new Error('Cannot write a directory');
+      current = await readFile(target);
+      mode = st.mode & 0o7777;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+
+    const currentHash = current ? hashContent(current) : null;
+    if (currentHash !== expectedHash) {
+      throw new FileConflictError(currentHash);
+    }
+
+    await atomicWriteFile(target, content, mode);
+    const written = Buffer.from(content, 'utf-8');
+    return { path: target, hash: hashContent(written), size: written.length };
+  }
+
+  /** Rename or move a file or directory. The destination must not exist. */
+  async renamePath(from: string, to: string, allowedBase: string): Promise<string> {
+    const source = await this.validatePath(from, allowedBase);
+    const dest = await this.validatePathWithParent(to, allowedBase);
+    if (!source || !dest) throw new Error('Access denied: path outside allowed directory');
+    if (source === (await realpath(allowedBase))) throw new Error('Access denied: cannot move the base');
+    try {
+      await lstat(dest);
+      throw new FileConflictError(null);
+    } catch (err) {
+      if (err instanceof FileConflictError) throw err;
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    }
+    await rename(source, dest);
+    return dest;
+  }
+
+  /**
+   * Delete a file or an empty directory. A directory with anything in it is
+   * refused: removing a tree from a phone is one mis-tap away from a disaster
+   * that has no undo.
+   */
+  async deletePath(path: string, allowedBase: string): Promise<void> {
+    const resolvedBase = await realpath(allowedBase);
+    // Not realpath on the target itself: deleting a symlink removes the link.
+    const parent = await this.validatePath(dirname(path), allowedBase);
+    if (!parent) throw new Error('Access denied: path outside allowed directory');
+    const target = join(parent, basename(path));
+    if (target === resolvedBase || basename(path) === '..' || basename(path) === '.') {
+      throw new Error('Access denied: cannot delete the base');
+    }
+    const st = await lstat(target);
+    if (st.isDirectory()) await rmdir(target);
+    else await unlink(target);
+  }
+
   getParentPath(path: string, allowedBase: string): string | null {
     const parent = dirname(path);
     // Don't go above allowed base
@@ -380,5 +461,16 @@ export class FileService {
   isTextFile(path: string): boolean {
     const ext = extname(path).toLowerCase();
     return TEXT_EXTENSIONS.has(ext);
+  }
+}
+
+export function hashContent(buffer: Buffer): string {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+/** The file on disk is not the one the writer read. */
+export class FileConflictError extends Error {
+  constructor(public readonly currentHash: string | null) {
+    super('File changed on disk');
   }
 }

@@ -83,6 +83,12 @@ interface ExtendedSession {
 }
 
 // Control mode context passed through the pane tree
+export interface ChatInsert {
+	paneId: string;
+	text: string;
+	id: number;
+}
+
 export interface ControlModeContext {
 	getControlConfig: (paneId: string) => ControlModeConfig | undefined;
 	splitPane: (paneId: string, direction: "h" | "v") => void;
@@ -99,6 +105,11 @@ export interface ControlModeContext {
 	 *  These two let the layout read that state and ask for it: the phone's file
 	 *  browser has a chat button, and its back gesture closes the transcript. */
 	chatRequest?: { paneId: string; open: boolean; requestId: number } | null;
+	/** Text for the composer of the pane showing its chat, from outside it -
+	 *  the file viewer attaching a path or a prompt built from selected lines. */
+	chatInsert?: ChatInsert | null;
+	/** The composer took the text; it is not to be added a second time. */
+	onChatInsertApplied?: (id: number) => void;
 	onChatOpenChange?: (paneId: string, open: boolean) => void;
 	/** Remote-control mode (PC only): the xterm area shows a placeholder and
 	 * the local herdr client owns the terminal. */
@@ -543,6 +554,8 @@ function TerminalPane({
 						paneId={activeTmuxPane?.paneId}
 						working={activeTmuxPane?.indicatorState === "processing"}
 						waiting={activeTmuxPane?.indicatorState === "waiting_input"}
+						insert={controlModeContext.chatInsert?.paneId === paneId ? controlModeContext.chatInsert : null}
+						onInsertApplied={controlModeContext.onChatInsertApplied}
 					/>
 				</div>
 			</div>
@@ -859,6 +872,8 @@ function TerminalPane({
 						paneId={activeTmuxPane?.paneId}
 						working={activeTmuxPane?.indicatorState === "processing"}
 						waiting={activeTmuxPane?.indicatorState === "waiting_input"}
+						insert={controlModeContext.chatInsert?.paneId === paneId ? controlModeContext.chatInsert : null}
+						onInsertApplied={controlModeContext.onChatInsertApplied}
 					/>
 				)}
 				{sessionTarget ? (

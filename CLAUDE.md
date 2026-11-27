@@ -131,7 +131,7 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - **SessionMetadataService** (`services/session-metadata.ts`) - Persists session metadata (theme, STT vocabulary, last known sessions for recovery after reboot). Deliberately *not* session order or title — both live in herdr (order = workspace order, title = workspace label)
 - **SessionsService** (`services/sessions.ts`) - Session CRUD operations with file-based persistence
 - **PromptHistoryService** (`services/prompt-history.ts`) - Searches prompt history across sessions
-- **FileService** (`services/file-service.ts`) - Secure file operations with path traversal prevention
+- **FileService** (`services/file-service.ts`) - File operations confined to a base directory by realpath. The file routes take the home directory as that base, or a live session's directory when the path lies outside home (`baseFor` in `routes/files.ts`) - the viewer reaches configs and other projects, never `/etc`. A text file read whole carries its sha256 `hash`; a write sends it back and is refused (409 with `currentHash`) when the file changed in between, which is how an edit from the phone never silently undoes the agent's. Writes land on a symlink's target and keep the file's mode; delete takes a file or an *empty* directory only
 - **FileChangeTracker** (`services/file-change-tracker.ts`) - Parses Claude Code `.jsonl` logs to track file changes
 - **AnthropicUsageService** (`services/anthropic-usage.ts`) - Fetches usage limits from Anthropic API with 60s cache, 5min backoff on 429, in-flight request coalescing
 - **AnthropicModels** (`services/anthropic-models.ts`) - Static metadata for Anthropic models (context size, pricing) used by cost/usage calculations
@@ -230,6 +230,9 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 - `GET /raw` - Stream file inline for `<img>`/`<video>`/`<audio>` (Range request / 206 supported)
 - `GET /download` - Download file as attachment (streamed via `Bun.file()`)
 - `POST /upload` - Upload file(s) via multipart/form-data (streamed via `Bun.write()`)
+- `POST /write` - Save a text file (`{ path, content, expectedHash }`; `expectedHash: null` creates a file that must not exist). 409 `{ currentHash }` when it changed since it was read
+- `POST /rename` - Rename or move (`{ from, to }`; 409 if `to` exists)
+- `POST /delete` - Delete a file or an empty directory (`{ path }`; 409 when not empty)
 - `GET /browse` - Browse directory tree
 - `GET /changes/:sessionWorkingDir` - Claude Code changes from `.jsonl`
 - `GET /git-changes/:workingDir` - Git-tracked changed files (`git status --porcelain`)
@@ -319,7 +322,11 @@ glasses/     # EVEN G2 smart glasses app (EvenHub SDK, built to out.ehpk)
 
 **Files** (`components/files/`):
 - **FileViewer.tsx** - Container with file browser and content viewer, Claude/Git change toggle, browser history navigation, file upload/download, video/audio playback
-- **FileBrowser.tsx** - Directory tree navigation
+- **FileBrowser.tsx** - Directory tree with a filter, name/recent sort, a dot on what the agent created or edited (from the changes list), and a breadcrumb bar whose every step navigates - up past the working directory too. A long press (or right-click) opens `FileActionsSheet`; the click the finger makes on lifting is swallowed, or it lands on the sheet's backdrop and closes it at once
+- **FileEditor.tsx** - Editing a text file on a phone or tablet. A plain textarea, not a code-editor library, because it is the one surface every mobile IME composes into reliably; line numbers come from a copy of the text laid out behind it at the same width, so a wrapped line keeps its number. Keys a phone keyboard buries (Tab, brackets, undo) sit above it on a coarse pointer, inserted with `execCommand` so the native undo stack survives. The file is re-read every few seconds while open; a change on disk shows a banner with the diff, their version, or save over it
+- **JumpSheet.tsx** - Go to any folder: a typed path with completion (`~` is the server's home, asked of `/browse`, not inferred from a path), this session's and the other sessions' directories, bookmarks and recent folders (`utils/file-places.ts`, per browser)
+- **FileActionsSheet.tsx** - Per-entry actions: attach to chat (`@path`), edit, open folder, copy path, download, rename/move, bookmark, delete
+- **CreateMenu.tsx** / **ViewerSettingsMenu.tsx** - New file, new folder and upload; text size and wrap (the toolbar's `Aa`, replacing controls that floated over the text). `useViewerSettings` is one store for the page, so the toolbar and the viewer read the same values
 - **FileContentView.tsx** - Routes file content to the right viewer (code/image/markdown/html/media)
 - **ChangesView.tsx** - Claude Code / Git change list with per-file diff navigation
 - **CodeViewer.tsx** - Syntax highlighted code display
