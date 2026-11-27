@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { storageKey } from "../utils/app-storage";
 
 const WORDWRAP_STORAGE_KEY = storageKey("wordwrap");
@@ -70,41 +70,70 @@ export interface ViewerSettings {
 }
 
 /**
- * Centralizes the viewer settings that were previously copy-pasted across
- * CodeViewer / DiffViewer / MarkdownViewer: per-file word-wrap and a global
- * font size, both backed by localStorage.
+ * One store for every viewer on the page. The settings are changed from the
+ * file viewer's toolbar while the viewer showing the file reads them, so two
+ * instances of this hook have to see the same values - per-instance state let
+ * a toolbar change reach nothing until the file was opened again.
  */
+let fontSizeState = getFontSizeSetting();
+const wordWrapState = new Map<string, boolean>();
+let version = 0;
+const listeners = new Set<() => void>();
+
+function emit() {
+	version += 1;
+	for (const l of listeners) l();
+}
+
+function subscribe(listener: () => void) {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
+}
+
+function getVersion() {
+	return version;
+}
+
+function wordWrapFor(fileName: string): boolean {
+	let value = wordWrapState.get(fileName);
+	if (value === undefined) {
+		value = getWordWrapSetting(fileName);
+		wordWrapState.set(fileName, value);
+	}
+	return value;
+}
+
+function setFontSizeShared(size: number) {
+	fontSizeState = size;
+	emit();
+}
+
 export function useViewerSettings(fileName?: string): ViewerSettings {
-	const [wordWrap, setWordWrap] = useState(() =>
-		getWordWrapSetting(fileName || ""),
-	);
-	const [fontSize, setFontSize] = useState(() => getFontSizeSetting());
+	useSyncExternalStore(subscribe, getVersion);
+	const key = fileName || "";
 
 	const toggleWordWrap = useCallback(() => {
-		setWordWrap((prev) => {
-			const next = !prev;
-			if (fileName) {
-				persistWordWrapSetting(fileName, next);
-			}
-			return next;
-		});
-	}, [fileName]);
+		const next = !wordWrapFor(key);
+		wordWrapState.set(key, next);
+		if (key) persistWordWrapSetting(key, next);
+		emit();
+	}, [key]);
 
 	const commitFontSize = useCallback((size: number) => {
-		setFontSize(size);
+		setFontSizeShared(size);
 		persistFontSizeSetting(size);
 	}, []);
 
 	const resetFontSize = useCallback(() => {
-		setFontSize(DEFAULT_FONTSIZE);
+		setFontSizeShared(DEFAULT_FONTSIZE);
 		persistFontSizeSetting(DEFAULT_FONTSIZE);
 	}, []);
 
 	return {
-		wordWrap,
+		wordWrap: wordWrapFor(key),
 		toggleWordWrap,
-		fontSize,
-		setFontSize,
+		fontSize: fontSizeState,
+		setFontSize: setFontSizeShared,
 		commitFontSize,
 		resetFontSize,
 	};

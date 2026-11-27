@@ -1,6 +1,5 @@
 /** biome-ignore-all lint/a11y/noStaticElementInteractions lint/a11y/useKeyWithClickEvents: legacy click-on-div UI; keyboard navigation provided via main shortcuts */
 import hljs from "highlight.js";
-import { Eye, WrapText } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import "highlight.js/styles/github-dark.css";
@@ -23,8 +22,6 @@ interface CodeViewerProps {
 	showLineNumbers?: boolean;
 	truncated?: boolean;
 	onCopyPrompt?: (text: string) => void;
-	onTogglePreview?: () => void;
-	hasPreview?: boolean;
 	initialScrollRatio?: number;
 	onScrollRatioChange?: (ratio: number) => void;
 }
@@ -37,21 +34,13 @@ export function CodeViewer({
 	showLineNumbers = true,
 	truncated = false,
 	onCopyPrompt,
-	onTogglePreview,
-	hasPreview = false,
 	initialScrollRatio = 0,
 	onScrollRatioChange,
 }: CodeViewerProps) {
 	const { t } = useTranslation();
 	const containerRef = useRef<HTMLDivElement>(null);
-	const {
-		wordWrap,
-		toggleWordWrap,
-		fontSize,
-		setFontSize,
-		commitFontSize,
-		resetFontSize,
-	} = useViewerSettings(fileName);
+	const { wordWrap, fontSize, setFontSize, commitFontSize } =
+		useViewerSettings(fileName);
 	const { selection, handleLineClick, isLineSelected, clearSelection } =
 		useLineSelection();
 
@@ -159,37 +148,6 @@ export function CodeViewer({
 						);
 					})}
 				</div>
-			</div>
-
-			{/* Floating controls - top right */}
-			<div className="absolute top-2 right-2 flex items-center gap-1.5 bg-th-surface/90 rounded-md p-1.5 backdrop-blur-sm">
-				{hasPreview && onTogglePreview && (
-					<button
-						type="button"
-						onClick={onTogglePreview}
-						className="flex items-center gap-1 px-2.5 py-1.5 text-sm text-th-text-secondary hover:text-th-text hover:bg-th-surface-hover rounded transition-colors"
-						title={t("files.preview")}
-					>
-						<Eye className="w-4 h-4" />
-						Preview
-					</button>
-				)}
-				<button
-					type="button"
-					onClick={resetFontSize}
-					className="px-2.5 py-1.5 text-sm text-th-text-secondary hover:text-th-text hover:bg-th-surface-hover rounded transition-colors"
-					title={t("files.resetFontSizeHint")}
-				>
-					{fontSize}px
-				</button>
-				<button
-					type="button"
-					onClick={toggleWordWrap}
-					className={`p-2 rounded transition-colors ${wordWrap ? "bg-blue-600 text-th-text" : "text-th-text-secondary hover:text-th-text hover:bg-th-surface-hover"}`}
-					title={wordWrap ? t("files.wrapOff") : t("files.wrapOn")}
-				>
-					<WrapText className="w-5 h-5" />
-				</button>
 			</div>
 
 			{/* Prompt Composer */}

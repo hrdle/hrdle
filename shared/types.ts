@@ -494,6 +494,10 @@ export interface FileContent {
   mimeType: string;
   size: number;
   truncated: boolean;
+  /** sha256 of the whole file, for a text file read in full. A save sends it
+   *  back, and a file that no longer hashes to it was changed by someone else
+   *  in the meantime. */
+  hash?: string;
 }
 
 export interface FileChange {

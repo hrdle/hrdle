@@ -1698,6 +1698,14 @@ export function DesktopLayout({
 							: undefined
 					}
 					onShowDashboard={() => setShowDashboard((prev) => !prev)}
+					sessionPlaces={sessions
+						.filter(
+							(s) =>
+								samePeerId(s.peerId, peerId) &&
+								!!s.currentPath &&
+								s.currentPath !== dir,
+						)
+						.map((s) => ({ name: s.name, path: s.currentPath as string }))}
 				/>
 			))}
 

@@ -192,8 +192,6 @@ export function FileContentView({
 				filePath={path}
 				truncated={selectedFile.truncated}
 				showLineNumbers={true}
-				hasPreview={isMarkdownFile(path) || isHtmlFile(path)}
-				onTogglePreview={onEnablePreview}
 				initialScrollRatio={scrollRatio}
 				onScrollRatioChange={onScrollRatioChange}
 			/>

@@ -1,25 +1,42 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { readFile, mkdir, realpath, stat } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
-import { FileService } from '../services/file-service';
+import { FileConflictError, FileService } from '../services/file-service';
 import { FileChangeTracker } from '../services/file-change-tracker';
 import { HerdrService } from '../services/herdr';
 import type { FileListResponse, FileReadResponse, FileChangesResponse, FileInfo, GitChangesResponse, GitDiffResponse, GitFileChange, GitChangeStatus } from '../../../shared/types';
 import { TMP_PATHS } from '../../../shared/identity';
 
 const fileService = new FileService();
+
+/**
+ * What the file viewer may read and write: the home directory, so a person can
+ * reach a config or another project from the phone - the same boundary
+ * `/browse` and `/mkdir` use - plus any live session's directory, which may sit
+ * outside home (`/tmp`, `/opt`) and was reachable before the boundary widened.
+ * Returns the base that holds `path`, or null when none does.
+ */
+async function baseFor(path: string): Promise<string | null> {
+  const home = homedir();
+  if (await fileService.validatePathWithParent(path, home)) return home;
+  const sessions = await herdrService.listWorkspaces();
+  for (const s of sessions) {
+    for (const cand of [s.currentPath, ...(s.panes ?? []).map((p) => p.path)]) {
+      if (cand && (await fileService.validatePathWithParent(path, cand))) return cand;
+    }
+  }
+  return null;
+}
 const changeTracker = new FileChangeTracker();
 const herdrService = new HerdrService();
 
 /**
- * The client supplies `sessionWorkingDir` as the base for file access. It MUST
- * be the working directory of an actual live session/pane (or a directory
- * below one); otherwise a client could set base=/etc (or ~/.ssh, /) and the
- * only confinement check (requested path startsWith base) would happily read
- * or write arbitrary host files. We resolve the candidate against the
- * authoritative live-session list and compare realpaths so a symlinked base
- * can't smuggle an off-tree path.
+ * The change and git routes run against a directory the client names, so it
+ * MUST be the working directory of a live session/pane (or below one):
+ * otherwise a client could point `git` at any repository on the host. The
+ * candidate is resolved against the live-session list and compared by
+ * realpath so a symlinked directory can't smuggle an off-tree path.
  */
 async function isAllowedSessionDir(sessionWorkingDir: string): Promise<boolean> {
   let target: string;
@@ -50,23 +67,20 @@ export const files = new Hono();
  * GET /files/list - List directory contents
  * Query params:
  *   - path: Directory path to list
- *   - sessionWorkingDir: Working directory of the session (for security)
  */
 files.get('/list', async (c) => {
   const path = c.req.query('path');
-  const sessionWorkingDir = c.req.query('sessionWorkingDir');
 
-  if (!path || !sessionWorkingDir) {
-    return c.json({ error: 'Missing path or sessionWorkingDir parameter' }, 400);
+  if (!path) {
+    return c.json({ error: 'Missing path parameter' }, 400);
   }
 
-  if (!(await isAllowedSessionDir(sessionWorkingDir))) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
+  const base = await baseFor(path);
+  if (!base) return c.json({ error: 'Access denied' }, 403);
 
   try {
-    const files = await fileService.listDirectory(path, sessionWorkingDir);
-    const parentPath = fileService.getParentPath(path, sessionWorkingDir);
+    const files = await fileService.listDirectory(path, base);
+    const parentPath = fileService.getParentPath(path, base);
 
     const response: FileListResponse = {
       path,
@@ -87,25 +101,22 @@ files.get('/list', async (c) => {
  * GET /files/read - Read file contents
  * Query params:
  *   - path: File path to read
- *   - sessionWorkingDir: Working directory of the session (for security)
  *   - maxSize: Optional max file size in bytes (default 1MB)
  */
 files.get('/read', async (c) => {
   const path = c.req.query('path');
-  const sessionWorkingDir = c.req.query('sessionWorkingDir');
   const maxSizeParam = c.req.query('maxSize');
   const maxSize = maxSizeParam ? parseInt(maxSizeParam, 10) : undefined;
 
-  if (!path || !sessionWorkingDir) {
-    return c.json({ error: 'Missing path or sessionWorkingDir parameter' }, 400);
+  if (!path) {
+    return c.json({ error: 'Missing path parameter' }, 400);
   }
 
-  if (!(await isAllowedSessionDir(sessionWorkingDir))) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
+  const base = await baseFor(path);
+  if (!base) return c.json({ error: 'Access denied' }, 403);
 
   try {
-    const file = await fileService.readFile(path, sessionWorkingDir, maxSize);
+    const file = await fileService.readFile(path, base, maxSize);
 
     const response: FileReadResponse = {
       file,
@@ -479,25 +490,22 @@ files.post('/mkdir', async (c) => {
  * GET /files/raw - Serve a file inline (for <img>/<video> rendering, etc.)
  * Query params:
  *   - path: File path
- *   - sessionWorkingDir: Working directory of the session (for security)
  *
  * Uses Bun.file() for streaming. No size limit. Content-Type inferred from
  * the file service's known mime mapping.
  */
 files.get('/raw', async (c) => {
   const path = c.req.query('path');
-  const sessionWorkingDir = c.req.query('sessionWorkingDir');
 
-  if (!path || !sessionWorkingDir) {
-    return c.json({ error: 'Missing path or sessionWorkingDir parameter' }, 400);
+  if (!path) {
+    return c.json({ error: 'Missing path parameter' }, 400);
   }
 
-  if (!(await isAllowedSessionDir(sessionWorkingDir))) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
+  const base = await baseFor(path);
+  if (!base) return c.json({ error: 'Access denied' }, 403);
 
   try {
-    const validPath = await fileService.validatePath(path, sessionWorkingDir);
+    const validPath = await fileService.validatePath(path, base);
     if (!validPath) {
       return c.json({ error: 'Access denied' }, 403);
     }
@@ -580,24 +588,21 @@ files.get('/raw', async (c) => {
  * GET /files/download - Download a file as binary attachment (streamed)
  * Query params:
  *   - path: File path to download
- *   - sessionWorkingDir: Working directory of the session (for security)
  *
  * Uses Bun.file() which streams from disk — no size limit, low memory.
  */
 files.get('/download', async (c) => {
   const path = c.req.query('path');
-  const sessionWorkingDir = c.req.query('sessionWorkingDir');
 
-  if (!path || !sessionWorkingDir) {
-    return c.json({ error: 'Missing path or sessionWorkingDir parameter' }, 400);
+  if (!path) {
+    return c.json({ error: 'Missing path parameter' }, 400);
   }
 
-  if (!(await isAllowedSessionDir(sessionWorkingDir))) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
+  const base = await baseFor(path);
+  if (!base) return c.json({ error: 'Access denied' }, 403);
 
   try {
-    const validPath = await fileService.validatePath(path, sessionWorkingDir);
+    const validPath = await fileService.validatePath(path, base);
     if (!validPath) {
       return c.json({ error: 'Access denied' }, 403);
     }
@@ -632,7 +637,6 @@ files.get('/download', async (c) => {
  * Body (multipart/form-data):
  *   - file: File(s) to upload (repeatable)
  *   - path: Destination directory
- *   - sessionWorkingDir: Working directory of the session (for security)
  *
  * Uses Bun.write() which streams from the incoming File — no size limit,
  * low memory.
@@ -641,17 +645,14 @@ files.post('/upload', async (c) => {
   try {
     const formData = await c.req.formData();
     const destPath = formData.get('path');
-    const sessionWorkingDir = formData.get('sessionWorkingDir');
 
-    if (typeof destPath !== 'string' || typeof sessionWorkingDir !== 'string') {
-      return c.json({ error: 'Missing path or sessionWorkingDir' }, 400);
+    if (typeof destPath !== 'string') {
+      return c.json({ error: 'Missing path' }, 400);
     }
 
-    if (!(await isAllowedSessionDir(sessionWorkingDir))) {
-      return c.json({ error: 'Access denied' }, 403);
-    }
-
-    const validDir = await fileService.validatePath(destPath, sessionWorkingDir);
+    const base = await baseFor(destPath);
+    if (!base) return c.json({ error: 'Access denied' }, 403);
+    const validDir = await fileService.validatePath(destPath, base);
     if (!validDir) {
       return c.json({ error: 'Access denied' }, 403);
     }
@@ -675,8 +676,8 @@ files.post('/upload', async (c) => {
       }
 
       const targetPath = join(validDir, safeName);
-      // Defense-in-depth against symlinks pointing outside the session dir.
-      const validTarget = await fileService.validatePathWithParent(targetPath, sessionWorkingDir);
+      // Defense-in-depth against symlinks pointing outside the home directory.
+      const validTarget = await fileService.validatePathWithParent(targetPath, base);
       if (!validTarget) {
         return c.json({ error: `Access denied for ${safeName}` }, 403);
       }
@@ -690,5 +691,73 @@ files.post('/upload', async (c) => {
   } catch (error) {
     console.error('Upload error:', error);
     return c.json({ error: 'Failed to upload file' }, 500);
+  }
+});
+
+function fileErrorResponse(c: Context, error: unknown, action: string) {
+  if (error instanceof FileConflictError) {
+    return c.json({ error: 'conflict', currentHash: error.currentHash }, 409);
+  }
+  const code = (error as NodeJS.ErrnoException)?.code;
+  if (error instanceof Error && error.message.includes('Access denied')) {
+    return c.json({ error: 'Access denied' }, 403);
+  }
+  if (code === 'ENOENT') return c.json({ error: 'Not found' }, 404);
+  if (code === 'ENOTEMPTY' || code === 'EEXIST') return c.json({ error: 'Directory is not empty' }, 409);
+  if (code === 'EACCES' || code === 'EPERM') return c.json({ error: 'Permission denied' }, 403);
+  console.error(`File ${action} error:`, error);
+  return c.json({ error: `Failed to ${action}` }, 500);
+}
+
+/**
+ * POST /files/write - Save a text file
+ * Body: { path, content, expectedHash } - expectedHash is the `hash` the file
+ * was read with, or null to create a file that must not exist yet. 409 with
+ * `currentHash` when the file on disk is no longer that one.
+ */
+files.post('/write', async (c) => {
+  const body = await c.req.json<{ path?: string; content?: string; expectedHash?: string | null }>();
+  if (typeof body?.path !== 'string' || typeof body.content !== 'string' || body.expectedHash === undefined) {
+    return c.json({ error: 'Missing path, content or expectedHash' }, 400);
+  }
+  const base = await baseFor(body.path);
+  if (!base) return c.json({ error: 'Access denied' }, 403);
+  try {
+    const result = await fileService.writeTextFile(body.path, body.content, body.expectedHash, base);
+    return c.json({ success: true, ...result });
+  } catch (error) {
+    return fileErrorResponse(c, error, 'write file');
+  }
+});
+
+/** POST /files/rename - Rename or move. Body: { from, to }; 409 if `to` exists. */
+files.post('/rename', async (c) => {
+  const body = await c.req.json<{ from?: string; to?: string }>();
+  if (typeof body?.from !== 'string' || typeof body.to !== 'string') {
+    return c.json({ error: 'Missing from or to' }, 400);
+  }
+  const base = await baseFor(body.from);
+  if (!base || (await baseFor(body.to)) !== base) return c.json({ error: 'Access denied' }, 403);
+  try {
+    const path = await fileService.renamePath(body.from, body.to, base);
+    return c.json({ success: true, path });
+  } catch (error) {
+    return fileErrorResponse(c, error, 'rename');
+  }
+});
+
+/** POST /files/delete - Delete a file or an empty directory. Body: { path }. */
+files.post('/delete', async (c) => {
+  const body = await c.req.json<{ path?: string }>();
+  if (typeof body?.path !== 'string') {
+    return c.json({ error: 'Missing path' }, 400);
+  }
+  const base = await baseFor(body.path);
+  if (!base) return c.json({ error: 'Access denied' }, 403);
+  try {
+    await fileService.deletePath(body.path, base);
+    return c.json({ success: true });
+  } catch (error) {
+    return fileErrorResponse(c, error, 'delete');
   }
 });
