@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.237] - 2026-11-28
+
+### Added
+- **Edit files from a phone or tablet.** Open a text file and press Edit. A
+  key row above the keyboard gives Tab, brackets and undo. If the agent
+  changes the file while you are editing it, a banner says so and lets you
+  see the difference, take their version or save yours over it - nothing is
+  overwritten silently.
+- **Go to any folder under your home directory**, not only the session's
+  own. Tap a step of the path at the bottom to go up, or press Go to and
+  type a path (with completion), or pick another session's folder, a
+  bookmark or a recent one.
+- **Long-press a file or folder** to attach it to the chat, edit, copy its
+  path, download, rename or move it, bookmark a folder, or delete it (empty
+  folders only).
+- New file and new folder next to upload, a filter, a recent-first sort, and
+  a dot on files the agent created or edited.
+
+### Changed
+- Text size and line wrapping are in an Aa menu in the toolbar instead of
+  floating over the top of the file.
+
+### Fixed
+- Attaching a file to the chat, or a prompt made from selected lines, goes
+  into the chat's input when the pane is showing its chat, instead of the
+  hidden terminal input.
+- Subfolders of a session on another machine were listed from this one.
+
 ## [0.3.236] - 2026-11-26
 
 ### Changed
