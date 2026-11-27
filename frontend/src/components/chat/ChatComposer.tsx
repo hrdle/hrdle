@@ -50,6 +50,10 @@ interface ChatComposerProps {
 	showMode?: boolean;
 	/** A prompt went in, as written: the view shows it and follows to its end. */
 	onSent?: (prompt: string) => void;
+	/** Text to add to what is being written, from outside the composer. */
+	insert?: { text: string; id: number } | null;
+	/** Said once the text is in, so it is not added again on a remount. */
+	onInsertApplied?: (id: number) => void;
 }
 
 /** How long a stop stays pending when the status does not come back to say it worked. */
@@ -73,6 +77,8 @@ export function ChatComposer({
 	waiting = false,
 	showMode = false,
 	onSent,
+	insert,
+	onInsertApplied,
 }: ChatComposerProps) {
 	const { t } = useTranslation();
 	const [text, setText] = useState("");
@@ -82,6 +88,27 @@ export function ChatComposer({
 	const [showHistory, setShowHistory] = useState(false);
 	const [attachments, setAttachments] = useState<Attachment[]>([]);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+	// Added to the draft rather than replacing it: several files are attached
+	// one at a time, and a half-written prompt is not to be thrown away. The
+	// text stays pending until a composer takes it - on a phone the chat is
+	// unmounted while the file viewer is up, and this one mounts after it was
+	// sent - and is cleared once taken, so a remount does not add it again.
+	const appliedInsertRef = useRef(0);
+	useEffect(() => {
+		if (!insert || insert.id === appliedInsertRef.current) return;
+		appliedInsertRef.current = insert.id;
+		setText((prev) =>
+			!prev ? insert.text : /\s$/.test(prev) ? prev + insert.text : `${prev} ${insert.text}`,
+		);
+		onInsertApplied?.(insert.id);
+		requestAnimationFrame(() => {
+			const ta = textareaRef.current;
+			if (!ta) return;
+			ta.focus();
+			ta.setSelectionRange(ta.value.length, ta.value.length);
+		});
+	}, [insert, onInsertApplied]);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [expanded, setExpanded] = useState(false);

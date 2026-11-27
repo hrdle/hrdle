@@ -24,7 +24,12 @@ import { MobileDashboard } from "./dashboard/MobileDashboard";
 import { DashboardPanel } from "./DashboardPanel";
 import { FloatingKeyboard, type FloatingKeyboardRef } from "./FloatingKeyboard";
 import { FileViewer } from "./files/FileViewer";
-import { type ControlModeContext, PaneContainer, type PaneNode } from "./PaneContainer";
+import {
+	type ChatInsert,
+	type ControlModeContext,
+	PaneContainer,
+	type PaneNode,
+} from "./PaneContainer";
 import { SessionModal } from "./SessionModal";
 import type { ControlModeConfig, TerminalRef } from "./Terminal";
 import { storageKey } from "../utils/app-storage";
@@ -235,6 +240,8 @@ export function DesktopLayout({
 		requestId: number;
 	} | null>(null);
 	const chatRequestIdRef = useRef(0);
+	const [chatInsert, setChatInsert] = useState<ChatInsert | null>(null);
+	const chatInsertIdRef = useRef(0);
 	const requestPaneChat = useCallback((paneId: string, open: boolean) => {
 		chatRequestIdRef.current += 1;
 		setChatRequest({ paneId, open, requestId: chatRequestIdRef.current });
@@ -899,6 +906,14 @@ export function DesktopLayout({
 			? (visible: boolean) => setShowKeyboard(visible)
 			: undefined,
 		onCopyPrompt: (text: string) => {
+			// A pane showing its chat has no terminal input on screen: the text
+			// goes to the chat's composer, where it will be sent from.
+			const pane = activePaneRef.current;
+			if (chatOpenPanes.has(pane)) {
+				chatInsertIdRef.current += 1;
+				setChatInsert({ paneId: pane, text, id: chatInsertIdRef.current });
+				return;
+			}
 			if (isTablet) {
 				setShowKeyboard(true);
 				setTimeout(() => floatingKeyboardRef.current?.setInputText(text), 200);
@@ -918,6 +933,9 @@ export function DesktopLayout({
 		onShowDashboard: () => setShowDashboard(true),
 		onOpenFileViewer: openFileViewer,
 		chatRequest,
+		chatInsert,
+		onChatInsertApplied: (id: number) =>
+			setChatInsert((cur) => (cur?.id === id ? null : cur)),
 		onChatOpenChange: handleChatOpenChange,
 		remoteControl,
 	};

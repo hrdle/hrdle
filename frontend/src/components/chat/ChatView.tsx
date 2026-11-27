@@ -26,6 +26,9 @@ interface ChatViewProps {
 	working?: boolean;
 	/** The pane's agent is waiting on the person: a question may be up. */
 	waiting?: boolean;
+	/** Text to add to the composer, from the file viewer. */
+	insert?: { text: string; id: number } | null;
+	onInsertApplied?: (id: number) => void;
 }
 
 interface SentPrompt {
@@ -100,6 +103,8 @@ export function ChatView({
 	paneId,
 	working = false,
 	waiting = false,
+	insert,
+	onInsertApplied,
 }: ChatViewProps) {
 	const { t } = useTranslation();
 	const [followSignal, setFollowSignal] = useState(0);
@@ -182,6 +187,8 @@ export function ChatView({
 					working={working}
 					waiting={waiting}
 					showMode={agent === "claude"}
+					insert={insert}
+					onInsertApplied={onInsertApplied}
 					onSent={(prompt) => {
 						setSent(
 							prompt.trim()
