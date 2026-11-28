@@ -360,8 +360,15 @@ function readReview(lines: string[], at: number): ClaudePicker | undefined {
  * the full-width one, and a Japanese question ends in the latter as often as
  * not.
  */
+const QUESTION_BAR = /^│\s?/;
+
 function questionOf(before: string[]): string | undefined {
-  const text = before.map((l) => dropSidePanel(l).trim()).filter((l) => l.length > 0 && !RULE.test(l));
+  // Claude Code 2.1.332 draws a bar down the question's left edge (`│ どう…`).
+  // It is the frame, not the question, and read as text it reached the chat's
+  // card and the glasses as part of the wording.
+  const text = before
+    .map((l) => dropSidePanel(l).trim().replace(QUESTION_BAR, ''))
+    .filter((l) => l.length > 0 && !RULE.test(l));
   if (text.length === 0) return undefined;
   return text.slice(-MAX_QUESTION_LINES).reduce(joinWrapped);
 }
