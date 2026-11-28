@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.238] - 2026-11-28
+
+### Fixed
+- A session made a moment ago no longer shows "not found" in its chat until
+  the page is reloaded. Claude Code writes its record only after the first
+  prompt, so the chat now waits for it and shows the conversation as soon as
+  it exists.
+- Question cards and the glasses no longer show the vertical bar Claude Code
+  now draws beside a question.
+
+### Changed
+- The README has new demo videos, screenshots and an up-to-date feature list.
+
 ## [0.3.237] - 2026-11-28
 
 ### Added
