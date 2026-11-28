@@ -71,6 +71,11 @@ export async function handleSubscribeConversation(
     return;
   }
 
+  watcher.onFound((ccSessionId) => {
+    try {
+      ws.send(JSON.stringify({ type: 'conversation-subscribed', sessionId, agentSessionId, ccSessionId }));
+    } catch { /* disconnected */ }
+  });
   watcher.onUpdate((newMessages) => {
     try {
       ws.send(JSON.stringify({ type: 'conversation-update', sessionId, agentSessionId, messages: newMessages }));
