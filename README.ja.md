@@ -5,7 +5,7 @@
 **机を離れても、エージェントに届く。**
 パソコンの前に、あなたはもういない。それでも、仕事は進んでいる。
 
-Hrdle は Claude Code、Codex、Grok、Kimi、OpenCode といったコーディングエージェントを
+Hrdle は Claude Code、Codex、Grok、Kimi、OpenCode、pi といったコーディングエージェントを
 あなたのマシンで動かし、スマホと EVEN Realities G2 から操作できるようにします。
 
 **PC を開かずに仕事を始める。** 見るだけでなく、始められます。セッションを作り、声で頼み、
@@ -19,15 +19,30 @@ Tailscale 越しに届くので、そのマシンに求めるのは起き続け�
 
 ## デモ
 
-![Hrdle デモ — タブレットで本物のターミナル、会話ビュー、G2 グラスからの音声返信がターミナルに届くまで](docs/demo.gif)
+![Hrdle デモ — スマホからセッションを始め、質問にタップで答え、ファイルをその場で直し、G2 グラスからの声の返事がエージェントに届くまで](docs/demo-ja.gif)
 
-フル動画: [42秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-ja.mp4) · [62秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-ja.mp4)（日本語） — [42s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-en.mp4) · [62s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-en.mp4)（English）
+フル動画: [34秒](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-short-ja.mp4) · [53秒](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-full-ja.mp4)（日本語） — [34s](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-short-en.mp4) · [53s](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-full-en.mp4)（English）
+
+<table>
+<tr>
+<td align="center"><img src="docs/screenshots/phone-question.png" width="220" alt="スマホのチャットビュー。エージェントの質問がタップで答えるカードになっている"><br><sub>質問には、タップで答える</sub></td>
+<td align="center"><img src="docs/screenshots/phone-board.png" width="220" alt="ボード表示。セッションを、あなたに何を求めているかで分けて並べる"><br><sub>誰があなたを待っているか</sub></td>
+<td align="center"><img src="docs/screenshots/phone-edit.png" width="220" alt="エージェントが変更したファイルを、キーボード上のキー列を使って編集している"><br><sub>ファイルをその場で直す</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/screenshots/tablet-chat.png" width="460" alt="タブレットのチャットビュー"><br><sub>同じ会話をタブレットでも</sub></td>
+<td align="center"><img src="docs/screenshots/glasses-voice.png" width="220" alt="G2 の画面に、声で話した返事の下書きが出ている"><br><sub>G2 から声で返事</sub></td>
+</tr>
+</table>
 
 ## できること
 
-- **セッションとペイン** — 複数のエージェントを並べて動かし、ペインを分割・ズーム・リサイズ・クローズできます。レイアウトは接続中の全クライアントで共有されます。処理中・入力待ち・完了のインジケータはペイン自体から検出するので hook は不要です。セッションを長押しすると色を割り当てられます。
-- **タッチのための設計** — タブレットは分割レイアウトとドラッグ可能なフローティングキーボード、モバイルはペインタブバー付きのカスタムキーボード。ピンチズームと慣性スクロールに対応し、数字キーの長押しで記号を入力できます。デスクトップでは選択と同時にコピー、フォントサイズもショートカットで調整できます。
-- **作業を読む** — 現在のセッションを会話形式で表示するチャットビューと、シンタックスハイライト・画像・Markdown・HTML に対応したファイルビューア。差分は Claude Code の編集と git のどちらでも表示できます。
+- **スマホから始める** — フォルダ・エージェント・マシンを選んでセッションを作ると、エージェントが最初の指示を受けられる状態で立ち上がります。先にパソコンで何かを開いておく必要はありません。
+- **エージェントごとのチャット** — 会話をチャットとして表示し、入力欄から話しかけられます。画像の添付、パレットからのスラッシュコマンドとスキル、権限モードの切り替え、作業中の停止ボタン。エージェントの質問や許可の確認はタップで答えるカードになり、作業中は Claude Code の進み具合の行が出て、次に送るとよさそうな指示もワンタップで入れられます。
+- **誰があなたを待っているか** — セッションを「あなた待ち・完了（未確認）・作業中・待機」に分けて並べるボード。状態はペイン自体から読むので hook は不要です。
+- **ファイル** — ホームディレクトリ以下ならどこでも開けて、エージェントが作った・編集したファイルに印が付きます。その場で編集もでき、編集中にエージェントが同じファイルを書き換えたら上書きせずに知らせます。画像・動画・Markdown・HTML・STL のプレビュー、差分はエージェントの編集と git のどちらからでも。
+- **セッションとペイン** — 複数のエージェントを並べて動かし、ペインを分割・ズーム・リサイズ・クローズできます。レイアウトは接続中の全クライアントで共有されます。セッションを長押しすると色を割り当てられます。
+- **タッチのための設計** — タブレットは分割レイアウトとドラッグ可能なフローティングキーボード、モバイルはペインタブバー付きのカスタムキーボード。ピンチズームと慣性スクロールに対応します。デスクトップでは、ターミナルは herdr 自身のクライアントに任せ、ブラウザはその周りのことに使います（そのマシンから離れているときは、ブラウザにターミナルを描くこともできます）。
 - **履歴と検索** — 過去のセッションを閲覧・再開でき、全メッセージの全文検索と、全セッションを横断するプロンプト履歴検索が使えます。
 - **ダッシュボード** — 5時間 / 7日サイクルの使用率、リセットまでの時間と現在のペースでのリミット到達予測、モデル別トークン使用量、コスト推定、CPU / メモリ / スワップの履歴、WebSocket の往復遅延。
 - **複数マシン** — Tailscale 経由の peer サーバーを自動検出し、セッション・履歴・ダッシュボードを集約します。`hrdle send` / `hrdle peek` でそのいずれのペインも CLI から操作できます。
@@ -46,12 +61,15 @@ G2 用のコンパニオンアプリ（`glasses/`、EvenHub SDK 製）を使う�
 - **通知はブラウザではなくレンズに出る** — アプリが接続している間、hook イベントは
   90秒 TTL のリレーアイテムとして G2 の画面に載る。グラスが居ない・セッションを解決
   できない場合は従来どおりブラウザ通知が出るので、**通知が消えることはない**
-- **音声入力** — G2 の SDK は生の PCM しか出さないため、書き起こしはサーバ側の
-  `POST /api/glasses/stt`（Groq `whisper-large-v3-turbo`）で行う。
+- **音声入力** — 押している間だけ話し、離すとひと区切り、確認して送信。G2 の SDK は生の
+  PCM しか出さないため、書き起こしはサーバ側の `POST /api/glasses/stt`
+  （Groq `whisper-large-v3-turbo`）で行う。
   **音声も API キーもこのホストから出ない**
 - **エージェント自筆のメモ** — `hrdle glasses "<text>"` で、エージェントが一行だけ
   目の前に出せる。選択肢を付ければその場で answer できる。セッションは working directory
   から解決されるので、通常は指定不要
+- **すべてのマシン** — peer があると一覧はマシンから始まり、その質問や通知も、グラスが
+  つないでいる1台のサーバ経由でレンズに届く
 - **シミュレータ** — 同じアプリがブラウザ向けにもビルドされ `/glasses` で配信される。
   実機が無くても試せる
 
@@ -64,7 +82,7 @@ G2 用のコンパニオンアプリ（`glasses/`、EvenHub SDK 製）を使う�
 |---------|----------------|
 | [Tailscale](https://tailscale.com/) | **最初に入れてください。** Linux: `curl -fsSL https://tailscale.com/install.sh \| sh` / macOS: `brew install tailscale`（App Store 版には証明書生成に必要な CLI が入っていません）。そのうえで `sudo tailscale set --operator=$USER` を一度だけ |
 | [herdr](https://herdr.dev/) | 入っていなければインストーラが導入します（自分で入れる場合は `HRDLE_SKIP_HERDR=1`） |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `npm install -g @anthropic-ai/claude-code` のあと一度サインイン。Codex / Grok Build / Kimi Code / OpenCode も使えます |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `npm install -g @anthropic-ai/claude-code` のあと一度サインイン。Codex / Grok Build / Kimi Code / OpenCode / pi も使えます |
 
 ## インストール
 
@@ -78,8 +96,8 @@ Tailscale が入っていれば、これだけです:
 curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 ```
 
-herdr が無ければ導入し、証明書生成を許可し、サービスを登録し、最後にスマホアプリで読む
-ためのサーバーアドレスを QR コードで表示します。
+herdr が無ければ導入し、証明書生成を許可し、サービスを登録し、最後にサーバーのアドレスを
+表示します（グラスのアプリに入力する短いコードと、ブラウザ用の URL）。
 
 インストーラが代行できないことが2つあります:
 
@@ -171,19 +189,23 @@ hrdle debug <sub>            # 稼働中サービスのBunインスペクタ操�
 
 ## キーボードショートカット
 
+デスクトップで、ブラウザにターミナルを描いているとき:
+
 | ショートカット | 操作 |
 |--------------|------|
-| `Ctrl+B` | セッションモーダルの切替 |
+| `Ctrl+B` | セッションモーダル |
 | `Ctrl+Shift+B` | ダッシュボードパネルの切替 |
-| `Ctrl+D` | 縦分割（右） |
-| `Ctrl+Shift+D` | 横分割（下） |
-| `Ctrl+W` | ペインを閉じる |
-| `Ctrl+Arrow` | ペイン間のフォーカス移動 |
-| `Ctrl+Shift+Arrow` | アクティブペインのリサイズ |
+| `Ctrl+Shift+E` | ペインを分割（右に新しいペイン） |
+| `Ctrl+Shift+D` | ペインを分割（下に新しいペイン） |
+| `Ctrl+Shift+X` | ペインを閉じる |
+| `Alt+Arrow` | ペイン間のフォーカス移動 |
+| `Ctrl+Shift+Arrow` | ペインのリサイズ |
 | `Ctrl+Shift+=` | ペインサイズの均等化 |
-| `Ctrl+1-9` | 番号でセッション切り替え |
-| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | フォントサイズ 拡大 / 縮小 / リセット |
-| `Ctrl+C`（選択時）/ `Ctrl+V` | コピー / 貼り付け |
+| `Ctrl/Cmd+1`..`9` | セッション切り替え |
+| `Ctrl/Cmd+=` / `-` / `0` | フォントサイズ 拡大 / 縮小 / リセット |
+| `Ctrl/Cmd+C`（選択時）/ `Ctrl/Cmd+V` | コピー / 貼り付け |
+
+`Ctrl+D`・`Ctrl+W`・`Ctrl+Arrow` はペインに届きます。どのシェルでも EOF・単語削除・単語移動だからです。
 
 ## Hook通知
 

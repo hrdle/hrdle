@@ -19,15 +19,30 @@ sessions. The hurdle of getting started is in the name too.*
 
 ## Demo
 
-![Hrdle demo — the real terminal on a tablet, conversation view, and a voice reply from the G2 glasses landing in the terminal](docs/demo.gif)
+![Hrdle demo — a session started from the phone, a question answered with a tap, a file fixed in place, and a spoken reply from the G2 glasses reaching the agent](docs/demo.gif)
 
-Full video: [42s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-en.mp4) · [62s](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-en.mp4) (English) — [42秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-short-ja.mp4) · [62秒](https://github.com/hrdle/hrdle/releases/download/v0.3.83/hrdle-promo-full-ja.mp4) (日本語)
+Full video: [34s](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-short-en.mp4) · [53s](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-full-en.mp4) (English) — [34秒](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-short-ja.mp4) · [53秒](https://github.com/hrdle/hrdle/releases/download/v0.3.238/hrdle-promo-full-ja.mp4) (日本語)
+
+<table>
+<tr>
+<td align="center"><img src="docs/screenshots/phone-question.png" width="220" alt="The chat view on a phone, with the agent's question as a card to tap"><br><sub>Answer its questions with a tap</sub></td>
+<td align="center"><img src="docs/screenshots/phone-board.png" width="220" alt="The board: sessions grouped by what each needs from you"><br><sub>See who is waiting on you</sub></td>
+<td align="center"><img src="docs/screenshots/phone-edit.png" width="220" alt="Editing a file the agent changed, with a key row above the keyboard"><br><sub>Fix a file in place</sub></td>
+</tr>
+<tr>
+<td colspan="2" align="center"><img src="docs/screenshots/tablet-chat.png" width="460" alt="The chat view on a tablet"><br><sub>The same conversation on a tablet</sub></td>
+<td align="center"><img src="docs/screenshots/glasses-voice.png" width="220" alt="A spoken reply drafted on the G2 display"><br><sub>Reply by voice from the G2</sub></td>
+</tr>
+</table>
 
 ## What it does
 
-- **Sessions and panes** — run several agents side by side, split / zoom / resize / close panes, and every connected client sees the same layout. Indicators show which sessions are working, waiting on you, or done, read from the pane itself with no hooks required. Long-press a session to give it a colour.
-- **Made for touch** — tablet split layout with a draggable floating keyboard, a custom mobile keyboard with a pane tab bar, pinch-to-zoom and momentum scrolling. Long-press a number key for its symbol. On desktop, text selection with auto-copy and font-size shortcuts.
-- **Reading the work** — a chat view that renders the current session as a conversation, and a file viewer with syntax highlighting, images, Markdown and HTML, showing diffs from either Claude Code's edits or git.
+- **Start from the phone** — create a session by picking a folder, an agent and the machine, and the agent comes up ready for its first prompt. Nothing has to be open on a computer first.
+- **A chat for each agent** — the conversation as a chat, with a composer to write to it: images, slash commands and skills from a palette, the permission mode as a chip, a stop button while it works. Its questions and permission prompts are cards you tap, Claude Code's progress line shows while it works, and its suggested next prompt is one tap away.
+- **See who needs you** — a board that groups sessions by what each needs from you: waiting on you, done and unseen, working, idle. Indicators come from the pane itself, with no hooks required.
+- **Files** — browse anywhere under your home directory, see which files the agent created or edited, and fix one in place: an edit made while the agent changes the same file is shown, never silently overwritten. Images, video, Markdown, HTML and STL models preview; diffs come from the agent's edits or git.
+- **Sessions and panes** — run several agents side by side, split / zoom / resize / close panes, and every connected client sees the same layout. Long-press a session to give it a colour.
+- **Made for touch** — tablet split layout with a draggable floating keyboard, a custom mobile keyboard with a pane tab bar, pinch-to-zoom and momentum scrolling. On a desktop the terminal stays in herdr's own client and the browser is for everything around it; it can render the terminal too when you are away from that machine.
 - **History and search** — browse and resume past sessions, full-text search across every message, prompt history from all sessions at once.
 - **Dashboard** — 5-hour / 7-day usage cycles, time to reset and a projection of when you will hit the limit at the current pace, per-model token use, cost estimates, CPU / memory / swap history, WebSocket latency.
 - **Several machines** — peer servers over Tailscale, auto-discovered, with sessions, history and dashboards aggregated. `hrdle send` and `hrdle peek` drive a pane on any of them from the CLI.
@@ -46,12 +61,14 @@ and you are not at a screen.
 - **Notifications go to the lenses, not the browser** — while the app is connected, hook
   events become 90-second relay items on the G2 display. If the glasses are absent or the
   session cannot be resolved, the browser notification fires as before, so nothing is lost
-- **Voice input** — the G2 SDK emits raw PCM, so transcription happens server-side via
-  `POST /api/glasses/stt` (Groq `whisper-large-v3-turbo`). **The audio and the API key
-  never leave your host**
+- **Voice input** — hold to speak, let go to end the phrase, then send. The G2 SDK emits
+  raw PCM, so transcription happens server-side via `POST /api/glasses/stt` (Groq
+  `whisper-large-v3-turbo`). **The audio and the API key never leave your host**
 - **Agent-written notes** — `hrdle glasses "<text>"` lets an agent put one line in front of
   you, with optional choices to answer. The session is resolved from the working directory,
   so agents rarely need to name it
+- **Every machine** — with peers, the list opens on the machines, and their questions and
+  notices reach the lenses through the one server the glasses talk to
 - **Simulator** — the same app builds for the browser and is served at `/glasses`, so you
   can try it without hardware
 
@@ -64,7 +81,7 @@ Build and distribution live in [`glasses/README.md`](glasses/README.md). The pac
 |------------|--------------|
 | [Tailscale](https://tailscale.com/) | **Install this first.** Linux: `curl -fsSL https://tailscale.com/install.sh \| sh` / macOS: `brew install tailscale` (the App Store build ships no CLI, which certificate generation needs). Then `sudo tailscale set --operator=$USER`, once |
 | [herdr](https://herdr.dev/) | The installer installs it if it is missing (`HRDLE_SKIP_HERDR=1` to do it yourself) |
-| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `npm install -g @anthropic-ai/claude-code`, then sign in once. Codex, Grok Build, Kimi Code and OpenCode work too |
+| [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | `npm install -g @anthropic-ai/claude-code`, then sign in once. Codex, Grok Build, Kimi Code, OpenCode and pi work too |
 
 ## Install
 
@@ -79,7 +96,8 @@ curl -fsSL https://raw.githubusercontent.com/hrdle/hrdle/main/install.sh | bash
 ```
 
 It installs herdr if it is missing, allows certificate generation, registers the service,
-and finishes by printing the server's address as a QR code for the phone app to scan.
+and finishes by printing the server's address: a short code to type into the glasses
+app, and the URL for a browser.
 
 Two things it cannot do for you:
 
@@ -172,19 +190,24 @@ hrdle debug <sub>            # Bun inspector on the running service
 
 ## Keyboard shortcuts
 
+On a desktop with the terminal rendered in the browser:
+
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+B` | Toggle session modal |
+| `Ctrl+B` | Session modal |
 | `Ctrl+Shift+B` | Toggle dashboard panel |
-| `Ctrl+D` | Split pane vertically (right) |
-| `Ctrl+Shift+D` | Split pane horizontally (bottom) |
-| `Ctrl+W` | Close pane |
-| `Ctrl+Arrow` | Navigate between panes |
-| `Ctrl+Shift+Arrow` | Resize active pane |
+| `Ctrl+Shift+E` | Split pane (new pane on the right) |
+| `Ctrl+Shift+D` | Split pane (new pane below) |
+| `Ctrl+Shift+X` | Close pane |
+| `Alt+Arrow` | Move focus between panes |
+| `Ctrl+Shift+Arrow` | Resize pane |
 | `Ctrl+Shift+=` | Equalize pane sizes |
-| `Ctrl+1-9` | Switch to session by number |
-| `Ctrl+=` / `Ctrl+-` / `Ctrl+0` | Font size up / down / reset |
-| `Ctrl+C` (with selection) / `Ctrl+V` | Copy / paste |
+| `Ctrl/Cmd+1`..`9` | Switch session |
+| `Ctrl/Cmd+=` / `-` / `0` | Font size up / down / reset |
+| `Ctrl/Cmd+C` (with selection) / `Ctrl/Cmd+V` | Copy / paste |
+
+`Ctrl+D`, `Ctrl+W` and `Ctrl+Arrow` go to the pane: they are EOF, delete-word and word
+motion in every shell.
 
 ## Hook notifications
 
