@@ -89,8 +89,9 @@ interface SessionsIndex {
 export class SessionHistoryService {
   private projectsDir: string;
 
-  constructor() {
-    this.projectsDir = join(homedir(), '.claude', 'projects');
+  /** `projectsDir` is for tests, which cannot redirect Bun's cached `os.homedir()`. */
+  constructor(projectsDir?: string) {
+    this.projectsDir = projectsDir ?? join(homedir(), '.claude', 'projects');
   }
 
   /**

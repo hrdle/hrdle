@@ -491,3 +491,31 @@ describe('a single-pick list', () => {
     expect(picker?.options[2].label).toBe('ルータ操作は中止');
   });
 });
+
+/**
+ * The same picker as Claude Code 2.1.332 draws it, captured from a pane on
+ * 2026-11-28: the question wraps behind a bar on its left edge, and each
+ * option has its description on the row below.
+ */
+const BARRED = [
+  '───────────────────────────────────────────────────────────────────',
+  ' ☐ タグ保存方式',
+  '│ ブックマークのタグをどう保存しますか？（現状は src/store.ts のインメモリ Map に Bookmark {id, url, title, createdAt}',
+  '│ を保存しています）',
+  '❯ 1. Bookmarkにtags配列 (Recommended)',
+  '     Bookmark に tags: string[] を直接持たせる、最もシンプルで変更が小さい方式。',
+  '  2. タグを別エンティティ化',
+  '     Tag {id, name} を別の Map で管理し、Bookmark は tagIds で参照する方式。',
+  '  3. Type something.',
+  '───────────────────────────────────────────────────────────────────',
+  '  4. Chat about this',
+  'Enter to select · ↑/↓ to navigate · Esc to cancel',
+];
+
+describe('a question behind a bar', () => {
+  test('the bar is not part of the question', () => {
+    const question = readClaudePicker(BARRED)?.question;
+    expect(question?.startsWith('ブックマークのタグをどう保存しますか？')).toBe(true);
+    expect(question).not.toContain('│');
+  });
+});
